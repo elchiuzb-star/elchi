@@ -1,0 +1,319 @@
+{
+  "info": {
+    "name": "Elchi - Client User To Order Flow",
+    "description": "Focused Postman collection for the client user flow: create/login account, upload cargo photo, create order draft, publish order, and view own order. Uses environment variables and saves tokens, file_url, and order_id automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/health"
+      }
+    },
+    {
+      "name": "02 Request OTP - Client",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{client_phone}}\",\n  \"role\": \"client\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/auth/request-otp"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('OTP requested', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "if (body.dev_otp) { pm.environment.set('otp_code', body.dev_otp); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Verify OTP - Save Client Tokens",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{client_phone}}\",\n  \"role\": \"client\",\n  \"otp\": \"{{otp_code}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/auth/verify-otp"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Client verified', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.environment.set('client_access_token', body.access_token);",
+              "pm.environment.set('client_refresh_token', body.refresh_token);",
+              "if (body.user && body.user.id) { pm.environment.set('client_user_id', body.user.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Auth Me - Client",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/auth/me"
+      }
+    },
+    {
+      "name": "05 List Cities - Save First Two City IDs",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/cities"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Cities loaded', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "const cities = body.data || [];",
+              "if (cities.length >= 2) {",
+              "  pm.environment.set('city_from_id', cities[0].id);",
+              "  pm.environment.set('city_to_id', cities[1].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Get Suggested Price",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/route-tariffs/suggested-price?from_city_id={{city_from_id}}&to_city_id={{city_to_id}}"
+      }
+    },
+    {
+      "name": "07 Upload Cargo Photo - Save File URL",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "type",
+              "value": "cargo_photo",
+              "type": "text"
+            },
+            {
+              "key": "file",
+              "type": "file",
+              "src": ""
+            }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/files/upload"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Cargo photo uploaded', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "if (body.data && body.data.file_url) {",
+              "  pm.environment.set('cargo_photo_url', body.data.file_url);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Create Order Draft - Save Order ID",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"from_city_id\": {{city_from_id}},\n  \"to_city_id\": {{city_to_id}},\n  \"pickup_address\": \"{{pickup_address}}\",\n  \"dropoff_address\": \"{{dropoff_address}}\",\n  \"sender_phone\": \"{{sender_phone}}\",\n  \"receiver_phone\": \"{{receiver_phone}}\",\n  \"cargo_photo_url\": \"{{cargo_photo_url}}\",\n  \"comment\": \"{{order_comment}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{base_url}}/api/v1/client/orders"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Order draft created', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "if (body.data && body.data.id) {",
+              "  pm.environment.set('order_id', body.data.id);",
+              "  pm.environment.set('order_number', body.data.order_number);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Publish Order",
+      "request": {
+        "method": "POST",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/client/orders/{{order_id}}/publish"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Order published', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "if (body.data && body.data.matched_drivers_count !== undefined) {",
+              "  pm.environment.set('matched_drivers_count', body.data.matched_drivers_count);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Get My Order Detail",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/client/orders/{{order_id}}"
+      }
+    },
+    {
+      "name": "11 List My Orders",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{client_access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/client/orders?page=1&limit=20"
+      }
+    }
+  ]
+}

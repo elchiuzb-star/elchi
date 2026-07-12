@@ -1,0 +1,238 @@
+{
+  "info": {
+    "name": "Intercity Parcel Delivery Marketplace API - MVP",
+    "description": "MVP API collection for Elchi. Payment is cash only. No online payments, OTP/QR proof, GPS tracking, chat, driver departure time, route capacity, cargo type, cargo weight, or cargo size flows are included.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8000"},
+    {"key": "client_access_token", "value": ""},
+    {"key": "driver_access_token", "value": ""},
+    {"key": "operator_access_token", "value": ""},
+    {"key": "admin_access_token", "value": ""},
+    {"key": "super_admin_access_token", "value": ""},
+    {"key": "order_id", "value": ""},
+    {"key": "bid_id", "value": ""},
+    {"key": "driver_id", "value": ""},
+    {"key": "city_from_id", "value": "1"},
+    {"key": "city_to_id", "value": "2"},
+    {"key": "route_id", "value": ""},
+    {"key": "dispute_id", "value": ""},
+    {"key": "notification_id", "value": ""},
+    {"key": "audit_log_id", "value": ""},
+    {"key": "file_url", "value": "/uploads/cargo_photo/2026/06/example.jpg"}
+  ],
+  "item": [
+    {
+      "name": "01 Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {"method": "GET", "url": "{{base_url}}/api/v1/health"}
+        },
+        {
+          "name": "OpenAPI JSON",
+          "request": {"method": "GET", "url": "{{base_url}}/openapi.json"}
+        }
+      ]
+    },
+    {
+      "name": "02 Auth",
+      "item": [
+        {
+          "name": "Request OTP - Client",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/auth/request-otp",
+            "body": {"mode": "raw", "raw": "{\n  \"phone\": \"{{client_phone}}\",\n  \"role\": \"client\"\n}"}
+          }
+        },
+        {
+          "name": "Verify OTP - Client",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/auth/verify-otp",
+            "body": {"mode": "raw", "raw": "{\n  \"phone\": \"{{client_phone}}\",\n  \"role\": \"client\",\n  \"otp\": \"{{otp_code}}\"\n}"}
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/auth/refresh",
+            "body": {"mode": "raw", "raw": "{\n  \"refresh_token\": \"{{client_refresh_token}}\"\n}"}
+          }
+        },
+        {
+          "name": "Me",
+          "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/auth/me"}
+        }
+      ]
+    },
+    {
+      "name": "03 Files",
+      "item": [
+        {
+          "name": "Upload Cargo Photo",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]},
+            "url": "{{base_url}}/api/v1/files/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "type", "value": "cargo_photo", "type": "text"},
+                {"key": "file", "type": "file", "src": ""}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Cities and Tariffs",
+      "item": [
+        {"name": "List Cities", "request": {"method": "GET", "url": "{{base_url}}/api/v1/cities"}},
+        {"name": "Suggested Price", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/route-tariffs/suggested-price?from_city_id={{city_from_id}}&to_city_id={{city_to_id}}"}}
+      ]
+    },
+    {
+      "name": "05 Client Orders",
+      "item": [
+        {
+          "name": "Create Order Draft",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]},
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/client/orders",
+            "body": {"mode": "raw", "raw": "{\n  \"from_city_id\": {{city_from_id}},\n  \"to_city_id\": {{city_to_id}},\n  \"pickup_address\": \"Toshkent, Chilonzor\",\n  \"dropoff_address\": \"Samarqand shahar\",\n  \"sender_phone\": \"+998901234567\",\n  \"receiver_phone\": \"+998911112233\",\n  \"cargo_type\": \"parcel\",\n  \"cargo_photo_url\": \"{{file_url}}\",\n  \"comment\": \"Ehtiyot qilib olib boring\"\n}"}
+          }
+        },
+        {"name": "Publish Order", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/client/orders/{{order_id}}/publish"}},
+        {"name": "List Own Orders", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/client/orders?page=1&limit=20"}}
+      ]
+    },
+    {
+      "name": "06 Driver Profile and Routes",
+      "item": [
+        {"name": "Get Driver Profile", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{driver_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/driver/profile"}},
+        {
+          "name": "Create Driver Route",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{driver_access_token}}", "type": "string"}]},
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/driver/routes",
+            "body": {"mode": "raw", "raw": "{\n  \"from_city_id\": {{city_from_id}},\n  \"to_city_id\": {{city_to_id}}\n}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Driver Feed and Bids",
+      "item": [
+        {"name": "Driver Feed", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{driver_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/driver/orders/feed"}},
+        {
+          "name": "Create Bid",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{driver_access_token}}", "type": "string"}]},
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}/bids",
+            "body": {"mode": "raw", "raw": "{\n  \"price\": 55000\n}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Select Driver",
+      "item": [
+        {
+          "name": "Select Driver",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]},
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/client/orders/{{order_id}}/select-driver",
+            "body": {"mode": "raw", "raw": "{\n  \"bid_id\": {{bid_id}}\n}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Driver Order Status",
+      "item": [
+        {"name": "Picked Up", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{driver_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}/picked-up"}},
+        {"name": "In Transit", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{driver_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}/in-transit"}},
+        {"name": "Delivered", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{driver_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}/delivered"}}
+      ]
+    },
+    {
+      "name": "10 Client Confirm and Rating",
+      "item": [
+        {"name": "Confirm Delivered Order", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/client/orders/{{order_id}}/confirm"}},
+        {
+          "name": "Rate Driver",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]},
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/client/orders/{{order_id}}/rating",
+            "body": {"mode": "raw", "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Yaxshi yetkazib berdi\"\n}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Disputes",
+      "item": [
+        {
+          "name": "Open Dispute",
+          "request": {
+            "method": "POST",
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]},
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "{{base_url}}/api/v1/orders/{{order_id}}/disputes",
+            "body": {"mode": "raw", "raw": "{\n  \"reason\": \"delayed\",\n  \"comment\": \"Haydovchi kechikyapti\"\n}"}
+          }
+        },
+        {"name": "List My Disputes", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/disputes"}}
+      ]
+    },
+    {
+      "name": "12 Notifications",
+      "item": [
+        {"name": "List Notifications", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/notifications"}},
+        {"name": "Mark Notification Read", "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{client_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/notifications/{{notification_id}}/read"}}
+      ]
+    },
+    {
+      "name": "13 Admin Orders",
+      "item": [
+        {"name": "List Admin Orders", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{operator_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/admin/orders"}}
+      ]
+    },
+    {
+      "name": "14 Admin Drivers",
+      "item": [
+        {"name": "List Admin Drivers", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{operator_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/admin/drivers"}},
+        {"name": "Approve Driver", "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{admin_access_token}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "url": "{{base_url}}/api/v1/admin/drivers/{{driver_id}}/approve", "body": {"mode": "raw", "raw": "{\n  \"comment\": \"Documents checked\"\n}"}}}
+      ]
+    },
+    {
+      "name": "15 Audit Logs",
+      "item": [
+        {"name": "List Audit Logs", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{admin_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/admin/audit-logs"}},
+        {"name": "Get Audit Log", "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{admin_access_token}}", "type": "string"}]}, "url": "{{base_url}}/api/v1/admin/audit-logs/{{audit_log_id}}"}}
+      ]
+    }
+  ]
+}

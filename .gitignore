@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.env
+.venv/
+venv/
+
+*.db
+*.sqlite
+*.sqlite3
+
+storage/uploads/
+node_modules/
+.pnpm-store/
+dist/
+app-ui/dist/
+app-ui/.env.local
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

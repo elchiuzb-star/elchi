@@ -1,0 +1,1019 @@
+{
+  "info": {
+    "name": "Elchi - Client Side Automated Test",
+    "description": "Professional client-only automated Postman collection. Runs from client account creation/login through city discovery, draft order creation, publish, listing, cancellation scenario, client-side security checks, and logout. This collection intentionally excludes admin and driver workflows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const autoGenerate = (pm.environment.get('auto_generate_client_phone') || 'true') === 'true';",
+          "if (!pm.environment.get('run_id')) {",
+          "  const runId = Date.now().toString().slice(-8);",
+          "  pm.environment.set('run_id', runId);",
+          "  if (autoGenerate || !pm.environment.get('client_phone')) {",
+          "    pm.environment.set('client_phone', `+99890${runId.slice(-7)}`);",
+          "  }",
+          "}",
+          "if (!pm.environment.get('otp_code')) { pm.environment.set('otp_code', '12345'); }",
+          "if (!pm.environment.get('cargo_photo_url')) {",
+          "  pm.environment.set('cargo_photo_url', '/uploads/cargo_photo/2026/06/postman-client-auto.jpg');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Setup And Health",
+      "item": [
+        {
+          "name": "Initialize Run Variables",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Run variables initialized', function () {",
+                  "  pm.expect(pm.environment.get('run_id')).to.not.be.empty;",
+                  "  pm.expect(pm.environment.get('client_phone')).to.match(/^\\+998\\d{9}$/);",
+                  "});",
+                  "console.log('Client phone:', pm.environment.get('client_phone'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/health"
+          }
+        },
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('API is healthy', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/health"
+          }
+        },
+        {
+          "name": "OpenAPI Loads",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OpenAPI loads', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.openapi).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/openapi.json"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Client Account And Auth",
+      "item": [
+        {
+          "name": "Request OTP - Client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OTP requested for client', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const data = body.data || {};",
+                  "if (data.dev_otp || body.dev_otp) {",
+                  "  pm.environment.set('otp_code', data.dev_otp || body.dev_otp);",
+                  "}",
+                  "pm.test('OTP response is client-safe', function () {",
+                  "  pm.expect(data.phone).to.eql(pm.environment.get('client_phone'));",
+                  "  pm.expect(data.expires_in_seconds).to.eql(120);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{client_phone}}\",\n  \"role\": \"client\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/request-otp"
+          }
+        },
+        {
+          "name": "Verify OTP - Save Tokens",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client login succeeds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('client_access_token', body.access_token);",
+                  "pm.environment.set('client_refresh_token', body.refresh_token);",
+                  "if (body.user && body.user.id) { pm.environment.set('client_user_id', body.user.id); }",
+                  "pm.test('Client token response is correct', function () {",
+                  "  pm.expect(body.token_type).to.eql('bearer');",
+                  "  pm.expect(body.user.role).to.eql('client');",
+                  "  pm.expect(body.user.phone).to.eql(pm.environment.get('client_phone'));",
+                  "  pm.expect(body.access_token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.refresh_token).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{client_phone}}\",\n  \"role\": \"client\",\n  \"otp\": \"{{otp_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/verify-otp"
+          }
+        },
+        {
+          "name": "Get Me - Client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client can read own auth profile', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.role).to.eql('client');",
+                  "  pm.expect(body.phone).to.eql(pm.environment.get('client_phone'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/auth/me"
+          }
+        },
+        {
+          "name": "Refresh Token - Rotate Tokens",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Refresh token rotates', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const oldRefresh = pm.environment.get('client_refresh_token');",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('old_client_refresh_token', oldRefresh);",
+                  "pm.environment.set('client_access_token', body.access_token);",
+                  "pm.environment.set('client_refresh_token', body.refresh_token);",
+                  "pm.test('New refresh token is different', function () {",
+                  "  pm.expect(body.refresh_token).to.not.eql(oldRefresh);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{client_refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/refresh"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Client Profile",
+      "item": [
+        {
+          "name": "Get Client Profile - Before Update",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client can get profile', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.phone).to.eql(pm.environment.get('client_phone'));",
+                  "  pm.expect(data.role).to.eql('client');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/client/profile"
+          }
+        },
+        {
+          "name": "Update Client Full Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client full name updated', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.full_name).to.eql(pm.environment.get('client_full_name'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"{{client_full_name}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/client/profile"
+          }
+        },
+        {
+          "name": "Get Me - Full Name Reflected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Auth me reflects client full name', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.full_name).to.eql(pm.environment.get('client_full_name'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Cities And Pricing",
+      "item": [
+        {
+          "name": "List Cities - Save Route Cities",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cities endpoint succeeds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const cities = body.data || [];",
+                  "pm.test('At least two active cities exist', function () {",
+                  "  pm.expect(cities.length, 'Seed at least two active cities before running client order flow').to.be.at.least(2);",
+                  "});",
+                  "if (cities.length >= 2) {",
+                  "  pm.environment.set('city_from_id', cities[0].id);",
+                  "  pm.environment.set('city_to_id', cities[1].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/cities"
+          }
+        },
+        {
+          "name": "Get Suggested Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Suggested price endpoint succeeds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const data = body.data || {};",
+                  "if (data.suggested_price !== undefined && data.suggested_price !== null) {",
+                  "  pm.environment.set('suggested_price', data.suggested_price);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/route-tariffs/suggested-price?from_city_id={{city_from_id}}&to_city_id={{city_to_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Create Draft Order",
+      "item": [
+        {
+          "name": "Create Draft Order - Save Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Draft order created', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const data = body.data || {};",
+                  "pm.environment.set('order_id', data.id);",
+                  "pm.environment.set('order_number', data.order_number);",
+                  "pm.environment.set('order_status', data.status);",
+                  "pm.test('Order starts as draft and cash/unpaid', function () {",
+                  "  pm.expect(data.status).to.eql('draft');",
+                  "  pm.expect(data.payment_method).to.eql('cash');",
+                  "  pm.expect(data.payment_status).to.eql('unpaid');",
+                  "  pm.expect(data.cargo_photo_url).to.eql(pm.environment.get('cargo_photo_url'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_city_id\": {{city_from_id}},\n  \"to_city_id\": {{city_to_id}},\n  \"pickup_address\": \"{{pickup_address}}\",\n  \"dropoff_address\": \"{{dropoff_address}}\",\n  \"sender_phone\": \"{{sender_phone}}\",\n  \"receiver_phone\": \"{{receiver_phone}}\",\n  \"cargo_photo_url\": \"{{cargo_photo_url}}\",\n  \"comment\": \"{{order_comment}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/client/orders"
+          }
+        },
+        {
+          "name": "Get Draft Order Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Draft detail belongs to client', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.id).to.eql(Number(pm.environment.get('order_id')));",
+                  "  pm.expect(data.status).to.eql('draft');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/client/orders/{{order_id}}"
+          }
+        },
+        {
+          "name": "List Draft Orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Draft order appears in client list', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const items = pm.response.json().data.items || [];",
+                  "  pm.expect(items.some(item => item.id === Number(pm.environment.get('order_id')))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/client/orders?status=draft&page=1&limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Publish And Browse Order",
+      "item": [
+        {
+          "name": "Publish Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order published', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json().data || {};",
+                  "pm.environment.set('order_status', data.status);",
+                  "if (data.matched_drivers_count !== undefined) {",
+                  "  pm.environment.set('matched_drivers_count', data.matched_drivers_count);",
+                  "}",
+                  "pm.test('Published status saved', function () {",
+                  "  pm.expect(data.status).to.eql('published');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/client/orders/{{order_id}}/publish"
+          }
+        },
+        {
+          "name": "Get Published Order Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Published detail is visible to owner', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.id).to.eql(Number(pm.environment.get('order_id')));",
+                  "  pm.expect(data.status).to.eql('published');",
+                  "  pm.expect(data.sender_phone).to.eql(pm.environment.get('sender_phone'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/client/orders/{{order_id}}"
+          }
+        },
+        {
+          "name": "List Published Orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Published order appears in list', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const items = pm.response.json().data.items || [];",
+                  "  pm.expect(items.some(item => item.id === Number(pm.environment.get('order_id')))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/client/orders?status=published&page=1&limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Client Cancellation Scenario",
+      "item": [
+        {
+          "name": "Create Separate Draft For Cancellation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cancellable draft created', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const data = pm.response.json().data || {};",
+                  "pm.environment.set('cancel_order_id', data.id);",
+                  "pm.environment.set('cancel_order_number', data.order_number);",
+                  "pm.test('Cancellation order is draft', function () {",
+                  "  pm.expect(data.status).to.eql('draft');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_city_id\": {{city_from_id}},\n  \"to_city_id\": {{city_to_id}},\n  \"pickup_address\": \"{{pickup_address}}\",\n  \"dropoff_address\": \"{{dropoff_address}}\",\n  \"sender_phone\": \"{{sender_phone}}\",\n  \"receiver_phone\": \"{{receiver_phone}}\",\n  \"cargo_photo_url\": \"{{cargo_photo_url}}\",\n  \"comment\": \"Cancellation scenario order\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/client/orders"
+          }
+        },
+        {
+          "name": "Cancel Own Draft Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client can cancel own draft', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.order_id).to.eql(Number(pm.environment.get('cancel_order_id')));",
+                  "  pm.expect(data.status).to.eql('cancelled');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Client changed plans during automated test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/client/orders/{{cancel_order_id}}/cancel"
+          }
+        },
+        {
+          "name": "List Cancelled Orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cancelled order appears in list', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const items = pm.response.json().data.items || [];",
+                  "  pm.expect(items.some(item => item.id === Number(pm.environment.get('cancel_order_id')))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/client/orders?status=cancelled&page=1&limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Client Security And Validation",
+      "item": [
+        {
+          "name": "Anonymous Cannot List Client Orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Anonymous request is unauthorized', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql('UNAUTHORIZED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/client/orders"
+          }
+        },
+        {
+          "name": "Refresh Token Cannot Access Me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Refresh token is rejected as access token', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_refresh_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/auth/me"
+          }
+        },
+        {
+          "name": "Removed MVP Fields Are Rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Forbidden order fields are rejected', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_city_id\": {{city_from_id}},\n  \"to_city_id\": {{city_to_id}},\n  \"pickup_address\": \"{{pickup_address}}\",\n  \"dropoff_address\": \"{{dropoff_address}}\",\n  \"sender_phone\": \"{{sender_phone}}\",\n  \"receiver_phone\": \"{{receiver_phone}}\",\n  \"cargo_photo_url\": \"{{cargo_photo_url}}\",\n  \"cargo_type\": \"documents\",\n  \"weight\": 3,\n  \"size\": \"small\",\n  \"pickup_time\": \"2026-06-16T10:00:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/client/orders"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Logout And Revocation",
+      "item": [
+        {
+          "name": "Logout - Revoke Current Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client logout succeeds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{client_refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/logout"
+          }
+        },
+        {
+          "name": "Refresh After Logout Is Rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Revoked refresh token cannot rotate', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().error.code).to.eql('REFRESH_TOKEN_REVOKED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{client_refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/refresh"
+          }
+        }
+      ]
+    }
+  ]
+}

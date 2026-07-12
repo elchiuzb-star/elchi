@@ -1,0 +1,1605 @@
+{
+  "info": {
+    "name": "Elchi - Driver Side Automated Test",
+    "description": "Professional driver-side automated Postman collection. Runs driver registration, profile update, document submission, admin approval support, availability, route creation, client order support, driver feed, bidding, selected-order detail, order status updates, and security checks. Requires an existing admin user for the approval support folder.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const shouldReset = pm.info.requestName === 'Initialize Run Variables';",
+          "if (shouldReset) {",
+          "  ['driver_access_token', 'driver_refresh_token', 'driver_user_id', 'driver_profile_id', 'driver_plate_number', 'driver_plate_number_normalized', 'client_access_token', 'client_refresh_token', 'client_user_id', 'city_from_id', 'city_to_id', 'driver_route_id', 'order_id', 'order_number', 'bid_id'].forEach(key => pm.environment.unset(key));",
+          "}",
+          "const runId = shouldReset ? Date.now().toString().slice(-8) : (pm.environment.get('run_id') || Date.now().toString().slice(-8));",
+          "pm.environment.set('run_id', runId);",
+          "if (!pm.environment.get('otp_code')) { pm.environment.set('otp_code', '12345'); }",
+          "if ((pm.environment.get('auto_generate_driver_phone') || 'true') === 'true' || !pm.environment.get('driver_phone')) {",
+          "  pm.environment.set('driver_phone', `+99891${runId.slice(-7)}`);",
+          "}",
+          "if ((pm.environment.get('auto_generate_client_phone') || 'true') === 'true' || !pm.environment.get('client_phone')) {",
+          "  pm.environment.set('client_phone', `+99892${runId.slice(-7)}`);",
+          "}",
+          "if (!pm.environment.get('driver_plate_number')) {",
+          "  pm.environment.set('driver_plate_number', `01 A ${runId.slice(-3)} PM`);",
+          "}",
+          "if (!pm.environment.get('cargo_photo_url')) {",
+          "  pm.environment.set('cargo_photo_url', '/uploads/cargo_photo/2026/06/postman-driver-auto.jpg');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Setup And Health",
+      "item": [
+        {
+          "name": "Initialize Run Variables",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Run variables initialized', function () {",
+                  "  pm.expect(pm.environment.get('run_id')).to.not.be.empty;",
+                  "  pm.expect(pm.environment.get('driver_phone')).to.match(/^\\+998\\d{9}$/);",
+                  "  pm.expect(pm.environment.get('client_phone')).to.match(/^\\+998\\d{9}$/);",
+                  "});",
+                  "console.log('Driver phone:', pm.environment.get('driver_phone'));",
+                  "console.log('Client phone:', pm.environment.get('client_phone'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/health"
+          }
+        },
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('API is healthy', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Driver Account And Profile",
+      "item": [
+        {
+          "name": "Request OTP - Driver",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver OTP requested', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const data = body.data || {};",
+                  "if (data.dev_otp || body.dev_otp) { pm.environment.set('otp_code', data.dev_otp || body.dev_otp); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driver_phone}}\",\n  \"role\": \"driver\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/request-otp"
+          }
+        },
+        {
+          "name": "Verify OTP - Save Driver Tokens",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver verified', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('driver_access_token', body.access_token);",
+                  "pm.environment.set('driver_refresh_token', body.refresh_token);",
+                  "if (body.user && body.user.id) { pm.environment.set('driver_user_id', body.user.id); }",
+                  "pm.test('Driver role returned', function () { pm.expect(body.user.role).to.eql('driver'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driver_phone}}\",\n  \"role\": \"driver\",\n  \"otp\": \"{{otp_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/verify-otp"
+          }
+        },
+        {
+          "name": "Get Me - Driver",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver me loaded', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('Me is driver', function () { pm.expect(body.role).to.eql('driver'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/auth/me"
+          }
+        },
+        {
+          "name": "Get Driver Profile - Auto Created",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver profile loaded', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const data = body.data || {};",
+                  "pm.environment.set('driver_profile_id', data.id);",
+                  "pm.test('New driver is not approved or available', function () {",
+                  "  pm.expect(data.verification_status).to.eql('new');",
+                  "  pm.expect(data.is_available).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/profile"
+          }
+        },
+        {
+          "name": "Update Driver Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver profile updated', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.environment.set('driver_plate_number_normalized', data.plate_number_normalized || '');",
+                  "pm.test('Protected status was not changed by driver', function () {",
+                  "  pm.expect(data.verification_status).to.not.eql('approved');",
+                  "});",
+                  "pm.test('Plate normalization exists', function () {",
+                  "  pm.expect(data.plate_number_normalized).to.not.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"{{driver_full_name}}\",\n  \"car_model\": \"{{driver_car_model}}\",\n  \"car_color\": \"{{driver_car_color}}\",\n  \"plate_number\": \"{{driver_plate_number}}\",\n  \"verification_status\": \"approved\",\n  \"rating\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/profile"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Driver Documents And Pre-Approval Security",
+      "item": [
+        {
+          "name": "Submit Passport",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type\": \"passport\",\n  \"file_url\": \"/uploads/passport/2026/06/postman-passport.pdf\",\n  \"mime_type\": \"application/pdf\",\n  \"size_bytes\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Passport accepted', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Document pending', function () { pm.expect(pm.response.json().data.status).to.eql('pending'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Selfie",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type\": \"selfie\",\n  \"file_url\": \"/uploads/selfie/2026/06/postman-selfie.jpg\",\n  \"mime_type\": \"image/jpeg\",\n  \"size_bytes\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Selfie accepted', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit License",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type\": \"license\",\n  \"file_url\": \"/uploads/license/2026/06/postman-license.webp\",\n  \"mime_type\": \"image/webp\",\n  \"size_bytes\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('License accepted', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Car Document",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type\": \"car_document\",\n  \"file_url\": \"/uploads/car_document/2026/06/postman-car-document.pdf\",\n  \"mime_type\": \"application/pdf\",\n  \"size_bytes\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Car document accepted', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Car Photo",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type\": \"car_photo\",\n  \"file_url\": \"/uploads/car_photo/2026/06/postman-car-photo.png\",\n  \"mime_type\": \"image/png\",\n  \"size_bytes\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Car photo accepted', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject Invalid Driver Document Type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid document type rejected', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Correct error code', function () { pm.expect(pm.response.json().error.code).to.eql('DRIVER_DOCUMENT_INVALID_TYPE'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type\": \"pickup_proof\",\n  \"file_url\": \"/uploads/pickup_proof/2026/06/nope.jpg\",\n  \"mime_type\": \"image/jpeg\",\n  \"size_bytes\": 1024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/documents"
+          }
+        },
+        {
+          "name": "Availability True Before Approval Fails",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Unapproved driver cannot become available', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Correct error code', function () { pm.expect(pm.response.json().error.code).to.eql('DRIVER_NOT_APPROVED'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_available\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/availability"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Admin Approval Support",
+      "item": [
+        {
+          "name": "Request OTP - Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin OTP requested', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const data = body.data || {};",
+                  "if (data.dev_otp || body.dev_otp) { pm.environment.set('otp_code', data.dev_otp || body.dev_otp); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{admin_phone}}\",\n  \"role\": \"{{admin_role}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/request-otp"
+          }
+        },
+        {
+          "name": "Verify OTP - Save Admin Tokens",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin verified', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('admin_access_token', body.access_token);",
+                  "pm.environment.set('admin_refresh_token', body.refresh_token);",
+                  "pm.test('Admin-like role returned', function () { pm.expect(['admin', 'super_admin']).to.include(body.user.role); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{admin_phone}}\",\n  \"role\": \"{{admin_role}}\",\n  \"otp\": \"{{otp_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/verify-otp"
+          }
+        },
+        {
+          "name": "Admin Driver Detail - Documents Present",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin can view driver detail', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.test('Five required documents visible', function () { pm.expect(data.documents || []).to.have.length(5); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/admin/drivers/{{driver_profile_id}}"
+          }
+        },
+        {
+          "name": "Approve Driver",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver approved by admin', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.test('Approved but still unavailable', function () {",
+                  "  pm.expect(data.verification_status).to.eql('approved');",
+                  "  pm.expect(data.is_available).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Postman driver documents checked\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/admin/drivers/{{driver_profile_id}}/approve"
+          }
+        },
+        {
+          "name": "Create Support City From",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Support from-city created', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.environment.set('city_from_id', data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name_uz\": \"Postman From {{run_id}}\",\n  \"name_ru\": \"Postman From {{run_id}}\",\n  \"region\": \"Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/admin/cities"
+          }
+        },
+        {
+          "name": "Create Support City To",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Support to-city created', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.environment.set('city_to_id', data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name_uz\": \"Postman To {{run_id}}\",\n  \"name_ru\": \"Postman To {{run_id}}\",\n  \"region\": \"Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/admin/cities"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Driver Availability And Routes",
+      "item": [
+        {
+          "name": "Set Driver Available",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Approved driver can become available', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Availability true', function () { pm.expect(pm.response.json().data.is_available).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_available\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/availability"
+          }
+        },
+        {
+          "name": "List Public Cities - Save First Two IDs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cities loaded', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const data = body.data || {};",
+                  "const cities = Array.isArray(data) ? data : (data.items || []);",
+                  "pm.test('At least two cities exist', function () { pm.expect(cities.length).to.be.at.least(2); });",
+                  "if (cities.length >= 2 && (!pm.environment.get('city_from_id') || !pm.environment.get('city_to_id'))) {",
+                  "  pm.environment.set('city_from_id', cities[0].id);",
+                  "  pm.environment.set('city_to_id', cities[1].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/cities?page=1&limit=20"
+          }
+        },
+        {
+          "name": "Create Driver Route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Route created', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.environment.set('driver_route_id', data.id);",
+                  "pm.test('Route is available', function () { pm.expect(data.status).to.eql('available'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_city_id\": {{city_from_id}},\n  \"to_city_id\": {{city_to_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/routes"
+          }
+        },
+        {
+          "name": "List Driver Routes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver routes loaded', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Route list contains created route', function () {",
+                  "  const routes = pm.response.json().data || [];",
+                  "  pm.expect(routes.some(r => String(r.id) === String(pm.environment.get('driver_route_id')))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/routes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Client Order Support For Driver Feed",
+      "item": [
+        {
+          "name": "Request OTP - Client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client OTP requested', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "const data = body.data || {};",
+                  "if (data.dev_otp || body.dev_otp) { pm.environment.set('otp_code', data.dev_otp || body.dev_otp); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{client_phone}}\",\n  \"role\": \"client\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/request-otp"
+          }
+        },
+        {
+          "name": "Verify OTP - Save Client Tokens",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client verified', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('client_access_token', body.access_token);",
+                  "pm.environment.set('client_refresh_token', body.refresh_token);",
+                  "if (body.user && body.user.id) { pm.environment.set('client_user_id', body.user.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{client_phone}}\",\n  \"role\": \"client\",\n  \"otp\": \"{{otp_code}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/verify-otp"
+          }
+        },
+        {
+          "name": "Create Client Order Draft",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client order draft created', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.environment.set('order_id', data.id);",
+                  "pm.environment.set('order_number', data.order_number || '');",
+                  "pm.test('Order is draft', function () { pm.expect(data.status).to.eql('draft'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_city_id\": {{city_from_id}},\n  \"to_city_id\": {{city_to_id}},\n  \"pickup_address\": \"{{pickup_address}}\",\n  \"dropoff_address\": \"{{dropoff_address}}\",\n  \"sender_phone\": \"{{sender_phone}}\",\n  \"receiver_phone\": \"{{receiver_phone}}\",\n  \"cargo_photo_url\": \"{{cargo_photo_url}}\",\n  \"comment\": \"Postman automated driver-side support order\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/client/orders"
+          }
+        },
+        {
+          "name": "Publish Client Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order published', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.test('Order status published', function () { pm.expect(data.status).to.eql('published'); });",
+                  "pm.test('At least one driver matched', function () { pm.expect(data.matched_drivers_count).to.be.at.least(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/client/orders/{{order_id}}/publish"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Driver Feed Bids And Status Flow",
+      "item": [
+        {
+          "name": "Driver Feed Shows Published Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver feed loaded', function () { pm.response.to.have.status(200); });",
+                  "const items = (pm.response.json().data || {}).items || [];",
+                  "pm.test('Published order visible in feed', function () {",
+                  "  pm.expect(items.some(o => String(o.id) === String(pm.environment.get('order_id')))).to.eql(true);",
+                  "});",
+                  "pm.test('Feed hides private contacts', function () {",
+                  "  const item = items.find(o => String(o.id) === String(pm.environment.get('order_id'))) || {};",
+                  "  pm.expect(item.sender_phone).to.eql(undefined);",
+                  "  pm.expect(item.receiver_phone).to.eql(undefined);",
+                  "  pm.expect(item.pickup_address).to.eql(undefined);",
+                  "  pm.expect(item.dropoff_address).to.eql(undefined);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/orders/feed"
+          }
+        },
+        {
+          "name": "Driver Limited Order Detail Before Selection",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Limited order detail loaded', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.test('Private details are hidden before selection', function () {",
+                  "  pm.expect(data.sender_phone).to.eql(undefined);",
+                  "  pm.expect(data.receiver_phone).to.eql(undefined);",
+                  "  pm.expect(data.pickup_address).to.eql(undefined);",
+                  "  pm.expect(data.dropoff_address).to.eql(undefined);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}"
+          }
+        },
+        {
+          "name": "Create Driver Bid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Bid created', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.environment.set('bid_id', data.bid_id);",
+                  "pm.test('Bid status active', function () { pm.expect(data.status).to.eql('active'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": {{bid_price}},\n  \"comment\": \"Postman driver bid\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}/bids"
+          }
+        },
+        {
+          "name": "Update Driver Bid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Bid updated', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.test('Updated bid remains active', function () { pm.expect(data.status).to.eql('active'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": {{updated_bid_price}},\n  \"comment\": \"Postman updated driver bid\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/bids/{{bid_id}}"
+          }
+        },
+        {
+          "name": "Client Selects Driver Bid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Client selected driver', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Order accepted', function () { pm.expect(pm.response.json().data.status).to.eql('accepted'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{client_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bid_id\": {{bid_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/client/orders/{{order_id}}/select-driver"
+          }
+        },
+        {
+          "name": "Driver Full Order Detail After Selection",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Full order detail loaded', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json().data || {};",
+                  "pm.test('Assigned driver sees private details', function () {",
+                  "  pm.expect(data.sender_phone).to.eql(pm.environment.get('sender_phone'));",
+                  "  pm.expect(data.receiver_phone).to.eql(pm.environment.get('receiver_phone'));",
+                  "  pm.expect(data.pickup_address).to.eql(pm.environment.get('pickup_address'));",
+                  "  pm.expect(data.dropoff_address).to.eql(pm.environment.get('dropoff_address'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}"
+          }
+        },
+        {
+          "name": "Mark Order Picked Up",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order picked up', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Status picked_up', function () { pm.expect(pm.response.json().data.status).to.eql('picked_up'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}/picked-up"
+          }
+        },
+        {
+          "name": "Mark Order In Transit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order in transit', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Status in_transit', function () { pm.expect(pm.response.json().data.status).to.eql('in_transit'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}/in-transit"
+          }
+        },
+        {
+          "name": "Mark Order Delivered",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order delivered', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Status delivered', function () { pm.expect(pm.response.json().data.status).to.eql('delivered'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/orders/{{order_id}}/delivered"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Cleanup And Token Checks",
+      "item": [
+        {
+          "name": "Set Driver Unavailable",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver can become unavailable', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Availability false', function () { pm.expect(pm.response.json().data.is_available).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_available\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/driver/availability"
+          }
+        },
+        {
+          "name": "Disable Driver Route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Route disabled', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Route unavailable', function () { pm.expect(pm.response.json().data.status).to.eql('unavailable'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{base_url}}/api/v1/driver/routes/{{driver_route_id}}"
+          }
+        },
+        {
+          "name": "Logout Driver Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Driver logout succeeds', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{driver_access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{driver_refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base_url}}/api/v1/auth/logout"
+          }
+        }
+      ]
+    }
+  ]
+}

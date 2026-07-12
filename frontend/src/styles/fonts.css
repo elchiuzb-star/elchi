@@ -1,0 +1,6 @@
+/* Elchi type system — one family, no mono.
+   Inter carries both body and headings (full Uzbek Latin + Cyrillic). Headings
+   are just Inter at heavier weights + tighter tracking (see `.font-display`),
+   so uz/ru titles stay perfectly consistent with the rest of the UI. Numbers
+   use Inter tabular figures. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');

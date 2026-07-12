@@ -1,0 +1,44 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.prototype-phone-shell {
+  transform: scale(min(calc((100vw - 260px) / 430px), calc((100vh - 32px) / 890px), 1));
+  transform-origin: center;
+}
+
+@media (max-width: 760px) {
+  .prototype-root {
+    display: block;
+  }
+
+  .prototype-sidebar {
+    display: none;
+  }
+
+  .prototype-canvas {
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .prototype-phone-shell {
+    transform: scale(min(calc(100vw / 410px), calc((100vh - 16px) / 870px), 1));
+  }
+}
