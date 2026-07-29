@@ -3,6 +3,14 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "admin.elchigo.uz" }],
+      "destination": "https://elchi.uz/admin",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",
