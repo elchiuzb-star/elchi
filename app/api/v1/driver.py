@@ -31,6 +31,7 @@ from app.services.driver_service import (
     disable_driver_route,
     document_to_dict,
     get_or_create_driver_profile,
+    list_driver_documents,
     list_driver_routes,
     profile_to_dict,
     profile_update_dict,
@@ -280,6 +281,22 @@ def patch_driver_profile(
     if isinstance(updated, JSONResponse):
         return updated
     return {"success": True, "data": profile_update_dict(updated), "message": "Driver profile updated"}
+
+
+@router.get("/documents", response_model=None)
+def list_documents(
+    current_user: User | JSONResponse = Depends(get_current_driver),
+    db: Session = Depends(get_db),
+) -> dict | JSONResponse:
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    profile = get_or_create_driver_profile(db, current_user)
+    documents = list_driver_documents(db, profile)
+    return {
+        "success": True,
+        "data": [document_to_dict(document) for document in documents],
+        "message": "OK",
+    }
 
 
 @router.post("/documents", response_model=None)

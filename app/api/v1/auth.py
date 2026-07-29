@@ -1,6 +1,6 @@
 from math import ceil
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func, or_, select
@@ -27,9 +27,18 @@ router = APIRouter(prefix="/auth")
 admin_router = APIRouter(prefix="/admin/users")
 
 
+def client_ip(request: Request) -> str | None:
+    """Real client IP. Behind a reverse proxy the direct peer is the proxy, so
+    prefer the left-most X-Forwarded-For entry it sets."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
 @router.post("/request-otp", response_model=OtpRequestedResponse)
-def request_otp_endpoint(payload: AuthRequestOtp, db: Session = Depends(get_db)) -> OtpRequestedResponse:
-    result = request_otp(db, phone=payload.phone, role=payload.role)
+def request_otp_endpoint(payload: AuthRequestOtp, request: Request, db: Session = Depends(get_db)) -> OtpRequestedResponse:
+    result = request_otp(db, phone=payload.phone, role=payload.role, ip_address=client_ip(request))
     if hasattr(result, "status_code"):
         return result
     return OtpRequestedResponse(

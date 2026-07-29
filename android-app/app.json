@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Elchi",
+    "slug": "elchi-android-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "elchi",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "uz.elchi.app"
+    },
+    "android": {
+      "package": "uz.elchi.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#2258E6",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Jo'natish manzilini avtomatik aniqlash uchun joylashuvingizga ruxsat bering."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Yuk rasmini biriktirish uchun galereyaga ruxsat bering."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#2258E6",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {}
+    }
+  }
+}

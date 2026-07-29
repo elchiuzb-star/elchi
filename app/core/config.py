@@ -18,13 +18,32 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     mock_otp_code: str = "00000"
     otp_length: int = 5
-    otp_expire_seconds: int = 120
+    otp_expire_seconds: int = 180
     otp_max_send_requests: int = 5
     otp_send_window_minutes: int = 30
     otp_resend_cooldown_seconds: int = 60
     otp_max_verify_attempts: int = 5
+    # Anti SMS-pumping: cap requests per source IP and a hard global daily
+    # ceiling so a distributed attack can't exceed a known SMS spend.
+    otp_max_requests_per_ip: int = 15
+    otp_ip_window_minutes: int = 60
+    otp_global_daily_cap: int = 2000
     dev_mock_otp: str = "12345"
     super_admin_phone: str | None = "+998900000001"
+
+    # ── SMS / OTP delivery via Eskiz.uz ──────────────────────────────────────
+    # sms_enabled turns on real delivery; when off, OTPs stay dev-mock only.
+    # sms_test_mode sends the pre-approved test template with a fixed code
+    # (needed until the production template is moderated by Eskiz).
+    sms_enabled: bool = False
+    sms_test_mode: bool = True
+    eskiz_base_url: str = "https://notify.eskiz.uz/api"
+    eskiz_email: str | None = None
+    eskiz_password: str | None = None
+    eskiz_from: str = "4546"  # Eskiz's default test sender id
+    otp_message_template: str = "Elchi platformasiga kirish uchun tasdiqlash kodi: {code}"
+    # Eskiz-approved template ('...kodi: %d') — {code} is the variable part.
+    sms_test_message: str = "Dunyo Taxi platformasiga kirish uchun tasdiqlash kodi: {code}"
 
     upload_dir: str = "storage/uploads"
     max_image_upload_mb: int = 5
@@ -33,6 +52,7 @@ class Settings(BaseSettings):
 
     google_maps_api_key: str | None = None
     google_maps_country: str = "uz"
+    yandex_geocoder_api_key: str | None = None
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173,http://0.0.0.0:5173"
     cors_origin_regex: str | None = (
         r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"

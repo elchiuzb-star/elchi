@@ -1,3 +1,4 @@
+import ipaddress
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from secrets import randbelow
@@ -5,13 +6,14 @@ from typing import Any
 
 from fastapi import status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token, verify_token
 from app.models import AuditLog, ClientProfile, DriverProfile, OtpCode, RefreshSession, User
 from app.schemas.auth import AdminUserCreate
+from app.services import sms_service
 from app.services.audit_service import write_audit_log
 from app.utils.api_response import error_response
 
@@ -85,14 +87,24 @@ def otp_hash(otp: str) -> str:
 
 
 def generate_otp() -> str:
-    if is_development():
+    # A random code whenever SMS is actually being sent. Only pure local dev
+    # with SMS off falls back to the fixed mock (keeps the emulator flow simple).
+    if is_development() and not settings.sms_enabled:
         return settings.dev_mock_otp
     upper = 10**settings.otp_length
     lower = 10 ** (settings.otp_length - 1)
     return str(randbelow(upper - lower) + lower)
 
 
+def otp_message(code: str) -> str:
+    """The SMS body — the real code interpolated into the active approved
+    template. Eskiz approved '...kodi: %d', so a variable code passes moderation."""
+    template = settings.sms_test_message if settings.sms_test_mode else settings.otp_message_template
+    return template.format(code=code)
+
+
 def is_dev_mock_otp(value: str) -> bool:
+    # Local-dev convenience backdoor; disabled entirely outside development.
     if not is_development():
         return False
     return value == settings.dev_mock_otp or value == settings.mock_otp_code
@@ -125,12 +137,32 @@ def create_profile_if_needed(db: Session, user: User) -> None:
 
 def count_recent_otps(db: Session, phone: str, role: str, now: datetime) -> int:
     window_start = now - timedelta(minutes=settings.otp_send_window_minutes)
-    from sqlalchemy import func
-
     return db.scalar(select(func.count(OtpCode.id)).where(OtpCode.phone == phone, OtpCode.role == role, OtpCode.created_at >= window_start)) or 0
 
 
-def request_otp(db: Session, phone: str, role: str) -> dict[str, Any] | JSONResponse:
+def _is_local_ip(ip: str | None) -> bool:
+    """Loopback / private / emulator IPs — never a real public attacker source.
+    Per-IP limits skip these so local + emulator testing isn't throttled; in
+    production the proxy supplies real public client IPs via X-Forwarded-For."""
+    if not ip:
+        return True
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return True
+    return addr.is_loopback or addr.is_private or addr.is_link_local
+
+
+def count_recent_otps_by_ip(db: Session, ip: str, now: datetime) -> int:
+    window_start = now - timedelta(minutes=settings.otp_ip_window_minutes)
+    return db.scalar(select(func.count(OtpCode.id)).where(OtpCode.ip_address == ip, OtpCode.created_at >= window_start)) or 0
+
+
+def count_otps_since(db: Session, since: datetime) -> int:
+    return db.scalar(select(func.count(OtpCode.id)).where(OtpCode.created_at >= since)) or 0
+
+
+def request_otp(db: Session, phone: str, role: str, ip_address: str | None = None) -> dict[str, Any] | JSONResponse:
     normalized_phone = normalize_phone(phone)
     if isinstance(normalized_phone, JSONResponse):
         return normalized_phone
@@ -172,7 +204,7 @@ def request_otp(db: Session, phone: str, role: str) -> dict[str, Any] | JSONResp
     if latest_otp is not None:
         seconds_since_last = (now - ensure_aware(latest_otp.created_at)).total_seconds()
         if seconds_since_last < settings.otp_resend_cooldown_seconds:
-            return error_response(status.HTTP_400_BAD_REQUEST, "OTP_RESEND_TOO_SOON", "Please wait before requesting another OTP")
+            return error_response(status.HTTP_429_TOO_MANY_REQUESTS, "OTP_RESEND_TOO_SOON", "Please wait before requesting another OTP")
 
     recent_count = count_recent_otps(db, normalized_phone, role, now)
     if recent_count >= settings.otp_max_send_requests:
@@ -181,6 +213,14 @@ def request_otp(db: Session, phone: str, role: str) -> dict[str, Any] | JSONResp
             "OTP_SEND_LIMIT_EXCEEDED",
             "Too many OTP requests. Please try again later",
         )
+
+    # Hard global ceiling on total OTP sends (SMS-spend / mass-abuse guard).
+    if count_otps_since(db, now - timedelta(days=1)) >= settings.otp_global_daily_cap:
+        return error_response(status.HTTP_429_TOO_MANY_REQUESTS, "OTP_GLOBAL_LIMIT", "Service is busy. Please try again later")
+
+    # Per-IP ceiling — stops one source fanning out across many phone numbers.
+    if not _is_local_ip(ip_address) and count_recent_otps_by_ip(db, ip_address, now) >= settings.otp_max_requests_per_ip:
+        return error_response(status.HTTP_429_TOO_MANY_REQUESTS, "OTP_IP_LIMIT", "Too many requests. Please try again later")
 
     for active_otp in db.scalars(
         select(OtpCode).where(OtpCode.phone == normalized_phone, OtpCode.role == role, OtpCode.used_at.is_(None))
@@ -197,6 +237,7 @@ def request_otp(db: Session, phone: str, role: str) -> dict[str, Any] | JSONResp
             expires_at=now + timedelta(seconds=settings.otp_expire_seconds),
             attempt_count=0,
             send_count_window_start=now - timedelta(minutes=settings.otp_send_window_minutes),
+            ip_address=ip_address,
         )
     )
     write_audit_log(
@@ -209,13 +250,22 @@ def request_otp(db: Session, phone: str, role: str) -> dict[str, Any] | JSONResp
         actor_role=user.role if user is not None else "system",
     )
     db.commit()
+
+    # Deliver over SMS when enabled. Failure is logged inside send_sms and does
+    # not fail the request — the code is stored and the user can resend.
+    if settings.sms_enabled:
+        sms_service.send_sms(normalized_phone, otp_message(otp))
+
     data = {
         "otp_sent": True,
         "phone": normalized_phone,
         "expires_in_seconds": settings.otp_expire_seconds,
         "resend_after_seconds": settings.otp_resend_cooldown_seconds,
     }
-    if is_development():
+    # Only surface the code when there is no real SMS to deliver it (local dev /
+    # emulator). Once SMS is enabled the code goes over the wire only, never in
+    # the API response.
+    if is_development() and not settings.sms_enabled:
         data["dev_otp"] = otp
     return data
 

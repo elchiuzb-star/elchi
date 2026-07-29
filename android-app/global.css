@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Elchi design tokens ─────────────────────────────────────────────────────
+   Ported from frontend/src/styles/theme.css. Light values under :root, dark
+   values under the prefers-color-scheme media query (NativeWind maps this to
+   the device / Appearance color scheme, and to a manual override set via
+   nativewind's colorScheme API). */
+
+:root {
+  --color-background: #f4f6fb;
+  --color-foreground: #111726;
+  --color-card: #ffffff;
+  --color-card-foreground: #111726;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #111726;
+  --color-primary: #2258e6;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #e9eef9;
+  --color-secondary-foreground: #2a3346;
+  --color-muted: #eef1f8;
+  --color-muted-foreground: #5b6577;
+  --color-accent: #e4ebfd;
+  --color-accent-foreground: #2258e6;
+  --color-feruza: #3b82f6;
+  --color-destructive: #d93b44;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #1e9e5b;
+  --color-warning: #c98a16;
+  --color-info: #2c7bd0;
+  --color-border: rgba(17, 23, 38, 0.09);
+  --color-input: #eef1f8;
+  --color-ring: #2258e6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #0b1020;
+    --color-foreground: #e9edf6;
+    --color-card: #141b2e;
+    --color-card-foreground: #e9edf6;
+    --color-popover: #182034;
+    --color-popover-foreground: #e9edf6;
+    --color-primary: #4a78f0;
+    --color-primary-foreground: #ffffff;
+    --color-secondary: #1e2740;
+    --color-secondary-foreground: #c4cde0;
+    --color-muted: #182034;
+    --color-muted-foreground: #8a93a8;
+    --color-accent: #16233f;
+    --color-accent-foreground: #6aa6ff;
+    --color-feruza: #6aa6ff;
+    --color-destructive: #ef5a63;
+    --color-destructive-foreground: #ffffff;
+    --color-success: #35bb78;
+    --color-warning: #e0a93a;
+    --color-info: #5aa6e0;
+    --color-border: rgba(233, 237, 246, 0.1);
+    --color-input: #1e2740;
+    --color-ring: #4a78f0;
+  }
+}

@@ -7,7 +7,7 @@ from app.schemas.geo import (
     GeoReverseGeocodeRequest,
     GeoValidateLocationRequest,
 )
-from app.services import google_maps_service
+from app.services import yandex_maps_service as maps_service
 from app.services.geo_service import nearest_district, validate_location_payload
 from app.utils.api_response import error_response
 
@@ -29,18 +29,18 @@ def validate_location(payload: GeoValidateLocationRequest, db: Session = Depends
 
 @router.post("/reverse-geocode", response_model=None)
 def reverse_geocode(payload: GeoReverseGeocodeRequest, db: Session = Depends(get_db)) -> dict:
-    """Resolve a map marker (lat/lng) to a human-readable address via Google Maps.
+    """Resolve a map marker (lat/lng) to a human-readable address via Yandex Maps.
 
-    Falls back to the nearest known district when Google is not configured/available.
+    Falls back to the nearest known district when Yandex is not configured/available.
     """
     lat = float(payload.lat)
     lng = float(payload.lng)
-    google_result = google_maps_service.reverse_geocode(lat, lng, language=payload.language)
+    geo_result = maps_service.reverse_geocode(lat, lng, language=payload.language)
     detected, _distance = nearest_district(db, lat, lng)
-    if google_result is not None:
+    if geo_result is not None:
         data = {
-            **google_result,
-            "provider": "google",
+            **geo_result,
+            "provider": "yandex",
             "detected_region_id": detected.city_id if detected else None,
             "detected_district_id": detected.id if detected else None,
         }
@@ -63,8 +63,8 @@ def reverse_geocode(payload: GeoReverseGeocodeRequest, db: Session = Depends(get
 
 @router.post("/geocode", response_model=None)
 def geocode(payload: GeoGeocodeRequest):
-    """Resolve a typed address to coordinates via Google Maps."""
-    result = google_maps_service.geocode(payload.address, language=payload.language)
+    """Resolve a typed address to coordinates via Yandex Maps."""
+    result = maps_service.geocode(payload.address, language=payload.language)
     if result is None:
         return error_response(404, "GEOCODE_FAILED", "Manzil bo'yicha koordinata topilmadi")
-    return {"success": True, "data": {**result, "provider": "google"}, "message": "OK"}
+    return {"success": True, "data": {**result, "provider": "yandex"}, "message": "OK"}

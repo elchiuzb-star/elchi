@@ -1320,7 +1320,7 @@ function PhoneScreen({ role, onSubmit, onBack }: { role:Role; onSubmit:(p:string
   );
 }
 
-const OTP_LENGTH = 5;
+const OTP_LENGTH = 6; // must match backend ELCHI_OTP_LENGTH
 
 function OtpScreen({ phone, onVerify, onResend, devOtp, onBack }: { phone:string; role:Role; onVerify:(code:string)=>Promise<void>; onResend:()=>Promise<string|undefined>; devOtp?:string; onBack:()=>void }) {
   const { t } = useT();

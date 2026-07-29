@@ -183,6 +183,7 @@ def limited_order_to_dict(db: Session, order: Order, driver_id: int) -> dict[str
         "to_district": district_summary(to_district),
         "pickup_area": from_district.name_uz if from_district else area(order.pickup_address),
         "dropoff_area": to_district.name_uz if to_district else area(order.dropoff_address),
+        "cargo_type": order.cargo_type,
         "cargo_photo_url": order.cargo_photo_url,
         "suggested_price": order.suggested_price,
         "client_price": order.client_price,

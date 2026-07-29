@@ -240,6 +240,17 @@ def submit_driver_document(
     return document
 
 
+def list_driver_documents(db: Session, profile: DriverProfile) -> list[DriverDocument]:
+    """Documents the driver has uploaded, so the app can show per-document state."""
+    return list(
+        db.scalars(
+            select(DriverDocument)
+            .where(DriverDocument.driver_id == profile.id)
+            .order_by(DriverDocument.id.asc())
+        )
+    )
+
+
 def document_to_dict(document: DriverDocument) -> dict[str, Any]:
     return {
         "document_id": document.id,
@@ -247,6 +258,7 @@ def document_to_dict(document: DriverDocument) -> dict[str, Any]:
         "document_type": document.document_type,
         "file_url": document.file_url,
         "status": document.status,
+        "rejection_reason": document.rejection_reason,
     }
 
 
