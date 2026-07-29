@@ -1,0 +1,26 @@
+api.elchigo.uz {
+	encode zstd gzip
+
+	# Slightly above ELCHI_MAX_DOCUMENT_UPLOAD_MB (10) so the API returns its
+	# own validation error rather than Caddy cutting the request short.
+	request_body {
+		max_size 12MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy api:8000
+
+	log {
+		output file /data/access.log {
+			roll_size 50MB
+			roll_keep 5
+		}
+	}
+}

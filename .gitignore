@@ -7,8 +7,13 @@ __pycache__/
 htmlcov/
 
 .env
+.env.*
+!.env.example
+!.env.production.example
 .venv/
 venv/
+
+backups/
 
 *.db
 *.sqlite
