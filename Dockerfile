@@ -1,8 +1,12 @@
 FROM python:3.12-slim
 
+# PYTHONPATH is set because `python scripts/foo.py` puts /app/scripts on
+# sys.path, not /app, so the seed scripts cannot `import app`. uvicorn is
+# unaffected either way, since it adds the working directory itself.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
