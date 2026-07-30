@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { ArrowRight, RefreshCw as ArrowsClockwise, CircleAlert as WarningCircle } from "lucide-react-native";
 import { useT } from "@/i18n/i18n";
 import { useTheme } from "@/theme/ThemeProvider";
 import { getUzbekErrorMessage } from "@/utils/errors";
 import { BackButton, PrimaryButton } from "@/components/buttons";
 
-// Must match the backend's otp_length (Eskiz's approved test code is 6 digits).
-const OTP_LENGTH = Number(process.env.EXPO_PUBLIC_OTP_LENGTH) || 6;
+// Must match the backend's otp_length. The approved Elchi template uses 4.
+const OTP_LENGTH = Number(process.env.EXPO_PUBLIC_OTP_LENGTH) || 4;
 
 export function OtpScreen({
   phone,
@@ -54,6 +54,23 @@ export function OtpScreen({
       setLoading(false);
     }
   }
+
+  // Submit as soon as the code is complete, so the user never has to press the
+  // button (this also covers Android SMS autofill filling all digits at once).
+  // The submitted value is remembered so a rejected code isn't retried in a
+  // loop; editing the code clears it and allows another attempt.
+  const autoSubmitted = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (code.length !== OTP_LENGTH) {
+      autoSubmitted.current = null;
+      return;
+    }
+    if (loading || autoSubmitted.current === code) return;
+    autoSubmitted.current = code;
+    Keyboard.dismiss();
+    void verify();
+  }, [code, loading]);
 
   async function resendCode() {
     setError("");
