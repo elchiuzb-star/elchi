@@ -33,7 +33,21 @@ echo "==> Status"
 "${COMPOSE[@]}" ps
 
 echo
-echo "Health check:"
-curl -fsS https://api.elchigo.uz/api/v1/health && echo || {
-	echo "  not reachable yet — check: ${COMPOSE[*]} logs -f caddy api" >&2
-}
+# On a first deploy Caddy still has to obtain a certificate from Let's Encrypt,
+# which takes a few seconds. Curling immediately fails with a TLS alert, so
+# retry for a minute before calling it broken.
+echo "Health check (waiting for TLS if this is the first deploy)..."
+for attempt in $(seq 1 12); do
+	if curl -fsS --max-time 5 https://api.elchigo.uz/api/v1/health; then
+		echo
+		echo "OK — https://api.elchigo.uz/docs"
+		exit 0
+	fi
+	printf '  attempt %s/12 not ready yet, retrying in 5s\n' "$attempt"
+	sleep 5
+done
+
+echo >&2
+echo "Still not reachable after 60s. Check the logs:" >&2
+echo "  ${COMPOSE[*]} logs --tail=50 caddy api" >&2
+exit 1
