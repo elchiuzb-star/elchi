@@ -16,8 +16,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 30
     jwt_algorithm: str = "HS256"
-    mock_otp_code: str = "00000"
-    otp_length: int = 5
+    mock_otp_code: str = "0000"
+    # 4 digits, matching the Eskiz-approved Elchi template. Keep in sync with
+    # the clients' OTP_LENGTH (VITE_OTP_LENGTH / EXPO_PUBLIC_OTP_LENGTH).
+    otp_length: int = 4
     otp_expire_seconds: int = 180
     otp_max_send_requests: int = 5
     otp_send_window_minutes: int = 30
@@ -28,7 +30,7 @@ class Settings(BaseSettings):
     otp_max_requests_per_ip: int = 15
     otp_ip_window_minutes: int = 60
     otp_global_daily_cap: int = 2000
-    dev_mock_otp: str = "12345"
+    dev_mock_otp: str = "1234"
     super_admin_phone: str | None = "+998900000001"
 
     # ── SMS / OTP delivery via Eskiz.uz ──────────────────────────────────────
