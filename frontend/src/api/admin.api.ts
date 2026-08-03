@@ -5,17 +5,10 @@ import type { AuthRole, AuthUser, StaffRole, TokenResponse } from "../types/auth
 
 export type AdminRecord = Record<string, unknown>;
 
-export type AdminLoginPayload = {
-  phone: string;
-  role: StaffRole;
-};
-
-export type AdminOtpResponse = {
-  otp_sent: boolean;
-  phone: string;
-  dev_otp?: string;
-  expires_in_seconds?: number;
-  resend_after_seconds?: number;
+// Staff sign in with a username and password; only clients and drivers use OTP.
+export type StaffLoginPayload = {
+  username: string;
+  password: string;
 };
 
 export type AdminUserCreatePayload = {
@@ -138,16 +131,8 @@ export function query(params: Record<string, string | number | boolean | undefin
   return value ? `?${value}` : "";
 }
 
-export function requestAdminOtp(payload: AdminLoginPayload) {
-  return adminApiRequest<AdminOtpResponse>("/auth/request-otp", {
-    method: "POST",
-    body: payload,
-    auth: false,
-  });
-}
-
-export function verifyAdminOtp(payload: AdminLoginPayload & { otp: string }) {
-  return adminApiRequest<TokenResponse>("/auth/verify-otp", {
+export function staffLogin(payload: StaffLoginPayload) {
+  return adminApiRequest<TokenResponse>("/auth/staff-login", {
     method: "POST",
     body: payload,
     auth: false,

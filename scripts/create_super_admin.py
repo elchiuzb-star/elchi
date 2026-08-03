@@ -30,6 +30,10 @@ def main() -> None:
         db.add(user)
         db.commit()
         print(f"Created super_admin: {normalized_phone}")
+        print(
+            "This account has no login yet — staff cannot use SMS OTP. Set one with:\n"
+            f"  python scripts/set_staff_password.py --username <name> --phone {normalized_phone}"
+        )
     finally:
         db.close()
         engine.dispose()

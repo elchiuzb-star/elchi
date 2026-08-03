@@ -2,12 +2,17 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import Any
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt is used directly rather than through passlib: passlib 1.7.4 reads
+# bcrypt.__about__, which bcrypt removed in 4.1, so the passlib backend raises
+# on first use against the installed bcrypt 5.x.
+BCRYPT_ROUNDS = 12
+# bcrypt silently truncates at 72 bytes; reject longer input instead.
+MAX_PASSWORD_BYTES = 72
 
 
 def create_token(
@@ -64,8 +69,21 @@ def verify_token(token: str) -> dict[str, Any] | None:
 
 
 def hash_password(password: str) -> str:
-    return password_context.hash(password)
+    encoded = password.encode("utf-8")
+    if len(encoded) > MAX_PASSWORD_BYTES:
+        raise ValueError(f"Password must be at most {MAX_PASSWORD_BYTES} bytes")
+    return bcrypt.hashpw(encoded, bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return password_context.verify(plain_password, hashed_password)
+    """Constant-time check. Returns False rather than raising on a malformed or
+    missing hash, so a user without a password simply fails to authenticate."""
+    if not hashed_password:
+        return False
+    encoded = plain_password.encode("utf-8")
+    if len(encoded) > MAX_PASSWORD_BYTES:
+        return False
+    try:
+        return bcrypt.checkpw(encoded, hashed_password.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False

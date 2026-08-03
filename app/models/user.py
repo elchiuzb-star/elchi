@@ -15,6 +15,10 @@ class User(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     phone: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    # Staff sign in with username + password; clients and drivers use SMS OTP
+    # and leave both of these null.
+    username: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     full_name: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)

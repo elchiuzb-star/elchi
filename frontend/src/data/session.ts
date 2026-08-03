@@ -10,7 +10,7 @@ import {
   getRefreshToken,
   getStoredUser,
 } from "../auth/tokenStorage";
-import { requestAdminOtp, verifyAdminOtp, getAdminMe } from "../api/admin.api";
+import { staffLogin, getAdminMe } from "../api/admin.api";
 import {
   saveAdminTokens,
   clearAdminAuthStorage,
@@ -28,41 +28,22 @@ const resolvedStaffRole = new Map<string, StaffRole>();
 
 export type OtpRequestResult = { devOtp?: string };
 
-/** Request an OTP for the given UI role. Returns the dev OTP when the backend is in development mode. */
-export async function sessionRequestOtp(role: UiRole, rawPhone: string): Promise<OtpRequestResult> {
-  const phone = normalizeUzPhone(rawPhone);
-  if (role !== "admin") {
-    const res = await mobileRequestOtp({ phone, role });
-    return { devOtp: res.dev_otp };
-  }
-  // Admin: auto-detect the staff role that matches this phone.
-  let lastError: unknown = null;
-  for (const staffRole of STAFF_ROLE_ORDER) {
-    try {
-      const res = await requestAdminOtp({ phone, role: staffRole });
-      resolvedStaffRole.set(phone, staffRole);
-      return { devOtp: res.dev_otp };
-    } catch (error) {
-      lastError = error;
-      if (error instanceof ApiError && (error.code === "ROLE_MISMATCH" || error.code === "FORBIDDEN")) {
-        continue; // try the next staff role
-      }
-      throw error;
-    }
-  }
-  throw lastError ?? new Error("Staff user not found");
+/** Request an OTP. Clients and drivers only — the backend rejects staff roles here. */
+export async function sessionRequestOtp(role: Exclude<UiRole, "admin">, rawPhone: string): Promise<OtpRequestResult> {
+  const res = await mobileRequestOtp({ phone: normalizeUzPhone(rawPhone), role });
+  return { devOtp: res.dev_otp };
 }
 
-/** Verify the OTP and persist tokens into the correct store for this role. */
-export async function sessionVerifyOtp(role: UiRole, rawPhone: string, otp: string): Promise<AuthUser> {
-  const phone = normalizeUzPhone(rawPhone);
-  if (role !== "admin") {
-    const res = await mobileVerifyOtp({ phone, role, otp });
-    saveTokens(res.access_token, res.refresh_token, res.user);
-    return res.user;
-  }
-  const staffRole = resolvedStaffRole.get(phone) ?? "admin";
-  const res = await verifyAdminOtp({ phone, role: staffRole, otp });
+/** Verify the OTP and persist tokens. Clients and drivers only. */
+export async function sessionVerifyOtp(role: Exclude<UiRole, "admin">, rawPhone: string, otp: string): Promise<AuthUser> {
+  const res = await mobileVerifyOtp({ phone: normalizeUzPhone(rawPhone), role, otp });
+  saveTokens(res.access_token, res.refresh_token, res.user);
+  return res.user;
+}
+
+/** Staff sign-in with username + password. Persists into the admin token store. */
+export async function sessionStaffLogin(username: string, password: string): Promise<AuthUser> {
+  const res = await staffLogin({ username, password });
   saveAdminTokens(res.access_token, res.refresh_token, res.user);
   return res.user;
 }

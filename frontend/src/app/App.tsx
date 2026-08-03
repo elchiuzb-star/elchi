@@ -11,10 +11,11 @@ import {
   SquaresFour as LayoutDashboard, Users, Tag, ShieldCheck, SealCheck, SealWarning, ClipboardText as ClipboardList, CurrencyDollar as DollarSign,
   Pulse as Activity, CaretDown as ChevronDown, SidebarSimple as PanelLeftClose, Sidebar as PanelLeft, ArrowUpRight,
   RadioButton as CircleDot, UserCheck, UserMinus as UserX, Lightning as Zap, Funnel as Filter, DownloadSimple as Download, ArrowSquareOut as ExternalLink,
+  EyeSlash as EyeOff,
 } from "@phosphor-icons/react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import {
-  sessionRequestOtp, sessionVerifyOtp, sessionLogout, isSessionActive, sessionRefreshMe, sessionPhone, sessionUser,
+  sessionRequestOtp, sessionVerifyOtp, sessionStaffLogin, sessionLogout, isSessionActive, sessionRefreshMe, sessionPhone, sessionUser,
 } from "../data/session";
 import { getUzbekErrorMessage } from "../utils/errors";
 import {
@@ -236,7 +237,9 @@ const T = {
     admAuditLog:"Audit jurnali", admProfile:"Profil",
     admRefresh:"Yangilash", admLogout:"Chiqish", admCollapse:"Yig'ish",
     admBrandSubtitle:"Super admin", admSuperAdmin:"Super admin",
-    admLoginHeading:"Boshqaruv paneli", admLoginDesc:"Davom etish uchun raqamingizni kiriting",
+    admLoginHeading:"Boshqaruv paneli", admLoginDesc:"Davom etish uchun login va parolni kiriting",
+    admUsernameLabel:"Login", admPasswordLabel:"Parol", admLoginCta:"Kirish",
+    admLoginError:"Login va parolni to'liq kiriting", admShowPassword:"Parolni ko'rsatish", admHidePassword:"Parolni yashirish",
     admPanelBlurb:"Buyurtmalar, haydovchilar va tariflarni bir joydan boshqaring", admOtpSentTo:"Kod yuborildi:",
     // Dashboard
     admFinancialOverview:"Moliyaviy ko'rsatkichlar", admOperations:"Operatsiyalar",
@@ -475,7 +478,9 @@ const T = {
     admAuditLog:"Журнал аудита", admProfile:"Профиль",
     admRefresh:"Обновить", admLogout:"Выход", admCollapse:"Свернуть",
     admBrandSubtitle:"Супер-админ", admSuperAdmin:"Супер-админ",
-    admLoginHeading:"Панель управления", admLoginDesc:"Введите номер для входа",
+    admLoginHeading:"Панель управления", admLoginDesc:"Введите логин и пароль для входа",
+    admUsernameLabel:"Логин", admPasswordLabel:"Пароль", admLoginCta:"Войти",
+    admLoginError:"Введите логин и пароль", admShowPassword:"Показать пароль", admHidePassword:"Скрыть пароль",
     admPanelBlurb:"Управляйте заказами, водителями и тарифами в одном месте", admOtpSentTo:"Код отправлен:",
     // Dashboard
     admFinancialOverview:"Финансовый обзор", admOperations:"Операции",
@@ -714,7 +719,9 @@ const T = {
     admAuditLog:"Audit Log", admProfile:"Profile",
     admRefresh:"Refresh", admLogout:"Logout", admCollapse:"Collapse",
     admBrandSubtitle:"Super Admin", admSuperAdmin:"Super Admin",
-    admLoginHeading:"Management Panel", admLoginDesc:"Enter your number to continue",
+    admLoginHeading:"Management Panel", admLoginDesc:"Enter your username and password",
+    admUsernameLabel:"Username", admPasswordLabel:"Password", admLoginCta:"Sign in",
+    admLoginError:"Enter both username and password", admShowPassword:"Show password", admHidePassword:"Hide password",
     admPanelBlurb:"Manage orders, drivers and tariffs in one place", admOtpSentTo:"Code sent to:",
     // Dashboard
     admFinancialOverview:"Financial Overview", admOperations:"Operations",
@@ -4245,20 +4252,33 @@ function AuthPage() {
     return () => { active = false; };
   }, [role, navigate]);
 
+  // This page is the client/driver OTP flow. Staff sign in at /admin with a
+  // username and password, so bounce them there rather than calling an OTP
+  // endpoint the backend now rejects for staff roles.
+  function otpRoleOrRedirect(): Exclude<Role, "admin"> | null {
+    if (role === "admin") { navigate("/admin", { replace: true }); return null; }
+    return role;
+  }
   async function requestOtpFor(p: string) {
+    const otpRole = otpRoleOrRedirect();
+    if (!otpRole) return;
     setPhone(p);
-    const res = await sessionRequestOtp(role, p);
+    const res = await sessionRequestOtp(otpRole, p);
     setDevOtp(res.devOtp);
     setAuthStep("otp");
   }
   async function resendOtp() {
-    const res = await sessionRequestOtp(role, phone);
+    const otpRole = otpRoleOrRedirect();
+    if (!otpRole) return undefined;
+    const res = await sessionRequestOtp(otpRole, phone);
     setDevOtp(res.devOtp);
     return res.devOtp;
   }
   async function verifyOtpFor(code: string) {
-    await sessionVerifyOtp(role, phone, code);
-    navigate(`/${role}`, { replace: true });
+    const otpRole = otpRoleOrRedirect();
+    if (!otpRole) return;
+    await sessionVerifyOtp(otpRole, phone, code);
+    navigate(`/${otpRole}`, { replace: true });
   }
 
   // Admin: centered card on dark background
@@ -4385,37 +4405,22 @@ function ClientPage() {
 
 // ── /admin ────────────────────────────────────────────────────────────────────
 
-function AdminLogin({ step, phone, onRequestOtp, onVerify, onResend, onExit }: {
-  step:"phone"|"otp"; phone:string;
-  onRequestOtp:(phone:string)=>Promise<void>; onVerify:(code:string)=>Promise<void>;
-  onResend:()=>Promise<string|undefined>; onExit:()=>void;
-}) {
+// Staff sign in with username + password. Clients and drivers still use SMS
+// OTP; the backend rejects staff roles on the OTP endpoints entirely.
+function AdminLogin({ onLogin }: { onLogin:(username:string,password:string)=>Promise<void> }) {
   const { t } = useT();
-  const [rest,setRest] = useState("");
-  const [code,setCode] = useState("");
+  const [username,setUsername] = useState("");
+  const [password,setPassword] = useState("");
+  const [showPassword,setShowPassword] = useState(false);
   const [err,setErr] = useState("");
   const [loading,setLoading] = useState(false);
-  const [resend,setResend] = useState(0);
-  const [focused,setFocused] = useState(true);
-  useEffect(()=>{ setErr(""); if(step==="otp"){ setCode(""); setResend(59); } },[step]);
-  useEffect(()=>{ if(resend<=0)return; const id=setInterval(()=>setResend(s=>s-1),1000); return()=>clearInterval(id); },[resend]);
-  const digits = rest.replace(/\D/g,"").slice(0,9);
-  const shownPhone = [digits.slice(0,2),digits.slice(2,5),digits.slice(5,7),digits.slice(7,9)].filter(Boolean).join(" ");
-  const complete = code.length===OTP_LENGTH;
-  async function submitPhone(){
-    if(digits.length<9){ setErr(t("phoneError")); return; }
+  const canSubmit = username.trim().length>=3 && password.length>=8;
+  async function submit(){
+    if(!canSubmit){ setErr(t("admLoginError")); return; }
     setLoading(true); setErr("");
-    try { await onRequestOtp("+998"+digits); }
-    catch(e){ setErr(getUzbekErrorMessage(e)); }
-    finally { setLoading(false); }
-  }
-  async function submitOtp(){
-    if(!complete){ setErr(t("otpError")); return; }
-    setLoading(true); setErr("");
-    try { await onVerify(code); }
+    try { await onLogin(username.trim(),password); }
     catch(e){ setErr(getUzbekErrorMessage(e)); setLoading(false); }
   }
-  async function resendCode(){ setErr(""); try { await onResend(); setResend(59); } catch(e){ setErr(getUzbekErrorMessage(e)); } }
 
   return (
     <div className="min-h-screen w-full bg-slate-100 flex items-center justify-center p-4" style={{ fontFamily:"Inter, sans-serif" }}>
@@ -4441,58 +4446,40 @@ function AdminLogin({ step, phone, onRequestOtp, onVerify, onResend, onExit }: {
             <div><p className="text-sm font-bold text-slate-900">Elchi Admin</p><p className="text-[10px] text-slate-400">Management Panel</p></div>
           </div>
 
-          {step==="phone" ? (
-            <>
-              <h2 className="text-2xl font-bold text-slate-900 mb-1.5">{t("admLoginHeading")}</h2>
-              <p className="text-sm text-slate-500 mb-8">{t("admLoginDesc")}</p>
-              <label className="text-xs font-semibold text-slate-500 mb-2 block">{t("phoneLabel")}</label>
-              <div className={`flex items-center gap-3 rounded-xl border bg-slate-50 px-4 h-14 transition-colors ${err?"border-red-400":"border-slate-200 focus-within:border-[#1B4FD8]"}`}>
-                <span className="text-[11px] font-bold text-[#1B4FD8] bg-[#1B4FD8]/10 rounded-md px-2 py-1">UZ</span>
-                <span className="text-base font-bold text-slate-900">+998</span>
-                <input autoFocus type="text" inputMode="numeric" value={shownPhone}
-                  onChange={e=>{ setRest(e.target.value); if(err)setErr(""); }}
-                  onKeyDown={e=>{ if(e.key==="Enter") submitPhone(); }}
-                  placeholder="90 123 45 67"
-                  className="flex-1 bg-transparent text-base font-bold font-mono text-slate-900 placeholder:text-slate-300 outline-none"/>
-              </div>
-              {err && <p className="mt-2 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12}/>{err}</p>}
-              <button onClick={submitPhone} disabled={loading||digits.length<9}
-                className="mt-8 w-full rounded-xl bg-[#1B4FD8] text-white text-sm font-semibold flex items-center justify-center gap-2 py-4 hover:bg-[#1746c4] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed">
-                {loading?<span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/>:<>{t("phoneCta")}<ArrowRight size={18}/></>}
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={()=>onExit()} className="self-start mb-6 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"><ChevronLeft size={18} className="text-slate-600"/></button>
-              <h2 className="text-2xl font-bold text-slate-900 mb-1.5">{t("otpTitle")}</h2>
-              <p className="text-sm text-slate-500 mb-8">{t("admOtpSentTo")} <span className="font-mono font-semibold text-slate-700">+998 {shownPhone||phone}</span></p>
-              <div className="relative">
-                <input type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus value={code}
-                  onChange={e=>{ setCode(e.target.value.replace(/\D/g,"").slice(0,OTP_LENGTH)); if(err)setErr(""); }}
-                  onKeyDown={e=>{ if(e.key==="Enter"&&complete) submitOtp(); }}
-                  onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
-                  className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer"/>
-                <div className="grid grid-cols-5 gap-3">
-                  {Array.from({length:OTP_LENGTH}).map((_,i)=>{
-                    const char = code[i] ?? "";
-                    const isCurrent = focused && i===code.length;
-                    const cls = err ? "border-red-400 bg-red-50" : char ? "border-[#1B4FD8] bg-[#1B4FD8]/5" : isCurrent ? "border-[#1B4FD8] bg-white" : "border-slate-200 bg-slate-50";
-                    return <div key={i} className={`aspect-square rounded-xl border-2 flex items-center justify-center text-xl font-bold font-mono text-slate-900 transition-all ${cls}`}>{char||(isCurrent?<span className="w-0.5 h-6 bg-[#1B4FD8] rounded-full animate-pulse"/>:"")}</div>;
-                  })}
-                </div>
-              </div>
-              {err && <p className="mt-3 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12}/>{err}</p>}
-              <div className="mt-5 flex justify-center">
-                {resend>0
-                  ?<p className="text-xs text-slate-400 font-mono">{t("otpResendIn")} 0:{resend.toString().padStart(2,"0")}</p>
-                  :<button onClick={resendCode} className="flex items-center gap-1 text-xs text-[#1B4FD8] font-medium hover:underline"><RefreshCw size={12}/>{t("otpResend")}</button>}
-              </div>
-              <button onClick={submitOtp} disabled={loading||!complete}
-                className="mt-8 w-full rounded-xl bg-[#1B4FD8] text-white text-sm font-semibold flex items-center justify-center gap-2 py-4 hover:bg-[#1746c4] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed">
-                {loading?<span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/>:<>{t("otpVerify")}<ArrowRight size={18}/></>}
-              </button>
-            </>
-          )}
+          <h2 className="text-2xl font-bold text-slate-900 mb-1.5">{t("admLoginHeading")}</h2>
+          <p className="text-sm text-slate-500 mb-8">{t("admLoginDesc")}</p>
+
+          <label htmlFor="adm-username" className="text-xs font-semibold text-slate-500 mb-2 block">{t("admUsernameLabel")}</label>
+          <div className={`flex items-center gap-3 rounded-xl border bg-slate-50 px-4 h-14 transition-colors ${err?"border-red-400":"border-slate-200 focus-within:border-[#1B4FD8]"}`}>
+            <User size={16} className="text-slate-400"/>
+            <input id="adm-username" autoFocus type="text" autoComplete="username" value={username}
+              onChange={e=>{ setUsername(e.target.value); if(err)setErr(""); }}
+              onKeyDown={e=>{ if(e.key==="Enter") submit(); }}
+              placeholder="admin"
+              className="flex-1 bg-transparent text-base font-semibold text-slate-900 placeholder:text-slate-300 outline-none"/>
+          </div>
+
+          <label htmlFor="adm-password" className="text-xs font-semibold text-slate-500 mb-2 mt-5 block">{t("admPasswordLabel")}</label>
+          <div className={`flex items-center gap-3 rounded-xl border bg-slate-50 px-4 h-14 transition-colors ${err?"border-red-400":"border-slate-200 focus-within:border-[#1B4FD8]"}`}>
+            <Lock size={16} className="text-slate-400"/>
+            <input id="adm-password" type={showPassword?"text":"password"} autoComplete="current-password" value={password}
+              onChange={e=>{ setPassword(e.target.value); if(err)setErr(""); }}
+              onKeyDown={e=>{ if(e.key==="Enter") submit(); }}
+              placeholder="••••••••"
+              className="flex-1 bg-transparent text-base font-semibold text-slate-900 placeholder:text-slate-300 outline-none"/>
+            <button type="button" onClick={()=>setShowPassword(v=>!v)}
+              aria-label={showPassword?t("admHidePassword"):t("admShowPassword")}
+              className="text-slate-400 hover:text-slate-600 transition-colors">
+              {showPassword?<EyeOff size={16}/>:<Eye size={16}/>}
+            </button>
+          </div>
+
+          {err && <p className="mt-3 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12}/>{err}</p>}
+
+          <button onClick={submit} disabled={loading||!canSubmit}
+            className="mt-8 w-full rounded-xl bg-[#1B4FD8] text-white text-sm font-semibold flex items-center justify-center gap-2 py-4 hover:bg-[#1746c4] active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed">
+            {loading?<span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/>:<>{t("admLoginCta")}<ArrowRight size={18}/></>}
+          </button>
         </div>
       </div>
     </div>
@@ -4519,10 +4506,8 @@ function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const requestOtp = async (p: string) => { setPhoneState(p); const res = await sessionRequestOtp("admin", p); setDevOtp(res.devOtp); setStep("otp"); };
-  const resendOtp = async () => { const res = await sessionRequestOtp("admin", phone); setDevOtp(res.devOtp); return res.devOtp; };
-  const verifyOtp = async (code: string) => { await sessionVerifyOtp("admin", phone, code); setStatus("authed"); };
-  const handleLogout = async () => { await sessionLogout("admin"); setStep("phone"); setStatus("login"); };
+  const handleLogin = async (username: string, password: string) => { await sessionStaffLogin(username, password); setStatus("authed"); };
+  const handleLogout = async () => { await sessionLogout("admin"); setStatus("login"); };
 
   const tFn = (k: TKey): string => {
     const v = (T[lang] as Record<string, unknown>)[k as string];
@@ -4539,14 +4524,7 @@ function AdminPage() {
           <span className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         </div>
       ) : (
-        <AdminLogin
-          step={step}
-          phone={phone}
-          onRequestOtp={requestOtp}
-          onVerify={verifyOtp}
-          onResend={resendOtp}
-          onExit={() => setStep("phone")}
-        />
+        <AdminLogin onLogin={handleLogin} />
       )}
     </LangCtx.Provider>
   );

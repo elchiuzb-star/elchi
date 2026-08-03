@@ -23,6 +23,14 @@ class AuthVerifyOtp(BaseModel):
         return self.otp or self.code or ""
 
 
+class StaffLogin(BaseModel):
+    """Staff sign in with username + password; clients and drivers use SMS OTP."""
+
+    username: str = Field(min_length=3, max_length=64)
+    # bcrypt truncates past 72 bytes, so reject longer rather than silently cut.
+    password: str = Field(min_length=8, max_length=72)
+
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 

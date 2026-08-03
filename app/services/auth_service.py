@@ -10,12 +10,22 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import create_access_token, create_refresh_token, verify_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+    verify_password,
+    verify_token,
+)
 from app.models import AuditLog, ClientProfile, DriverProfile, OtpCode, RefreshSession, User
 from app.schemas.auth import AdminUserCreate
 from app.services import sms_service
 from app.services.audit_service import write_audit_log
 from app.utils.api_response import error_response
+
+# Compared against when a username is not found, so a miss costs roughly the
+# same as a real password check. The plaintext is irrelevant and unused.
+_TIMING_DUMMY_HASH = hash_password("elchi-timing-equalizer-not-a-credential")
 
 PUBLIC_REGISTRATION_ROLES = {"client", "driver"}
 STAFF_ROLES = {"operator", "admin", "super_admin"}
@@ -169,6 +179,14 @@ def request_otp(db: Session, phone: str, role: str, ip_address: str | None = Non
     valid_role = validate_role(role)
     if isinstance(valid_role, JSONResponse):
         return valid_role
+    # Staff authenticate with username + password via /auth/staff-login. Refuse
+    # here so the OTP path isn't a second, weaker way into the admin panel.
+    if role in STAFF_ROLES:
+        return error_response(
+            status.HTTP_400_BAD_REQUEST,
+            "PASSWORD_LOGIN_REQUIRED",
+            "Staff accounts sign in with a username and password",
+        )
 
     now = utcnow()
     user = db.scalar(select(User).where(User.phone == normalized_phone))
@@ -299,6 +317,14 @@ def verify_otp(db: Session, phone: str, otp: str, role: str | None = None) -> Us
     resolved_role = infer_role(db, normalized_phone, role)
     if isinstance(resolved_role, JSONResponse):
         return resolved_role
+    # Mirrors the guard in request_otp: an OTP issued before staff moved to
+    # password login must not still be redeemable.
+    if resolved_role in STAFF_ROLES:
+        return error_response(
+            status.HTTP_400_BAD_REQUEST,
+            "PASSWORD_LOGIN_REQUIRED",
+            "Staff accounts sign in with a username and password",
+        )
 
     if not (otp.isdigit() and (len(otp) == settings.otp_length or is_dev_mock_otp(otp))):
         return error_response(status.HTTP_400_BAD_REQUEST, "OTP_INVALID", "Invalid OTP code")
@@ -373,6 +399,53 @@ def verify_otp(db: Session, phone: str, otp: str, role: str | None = None) -> Us
     except Exception:
         db.rollback()
         raise
+
+
+def normalize_username(value: str) -> str:
+    return (value or "").strip().lower()
+
+
+def login_staff_with_password(db: Session, username: str, password: str) -> User | JSONResponse:
+    """Authenticate a staff user by username + password.
+
+    Every failure returns the same generic error so the response never reveals
+    whether a username exists, whether it belongs to staff, or whether only the
+    password was wrong.
+    """
+    invalid = error_response(
+        status.HTTP_401_UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid username or password"
+    )
+    normalized = normalize_username(username)
+    if not normalized or not password:
+        return invalid
+
+    user = db.scalar(select(User).where(User.username == normalized))
+    # Burn a comparable amount of time when the username does not exist, so
+    # response timing doesn't disclose which usernames are real.
+    if user is None or user.role not in STAFF_ROLES or not user.password_hash:
+        verify_password(password, _TIMING_DUMMY_HASH)
+        return invalid
+
+    if not verify_password(password, user.password_hash):
+        return invalid
+
+    active_error = check_active_user(user)
+    if active_error is not None:
+        return active_error
+
+    user.last_login_at = utcnow()
+    db.add(user)
+    write_audit_log(
+        db,
+        user,
+        "auth",
+        user.id,
+        "staff_logged_in",
+        new_value={"username": user.username, "role": user.role},
+    )
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def create_refresh_session(db: Session, user: User, refresh_token: str, payload: dict[str, Any]) -> None:

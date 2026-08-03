@@ -194,12 +194,14 @@ def test_client_login_flow_creates_client_profile(client: TestClient) -> None:
 
 @pytest.mark.parametrize("role", ["operator", "admin", "super_admin"])
 def test_admin_roles_cannot_register_publicly(client: TestClient, role: str) -> None:
+    """Staff never reach the OTP path at all — they sign in with a password."""
     response = client.post(
         "/api/v1/auth/request-otp",
         json={"phone": "+998909999999", "role": role},
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "PASSWORD_LOGIN_REQUIRED"
 
 
 def test_invalid_otp_is_rejected(client: TestClient) -> None:
@@ -401,5 +403,9 @@ def test_super_admin_can_create_admin_and_operator_users(client: TestClient) -> 
     assert admin_forbidden.status_code == 403
     assert operator_forbidden.status_code == 403
 
-    assert client.post("/api/v1/auth/request-otp", json={"phone": "+998903000004", "role": "admin"}).status_code == 200
-    assert client.post("/api/v1/auth/request-otp", json={"phone": "+998903000005", "role": "operator"}).status_code == 200
+    # Newly created staff sign in with a username and password, so the OTP path
+    # stays closed to them. Their credentials are set via set_staff_password.py.
+    for phone, staff_role in (("+998903000004", "admin"), ("+998903000005", "operator")):
+        refused = client.post("/api/v1/auth/request-otp", json={"phone": phone, "role": staff_role})
+        assert refused.status_code == 400
+        assert refused.json()["error"]["code"] == "PASSWORD_LOGIN_REQUIRED"

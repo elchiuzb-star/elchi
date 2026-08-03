@@ -18,9 +18,17 @@ from app.schemas.auth import (
     LogoutResponse,
     OtpRequestedResponse,
     RefreshTokenRequest,
+    StaffLogin,
     TokenResponse,
 )
-from app.services.auth_service import build_token_response, create_admin_user, logout_refresh_session, request_otp, verify_otp
+from app.services.auth_service import (
+    build_token_response,
+    create_admin_user,
+    login_staff_with_password,
+    logout_refresh_session,
+    request_otp,
+    verify_otp,
+)
 from app.utils.api_response import error_response
 
 router = APIRouter(prefix="/auth")
@@ -52,6 +60,15 @@ def request_otp_endpoint(payload: AuthRequestOtp, request: Request, db: Session 
 @router.post("/verify-otp", response_model=TokenResponse)
 def verify_otp_endpoint(payload: AuthVerifyOtp, db: Session = Depends(get_db)) -> dict:
     user = verify_otp(db, phone=payload.phone, otp=payload.otp_value, role=payload.role)
+    if hasattr(user, "status_code"):
+        return user
+    return build_token_response(db, user)
+
+
+@router.post("/staff-login", response_model=TokenResponse)
+def staff_login_endpoint(payload: StaffLogin, db: Session = Depends(get_db)) -> dict:
+    """Username + password sign-in for operator/admin/super_admin."""
+    user = login_staff_with_password(db, username=payload.username, password=payload.password)
     if hasattr(user, "status_code"):
         return user
     return build_token_response(db, user)
