@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef } from "react";
 import { View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { useT } from "@/i18n/i18n";
@@ -6,6 +6,11 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { YANDEX_JS_API_KEY } from "@/core/config";
 
 export type LatLng = { lat: number; lng: number };
+
+/** Imperative controls for the picker. The picker's document is intentionally
+ *  stable (see the useMemo deps below), so moving it has to go through here
+ *  rather than through a prop change, which would remount the WebView. */
+export type YandexMapHandle = { setCenter: (lat: number, lng: number, zoom?: number) => void };
 
 // A stable origin for the WebView document. If the Yandex JS API key is later
 // restricted by HTTP Referer, whitelist this exact value in the Yandex console.
@@ -147,21 +152,29 @@ function buildHtml(opts: {
  *   - "picker": interactive; the map moves under a fixed RN centre pin and the
  *     centre coordinates are reported via onCenterChange.
  */
-export function YandexMap({
-  mode,
-  pickup,
-  dropoff,
-  center,
-  onCenterChange,
-}: {
-  mode: "route" | "picker";
-  pickup?: LatLng | null;
-  dropoff?: LatLng | null;
-  center?: LatLng | null;
-  onCenterChange?: (lat: number, lng: number) => void;
-}) {
+export const YandexMap = forwardRef<
+  YandexMapHandle,
+  {
+    mode: "route" | "picker";
+    pickup?: LatLng | null;
+    dropoff?: LatLng | null;
+    center?: LatLng | null;
+    onCenterChange?: (lat: number, lng: number) => void;
+  }
+>(function YandexMap({ mode, pickup, dropoff, center, onCenterChange }, ref) {
   const { lang } = useT();
   const { colors } = useTheme();
+  const webRef = useRef<WebView>(null);
+
+  useImperativeHandle(ref, () => ({
+    setCenter(lat: number, lng: number, zoom = 16) {
+      // window.__ymap is set during init(); guarded in case the map is not
+      // ready yet. The trailing `true;` avoids a warning on Android.
+      webRef.current?.injectJavaScript(
+        `try { if (window.__ymap) window.__ymap.setCenter([${lat}, ${lng}], ${zoom}); } catch (e) {} true;`,
+      );
+    },
+  }));
 
   const p = pickup && (num(pickup.lat) !== 0 || num(pickup.lng) !== 0) ? pickup : null;
   const d = dropoff && (num(dropoff.lat) !== 0 || num(dropoff.lng) !== 0) ? dropoff : null;
@@ -197,6 +210,7 @@ export function YandexMap({
   return (
     <View style={{ flex: 1, backgroundColor: colors.secondary }}>
       <WebView
+        ref={webRef}
         originWhitelist={["*"]}
         source={{ html, baseUrl: WEBVIEW_ORIGIN }}
         onMessage={onMessage}
@@ -211,4 +225,4 @@ export function YandexMap({
       />
     </View>
   );
-}
+});

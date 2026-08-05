@@ -34,3 +34,20 @@ export function reverseGeocode(lat: number, lng: number, language = "uz") {
     body: { lat, lng, language },
   });
 }
+
+export type GeocodeResponse = {
+  formatted_address?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  region?: string | null;
+  district?: string | null;
+  provider?: string;
+};
+
+/** Resolve a typed address to coordinates. The Yandex key stays server-side. */
+export function geocodeAddress(address: string, language = "uz") {
+  return apiRequest<GeocodeResponse>("/geo/geocode", {
+    method: "POST",
+    body: { address, language },
+  });
+}

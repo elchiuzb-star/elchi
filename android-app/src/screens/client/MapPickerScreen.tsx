@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
-import { Text, TextInput, View } from "react-native";
-import { MapPin, Navigation } from "@/components/icons";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { MapPin, Navigation, Search } from "@/components/icons";
 import { useT } from "@/i18n/i18n";
 import { useTheme } from "@/theme/ThemeProvider";
 import { BackHeader } from "@/components/primitives";
 import { PrimaryButton } from "@/components/buttons";
-import { YandexMap } from "@/components/maps/YandexMap";
+import { YandexMap, type YandexMapHandle } from "@/components/maps/YandexMap";
+import { geocodeAddress } from "@/api/geo.api";
 import type { CityInfo } from "@/core/order";
 
 export type PickedLocation = { address: string; lat: number | null; lng: number | null };
@@ -40,18 +41,85 @@ export function MapPickerScreen({
     longitude: centerLng ?? DEFAULT.longitude,
   };
   const centerRef = useRef(start);
+  const mapRef = useRef<YandexMapHandle>(null);
   const [address, setAddress] = useState(district ? `${district}, ${city.uz}` : city.uz);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
 
   function onCenterChange(lat: number, lng: number) {
     centerRef.current = { latitude: lat, longitude: lng };
+  }
+
+  async function handleSearch() {
+    const q = query.trim();
+    if (q.length < 2) return;
+    setSearching(true);
+    setSearchError("");
+    try {
+      // Bias the query to the chosen area, otherwise a bare street name can
+      // resolve to a same-named street in another city.
+      const scoped = district ? `${city.uz}, ${district}, ${q}` : `${city.uz}, ${q}`;
+      const res = await geocodeAddress(scoped);
+      if (res?.lat == null || res?.lng == null) {
+        setSearchError(t("mapSearchNotFound"));
+        return;
+      }
+      // Move the map; the fixed pin means the new centre becomes the picked
+      // point, and onCenterChange updates centerRef as the map settles.
+      mapRef.current?.setCenter(res.lat, res.lng);
+      centerRef.current = { latitude: res.lat, longitude: res.lng };
+      setAddress(res.formatted_address || scoped);
+    } catch {
+      setSearchError(t("mapSearchNotFound"));
+    } finally {
+      setSearching(false);
+    }
   }
 
   return (
     <View className="flex-1">
       <BackHeader onBack={onBack} title={title} />
 
+      {/* Search the chosen area instead of dragging across the whole map. */}
+      <View className="px-4 pb-3">
+        <View
+          className="flex-row items-center rounded-xl border border-border bg-input px-4"
+          style={{ gap: 10, height: 46 }}
+        >
+          <Search size={15} color={colors.mutedForeground} />
+          <TextInput
+            value={query}
+            onChangeText={(v) => {
+              setQuery(v);
+              if (searchError) setSearchError("");
+            }}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+            placeholder={t("mapSearchPlaceholder")}
+            placeholderTextColor={colors.mutedForeground}
+            className="flex-1 text-sm text-foreground"
+          />
+          {searching ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : query.trim().length >= 2 ? (
+            <Pressable onPress={handleSearch} hitSlop={8}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.primary }}>
+                {t("mapSearchCta")}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {searchError ? (
+          <Text style={{ marginTop: 6, fontSize: 11, color: colors.destructive }}>
+            {searchError}
+          </Text>
+        ) : null}
+      </View>
+
       <View style={{ height: 260 }}>
         <YandexMap
+          ref={mapRef}
           mode="picker"
           center={{ lat: start.latitude, lng: start.longitude }}
           onCenterChange={onCenterChange}
