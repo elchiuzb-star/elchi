@@ -6,6 +6,7 @@ import { useT } from "@/i18n/i18n";
 import { useTheme } from "@/theme/ThemeProvider";
 import { getUzbekErrorMessage } from "@/utils/errors";
 import { BackButton, PrimaryButton } from "@/components/buttons";
+import { ConsentNotice } from "@/components/ConsentNotice";
 
 function fmtPhone(raw: string): string {
   const d = raw.replace(/\D/g, "").slice(0, 12);
@@ -131,6 +132,10 @@ export function PhoneScreen({
         loading={loading}
         leftIcon={<PaperPlaneTilt size={16} color={colors.primaryForeground} />}
       />
+
+      {/* Tapping the button above is the act of consenting, so the notice has to
+          sit next to it — same screen for both client and driver. */}
+      <ConsentNotice />
     </View>
   );
 }
