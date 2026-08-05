@@ -1,5 +1,6 @@
 import { useState, createContext, useContext, useEffect, useRef } from "react";
 import { RouterProvider, createBrowserRouter, useNavigate, Outlet, Navigate } from "react-router";
+import { PrivacyPolicy } from "../pages/PrivacyPolicy";
 import {
   House as Home, MapPin, Package, User, CaretRight as ChevronRight, CaretLeft as ChevronLeft,
   ToggleLeft, ToggleRight, Star, Plus, Trash as Trash2, Pencil, TrendUp as TrendingUp,
@@ -4541,6 +4542,8 @@ const router = createBrowserRouter([
       { path: "driver",    Component: DriverPage  },
       { path: "client",    Component: ClientPage  },
       { path: "admin",     Component: AdminPage   },
+      // Public, no auth — the mobile app's consent notice links here.
+      { path: "privacy",   Component: PrivacyPolicy },
       { path: "*",         element: <Navigate to="/" replace /> },
     ],
   },
