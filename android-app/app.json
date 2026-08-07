@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "uz.elchi.app"
+      "bundleIdentifier": "uz.elchi.app",
+      "infoPlist": {
+        "NSMotionUsageDescription": "Joylashuvni aniqroq belgilash uchun harakat sensorlaridan foydalaniladi.",
+        "NSLocationAlwaysUsageDescription": "Jo'natish manzilini avtomatik aniqlash uchun joylashuvingizga ruxsat bering."
+      }
     },
     "android": {
       "package": "uz.elchi.app",
@@ -22,17 +26,25 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       [
         "expo-location",
         {
+          "locationWhenInUsePermission": "Jo'natish manzilini avtomatik aniqlash uchun joylashuvingizga ruxsat bering.",
           "locationAlwaysAndWhenInUsePermission": "Jo'natish manzilini avtomatik aniqlash uchun joylashuvingizga ruxsat bering."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Yuk rasmini biriktirish uchun galereyaga ruxsat bering."
+          "photosPermission": "Yuk rasmini biriktirish uchun galereyaga ruxsat bering.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       [
