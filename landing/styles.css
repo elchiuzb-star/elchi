@@ -1,0 +1,470 @@
+/* Elchi — landing + policy pages.
+   Light, document-like: deliberately unlike the dark product UI, so this reads
+   as public information rather than a second app screen. One accent only. */
+
+:root {
+	--ink: #10141c;
+	--paper: #fcfcfb;
+	--wash: #f2f4f7;
+	--rule: #dfe2e8;
+	--muted: #5b6473;
+	--road: #1b4fd8;
+
+	--display: "Archivo", system-ui, sans-serif;
+	--body: "Inter", system-ui, sans-serif;
+	--mono: "JetBrains Mono", ui-monospace, monospace;
+
+	--gutter: clamp(20px, 5vw, 64px);
+	--maxw: 1080px;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--body);
+	font-size: 16px;
+	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: var(--road);
+	text-underline-offset: 3px;
+}
+
+:focus-visible {
+	outline: 2px solid var(--road);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+
+.shell {
+	max-width: var(--maxw);
+	margin-inline: auto;
+	padding-inline: var(--gutter);
+}
+
+/* ── Eyebrow label ─────────────────────────────────────────────────────── */
+.eyebrow {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--muted);
+	margin: 0 0 20px;
+}
+
+/* ── Masthead ──────────────────────────────────────────────────────────── */
+.masthead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	/* Wraps rather than forcing the page wider than the viewport — three nav
+	   links plus the wordmark do not fit on a 390px screen. */
+	flex-wrap: wrap;
+	gap: 10px 24px;
+	padding-block: 18px;
+	border-bottom: 1px solid var(--rule);
+}
+
+.wordmark {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: 19px;
+	letter-spacing: -0.03em;
+	color: var(--ink);
+	text-decoration: none;
+}
+
+.masthead nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	font-size: 14px;
+}
+
+/* Narrow screens: tighten the nav so it wraps under the wordmark rather than
+   dropping links. */
+@media (max-width: 560px) {
+	.masthead nav {
+		font-size: 13px;
+		gap: 6px 14px;
+	}
+}
+
+.masthead nav a {
+	color: var(--muted);
+	text-decoration: none;
+}
+
+.masthead nav a:hover {
+	color: var(--ink);
+}
+
+/* ── Hero ──────────────────────────────────────────────────────────────── */
+.hero {
+	padding-block: clamp(44px, 8vw, 88px) clamp(44px, 7vw, 80px);
+	display: grid;
+	gap: clamp(40px, 6vw, 72px);
+	align-items: start;
+}
+
+/* Grid items default to min-width:auto, so the ledger's nowrap rows would set a
+   floor wider than a phone screen and push the whole page sideways. */
+.hero > * {
+	min-width: 0;
+}
+
+/* Copy left, route ledger right. Below 900px they stack, which keeps the
+   ledger narrow enough that origin and destination still read as a pair. */
+@media (min-width: 900px) {
+	.hero {
+		grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+	}
+}
+
+.hero h1 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: clamp(36px, 5.4vw, 60px);
+	line-height: 1.0;
+	letter-spacing: -0.035em;
+	margin: 0;
+	text-wrap: balance;
+}
+
+/* Scoped to the copy column so it can't reach into the ledger's footnote. */
+.hero__copy > p {
+	max-width: 52ch;
+	margin: 24px 0 0;
+	font-size: clamp(16px, 1.6vw, 18px);
+	color: var(--muted);
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 32px;
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 13px 22px;
+	border-radius: 3px;
+	font-size: 15px;
+	font-weight: 600;
+	text-decoration: none;
+	border: 1px solid transparent;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn--primary {
+	background: var(--road);
+	color: #fff;
+}
+
+.btn--primary:hover {
+	background: #163fae;
+}
+
+.btn--ghost {
+	border-color: var(--rule);
+	color: var(--ink);
+}
+
+.btn--ghost:hover {
+	border-color: var(--ink);
+}
+
+/* ── Route ledger — the signature. Real pairs, real distances, dotted
+   leaders, set like a freight manifest. ────────────────────────────────── */
+.ledger {
+	border-top: 1px solid var(--ink);
+	padding-top: 14px;
+}
+
+.ledger__head {
+	display: flex;
+	justify-content: space-between;
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--muted);
+	padding-bottom: 10px;
+}
+
+.route {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding-block: 11px;
+	border-bottom: 1px solid var(--rule);
+	font-family: var(--mono);
+	font-size: clamp(12px, 1.4vw, 15px);
+	min-width: 0;
+}
+
+.foot__row nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 22px;
+}
+
+.route__from,
+.route__to {
+	white-space: nowrap;
+}
+
+.route__leader {
+	flex: 1;
+	min-width: 16px;
+	transform: translateY(-4px);
+	/* Dotted leader, drawn dark enough to actually read as a connecting line. */
+	background-image: radial-gradient(circle, #b9bfca 1px, transparent 1px);
+	background-size: 5px 1px;
+	background-repeat: repeat-x;
+	background-position: 0 100%;
+	height: 1em;
+}
+
+.route__km {
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.ledger__note {
+	font-family: var(--mono);
+	font-size: 11px;
+	color: var(--muted);
+	margin: 14px 0 0;
+}
+
+/* ── Generic section ───────────────────────────────────────────────────── */
+.band {
+	border-top: 1px solid var(--rule);
+	padding-block: clamp(48px, 7vw, 84px);
+}
+
+.band--wash {
+	background: var(--wash);
+}
+
+.band h2 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: clamp(26px, 3.6vw, 38px);
+	letter-spacing: -0.025em;
+	line-height: 1.1;
+	margin: 0 0 8px;
+	max-width: 20ch;
+}
+
+.band__lede {
+	color: var(--muted);
+	max-width: 56ch;
+	margin: 0 0 40px;
+}
+
+/* ── Steps — numbered because the order flow genuinely is a sequence ───── */
+.steps {
+	display: grid;
+	gap: 1px;
+	background: var(--rule);
+	border: 1px solid var(--rule);
+}
+
+@media (min-width: 720px) {
+	.steps {
+		grid-template-columns: repeat(4, 1fr);
+	}
+}
+
+.step {
+	background: var(--paper);
+	padding: 26px 22px 30px;
+}
+
+.band--wash .step {
+	background: var(--wash);
+}
+
+.step__n {
+	font-family: var(--mono);
+	font-size: 11px;
+	color: var(--road);
+	letter-spacing: 0.1em;
+}
+
+.step h3 {
+	font-family: var(--display);
+	font-size: 17px;
+	font-weight: 600;
+	letter-spacing: -0.015em;
+	margin: 14px 0 7px;
+}
+
+.step p {
+	margin: 0;
+	font-size: 14.5px;
+	color: var(--muted);
+}
+
+/* ── Two audiences ─────────────────────────────────────────────────────── */
+.split {
+	display: grid;
+	gap: 28px;
+}
+
+@media (min-width: 760px) {
+	.split {
+		grid-template-columns: 1fr 1fr;
+		gap: 56px;
+	}
+}
+
+.split h3 {
+	font-family: var(--display);
+	font-size: 21px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	margin: 0 0 12px;
+}
+
+.checks {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.checks li {
+	position: relative;
+	padding-left: 26px;
+	margin-bottom: 11px;
+	color: var(--muted);
+	font-size: 15px;
+}
+
+.checks li::before {
+	content: "→";
+	position: absolute;
+	left: 0;
+	color: var(--road);
+	font-family: var(--mono);
+	font-size: 13px;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────────── */
+.foot {
+	border-top: 1px solid var(--rule);
+	padding-block: 40px 56px;
+	font-size: 14px;
+	color: var(--muted);
+}
+
+.foot__row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 18px 28px;
+	justify-content: space-between;
+	align-items: baseline;
+}
+
+.foot a {
+	color: var(--muted);
+	text-decoration: none;
+}
+
+.foot a:hover {
+	color: var(--ink);
+	text-decoration: underline;
+}
+
+.foot__legal {
+	margin-top: 26px;
+	font-family: var(--mono);
+	font-size: 11px;
+	color: var(--muted);
+}
+
+/* ── Policy document ───────────────────────────────────────────────────── */
+.doc {
+	padding-block: clamp(40px, 6vw, 72px) 80px;
+	max-width: 720px;
+}
+
+.doc h1 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: clamp(30px, 4.6vw, 44px);
+	letter-spacing: -0.03em;
+	line-height: 1.05;
+	margin: 0;
+}
+
+.doc__meta {
+	font-family: var(--mono);
+	font-size: 11px;
+	color: var(--muted);
+	margin: 14px 0 0;
+}
+
+.doc h2 {
+	font-family: var(--display);
+	font-size: 20px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	margin: 44px 0 12px;
+	padding-top: 22px;
+	border-top: 1px solid var(--rule);
+}
+
+.doc h3 {
+	font-size: 15px;
+	font-weight: 600;
+	margin: 24px 0 8px;
+}
+
+.doc p,
+.doc li {
+	color: #2c3340;
+	font-size: 15.5px;
+}
+
+.doc ul {
+	padding-left: 20px;
+}
+
+.doc li {
+	margin-bottom: 7px;
+}
+
+.doc .fill {
+	background: #fff5d6;
+	border-bottom: 1px solid #e6c74d;
+	padding: 0 3px;
+	font-family: var(--mono);
+	font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* {
+		transition: none !important;
+		animation: none !important;
+	}
+}
