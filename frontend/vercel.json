@@ -5,9 +5,9 @@
   "outputDirectory": "dist",
   "redirects": [
     {
-      "source": "/(.*)",
+      "source": "/",
       "has": [{ "type": "host", "value": "admin.elchigo.uz" }],
-      "destination": "https://elchi.uz/admin",
+      "destination": "/admin",
       "permanent": false
     }
   ],
