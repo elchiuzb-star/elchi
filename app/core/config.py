@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     otp_ip_window_minutes: int = 60
     otp_global_daily_cap: int = 2000
     dev_mock_otp: str = "1234"
+    # ── App-store reviewer access ────────────────────────────────────────────
+    # Google and Apple reviewers cannot receive an SMS to an Uzbek number, so
+    # without this they never get past the login screen and the submission is
+    # rejected. These specific phones accept a fixed code instead. Both values
+    # must be set for the path to exist at all, it applies to no other number,
+    # and every use is logged. Clear them once review is complete.
+    review_login_phones: str = ""
+    review_login_otp: str | None = None
     super_admin_phone: str | None = "+998900000001"
 
     # ── SMS / OTP delivery via Eskiz.uz ──────────────────────────────────────

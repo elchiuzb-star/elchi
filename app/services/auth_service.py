@@ -1,6 +1,8 @@
 import ipaddress
+import logging
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from hmac import compare_digest
 from secrets import randbelow
 from typing import Any
 
@@ -26,6 +28,8 @@ from app.utils.api_response import error_response
 # Compared against when a username is not found, so a miss costs roughly the
 # same as a real password check. The plaintext is irrelevant and unused.
 _TIMING_DUMMY_HASH = hash_password("elchi-timing-equalizer-not-a-credential")
+
+logger = logging.getLogger("elchi.auth")
 
 PUBLIC_REGISTRATION_ROLES = {"client", "driver"}
 STAFF_ROLES = {"operator", "admin", "super_admin"}
@@ -111,6 +115,28 @@ def otp_message(code: str) -> str:
     template. Eskiz approved '...kodi: %d', so a variable code passes moderation."""
     template = settings.sms_test_message if settings.sms_test_mode else settings.otp_message_template
     return template.format(code=code)
+
+
+def is_review_login_phone(phone: str) -> bool:
+    """Whether `phone` is one of the store-reviewer accounts."""
+    if not (settings.review_login_phones and settings.review_login_otp):
+        return False
+    for raw in settings.review_login_phones.split(","):
+        candidate = normalize_phone(raw.strip())
+        if isinstance(candidate, str) and candidate == phone:
+            return True
+    return False
+
+
+def is_review_login_otp(phone: str, value: str) -> bool:
+    """Fixed code accepted only for the allowlisted reviewer phones.
+
+    Unlike is_dev_mock_otp this works in production — that is the whole point —
+    so it is scoped to an explicit list and compared in constant time.
+    """
+    if not is_review_login_phone(phone):
+        return False
+    return compare_digest(value, settings.review_login_otp or "")
 
 
 def is_dev_mock_otp(value: str) -> bool:
@@ -271,7 +297,9 @@ def request_otp(db: Session, phone: str, role: str, ip_address: str | None = Non
 
     # Deliver over SMS when enabled. Failure is logged inside send_sms and does
     # not fail the request — the code is stored and the user can resend.
-    if settings.sms_enabled:
+    # Reviewer accounts sign in with a fixed code, so sending an SMS would only
+    # burn credit on a number nobody reads.
+    if settings.sms_enabled and not is_review_login_phone(normalized_phone):
         sms_service.send_sms(normalized_phone, otp_message(otp))
 
     data = {
@@ -326,7 +354,14 @@ def verify_otp(db: Session, phone: str, otp: str, role: str | None = None) -> Us
             "Staff accounts sign in with a username and password",
         )
 
-    if not (otp.isdigit() and (len(otp) == settings.otp_length or is_dev_mock_otp(otp))):
+    if not (
+        otp.isdigit()
+        and (
+            len(otp) == settings.otp_length
+            or is_dev_mock_otp(otp)
+            or is_review_login_otp(normalized_phone, otp)
+        )
+    ):
         return error_response(status.HTTP_400_BAD_REQUEST, "OTP_INVALID", "Invalid OTP code")
 
     otp_record = find_latest_otp(db, normalized_phone, resolved_role)
@@ -341,7 +376,10 @@ def verify_otp(db: Session, phone: str, otp: str, role: str | None = None) -> Us
     if otp_record.attempt_count >= settings.otp_max_verify_attempts:
         return error_response(status.HTTP_400_BAD_REQUEST, "OTP_TOO_MANY_ATTEMPTS", "Too many OTP verification attempts")
 
-    otp_matches = is_dev_mock_otp(otp) or otp_hash(otp) == otp_record.otp_hash
+    used_review_login = is_review_login_otp(normalized_phone, otp)
+    if used_review_login:
+        logger.warning("Store-reviewer login used for %s", normalized_phone)
+    otp_matches = is_dev_mock_otp(otp) or used_review_login or otp_hash(otp) == otp_record.otp_hash
     if not otp_matches:
         otp_record.attempt_count += 1
         db.add(otp_record)
