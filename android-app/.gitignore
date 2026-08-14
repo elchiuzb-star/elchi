@@ -40,3 +40,10 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Release signing material. NEVER commit — losing it is unrecoverable, but
+# leaking it lets anyone ship an update signed as you. Back this up outside
+# the repo (password manager / encrypted storage).
+credentials/
+*.keystore
+*.jks

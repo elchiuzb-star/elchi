@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 import {
   Bell,
   ChevronRight,
@@ -13,9 +13,12 @@ import {
   Sun,
   ToggleLeft,
   ToggleRight,
+  Trash2,
   TrendingUp,
   Vibrate,
 } from "@/components/icons";
+import { deleteOwnAccount } from "@/api/auth.api";
+import { getUzbekErrorMessage } from "@/utils/errors";
 import { useT, type Lang, type TKey } from "@/i18n/i18n";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { ThemeMode } from "@/core/types";
@@ -61,6 +64,32 @@ export function SettingsPanel({
     { label: t("promotions"), val: np, set: setNp, icon: TrendingUp },
     { label: t("vibration"), val: vib, set: setVib, icon: Vibrate },
   ];
+  const [deleting, setDeleting] = useState(false);
+
+  // Two-step: the alert spells out what is erased and what is retained, so
+  // "delete" is never a surprise. Confirmation is deliberately destructive-styled.
+  function confirmDelete() {
+    Alert.alert(t("deleteAccount"), t("deleteAccountConfirm"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("deleteAccountAction"),
+        style: "destructive",
+        onPress: async () => {
+          setDeleting(true);
+          try {
+            await deleteOwnAccount();
+            // The account is gone; the session must not linger.
+            onLogout();
+          } catch (e) {
+            Alert.alert(t("deleteAccount"), getUzbekErrorMessage(e));
+          } finally {
+            setDeleting(false);
+          }
+        },
+      },
+    ]);
+  }
+
   const accountLinks = [
     { icon: Shield, label: t("privacySecurity") },
     { icon: FileText, label: t("termsOfService") },
@@ -172,7 +201,26 @@ export function SettingsPanel({
             <IconTile icon={LogOut} size={15} tone="danger" />
             <Text className="flex-1 text-sm font-medium" style={{ color: colors.destructive }}>{t("logOut")}</Text>
           </Pressable>
+
+          {/* Account deletion must be reachable from inside the app — both
+              stores reject "email us to delete". */}
+          <Pressable
+            onPress={confirmDelete}
+            disabled={deleting}
+            className="flex-row items-center px-4 py-3.5 active:opacity-80"
+            style={{ gap: 12, borderTopWidth: 1, borderColor: colors.border }}
+          >
+            <IconTile icon={Trash2} size={15} tone="danger" />
+            <Text className="flex-1 text-sm font-medium" style={{ color: colors.destructive }}>
+              {t("deleteAccount")}
+            </Text>
+            {deleting ? <ActivityIndicator size="small" color={colors.destructive} /> : null}
+          </Pressable>
         </View>
+
+        <Text className="px-1 text-[11px] leading-4 text-muted-foreground">
+          {t("deleteAccountHint")}
+        </Text>
 
         <Text className="text-center text-[10px] text-muted-foreground">{t("version")}</Text>
       </ScrollView>

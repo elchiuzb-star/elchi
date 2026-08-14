@@ -35,3 +35,10 @@ export function logout(refreshTokenValue?: string | null) {
 export function getMe() {
   return apiRequest<AuthUser>("/auth/me");
 }
+
+/** Delete the signed-in user's own account. Required by Play and the App Store. */
+export function deleteOwnAccount() {
+  return apiRequest<{ deleted: boolean; message: string }>("/auth/me", {
+    method: "DELETE",
+  });
+}

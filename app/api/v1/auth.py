@@ -65,6 +65,19 @@ def verify_otp_endpoint(payload: AuthVerifyOtp, db: Session = Depends(get_db)) -
     return build_token_response(db, user)
 
 
+@router.delete("/me", response_model=None)
+def delete_own_account_endpoint(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> dict | JSONResponse:
+    """Self-service account deletion, required by Google Play and the App Store."""
+    from app.services.account_deletion_service import delete_own_account
+
+    result = delete_own_account(db, current_user)
+    if hasattr(result, "status_code"):
+        return result
+    return {"success": True, "data": result, "message": result["message"]}
+
+
 @router.post("/staff-login", response_model=TokenResponse)
 def staff_login_endpoint(payload: StaffLogin, db: Session = Depends(get_db)) -> dict:
     """Username + password sign-in for operator/admin/super_admin."""
