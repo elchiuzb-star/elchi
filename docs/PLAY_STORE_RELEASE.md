@@ -111,7 +111,7 @@ QANDAY ISHLAYDI
 2. Takliflar keladi — o'sha yo'nalishda ishlaydigan haydovchilar o'z narxini
    yozadi.
 3. Haydovchini tanlaysiz — reyting, avtomobil va narxni ko'rib tasdiqlaysiz.
-4. Yetkazib beriladi — olindi, yo'lda, yetkazildi. Har bosqichda xabar olasiz.
+4. Yetkazib beriladi — olindi, yo'lda, yetkazildi. Holatni ilovada kuzatib borasiz.
 
 JO'NATUVCHILAR UCHUN
 
@@ -155,7 +155,23 @@ Hisobni o'chirish: https://www.elchigo.uz/delete-account
 The feature graphic is mandatory and has no default. It appears at the top of
 the listing.
 
-## 6. Pre-submission checklist
+## 6. Known gap: no push notifications
+
+There is no Firebase/FCM integration and no `expo-notifications`. Notifications
+exist only as rows the app fetches while it is open — nothing reaches a closed
+app.
+
+This does **not** block release; Play does not require push. But for a bidding
+marketplace it is a product problem: a driver never learns a matching order
+appeared, and a client never learns a bid arrived, so the auction stalls unless
+someone happens to open the app.
+
+Listing copy has been kept accurate ("holatni ilovada kuzatib borasiz" rather
+than promising alerts). Adding push later means `expo-notifications`, a Firebase
+project with `google-services.json`, a device-token column, and a send step in
+`notification_service`.
+
+## 7. Pre-submission checklist
 
 - [x] Privacy policy live at a public URL
 - [x] Account deletion in-app and on the web
