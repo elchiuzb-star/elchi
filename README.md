@@ -2,6 +2,10 @@
 
 Backend API for the Elchi Intercity Parcel Delivery Marketplace MVP.
 
+Two people work in this repo at once — read [CONTRIBUTING.md](CONTRIBUTING.md)
+before your first commit. It covers who owns which folder, branch naming, and the
+API contract.
+
 ## Frontend
 
 The project ships two React + Vite + TypeScript frontends:
