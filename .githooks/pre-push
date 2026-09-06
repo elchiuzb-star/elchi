@@ -1,0 +1,43 @@
+#!/bin/sh
+#
+# Refuse to push straight to main. Work goes through a branch and a PR.
+# Emergency escape hatch: ALLOW_MAIN_PUSH=1 git push
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+
+protected="main"
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+	case "$remote_ref" in
+	"refs/heads/$protected")
+		if [ "$ALLOW_MAIN_PUSH" = "1" ]; then
+			echo "pre-push: ALLOW_MAIN_PUSH=1 — letting a direct push to $protected through." >&2
+			continue
+		fi
+		branch=$(git rev-parse --abbrev-ref HEAD)
+		cat >&2 <<MSG
+
+  Direct pushes to '$protected' are blocked.
+
+  You are on: $branch
+
+  Move the work onto its own branch and open a PR:
+
+      git switch -c fe/short-name      # frontend, Android, landing
+      git switch -c be/short-name      # API, migrations, deploy
+      git push -u origin HEAD
+      gh pr create
+
+  If you already committed on $protected, keep the commits and reset it:
+
+      git switch -c fe/short-name
+      git switch $protected && git reset --hard origin/$protected
+      git switch fe/short-name
+
+MSG
+		exit 1
+		;;
+	esac
+done
+
+exit 0
