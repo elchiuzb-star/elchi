@@ -252,6 +252,14 @@ class ListingDTO(ContractModel):
     passenger: PassengerDetails | None
     parcel: ParcelDetails | None
     comment: str | None
+    view_count: int = Field(
+        default=0,
+        description=(
+            "Q98: distinct people who opened this listing. Counts neither the owner, nor staff, nor "
+            "anonymous readers (including the public share page) - with no identity there is nothing to "
+            "deduplicate by. It is a count of people, never of openings."
+        ),
+    )
     published_at: UtcDateTime | None
     created_at: UtcDateTime
 
@@ -279,6 +287,14 @@ class ListingPublicDTO(ContractModel):
     reputation: dict[str, Any] | None = Field(default=None, description="Owned by trust_support (A12); null until then.")
     parcel_type: ParcelType | None = None
     trip_id: str | None = None
+    view_count: int = Field(
+        default=0,
+        description=(
+            "Q98: distinct people who opened this listing. Counts neither the owner, nor staff, nor "
+            "anonymous readers (including the public share page) - with no identity there is nothing to "
+            "deduplicate by. It is a count of people, never of openings."
+        ),
+    )
     published_at: UtcDateTime | None = None
 
 

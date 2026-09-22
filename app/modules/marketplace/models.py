@@ -159,8 +159,40 @@ class Listing(Base):
     )
     cancelled_reason: Mapped[str | None] = mapped_column(String(64))
     cancel_comment: Mapped[str | None] = mapped_column(Text)
+    # Q98: distinct people who opened this listing, denormalised from listing_views. Bumped only by the insert
+    # that created a row there, and deliberately *not* part of `version` - looking at a listing is not an edit,
+    # and a counter that moved the aggregate version would expire every open proposal on it (Q54).
+    view_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ListingView(Base):
+    """One row per (listing, person) - the primary key is what makes the count a count of people (Q98).
+
+    Written once, never updated: the first time somebody opens a listing. The owner, staff and anonymous
+    readers are excluded by the caller, because a number that a refresh can raise is not a number the owner can
+    act on (§9: no invented signals).
+    """
+
+    __tablename__ = "listing_views"
+    __table_args__ = (Index("ix_listing_views_viewer", "viewer_user_id"),)
+
+    listing_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("listings.id", name="listing_views_listing_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        autoincrement=False,
+    )
+    viewer_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", name="listing_views_viewer_user_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+        autoincrement=False,
+    )
+    first_viewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class PassengerListingDetails(Base):

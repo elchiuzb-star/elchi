@@ -238,6 +238,7 @@ def listing_dto(session: Session, listing: Listing, *, viewer_user_id: int | Non
             photo_visible=viewer_user_id is not None,
         ),
         comment=listing.comment,
+        view_count=listing.view_count,
         published_at=ensure_aware_utc(listing.published_at) if listing.published_at else None,
         created_at=ensure_aware_utc(listing.created_at),
     )
@@ -266,6 +267,7 @@ def listing_public_dto(session: Session, listing: Listing) -> ListingPublicDTO:
         reputation=None,
         parcel_type=ParcelType(parcel.parcel_type) if parcel and parcel.parcel_type else None,
         trip_id=_trip_public_id(session, listing.trip_id),
+        view_count=listing.view_count,
         published_at=ensure_aware_utc(listing.published_at) if listing.published_at else None,
     )
 

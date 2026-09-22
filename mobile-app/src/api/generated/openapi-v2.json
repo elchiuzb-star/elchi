@@ -13097,6 +13097,12 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "view_count": {
+            "default": 0,
+            "description": "Q98: distinct people who opened this listing. Counts neither the owner, nor staff, nor anonymous readers (including the public share page) - with no identity there is nothing to deduplicate by. It is a count of people, never of openings.",
+            "title": "View Count",
+            "type": "integer"
           }
         },
         "required": [
@@ -13730,6 +13736,12 @@
           },
           "unit_price_minor": {
             "title": "Unit Price Minor",
+            "type": "integer"
+          },
+          "view_count": {
+            "default": 0,
+            "description": "Q98: distinct people who opened this listing. Counts neither the owner, nor staff, nor anonymous readers (including the public share page) - with no identity there is nothing to deduplicate by. It is a count of people, never of openings.",
+            "title": "View Count",
             "type": "integer"
           }
         },

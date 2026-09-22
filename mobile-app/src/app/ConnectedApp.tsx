@@ -112,6 +112,7 @@ import { newIdempotencyKey } from "../api/v2/http";
 import { translate, translateDynamic } from "../i18n";
 import { negotiationActions, turnLabel, type ActorSide } from "./auction";
 import { alternativeReason, splitFeedGroups } from "./feedGroups";
+import { offerableServices, type OfferService } from "./tripOffers";
 import {
   createTrip,
   createVehicle,
@@ -490,6 +491,12 @@ function matchLabel(value: string): string {
 
 function confirmedStopsNote(): string {
   return translate("match.confirmedStopsNote");
+}
+
+/** Q98: how many *people* opened this listing. Zero is shown in words, because "0" next to a listing reads
+    as a failure to load, while "nobody has looked yet" is the sentence the owner can act on. */
+function viewCountLabel(count: number): string {
+  return count > 0 ? `${count} ${translate("listing.viewsSuffix")}` : translate("listing.viewsNone");
 }
 
 /** Why a suggestion is only a suggestion: the clock or the map. Null when the server gave no reason we
@@ -1427,6 +1434,7 @@ function ListingCard({ listing, onClick }: { listing: ListingDTO; onClick?: () =
       </div>
       <div className="flex items-center justify-between text-[13px] text-muted-foreground">
         <span>{shortDate(listing.departure_window_start)}</span>
+        <span>{viewCountLabel(listing.view_count)}</span>
         <span className="font-semibold text-foreground">{formatUzs(listing.total_minor / 100)}</span>
       </div>
     </button>
@@ -2345,6 +2353,26 @@ export function ConnectedApp() {
   /** The trip offers already published for one trip - what that journey is advertised as, and for how much. */
   function tripOffers(tripId: string) {
     return myOffers.filter((offer) => offer.trip_id === tripId && offer.status !== "cancelled" && offer.status !== "expired");
+  }
+
+  /**
+   * Which services this trip can still be advertised for.
+   *
+   * Q92: one trip carries both, and the database says so - `uq_listings_open_trip_offer` is unique on
+   * `(trip_id, service_type)`, not on `trip_id`. So a driver may publish a taxi offer *and* a parcel offer on
+   * the same journey, and the second one is refused only if it repeats the first's service.
+   *
+   * The screen used to open on "passenger" every time, which meant the second tap on a trip that already had
+   * a passenger offer walked the driver through the whole form and then failed on send with DUPLICATE_LISTING
+   * - the one path that makes "can a driver post both?" feel like "no". The same filter as `tripOffers` is
+   * used, because that is exactly the index's predicate: a cancelled or expired offer frees its service again.
+   */
+  function availableOfferServices(tripId: string): OfferService[] {
+    // `myOffers` already holds every listing of this trip; the module applies the index's own status filter.
+    return offerableServices(
+      myOffers.filter((offer) => offer.trip_id === tripId),
+      { passengerEnabled: Boolean(flags?.passenger_enabled) },
+    );
   }
 
   function resetOrderDraft() {
@@ -5629,6 +5657,10 @@ export function ConnectedApp() {
                     <p className="mt-0.5 text-[12px] text-muted-foreground">
                       {listingStatusLabel(offer.status)} · boshlang'ich narx, mijoz o'z narxini taklif qiladi
                     </p>
+                    {/* Q98: published only - a draft nobody can open would always read "nobody has looked". */}
+                    {offer.status === "published" && (
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">{viewCountLabel(offer.view_count)}</p>
+                    )}
                     {offer.status === "draft" && (
                       <button
                         type="button"
@@ -5654,7 +5686,7 @@ export function ConnectedApp() {
                     )}
                   </div>
                 ))}
-                {trip.status === "planned" && (
+                {trip.status === "planned" && availableOfferServices(trip.id).length > 0 && (
                   <button
                     type="button"
                     onClick={() => {
@@ -5662,7 +5694,9 @@ export function ConnectedApp() {
                       const last = trip.stops[trip.stops.length - 1]?.stop.id ?? "";
                       setOfferForm({
                         tripId: trip.id,
-                        serviceType: flags?.passenger_enabled ? "passenger" : "parcel",
+                        // Open on a service this trip does not already advertise, so the second offer on a
+                        // journey is one tap rather than a refusal.
+                        serviceType: availableOfferServices(trip.id)[0],
                         originStopId: first,
                         destinationStopId: last,
                         price: "",
@@ -5671,7 +5705,7 @@ export function ConnectedApp() {
                     }}
                     className="el-press mt-3 h-10 w-full rounded-[10px] border border-primary text-[14px] font-semibold text-primary"
                   >
-                    Narx bilan e'lon qilish
+                    {tripOffers(trip.id).length > 0 ? "Yana e'lon qo'shish" : "Narx bilan e'lon qilish"}
                   </button>
                 )}
               </div>
@@ -5827,6 +5861,8 @@ export function ConnectedApp() {
         );
       }
       const trip = trips.find((item) => item.id === offerForm.tripId);
+      const offerableServices = availableOfferServices(offerForm.tripId);
+      const alreadyOffered = tripOffers(offerForm.tripId).map((offer) => offer.service_type);
       const stopOptions = (trip?.stops ?? []).map((stop) => [stop.stop.id, stop.stop.name_uz] as [string, string]);
       const window = offerWindowForTrip(trip, offerForm.originStopId);
       const seatsOrOne = offerForm.serviceType === "passenger" ? (trip?.seat_capacity ?? 1) : 1;
@@ -5852,13 +5888,20 @@ export function ConnectedApp() {
             </div>
 
             {/* Q92: both service types are the driver's to publish. Passenger stays behind its flag (K7/Q91) -
-                the model is always there, only the way in is gated. */}
-            {flags?.passenger_enabled && (
+                the model is always there, only the way in is gated. A service this trip already advertises is
+                left out rather than shown and refused on send. */}
+            {offerableServices.length > 1 && (
               <SegmentedControl
                 value={offerForm.serviceType}
                 options={[["passenger", "Yo'lovchi"], ["parcel", "Yuk"]] as const}
                 onChange={(value) => setOfferForm({ ...offerForm, serviceType: value })}
               />
+            )}
+            {alreadyOffered.length > 0 && (
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                Bu safar uchun {alreadyOffered.map((service) => (service === "passenger" ? "yo'lovchi" : "yuk")).join(" va ")}
+                {" "}e'loni allaqachon bor — bittasidan ortiq bo'lmaydi.
+              </p>
             )}
 
             <PickSelect

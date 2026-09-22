@@ -6731,6 +6731,12 @@ export interface components {
             unit_price_minor: number;
             /** Version */
             version: number;
+            /**
+             * View Count
+             * @description Q98: distinct people who opened this listing. Counts neither the owner, nor staff, nor anonymous readers (including the public share page) - with no identity there is nothing to deduplicate by. It is a count of people, never of openings.
+             * @default 0
+             */
+            view_count: number;
         };
         /**
          * ListingKind
@@ -6927,6 +6933,12 @@ export interface components {
             trip_id?: string | null;
             /** Unit Price Minor */
             unit_price_minor: number;
+            /**
+             * View Count
+             * @description Q98: distinct people who opened this listing. Counts neither the owner, nor staff, nor anonymous readers (including the public share page) - with no identity there is nothing to deduplicate by. It is a count of people, never of openings.
+             * @default 0
+             */
+            view_count: number;
         };
         /**
          * ListingStatus

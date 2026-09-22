@@ -215,6 +215,24 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   - Q46 saqlanadi: kengaytirish o'lchangan detourni anglatmaydi; `confirmed_stops` ogohlantirishi o'z
     o'rnida qoladi.
 
+**Wave 17 qarori (22.09.2026) — ko'rishlar soni:**
+- **Q98 (foydalanuvchi qarori)** Har e'londa **ko'rishlar soni** bo'ladi va u **odamlar** sonini bildiradi:
+  `listing_views` jadvali PK `(listing_id, viewer_user_id)`, `listings.view_count` esa faqat qator yaratgan
+  insert'da oshadi (migratsiya 0083). Bitta foydalanuvchi necha marta ochsa ham — 1 ta ko'rish.
+  - **Sanalmaydi:** e'lon egasi (o'z e'lonini tekshirishi qiziqish bo'lib ko'rinmasligi uchun), xodim
+    (operator navbat bilan ishlaydi, talab emas) va **anonim o'quvchi**, shu jumladan ommaviy share sahifasi —
+    identifikatsiya yo'q joyda dedublikatsiya ham yo'q, qayta yuklash bilan ko'tariladigan son esa o'ylab
+    topilgan signal (§9). Taxminiy son aniq son sifatida ko'rsatilmaydi.
+  - Yozish `GET /api/v2/listings/{id}` ichida (feed'dagi `record_search` va xodim kontakt auditi kabi).
+    `version`, `terms_version`, `updated_at` **tegilmaydi** — o'qish tahrir emas, aks holda e'lonni ochgan
+    odam undagi barcha ochiq takliflarni bekor qilgan bo'lardi (Q54).
+  - Son ikkala DTO'da (`ListingDTO`, `ListingPublicDTO`) — kimligini oshkor qilmaydi, faqat son.
+- **Q99 (Q92 ning klient tomoni)** Bitta safarga ikkala xizmat e'lonini qo'yish DB'da allaqachon ruxsat etilgan
+  (`uq_listings_open_trip_offer` — `(trip_id, service_type)`). Klient endi e'lon formasini safar **hali
+  e'lon qilmagan** xizmat turida ochadi; ikkalasi ham bor bo'lsa tugma ko'rsatilmaydi. Qoida sof modulda:
+  `mobile-app/src/app/tripOffers.ts` (indeks predikati bilan bir xil: `cancelled`/`expired` xizmatni
+  bo'shatadi).
+
 **Wave 3.1 dan keyin ham ochiq:** U6 `rating_bucket` chegaralari (hozir `null` — sun’iy reyting yo‘q), ADR-0021 staff MFA (**Proposed**), dalil fayllarini imzolangan havola bilan ko‘rsatish.
 
 ## 4. Kod tuzilishi

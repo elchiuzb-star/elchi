@@ -197,6 +197,16 @@ def get_listing(
         return Envelope[ListingDTO | ListingPublicDTO](data=dto)
     if listing.status == ListingStatus.DRAFT.value:
         raise DomainError(ErrorCode.NOT_FOUND)
+    # Q98: this branch is exactly "somebody who is not the owner and not staff opened a published listing",
+    # which is what the owner's view count is supposed to mean. Anonymous readers fall through with
+    # viewer_user_id=None and are not counted - there is no identity to deduplicate them by.
+    #
+    # A write inside a GET, like the staff contact-view audit above and record_search on the feed: the
+    # thing being recorded *is* the read, so there is nothing else to hang it on. The insert cannot conflict
+    # (ON CONFLICT DO NOTHING) and its two foreign keys are the listing just read and the caller's own user,
+    # so it is not wrapped in a savepoint.
+    if marketplace_service.record_listing_view(session, listing, viewer_user_id=user_id):
+        session.commit()
     return Envelope[ListingDTO | ListingPublicDTO](data=listing_public_dto(session, listing))
 
 

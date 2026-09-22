@@ -30,9 +30,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import exists, func, or_, select, text
+from sqlalchemy import exists, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.contracts.enums import (
     ActorSide,
@@ -66,6 +67,7 @@ from app.modules.identity import service as identity_service
 from app.modules.marketplace.models import (
     Listing,
     ListingOfferLabel,
+    ListingView,
     ParcelListingDetails,
     ParcelPolicyItem,
     ParcelPolicyVersion,
@@ -1132,6 +1134,44 @@ def _assert_publishable(session: Session, listing: Listing, now: datetime) -> No
             ErrorCode.DUPLICATE_LISTING,
             details={"existing_listing_id": format_public_id(PublicIdPrefix.LISTING, duplicate)},
         )
+
+
+def record_listing_view(session: Session, listing: Listing, *, viewer_user_id: int | None) -> bool:
+    """Q98: remember that this person has seen this listing, and count them once.
+
+    Returns whether this call was the first time - the caller commits either way, but only a true here has
+    changed anything.
+
+    The count is of **people**, so the row is the count: `(listing_id, viewer_user_id)` is the primary key and
+    the counter is bumped only on the insert that actually created one. Everything that could turn the number
+    into noise is refused here rather than in the UI, because the owner reads it as a decision ("nobody is
+    looking - the window is wrong" vs "people look and pass - the price is wrong"):
+
+    * the owner's own opens, which would make every check of one's own listing read as interest;
+    * staff, who are working a queue, not shopping (Q3 keeps the two account kinds apart, so this is exact);
+    * anonymous readers, including the public share page - with no identity there is nothing to deduplicate
+      by, and a number a reload can raise is an invented signal (§9).
+
+    Deliberately does not touch `version`, `terms_version` or `updated_at`: looking at a listing is not an
+    edit. Bumping the aggregate version would expire every open proposal on it (Q54) - a listing would lose
+    its offers because somebody read it.
+    """
+    if viewer_user_id is None or viewer_user_id == listing.owner_user_id:
+        return False
+    first = session.execute(
+        pg_insert(ListingView)
+        .values(listing_id=listing.id, viewer_user_id=viewer_user_id)
+        .on_conflict_do_nothing(index_elements=["listing_id", "viewer_user_id"])
+        .returning(ListingView.listing_id)
+    ).scalar_one_or_none()
+    if first is None:
+        return False
+    # One statement, read-modify-write inside the database: two people opening the listing at the same instant
+    # both increment, because each waits for the other's row lock rather than overwriting a value read earlier.
+    session.execute(
+        update(Listing).where(Listing.id == listing.id).values(view_count=Listing.view_count + 1)
+    )
+    return True
 
 
 def _emit_listing_published(session: Session, listing: Listing, now: datetime) -> None:

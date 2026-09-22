@@ -292,6 +292,11 @@ export const messages = {
   "listingStatus.expired": { uz: "Muddati tugagan", ru: "Срок истёк" },
   "listingStatus.cancelled": { uz: "Bekor qilingan", ru: "Отменено" },
 
+  // Q98: a count of people, so zero is a real and useful answer - "nobody has looked yet" tells the owner the
+  // route or the window is wrong, where a low number with proposals would mean the price is.
+  "listing.viewsSuffix": { uz: "ta ko'rish", ru: "просмотров" },
+  "listing.viewsNone": { uz: "Hali hech kim ko'rmagan", ru: "Пока никто не смотрел" },
+
   // --- driver documents (§17.1) ------------------------------------------------------------------------------
   "docType.passport": { uz: "Pasport", ru: "Паспорт" },
   "docType.selfie": { uz: "Selfi", ru: "Селфи" },
