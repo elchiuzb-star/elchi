@@ -1,0 +1,41 @@
+{
+  "_note": "Shaped after the public Geoapify Routing API documentation (GeoJSON FeatureCollection). Hand-built for the contract test; NOT captured from the live service.",
+  "type": "FeatureCollection",
+  "properties": {
+    "mode": "drive",
+    "waypoints": [
+      {"lat": 41.2869, "lon": 69.2025},
+      {"lat": 39.6542, "lon": 66.9597},
+      {"lat": 38.8606, "lon": 65.7847}
+    ],
+    "units": "metric"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "mode": "drive",
+        "waypoints": [
+          {"location": [69.2025, 41.2869], "original_index": 0},
+          {"location": [66.9597, 39.6542], "original_index": 1},
+          {"location": [65.7847, 38.8606], "original_index": 2}
+        ],
+        "units": "metric",
+        "distance": 437812.4,
+        "distance_units": "meters",
+        "time": 19688.6,
+        "legs": [
+          {"distance": 301004.2, "time": 12911.9, "steps": []},
+          {"distance": 136808.2, "time": 6776.7, "steps": []}
+        ]
+      },
+      "geometry": {
+        "type": "MultiLineString",
+        "coordinates": [
+          [[69.2025, 41.2869], [68.7, 40.8], [67.9, 40.1], [66.9597, 39.6542]],
+          [[66.9597, 39.6542], [66.4, 39.3], [65.7847, 38.8606]]
+        ]
+      }
+    }
+  ]
+}

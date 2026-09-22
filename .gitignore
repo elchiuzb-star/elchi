@@ -29,3 +29,6 @@ app-ui/.env.local
 # OS / editor cruft
 .DS_Store
 Thumbs.db
+
+# OSRM routing graph: a build artefact rebuilt by scripts/osrm-prepare.sh, hundreds of MB.
+docker/osrm/data/

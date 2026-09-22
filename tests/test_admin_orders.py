@@ -191,13 +191,30 @@ def test_operator_can_view_order_detail(admin_orders_client) -> None:
     assert "pickup_proof" not in data
 
 
-def test_operator_can_manually_change_status_with_reason(admin_orders_client) -> None:
+def test_operator_cannot_manually_change_status(admin_orders_client) -> None:
     client, tokens, session_factory, ids = admin_orders_client
     order_id = create_order(session_factory, ids, status="picked_up", driver_id=ids["driver"])
 
     response = client.patch(
         f"/api/v1/admin/orders/{order_id}/status",
         headers=headers(tokens["operator"]),
+        json={"status": "in_transit", "reason": "Driver called operator"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"success": False, "error": {"code": "FORBIDDEN", "message": "Admin role required"}}
+    db = session_factory()
+    assert db.get(Order, order_id).status == "picked_up"
+    db.close()
+
+
+def test_admin_can_manually_change_status_with_reason(admin_orders_client) -> None:
+    client, tokens, session_factory, ids = admin_orders_client
+    order_id = create_order(session_factory, ids, status="picked_up", driver_id=ids["driver"])
+
+    response = client.patch(
+        f"/api/v1/admin/orders/{order_id}/status",
+        headers=headers(tokens["admin"]),
         json={"status": "in_transit", "reason": "Driver called operator"},
     )
 
@@ -219,10 +236,10 @@ def test_manual_status_requires_reason_and_rejects_invalid_status(admin_orders_c
     client, tokens, session_factory, ids = admin_orders_client
     order_id = create_order(session_factory, ids, status="picked_up", driver_id=ids["driver"])
 
-    missing_reason = client.patch(f"/api/v1/admin/orders/{order_id}/status", headers=headers(tokens["operator"]), json={"status": "in_transit"})
+    missing_reason = client.patch(f"/api/v1/admin/orders/{order_id}/status", headers=headers(tokens["admin"]), json={"status": "in_transit"})
     invalid_status = client.patch(
         f"/api/v1/admin/orders/{order_id}/status",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"status": "draft", "reason": "Bad target"},
     )
 
@@ -232,7 +249,7 @@ def test_manual_status_requires_reason_and_rejects_invalid_status(admin_orders_c
     assert invalid_status.json()["error"]["code"] == "ORDER_INVALID_STATUS"
 
 
-def test_operator_cannot_cancel_confirmed_order_but_admin_and_super_admin_can(admin_orders_client) -> None:
+def test_operator_cannot_cancel_any_order_but_admin_and_super_admin_can_cancel_confirmed(admin_orders_client) -> None:
     client, tokens, session_factory, ids = admin_orders_client
     operator_order_id = create_order(session_factory, ids, status="confirmed", driver_id=ids["driver"])
     admin_order_id = create_order(session_factory, ids, status="confirmed", driver_id=ids["driver"])
@@ -254,20 +271,23 @@ def test_operator_cannot_cancel_confirmed_order_but_admin_and_super_admin_can(ad
         json={"reason": "Exceptional cancellation"},
     )
 
-    assert operator_response.status_code == 400
-    assert operator_response.json()["error"]["code"] == "ORDER_INVALID_STATUS"
+    assert operator_response.status_code == 403
+    assert operator_response.json() == {"success": False, "error": {"code": "FORBIDDEN", "message": "Admin role required"}}
+    db = session_factory()
+    assert db.get(Order, operator_order_id).status == "confirmed"
+    db.close()
     assert admin_response.status_code == 200
     assert super_response.status_code == 200
 
 
-def test_operator_can_cancel_accepted_order_and_close_active_bids(admin_orders_client) -> None:
+def test_admin_can_cancel_accepted_order_and_close_active_bids(admin_orders_client) -> None:
     client, tokens, session_factory, ids = admin_orders_client
     order_id = create_order(session_factory, ids, status="accepted", driver_id=ids["driver"])
     bid_id = add_bid(session_factory, order_id, ids["driver"], status="active")
 
     response = client.post(
         f"/api/v1/admin/orders/{order_id}/cancel",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"reason": "Client unreachable"},
     )
 
@@ -279,7 +299,7 @@ def test_operator_can_cancel_accepted_order_and_close_active_bids(admin_orders_c
     audit = db.scalar(select(AuditLog).where(AuditLog.action == "admin_order_cancelled", AuditLog.entity_id == order_id))
     assert order.status == "cancelled"
     assert order.cancel_reason == "Client unreachable"
-    assert order.cancelled_by == ids["operator"]
+    assert order.cancelled_by == ids["admin"]
     assert order.cancelled_at is not None
     assert bid.status == "closed"
     assert history.reason == "Client unreachable"
@@ -288,14 +308,14 @@ def test_operator_can_cancel_accepted_order_and_close_active_bids(admin_orders_c
 
 
 @pytest.mark.parametrize("order_status", ["published", "bidding"])
-def test_operator_can_manually_assign_approved_driver(admin_orders_client, order_status: str) -> None:
+def test_admin_can_manually_assign_approved_driver(admin_orders_client, order_status: str) -> None:
     client, tokens, session_factory, ids = admin_orders_client
     order_id = create_order(session_factory, ids, status=order_status)
     bid_id = add_bid(session_factory, order_id, ids["driver"], status="active")
 
     response = client.post(
         f"/api/v1/admin/orders/{order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["driver"], "final_price": 55000, "reason": "Client requested operator assistance"},
     )
 
@@ -343,7 +363,7 @@ def test_manual_assign_closes_other_active_bids(admin_orders_client) -> None:
 
     response = client.post(
         f"/api/v1/admin/orders/{order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["driver"], "final_price": 55000, "reason": "Manual assign"},
     )
 
@@ -362,32 +382,32 @@ def test_manual_assign_validation_errors(admin_orders_client) -> None:
 
     missing_reason = client.post(
         f"/api/v1/admin/orders/{order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["driver"], "final_price": 55000},
     )
     invalid_price = client.post(
         f"/api/v1/admin/orders/{order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["driver"], "final_price": 0, "reason": "Manual assign"},
     )
     pending_driver = client.post(
         f"/api/v1/admin/orders/{order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["pending_driver"], "final_price": 55000, "reason": "Manual assign"},
     )
     blocked_driver = client.post(
         f"/api/v1/admin/orders/{order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["blocked_driver"], "final_price": 55000, "reason": "Manual assign"},
     )
     route_mismatch = client.post(
         f"/api/v1/admin/orders/{mismatch_order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["driver"], "final_price": 55000, "reason": "Manual assign"},
     )
     cancelled = client.post(
         f"/api/v1/admin/orders/{cancelled_order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["driver"], "final_price": 55000, "reason": "Manual assign"},
     )
 
@@ -405,12 +425,12 @@ def test_concurrent_manual_assignment_second_request_fails(admin_orders_client) 
 
     first = client.post(
         f"/api/v1/admin/orders/{order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["driver"], "final_price": 55000, "reason": "Manual assign"},
     )
     second = client.post(
         f"/api/v1/admin/orders/{order_id}/assign-driver",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"driver_id": ids["driver"], "final_price": 56000, "reason": "Manual assign again"},
     )
 

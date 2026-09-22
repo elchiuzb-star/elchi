@@ -1,39 +1,29 @@
+/**
+ * What a person reads when a v1 request is refused.
+ *
+ * The server sends a machine code; the sentence is chosen here, in the reader's language. That is the whole
+ * reason there is no `Accept-Language` negotiation in this app: `message` on the wire is an English developer
+ * description, and it was never the text anybody was meant to see.
+ *
+ * Honest wording (spec §21.2): a refusal says what actually happened - a code has expired, a document is
+ * missing, a balance is short - and never blames the network for a business rule. Most of these are things the
+ * person can fix, and they can only fix what they are told.
+ */
 import { ApiError } from "../types/api";
+import { translate, translateDynamic } from "../i18n";
 
-const uzbekErrorMessages: Record<string, string> = {
-  ROLE_MISMATCH: "Bu telefon raqam boshqa rolda ro'yxatdan o'tgan",
-  OTP_INVALID: "Kod noto'g'ri",
-  OTP_EXPIRED: "Kod muddati tugagan",
-  OTP_USED: "Kod allaqachon ishlatilgan",
-  OTP_RESEND_TOO_SOON: "Kodni qayta yuborishdan oldin biroz kuting",
-  OTP_TOO_MANY_ATTEMPTS: "Juda ko'p urinish bo'ldi",
-  OTP_SEND_LIMIT_EXCEEDED: "Kod olish urinishlari ko'payib ketdi. Keyinroq urinib ko'ring",
-  INVALID_PHONE: "Telefon raqam noto'g'ri",
-  DRIVER_NOT_APPROVED: "Profil tasdiqlanmagan",
-  DRIVER_NOT_AVAILABLE: "Faol holatni yoqing",
-  DRIVER_DOCUMENTS_INCOMPLETE: "Barcha kerakli hujjatlarni yuklang",
-  DRIVER_DOCUMENT_INVALID_TYPE: "Hujjat turi noto'g'ri",
-  DRIVER_DOCUMENT_TOO_LARGE: "Hujjat hajmi juda katta",
-  CITY_INACTIVE: "Tanlangan shahar faol emas",
-  DISTRICT_REQUIRED: "Tumanni tanlang",
-  DISTRICT_CITY_MISMATCH: "Tuman tanlangan shaharga tegishli emas",
-  DISTRICT_INACTIVE: "Tanlangan tuman faol emas",
-  ROUTE_TARIFF_NOT_FOUND: "Bu yo'nalish uchun narx topilmadi",
-  ROUTE_NOT_MATCHED: "Bu buyurtma sizning yo'nalishingizga mos emas",
-  UNAUTHORIZED: "Avval tizimga kiring",
-  FORBIDDEN: "Ruxsat yo'q",
-  USER_BLOCKED: "Foydalanuvchi bloklangan",
-  USER_INACTIVE: "Foydalanuvchi faol emas",
-  VALIDATION_ERROR: "Ma'lumotlarni tekshiring",
-  NOT_FOUND: "Ma'lumot topilmadi",
-};
-
-export function getUzbekErrorMessage(error: unknown): string {
+/**
+ * The message for an error, in the active language.
+ *
+ * Falls back in three steps: the code's own sentence, then the generic failure, and - when nothing reached the
+ * server at all - the offline line, which is the one case where blaming the connection is the truth.
+ */
+export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    return uzbekErrorMessages[error.code] ?? "Xatolik yuz berdi";
+    return translateDynamic(`error.${error.code}`) ?? translate("error.fallback");
   }
   if (error instanceof Error && error.message) {
-    return "Xatolik yuz berdi";
+    return translate("error.fallback");
   }
-  return "Internet aloqasi yo'q";
+  return translate("error.offline");
 }

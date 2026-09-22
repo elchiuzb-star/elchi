@@ -13,6 +13,7 @@ from app.services.audit_service import write_audit_log
 from app.services.city_service import pagination
 from app.services.notification_service import create_notification
 from app.utils.api_response import error_response
+from app.utils.legacy_time import v1_naive
 
 ALLOWED_DISPUTE_REASONS = {
     "delayed",
@@ -27,6 +28,9 @@ ALLOWED_DISPUTE_REASONS = {
 ALLOWED_DISPUTE_STATUSES = {"open", "under_review", "resolved", "rejected"}
 ACTIVE_DISPUTE_STATUSES = {"open", "under_review"}
 ADMIN_ROLES = {"operator", "admin", "super_admin"}
+FINAL_DISPUTE_STATUSES = {"resolved", "rejected"}
+DISPUTE_RESOLVER_ROLES = {"admin", "super_admin"}
+OPERATOR_DISPUTE_TARGET_STATUS = "under_review"
 OPEN_ROLES = {"client", "driver", *ADMIN_ROLES}
 USER_DISPUTABLE_STATUSES = {"accepted", "picked_up", "in_transit", "delivered"}
 ADMIN_DISPUTABLE_STATUSES = {"published", "bidding", "accepted", "picked_up", "in_transit", "delivered", "confirmed"}
@@ -131,7 +135,7 @@ def dispute_detail_to_dict(db: Session, dispute: Dispute) -> dict[str, Any]:
         "status": dispute.status,
         "resolution": dispute.resolution,
         "resolved_by": dispute.resolved_by,
-        "resolved_at": dispute.resolved_at,
+        "resolved_at": v1_naive(dispute.resolved_at),
         "created_at": dispute.created_at,
         "status_history": [
             {
@@ -331,13 +335,27 @@ def notify_dispute_parties(db: Session, order: Order, notification_type: str, ti
 
 
 def update_dispute(db: Session, user: User, dispute_id: int, payload: DisputeUpdate) -> dict[str, Any] | JSONResponse:
-    if payload.status not in ALLOWED_DISPUTE_STATUSES:
-        return error_response(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "Invalid dispute status")
-    if payload.status in {"resolved", "rejected"} and (payload.resolution is None or not payload.resolution.strip()):
-        return error_response(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "Resolution is required for resolved or rejected dispute")
+    # Existence first, for every staff role: a missing dispute is 404 before any
+    # validation or permission check. The endpoint is staff-only (401/403 for
+    # everyone else before this point), so existence is not leaked to clients,
+    # and staff get one consistent answer, as with other v1 admin endpoints.
     dispute = db.scalar(select(Dispute).where(Dispute.id == dispute_id).with_for_update())
     if dispute is None:
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Dispute not found")
+    if payload.status not in ALLOWED_DISPUTE_STATUSES:
+        return error_response(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "Invalid dispute status")
+    # Q13 / decision 38: resolving/rejecting changes the order's status, so it is
+    # admin+ only. An operator may only move a dispute to under_review, with a
+    # non-empty note (the existing `resolution` text field).
+    if user.role not in DISPUTE_RESOLVER_ROLES:
+        if payload.status in FINAL_DISPUTE_STATUSES:
+            return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Admin role required to resolve or reject a dispute")
+        if payload.status != OPERATOR_DISPUTE_TARGET_STATUS:
+            return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Operators can only move a dispute to under_review")
+        if payload.resolution is None or not payload.resolution.strip():
+            return error_response(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "A note is required to move a dispute to under_review")
+    if payload.status in {"resolved", "rejected"} and (payload.resolution is None or not payload.resolution.strip()):
+        return error_response(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "Resolution is required for resolved or rejected dispute")
     if dispute.status in {"resolved", "rejected"} and payload.status != dispute.status:
         return error_response(status.HTTP_400_BAD_REQUEST, "ORDER_INVALID_STATUS", "Resolved or rejected disputes are final")
 
@@ -409,5 +427,5 @@ def update_dispute(db: Session, user: User, dispute_id: int, payload: DisputeUpd
         "order_status": restored_status,
         "resolution": dispute.resolution,
         "resolved_by": dispute.resolved_by,
-        "resolved_at": dispute.resolved_at,
+        "resolved_at": v1_naive(dispute.resolved_at),
     }

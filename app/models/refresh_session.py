@@ -17,6 +17,15 @@ class RefreshSession(TimestampMixin, Base):
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: §17.6 (0072): why the session ended - "logout", "rotated", "admin_revoke", "account_deleted".
+    #: NULL while the session is live, and on rows revoked before 0072 (then treated as ended, fail closed).
+    revoked_reason: Mapped[str | None] = mapped_column(
+        String(32),
+        comment=(
+            "§17.6: why the session ended. NULL on a live session, and on rows revoked before 0072 "
+            "(treated as ended). 'rotated' means a successor session exists."
+        ),
+    )
     user_agent: Mapped[str | None] = mapped_column(String(512))
     ip_address: Mapped[str | None] = mapped_column(String(64))
 

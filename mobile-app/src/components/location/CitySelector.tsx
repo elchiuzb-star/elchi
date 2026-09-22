@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ChevronRight, MapPin, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, MapPin, Search } from "../../app/ui/icons";
 
 import { getCities } from "../../api/cities.api";
 import type { City } from "../../types/city";
@@ -56,63 +56,68 @@ export function CitySelector({ title, onSelectCity, onBack }: CitySelectorProps)
   const visibleCities = useMemo(() => cities.filter((city) => cityMatches(city, query)), [cities, query]);
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-white">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[#E5E7EB] px-5">
-        <button type="button" onClick={onBack} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F3F4F6]">
+    <main className="flex min-h-0 flex-1 flex-col bg-card">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-5">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Orqaga"
+          className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-muted"
+        >
           <ArrowLeft size={18} />
         </button>
-        <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold text-[#111827]">{title}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold text-foreground">{title}</h1>
         <button
           type="button"
           onClick={() => {
             setNotice("Avval shaharni tanlang");
             window.setTimeout(() => setNotice(""), 2200);
           }}
-          className="rounded-full bg-[#EEF2FF] px-4 py-2 text-[14px] font-semibold text-[#1B4FD8]"
+          className="rounded-full bg-accent px-4 py-2 text-[14px] font-semibold text-primary"
         >
           Xarita
         </button>
       </header>
-      <section className="border-b border-[#E5E7EB] px-5 py-4">
-        <label className="flex h-12 items-center gap-3 rounded-[16px] border-2 border-[#38BDF8] bg-white px-4">
-          <Search size={19} color="#6B7280" />
+      <section className="border-b border-border px-5 py-4">
+        <label className="flex h-12 items-center gap-3 rounded-[16px] border-2 border-feruza bg-card px-4">
+          <Search size={19} color="var(--muted-foreground)" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Qidirish"
-            className="min-w-0 flex-1 bg-transparent text-[15px] text-[#111827] outline-none"
+            className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none"
           />
         </label>
-        <p className="mt-2 text-[12px] leading-5 text-[#6B7280]">
+        <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
           Avval shaharni tanlang, keyin xaritada aniq manzilni belgilang.
         </p>
-        {notice && <p className="mt-2 text-[12px] font-semibold text-[#DC2626]">{notice}</p>}
+        {notice && <p className="mt-2 text-[12px] font-semibold text-destructive">{notice}</p>}
       </section>
       <section className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="px-5 py-8 text-center text-[14px] text-[#6B7280]">Shaharlar yuklanmoqda...</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Shaharlar yuklanmoqda...</div>
         ) : error ? (
-          <div className="px-5 py-8 text-center text-[14px] text-[#DC2626]">{error}</div>
+          <div className="px-5 py-8 text-center text-[14px] text-destructive">{error}</div>
         ) : visibleCities.length ? (
           visibleCities.map((city) => (
             <button
               key={city.id}
               type="button"
               onClick={() => onSelectCity(city)}
-              className="flex min-h-[74px] w-full items-center gap-3 border-b border-[#E5E7EB] px-5 text-left last:border-b-0"
+              className="flex min-h-[74px] w-full items-center gap-3 border-b border-border px-5 text-left last:border-b-0"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[#6B7280]">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <MapPin size={20} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-semibold text-[#111827]">{city.name_uz}</span>
-                <span className="mt-0.5 block truncate text-[13px] text-[#6B7280]">{city.region || city.name_ru || "-"}</span>
+                <span className="block truncate text-[16px] font-semibold text-foreground">{city.name_uz}</span>
+                <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">{city.region || city.name_ru || "-"}</span>
               </span>
-              <ChevronRight size={19} color="#9CA3AF" />
+              <ChevronRight size={19} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
             </button>
           ))
         ) : (
-          <div className="px-5 py-8 text-center text-[14px] text-[#6B7280]">Shahar topilmadi</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Shahar topilmadi</div>
         )}
       </section>
     </main>

@@ -1,14 +1,14 @@
+/**
+ * The legacy v1 parcel order, as a client still touches it.
+ *
+ * Creating and editing are deliberately absent (wave 13): new orders are v2 listings, so a pre-cutover v1 order
+ * only has to be readable and closeable. Leaving `POST`/`PATCH` helpers here would invite a second creation
+ * path and let one business object be mutated by both engines (Q4).
+ */
 import { apiRequest } from "./http";
 import type { Paginated } from "../types/api";
 import type { Bid } from "../types/bid";
-import type { ClientOrder, CreateOrderPayload, RatingPayload } from "../types/order";
-
-export function createClientOrder(payload: CreateOrderPayload) {
-  const body = Object.fromEntries(
-    Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== ""),
-  );
-  return apiRequest<ClientOrder>("/client/orders", { method: "POST", body });
-}
+import type { ClientOrder, RatingPayload } from "../types/order";
 
 export function listClientOrders(params: { status?: string; page?: number; limit?: number } = {}) {
   const query = new URLSearchParams();
@@ -20,17 +20,6 @@ export function listClientOrders(params: { status?: string; page?: number; limit
 
 export function getClientOrder(orderId: number) {
   return apiRequest<ClientOrder>(`/client/orders/${orderId}`);
-}
-
-export function updateClientOrder(orderId: number, payload: Partial<CreateOrderPayload>) {
-  const body = Object.fromEntries(
-    Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== ""),
-  );
-  return apiRequest<ClientOrder>(`/client/orders/${orderId}`, { method: "PATCH", body });
-}
-
-export function publishClientOrder(orderId: number) {
-  return apiRequest<ClientOrder>(`/client/orders/${orderId}/publish`, { method: "POST" });
 }
 
 export function listClientOrderBids(orderId: number) {

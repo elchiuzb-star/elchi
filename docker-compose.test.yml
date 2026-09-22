@@ -1,0 +1,83 @@
+# Test-only infrastructure for Elchi stage 2 (PostgreSQL 16 + PostGIS, Redis).
+#
+# NOT for production. Data lives on tmpfs and disappears with the container.
+# The explicit project name keeps this stack separate from any dev/prod stack:
+#
+#   docker compose -f docker-compose.test.yml up -d --wait     # builds the PostGIS image if missing
+#   docker compose -f docker-compose.test.yml down -v
+#
+# or simply scripts/test-pg.ps1 / scripts/test-pg.sh.
+#
+# Matching pytest default: ELCHI_TEST_PG_URL=postgresql+psycopg://elchi_test:elchi_test@127.0.0.1:45432/elchi_test
+# (tests/pg refuse non-local hosts and database names without a "test" token).
+#
+# Port 45432 (Q76): 55432 sat inside a Windows excluded TCP range and the
+# container failed with "access permissions". Windows periodically reserves
+# ranges for Hyper-V/WinNAT; before picking a port, check with:
+#   netsh interface ipv4 show excludedportrange protocol=tcp
+# and pick something below 49152 (outside the dynamic/Hyper-V range too) that
+# isn't listed. Redis below was moved to 36379 for the same reason.
+#
+# Same database engine as production (decision 34, owner A10a since wave 1.5):
+# image built from docker/postgis/Dockerfile (postgres:16.15-trixie by digest +
+# PostGIS 3.5.3 packages by exact version) and the production initdb locale/checksums.
+# Redis uses the production tag+digest. Bump together with docker-compose.prod.yml.
+
+name: elchi-test
+
+services:
+  postgis:
+    # Q58: set ELCHI_POSTGIS_IMAGE=<registry>/elchi-postgis@sha256:... so tests/pg run on exactly the
+    # production image once the UZ registry exists. Unset -> local tag; `build` is only the dev
+    # fallback when that tag is missing (`docker compose -f docker-compose.test.yml build postgis`).
+    image: ${ELCHI_POSTGIS_IMAGE:-elchi-postgis:16.15-3.5.3-trixie}
+    build:
+      context: docker/postgis
+    environment:
+      POSTGRES_USER: elchi_test
+      POSTGRES_PASSWORD: elchi_test
+      POSTGRES_DB: elchi_test
+      # Same as docker-compose.prod.yml (BR finding 14).
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C.UTF-8 --data-checksums"
+      TZ: UTC
+    # Durability settings are off on purpose: this database is disposable and
+    # speed matters more than crash safety. Never copy these flags to prod.
+    command:
+      - postgres
+      - -c
+      - timezone=UTC
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - max_connections=300
+      - -c
+      - lock_timeout=30s
+    ports:
+      - "127.0.0.1:45432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data:rw,size=1g
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elchi_test -d elchi_test -h 127.0.0.1"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  redis:
+    # Reserved for rate limits / pub/sub. No persistence. Same tag+digest as production.
+    image: redis:7.4.11@sha256:71da9275c5f3fcb97d0fa0c8c5b36cc995327265420f17a04bfd544f458059f7
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # Below the Windows dynamic/Hyper-V excluded range (49152-65535): 56379 was
+    # refused after a Docker Desktop restart ("access permissions").
+    ports:
+      - "127.0.0.1:36379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

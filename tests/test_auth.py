@@ -7,11 +7,20 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models
-from app.core.security import create_access_token, verify_token
+from app.core.config import settings
+from app.core.security import create_access_token, hash_password, verify_token
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models import AuditLog, ClientProfile, DriverProfile, OtpCode, RefreshSession, User
+
+# A well-formed code (right length) that is neither the dev mock nor the mock code,
+# so it reaches the expiry/attempt checks instead of failing format validation.
+WRONG_OTP = next(
+    candidate
+    for candidate in (digit * settings.otp_length for digit in "987654321")
+    if candidate not in {settings.dev_mock_otp, settings.mock_otp_code}
+)
 
 
 @pytest.fixture()
@@ -46,11 +55,11 @@ def test_client_login_flow(client: TestClient) -> None:
         json={"phone": "+998901111111", "role": "client"},
     )
     assert otp_response.status_code == 200
-    assert otp_response.json()["data"]["dev_otp"] == "12345"
+    assert otp_response.json()["data"]["dev_otp"] == settings.dev_mock_otp
 
     token_response = client.post(
         "/api/v1/auth/verify-otp",
-        json={"phone": "+998901111111", "role": "client", "otp": "12345"},
+        json={"phone": "+998901111111", "role": "client", "otp": settings.dev_mock_otp},
     )
     assert token_response.status_code == 200
     body = token_response.json()
@@ -115,7 +124,7 @@ def test_non_staff_cannot_update_full_name_through_auth_me(client: TestClient) -
     client.post("/api/v1/auth/request-otp", json={"phone": "+998901111113", "role": "client"})
     token_response = client.post(
         "/api/v1/auth/verify-otp",
-        json={"phone": "+998901111113", "role": "client", "otp": "12345"},
+        json={"phone": "+998901111113", "role": "client", "otp": settings.dev_mock_otp},
     )
 
     response = client.patch(
@@ -136,7 +145,7 @@ def test_driver_login_flow_creates_driver_profile(client: TestClient) -> None:
 
     token_response = client.post(
         "/api/v1/auth/verify-otp",
-        json={"phone": "+998902222222", "role": "driver", "otp": "12345"},
+        json={"phone": "+998902222222", "role": "driver", "otp": settings.dev_mock_otp},
     )
 
     assert token_response.status_code == 200
@@ -165,7 +174,7 @@ def test_existing_driver_missing_profile_is_repaired_on_verify(client: TestClien
     client.post("/api/v1/auth/request-otp", json={"phone": "+998902333333", "role": "driver"})
     response = client.post(
         "/api/v1/auth/verify-otp",
-        json={"phone": "+998902333333", "role": "driver", "otp": "12345"},
+        json={"phone": "+998902333333", "role": "driver", "otp": settings.dev_mock_otp},
     )
 
     assert response.status_code == 200
@@ -182,7 +191,7 @@ def test_client_login_flow_creates_client_profile(client: TestClient) -> None:
     )
     client.post(
         "/api/v1/auth/verify-otp",
-        json={"phone": "+998903333333", "role": "client", "otp": "12345"},
+        json={"phone": "+998903333333", "role": "client", "otp": settings.dev_mock_otp},
     )
 
     with next(app.dependency_overrides[get_db]()) as db:
@@ -212,7 +221,7 @@ def test_invalid_otp_is_rejected(client: TestClient) -> None:
 
     response = client.post(
         "/api/v1/auth/verify-otp",
-        json={"phone": "+998904444444", "role": "client", "otp": "11111"},
+        json={"phone": "+998904444444", "role": "client", "otp": WRONG_OTP},
     )
 
     assert response.status_code == 400
@@ -239,10 +248,11 @@ def test_otp_cooldown_send_limit_expiry_used_and_attempts(client: TestClient) ->
     phone = "+998906666666"
     first = client.post("/api/v1/auth/request-otp", json={"phone": phone, "role": "client"})
     assert first.status_code == 200
-    assert len(first.json()["data"]["dev_otp"]) == 5
+    assert len(first.json()["data"]["dev_otp"]) == settings.otp_length
 
     cooldown = client.post("/api/v1/auth/request-otp", json={"phone": phone, "role": "client"})
-    assert cooldown.status_code == 400
+    # Resend cooldown is a rate limit: 429 like the other OTP limits.
+    assert cooldown.status_code == 429
     assert cooldown.json()["error"]["code"] == "OTP_RESEND_TOO_SOON"
 
     with next(app.dependency_overrides[get_db]()) as db:
@@ -251,7 +261,7 @@ def test_otp_cooldown_send_limit_expiry_used_and_attempts(client: TestClient) ->
         otp.expires_at = otp.expires_at.replace(year=2020)
         db.commit()
 
-    expired = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": "client", "otp": "11111"})
+    expired = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": "client", "otp": WRONG_OTP})
     assert expired.status_code == 400
     assert expired.json()["error"]["code"] == "OTP_EXPIRED"
 
@@ -279,8 +289,8 @@ def test_otp_cooldown_send_limit_expiry_used_and_attempts(client: TestClient) ->
 def test_used_otp_and_too_many_attempts_are_rejected(client: TestClient) -> None:
     phone = "+998909111111"
     client.post("/api/v1/auth/request-otp", json={"phone": phone, "role": "client"})
-    ok = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": "client", "otp": "12345"})
-    reused = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": "client", "otp": "12345"})
+    ok = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": "client", "otp": settings.dev_mock_otp})
+    reused = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": "client", "otp": settings.dev_mock_otp})
     assert ok.status_code == 200
     assert reused.status_code == 400
     assert reused.json()["error"]["code"] == "OTP_USED"
@@ -290,33 +300,54 @@ def test_used_otp_and_too_many_attempts_are_rejected(client: TestClient) -> None
     for _ in range(5):
         assert client.post(
             "/api/v1/auth/verify-otp",
-            json={"phone": phone_attempts, "role": "client", "otp": "99999"},
+            json={"phone": phone_attempts, "role": "client", "otp": WRONG_OTP},
         ).status_code == 400
-    too_many = client.post("/api/v1/auth/verify-otp", json={"phone": phone_attempts, "role": "client", "otp": "99999"})
+    too_many = client.post("/api/v1/auth/verify-otp", json={"phone": phone_attempts, "role": "client", "otp": WRONG_OTP})
     assert too_many.status_code == 400
     assert too_many.json()["error"]["code"] == "OTP_TOO_MANY_ATTEMPTS"
 
 
 def test_existing_staff_can_login_but_blocked_inactive_deleted_cannot(client: TestClient) -> None:
+    """Staff sign in with username + password (commit 2ba7f0b); the OTP path is closed to them."""
+    password = "Staff-pass-123"
     with next(app.dependency_overrides[get_db]()) as db:
         users = [
-            User(phone="+998901000001", role="admin", status="active", is_phone_verified=True),
-            User(phone="+998901000002", role="operator", status="active", is_phone_verified=True),
-            User(phone="+998901000003", role="super_admin", status="active", is_phone_verified=True),
+            User(phone="+998901000001", username="h1admin", password_hash=hash_password(password), role="admin", status="active", is_phone_verified=True),
+            User(phone="+998901000002", username="h1operator", password_hash=hash_password(password), role="operator", status="active", is_phone_verified=True),
+            User(phone="+998901000003", username="h1super", password_hash=hash_password(password), role="super_admin", status="active", is_phone_verified=True),
             User(phone="+998901000004", role="client", status="blocked", is_phone_verified=True),
             User(phone="+998901000005", role="client", status="inactive", is_phone_verified=True),
             User(phone="+998901000006", role="client", status="deleted", is_phone_verified=True),
+            User(phone="+998901000007", username="h1blocked", password_hash=hash_password(password), role="admin", status="blocked", is_phone_verified=True),
+            User(phone="+998901000008", username="h1inactive", password_hash=hash_password(password), role="operator", status="inactive", is_phone_verified=True),
+            User(phone="+998901000009", username="h1deleted", password_hash=hash_password(password), role="super_admin", status="deleted", is_phone_verified=True),
         ]
         db.add_all(users)
         db.commit()
 
-    for phone, role in [
-        ("+998901000001", "admin"),
-        ("+998901000002", "operator"),
-        ("+998901000003", "super_admin"),
+    for phone, username, role in [
+        ("+998901000001", "h1admin", "admin"),
+        ("+998901000002", "h1operator", "operator"),
+        ("+998901000003", "h1super", "super_admin"),
     ]:
-        assert client.post("/api/v1/auth/request-otp", json={"phone": phone, "role": role}).status_code == 200
-        assert client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": role, "otp": "12345"}).status_code == 200
+        otp_request = client.post("/api/v1/auth/request-otp", json={"phone": phone, "role": role})
+        assert otp_request.status_code == 400
+        assert otp_request.json()["error"]["code"] == "PASSWORD_LOGIN_REQUIRED"
+        otp_verify = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": role, "otp": settings.dev_mock_otp})
+        assert otp_verify.status_code == 400
+        assert otp_verify.json()["error"]["code"] == "PASSWORD_LOGIN_REQUIRED"
+        assert "access_token" not in otp_verify.json()
+
+        login = client.post("/api/v1/auth/staff-login", json={"username": username, "password": password})
+        assert login.status_code == 200, login.text
+        assert login.json()["access_token"]
+        assert login.json()["user"]["role"] == role
+
+    for username, expected_code in [("h1blocked", "USER_BLOCKED"), ("h1inactive", "USER_INACTIVE"), ("h1deleted", "USER_INACTIVE")]:
+        response = client.post("/api/v1/auth/staff-login", json={"username": username, "password": password})
+        assert response.status_code == 403, username
+        assert response.json()["error"]["code"] == expected_code
+        assert "access_token" not in response.json()
 
     for phone in ["+998901000004", "+998901000005", "+998901000006"]:
         response = client.post("/api/v1/auth/request-otp", json={"phone": phone, "role": "client"})
@@ -325,7 +356,7 @@ def test_existing_staff_can_login_but_blocked_inactive_deleted_cannot(client: Te
 
 def test_token_types_refresh_rotation_and_logout(client: TestClient) -> None:
     client.post("/api/v1/auth/request-otp", json={"phone": "+998902000001", "role": "client"})
-    login = client.post("/api/v1/auth/verify-otp", json={"phone": "+998902000001", "role": "client", "otp": "12345"}).json()
+    login = client.post("/api/v1/auth/verify-otp", json={"phone": "+998902000001", "role": "client", "otp": settings.dev_mock_otp}).json()
     access_payload = verify_token(login["access_token"])
     refresh_payload = verify_token(login["refresh_token"])
     assert access_payload["type"] == "access"

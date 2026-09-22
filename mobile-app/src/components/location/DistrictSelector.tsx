@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ChevronRight, MapPin, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, MapPin, Search } from "../../app/ui/icons";
 
 import { getDistricts } from "../../api/districts.api";
 import type { City, District } from "../../types/city";
@@ -55,51 +55,56 @@ export function DistrictSelector({ city, onSelectDistrict, onBack }: DistrictSel
   const visibleDistricts = useMemo(() => districts.filter((district) => districtMatches(district, query)), [districts, query]);
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-white">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[#E5E7EB] px-5">
-        <button type="button" onClick={onBack} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F3F4F6]">
+    <main className="flex min-h-0 flex-1 flex-col bg-card">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-5">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Orqaga"
+          className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-muted"
+        >
           <ArrowLeft size={18} />
         </button>
-        <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold text-[#111827]">Tumanni tanlang</h1>
+        <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold text-foreground">Tumanni tanlang</h1>
       </header>
-      <section className="border-b border-[#E5E7EB] px-5 py-4">
-        <p className="mb-2 truncate text-[13px] font-semibold text-[#6B7280]">{city.name_uz}</p>
-        <label className="flex h-12 items-center gap-3 rounded-[16px] border-2 border-[#38BDF8] bg-white px-4">
-          <Search size={19} color="#6B7280" />
+      <section className="border-b border-border px-5 py-4">
+        <p className="mb-2 truncate text-[13px] font-semibold text-muted-foreground">{city.name_uz}</p>
+        <label className="flex h-12 items-center gap-3 rounded-[16px] border-2 border-feruza bg-card px-4">
+          <Search size={19} color="var(--muted-foreground)" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Tuman qidirish"
-            className="min-w-0 flex-1 bg-transparent text-[15px] text-[#111827] outline-none"
+            className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none"
           />
         </label>
-        <p className="mt-2 text-[12px] leading-5 text-[#6B7280]">Keyin xaritada aniq manzilni belgilang.</p>
+        <p className="mt-2 text-[12px] leading-5 text-muted-foreground">Keyin xaritada aniq manzilni belgilang.</p>
       </section>
       <section className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="px-5 py-8 text-center text-[14px] text-[#6B7280]">Tumanlar yuklanmoqda...</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Tumanlar yuklanmoqda...</div>
         ) : error ? (
-          <div className="px-5 py-8 text-center text-[14px] text-[#DC2626]">{error}</div>
+          <div className="px-5 py-8 text-center text-[14px] text-destructive">{error}</div>
         ) : visibleDistricts.length ? (
           visibleDistricts.map((district) => (
             <button
               key={district.id}
               type="button"
               onClick={() => onSelectDistrict(district)}
-              className="flex min-h-[70px] w-full items-center gap-3 border-b border-[#E5E7EB] px-5 text-left last:border-b-0"
+              className="flex min-h-[70px] w-full items-center gap-3 border-b border-border px-5 text-left last:border-b-0"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[#1B4FD8]">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
                 <MapPin size={19} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-semibold text-[#111827]">{district.name_uz}</span>
-                <span className="mt-0.5 block truncate text-[13px] text-[#6B7280]">{city.name_uz}</span>
+                <span className="block truncate text-[16px] font-semibold text-foreground">{district.name_uz}</span>
+                <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">{city.name_uz}</span>
               </span>
-              <ChevronRight size={19} color="#9CA3AF" />
+              <ChevronRight size={19} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
             </button>
           ))
         ) : (
-          <div className="px-5 py-8 text-center text-[14px] text-[#6B7280]">Tuman topilmadi</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Tuman topilmadi</div>
         )}
       </section>
     </main>

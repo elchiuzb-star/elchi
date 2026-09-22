@@ -267,7 +267,7 @@ def test_order_published_creates_notification_for_matched_driver(notifications_c
         "dropoff_address": "Samarqand, Registon",
         "sender_phone": "+998901234567",
         "receiver_phone": "+998911112233",
-        "cargo_photo_url": "/uploads/cargo_photo/2026/06/photo.jpg",
+        "cargo_photo_url": None,
     }
 
     create_response = client.post("/api/v1/client/orders", headers=headers(tokens["client"]), json=payload)
@@ -298,4 +298,9 @@ def test_stage_16_does_not_add_external_notification_or_tracking_fields(notifica
     forbidden_tables = {"chat_messages", "payment_notifications", "sms_deliveries", "fcm_deliveries", "tracking_events"}
 
     assert forbidden_columns.isdisjoint(notification_columns)
-    assert forbidden_tables.isdisjoint(Base.metadata.tables.keys())
+    # Scoped to legacy v1 models (wave 3 integration, A0a): stage-2 chat/tracking tables live in wired v2 modules
+    # (app.modules.*) and may share Base.metadata in the same process; v1 models must still not add them.
+    legacy_tables = {
+        mapper.local_table.name for mapper in Base.registry.mappers if mapper.class_.__module__.startswith("app.models")
+    }
+    assert forbidden_tables.isdisjoint(legacy_tables)

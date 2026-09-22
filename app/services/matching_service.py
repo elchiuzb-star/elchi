@@ -5,9 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.models import DriverProfile, DriverRoute, Order, OrderOffer, User
 from app.services.notification_service import create_notification
+from app.services.review_accounts import is_review_user_id, user_phone_matches_review_side
 
 
 def find_matched_drivers_for_order(db: Session, order: Order) -> list[DriverProfile]:
+    # Review (store) accounts are isolated: a review client's order reaches only
+    # review drivers, and a real client's order never reaches a review driver.
+    review_filter = user_phone_matches_review_side(User.phone, is_review_user_id(db, order.client_id))
     stmt = (
         select(DriverProfile)
         .join(User, User.id == DriverProfile.user_id)
@@ -24,6 +28,8 @@ def find_matched_drivers_for_order(db: Session, order: Order) -> list[DriverProf
         )
         .distinct()
     )
+    if review_filter is not None:
+        stmt = stmt.where(review_filter)
     return list(db.scalars(stmt))
 
 

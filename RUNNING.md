@@ -22,7 +22,7 @@ node -v
 # Python 3.11+ and the backend venv
 cd ~/Desktop/Elchi/elchi
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements-dev.txt   # runtime + test tools (pytest)
 
 # JS deps
 cd frontend     && npm install
@@ -55,6 +55,28 @@ open https://api.elchigo.uz/docs              # Swagger
 
 ### Locally
 
+**The database first.** Stage 2 needs PostGIS from migration `0030` onwards, and a plain local PostgreSQL
+install usually has none - the stage-2 schema then simply cannot be created. The repo ships a persistent
+stack with the same engine as production (decision 34):
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --wait     # PostgreSQL 16 + PostGIS :45433, Redis :36380
+```
+
+Its data lives in a named volume, so it survives container and machine restarts. `docker-compose.test.yml`
+(`:45432`) is a *different* stack: tmpfs, wiped on every restart, and only meant for `tests/pg`. Pointing the
+dev server at the test stack is the usual reason accounts and catalogues "disappear".
+
+`.env` then reads:
+
+```env
+ELCHI_DATABASE_URL=postgresql+psycopg://elchi:elchi_dev@127.0.0.1:45433/elchi
+ELCHI_REDIS_URL=redis://127.0.0.1:36380/0
+```
+
+An `ELCHI_DATABASE_URL` exported in the shell **overrides `.env`**, so start the server from a shell that does
+not set it (`echo $ELCHI_DATABASE_URL` should be empty).
+
 ```bash
 cd ~/Desktop/Elchi/elchi
 .venv/bin/alembic upgrade head                # ALWAYS run after pulling
@@ -66,10 +88,96 @@ cd ~/Desktop/Elchi/elchi
 First time only, seed reference data:
 
 ```bash
-.venv/bin/python scripts/seed_cities.py
-.venv/bin/python scripts/seed_districts.py
-.venv/bin/python scripts/seed_admin_required_data.py
+.venv/bin/python -m app.modules.platform.environment set development --by "dev:<you>"
+.venv/bin/python scripts/seed_admin_required_data.py          # v1 catalogue: 14 regions, 176 districts, super_admin
+.venv/bin/python scripts/import_legacy_districts.py --create-regions --apply   # v2 catalogue: 14 regions, 164 districts
+.venv/bin/python scripts/seed_geo_fixtures.py --actor-user-id 1                # DEV ONLY: corridor, stops, routes + service flags
 ```
+
+### Routing: our own OSRM
+
+The map draws whatever geometry the configured router returns. `fake` returns straight lines between
+stops - fine for a unit test, wrong on a map. `geoapify` is a real router but a third party outside the
+country, which Q24 keeps off. **OSRM run by us** is the third option and the only one with neither problem:
+it serves an OpenStreetMap extract from a container beside the database, so no coordinate leaves the machine
+and there is no external data flow to review.
+
+```bash
+scripts/osrm-prepare.sh                                              # one-time: ~120 MB extract + graph
+docker compose -f docker-compose.dev.yml --profile routing up -d osrm
+# .env:
+ELCHI_GEO_ROUTING_PROVIDER=osrm
+```
+
+Preparing the graph takes a few minutes and about 1 GB of RAM; the result lives in `docker/osrm/data`
+(gitignored) and is rebuilt with `scripts/osrm-prepare.sh --refresh` when a newer extract is wanted. The
+container is behind the `routing` compose profile, so a plain `up -d` does not try to start a router whose
+graph may not exist yet.
+
+What it buys, measured against the road:
+
+| | `fake` | `osrm` | real |
+|---|---|---|---|
+| Toshkent - Namangan | 281 km / 4s40m | **292 km / 4s08m** | ~290 km |
+| Samarqand - Buxoro | 291 km / 4s50m | **271 km / 4s19m** | ~270 km |
+| Toshkent - Kasbi | 530 km | **510 km** | ~480 km |
+
+`fake` also assumes one speed everywhere, which is why its durations are consistently long.
+
+Then, for testing the flow anywhere in the country rather than only on the fixture corridor:
+
+```bash
+.venv/bin/python scripts/geocode_missing_district_centres.py --apply   # district centres with no source
+.venv/bin/python scripts/seed_dev_nationwide.py                        # country flags + corridors on the axes
+```
+
+`geocode_missing_district_centres.py` is what makes "choose a district, the map opens there" true. The
+rule it keeps is wave 17.1's: a district centre is a coordinate somebody checked or it is NULL, never a
+guess. 66 districts are filled from the hand-checked list in `seed_districts.py::DISTRICT_CENTERS` - those
+are town centres and are the best source there is. The rest have no source in the repository, so the script
+asks the geocoder by name and accepts an answer only if it lands inside Uzbekistan, near its own region, and
+still carries the district's name. 96 pass that; 2 stay NULL, which the picker already handles by opening on
+the province and asking the person to mark their place.
+
+A geocoder answer is the district **polygon centroid**, not its town, so it can sit tens of kilometres from
+where people actually are - Konimex differs by 98 km. That is why the hand-checked list wins wherever it has
+an entry, and why these two sources are not interchangeable.
+
+`seed_dev_nationwide.py` turns the stage-2 services on at **country** scope and seeds four synthetic
+corridors along the axes that actually carry traffic - M39 south, M37 west, the Fergana valley, and
+Qashqadaryo - Buxoro - each with a confirmed route in both directions. With
+`ELCHI_GEO_DEV_POINT_OFFSET_M=250000` in `.env`, places away from an axis still project onto one.
+
+It was one corridor through all 14 region centres at first, and that is worth knowing because of how it
+failed: everything resolved, but Toshkent - Kasbi came back as **1 008 km**, since the only path between
+them ran down through Surxondaryo. A leg is measured *along the line it is projected onto*, so the line has
+to resemble the road or the distance above the price field is nonsense. With the per-axis corridors the same
+pair is 530 km against a real ~480, Toshkent - Namangan 281 against ~290, Samarqand - Buxoro 291 against
+~270.
+
+Still a **fixture, not geography**: straight hops between region centres from the fake router, region centres
+instead of verified stops, and a radius no real corridor would have. A pair that shares no axis (Kasbi -
+Namangan) resolves onto whichever line both reach and then *understates* the trip, because the drive to the
+road is not part of a leg - the client says so on screen whenever an end sits more than 5 km off the route.
+Both scripts refuse to run against a production marker, and the override is ignored outside development.
+`--drop` retires the corridors by closing them: a DB trigger protects the stops of a confirmed route
+version, and closing is the real retirement path anyway.
+
+Note what the fixture costs while it is on: `qa_probe_ui_journey.py` then reports three failures on purpose -
+`passenger stays off until the legal review`, `two places no route serves get the no-route answer` and
+`a direction that runs backwards along the road is refused`. Those checks assert the closed configuration, and
+the fixture is the open one. Drop it to see them pass again.
+
+That last script also switches the corridor's stage-2 services on: passenger, parcel, **driver listings** and
+matching. `driver_listing_enabled` is the one that bites - it defaults to `false` like every other service
+flag, and a corridor with no row for it falls back to that default, so a driver gets `FEATURE_DISABLED` when
+they try to publish a trip offer and the supply side of the marketplace looks broken. Re-running the script is
+safe: a flag already on is left completely alone (no version bump, no audit row). Production defaults are not
+touched, and the script refuses to run at all under a production marker.
+
+The environment marker is what makes the catalogue scripts run at all (they fail closed without it). Without
+the last line the direction picker shows regions and districts but no stops, and the feed stays empty: offers
+are matched on verified stops and confirmed routes, never on district names (spec §6.1).
 
 ### Tests
 
@@ -85,13 +193,77 @@ First time only, seed reference data:
 
 ## 2. Web app and admin panel
 
+### Stage 2: the `mobile-app` client
+
+**Stage-2 work lives in `mobile-app/`, not in `frontend/`.** `frontend/` is the v1 admin web app: it is frozen,
+talks only to `/api/v1`, and knows nothing about listings, trips, bookings or the commission wallet. Opening it
+and concluding "the backend work is not in the UI" is the usual confusion - the stage-2 screens are served by
+`mobile-app`: the stage-2 marketplace is a **section inside the client app**, and the staff screens are under
+`/admin`.
+
 ```bash
-cd ~/Desktop/Elchi/elchi/frontend
-VITE_API_BASE_URL=https://api.elchigo.uz/api/v1 npm run dev
+cd mobile-app
+VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1 npm run dev
 ```
 
-- Client / driver → <http://localhost:5173/>
-- Admin panel → <http://localhost:5173/admin>
+| Yo'l | Nima | Kim uchun |
+|---|---|---|
+| <http://localhost:5173/> | Mijoz va haydovchi ilovasi — **v1 pochta oqimi va 2-bosqich bozori bir ilovada** | Foydalanuvchilar |
+| <http://localhost:5173/admin> | Admin/operator paneli (v1 bo'limlari + v2 bo'limlari) | Xodimlar |
+| <http://localhost:5173/e/{token}> | Ommaviy e'lon/kuzatuv sahifasi | Havola olgan odam |
+
+**Alohida `/v2` ilovasi yo'q va alohida «bozor» bo'limi ham yo'q.** v1 ekranlarining o'zi 2-bosqich
+dvigatelida ishlaydi (wave 12): dizayn, yorliqlar va navigatsiya o'zgarmagan, faqat ular ortidagi katalog va
+buyruqlar `/api/v2` ga ulangan.
+
+### Qaysi backend ishi qaysi ekranda
+
+| Backend imkoniyati | Ekran (v1 nomi bilan) | Yo'l |
+|---|---|---|
+| Hudud → tuman → **xaritada joy belgilash** (Q88) | `client-location-selector` → `client-district-selector` → `client-point-picker` (`MapPointPicker`) | Bosh sahifa → «Qayerdan?» yoki «Qayerga?» qatori |
+| **Yo'lovchi / Yuk** rejimi (Q89) | `client-home` dagi ikki tugma | Flag o'chiq bo'lsa tugma umuman ko'rinmaydi |
+| Yo'nalish preview: koridor, masofa, yo'ldagi tumanlar | `GET /directions/preview` | Ikkala nuqta belgilanishi bilan avtomatik |
+| «Bu ikki nuqta hozircha ELCHI yo'nalishiga mos kelmaydi» | `client-home` dagi rad holati | `409 ROUTE_MISMATCH` javobida |
+| Yo'nalishdagi tumanlar (G17) va **tasdiqlangan marshrut xaritasi** (G18) | `client-home` va `client-route-summary` | «Yo'nalishni ko'rish» |
+| Jo'nash oynasi (dan/gacha) va narx | `client-route-summary` | O'sha ekranda |
+| Posilka turi, og'irligi, o'lchamlari (Q68) | `client-order-parcel` | «Davom etish» |
+| E'lon yaratish va e'lon qilish (L1 + L4) | `client-order-review` | «Buyurtmani e'lon qilish» |
+| Maskalangan aloqa ma'lumotlari ogohlantirishi (Q43) | `client-success` | E'lon qilingandan keyin |
+| E'lonlar, bronlar va eski v1 buyurtmalar | `client-orders` | Pastki navigatsiya → «Buyurtmalar» |
+| Takliflar, anonim «Haydovchi #N» (Q40), qabul qilish | `client-listing-bids` | Buyurtma → «Takliflarni ko'rish» |
+| Topshirish/yetkazish **kodlari** (B5) va «Yetkazilganini tasdiqlash» | `client-booking-detail` | Buyurtmalar → bronni oching |
+| Avtomobil ro'yxatdan o'tkazish (tekshiruv holati bilan, §17.1) | `driver-profile-form` | Haydovchi bosh sahifasi → «Profilni to'ldirish» |
+| Safar rejalashtirish (tasdiqlangan marshrut, o'rin va yuk sig'imi) | `driver-add-route` | «Yo'nalishlar» → `+` |
+| Safarni boshlash / yo'lga chiqish / yakunlash (T9) | `driver-routes` | «Yo'nalishlar» kartasidagi tugma |
+| Mijoz so'rovlari lentasi, **yo'lingizdagi tumanlar** bo'yicha (M1) | `driver-feed` | «Moslar» |
+| Taklif yuborish; olib ketish oynasi safar jadvalidan olinadi | `driver-bid` | «Moslar» → «Taklif yuborish» |
+| Bron amallari: yetib keldim → olib ketildi (kod) → yo'lda → yetkazildi (kod) | `driver-order-detail` | «Buyurtmalar» → bronni oching |
+| **Komissiya balansi**: mavjud / ushlab qolingan / qaytarilgan / to'ldirishlar | `driver-income` | Haydovchi bosh sahifasi → o'ng yuqoridagi karta |
+| Posilka rasmi (imzolangan havola, Q6) | `ParcelPhoto` — mijoz e'loni, mijoz va haydovchi broni | Buyurtma tafsilotlari |
+| Qarshi taklif (P6): narx, `price_revisions_left`, konflikt | `client-listing-bids` va `driver-proposals` | «Takliflarni ko'rish» / Profil → «Takliflarim» |
+| Chat (N6/N7): maskalangan matn, sahifalash, qayta urinish | `booking-chat` | Bron → «Xabarlar» |
+| Kuzatuv: **holat kuzatuvi** va **jonli joylashuv** alohida | `booking-tracking` | Bron → «Kuzatuv» |
+| Naqd to'lov qaydi (B10): qayd → tasdiq/e'tiroz | `CashAcknowledgement` | Bron ekranida, xizmat boshlangach |
+| Operator navbatlari, nizolar, KPI/SLO, legacy arxiv | `AdminOpsPanel` | `/admin` → tegishli bo'lim |
+| Staff MFA (omil ulash, tasdiqlash, bekor qilish) | `AdminSecurityPanel` | `/admin` → **Xavfsizlik (MFA)** |
+
+Xizmat flag'i o'chiq bo'lsa e'lon qilish `403 FEATURE_DISABLED` beradi — bu Q5 bo'yicha to'g'ri xulq. Lokal
+tekshiruv uchun koridorga flag yoqiladi:
+
+```bash
+curl -X PUT "http://127.0.0.1:8000/api/v2/admin/feature-flags/parcel_enabled/scopes/corridor/<corridor_id>" \
+  -H "Authorization: Bearer <staff_token>" -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" -d '{"enabled":true,"reason":"local dev"}'
+```
+
+Butun yo'lni bir buyruq bilan tekshirish (ekranlar chaqiradigan aynan shu ketma-ketlik):
+
+```bash
+QA_BASE=http://127.0.0.1:8000 py scripts/qa_probe_ui_journey.py
+```
+
+Ko'rinmaydigan narsalar odatda **ma'lumot yo'qligidan**: bo'sh katalogda viloyat/tuman/koridor bo'lmaydi va
+lentalar bo'sh chiqadi. Katalogni yuklash 1-bo'limda.
 
 ⚠️ **API calls from `localhost:5173` are blocked by CORS.** Production allows only
 `elchi.uz`, `www.elchi.uz`, and `admin.elchigo.uz`. The UI renders but login fails. Either:

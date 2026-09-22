@@ -42,6 +42,21 @@ def get_current_admin_order_user(
     return user
 
 
+# Forcing a status, assigning a driver or cancelling changes money/state, so it
+# is admin+ only. Operators keep read access to the list and detail endpoints.
+ADMIN_ORDER_MUTATION_ROLES = {"admin", "super_admin"}
+
+
+def get_current_admin_order_manager(
+    current_user: User | JSONResponse = Depends(get_current_admin_order_user),
+) -> User | JSONResponse:
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    if current_user.role not in ADMIN_ORDER_MUTATION_ROLES:
+        return error_response(403, "FORBIDDEN", "Admin role required")
+    return current_user
+
+
 @router.get("", response_model=None)
 def get_admin_orders(
     status: str | None = None,
@@ -97,7 +112,7 @@ def get_admin_order(
 def patch_admin_order_status(
     order_id: int,
     payload: AdminOrderStatusUpdate,
-    current_user: User | JSONResponse = Depends(get_current_admin_order_user),
+    current_user: User | JSONResponse = Depends(get_current_admin_order_manager),
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
     if isinstance(current_user, JSONResponse):
@@ -112,7 +127,7 @@ def patch_admin_order_status(
 def post_admin_assign_driver(
     order_id: int,
     payload: AdminAssignDriver,
-    current_user: User | JSONResponse = Depends(get_current_admin_order_user),
+    current_user: User | JSONResponse = Depends(get_current_admin_order_manager),
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
     if isinstance(current_user, JSONResponse):
@@ -127,7 +142,7 @@ def post_admin_assign_driver(
 def post_admin_cancel_order(
     order_id: int,
     payload: AdminOrderCancel,
-    current_user: User | JSONResponse = Depends(get_current_admin_order_user),
+    current_user: User | JSONResponse = Depends(get_current_admin_order_manager),
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
     if isinstance(current_user, JSONResponse):

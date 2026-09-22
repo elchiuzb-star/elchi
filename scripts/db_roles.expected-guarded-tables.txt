@@ -1,0 +1,31 @@
+# Tables with a trigger whose non-SECURITY-DEFINER function reads a session setting or pg_trigger_depth()
+# (scripts/db_roles.py GUARDED_TABLES_SQL). scripts/deploy.sh fails when the detected set differs from the
+# table names below (wave 1.7 NEW-5). Change this file together with the migration that adds/removes a guard.
+#
+# Format: <table> [read-only|app-marker]   (class defaults to read-only; a detected table missing here is read-only)
+#   read-only  -- the guard trusts session state that any session could set, and the only legitimate writer is
+#                 a SECURITY DEFINER trigger: db_roles.py revokes INSERT/UPDATE/DELETE/TRUNCATE from the app role.
+#   app-marker -- the setting is a transaction marker the APPLICATION sets (or evidence re-checked against real
+#                 rows); the app role is the legitimate writer and keeps DML. Grant review: these guards stop
+#                 accidental psql/migration writes, not a deliberate actor with app-role credentials
+#                 (Q36 roles, history/audit rows and monitoring cover that).
+ledger_account_balances read-only   # 0047: balance writer is the SECURITY DEFINER ledger_entries trigger (Q48)
+bookings                app-marker  # 0056 Q60: amount columns change only if the accepted-amendment marker names a real accepted amendment with matching values
+booking_amendments      app-marker  # 0056 Q60: AFTER UPDATE trigger that appends the accepted amendment id to the marker (writer, not a guard)
+feature_flag_values     app-marker  # 0057 Q72: enabling a v2 flag needs the admin-API marker set by geo.service.set_flag_value
+#
+# Guards that are NOT detected, by design: they do not read session state, so SET cannot bypass them and the
+# app role keeps its normal grants:
+#   trip_stop_occurrences, trip_segment_resources  -- 0054 Q63 stops lock (booking_allocations exist) and counter check
+#   topup_requests, ledger_adjustment_requests     -- 0055 Q69/Q70 approver role + platform_environment + Q48 gate
+#   chat_messages                                  -- 0059 chat_messages_guard: content is immutable and DELETE is
+#                                                     refused without reading any session setting (checked in wave 3.1);
+#                                                     the app role keeps INSERT/UPDATE (moderation) and loses DELETE
+#                                                     through the no-delete class in scripts/db_roles.py
+#   tracking_sessions, tracking_points, tracking_point_receipts, tracking_grants -- 0058 guards, same reason;
+#                                                     their privilege classes are in scripts/db_roles.py
+#   disputes_v2, dispute_evidence, contact_filter_hits, contact_strikes, ratings_v2, support_tickets,
+#   trust_review_items, tracking_evidence_points   -- 0060/0063 append-only and terminal-freeze guards
+# Wave 3.1: the detector follows function calls (recursive name match in prosrc), so a session check moved into a
+# helper is detected as well. Remaining limitation: a check reached through dynamic SQL (EXECUTE format(...)) or a
+# function in another schema is still invisible -- classify such a table here after review.

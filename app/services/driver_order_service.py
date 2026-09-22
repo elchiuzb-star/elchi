@@ -13,9 +13,13 @@ from app.schemas.bid import BidCreate, BidUpdate, OrderReject
 from app.schemas.driver_order import DriverOrderCancel
 from app.services.audit_service import write_audit_log
 from app.services.city_service import pagination
+from app.services.driver_locks import lock_bid_row, lock_driver_user_and_profile, lock_order_row
 from app.services.notification_service import create_notification
+from app.services.review_accounts import client_id_matches_review_side, is_review_driver_profile, review_pairing_allowed
 from app.services.system_settings_service import DEFAULT_DRIVER_COMMISSION_RATE, calculate_order_income
 from app.utils.api_response import error_response
+from app.utils.file_access import signed_file_url
+from app.utils.legacy_time import v1_naive
 
 OPEN_FEED_STATUSES = {"published", "bidding"}
 TERMINAL_BID_UPDATE_ORDER_STATUSES = {"accepted", "cancelled", "confirmed"}
@@ -184,7 +188,8 @@ def limited_order_to_dict(db: Session, order: Order, driver_id: int) -> dict[str
         "pickup_area": from_district.name_uz if from_district else area(order.pickup_address),
         "dropoff_area": to_district.name_uz if to_district else area(order.dropoff_address),
         "cargo_type": order.cargo_type,
-        "cargo_photo_url": order.cargo_photo_url,
+        # Cargo photo is visible only to the owner, the assigned driver and staff.
+        "cargo_photo_url": None,
         "suggested_price": order.suggested_price,
         "client_price": order.client_price,
         "status": order.status,
@@ -213,7 +218,8 @@ def full_order_to_dict(db: Session, order: Order) -> dict[str, Any]:
         "sender_phone": order.sender_phone,
         "receiver_phone": order.receiver_phone,
         "cargo_type": order.cargo_type,
-        "cargo_photo_url": order.cargo_photo_url,
+        # A cancelled order keeps assigned_driver_id; the photo link stops there.
+        "cargo_photo_url": None if order.status == "cancelled" else signed_file_url(order.cargo_photo_url),
         "comment": order.comment,
         "suggested_price": order.suggested_price,
         "client_price": order.client_price,
@@ -221,8 +227,8 @@ def full_order_to_dict(db: Session, order: Order) -> dict[str, Any]:
         "payment_method": order.payment_method,
         "payment_status": order.payment_status,
         "status": order.status,
-        "delivered_at": order.delivered_at,
-        "confirmed_at": order.confirmed_at,
+        "delivered_at": v1_naive(order.delivered_at),
+        "confirmed_at": v1_naive(order.confirmed_at),
         "created_at": order.created_at,
     }
     data.update(order_income_to_dict(order))
@@ -246,11 +252,37 @@ def driver_has_available_route_for_order(db: Session, profile: DriverProfile, or
     )
 
 
+def lock_order(db: Session, order_id: int) -> Order | None:
+    """SELECT ... FOR UPDATE on the order, refreshing any stale identity-map copy.
+
+    Every v1 path that changes an order's bids takes this lock first (order ->
+    bids), matching select_driver_for_order and client/admin cancel.
+    """
+    return lock_order_row(db, order_id)
+
+
+def recheck_driver_eligibility_locked(db: Session, profile: DriverProfile) -> JSONResponse | None:
+    """Lock users -> driver_profiles (after the order/bid locks) and re-check.
+
+    Closes the block_driver/account-deletion race: a block that committed first
+    is seen here; a block that starts later waits for this transaction. The
+    alternative (closing the driver's bids inside block_driver) would make
+    block_driver lock bids after users, reversing orders -> bids -> users.
+    """
+    locked_profile, locked_user = lock_driver_user_and_profile(db, profile.id)
+    if locked_profile is None or locked_user is None:
+        return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Driver account must be active")
+    return ensure_driver_eligible(locked_profile, locked_user)
+
+
 def get_offer(db: Session, order_id: int, driver_id: int) -> OrderOffer | None:
     return db.scalar(select(OrderOffer).where(OrderOffer.order_id == order_id, OrderOffer.driver_id == driver_id))
 
 
 def ensure_order_visible(db: Session, profile: DriverProfile, order: Order) -> JSONResponse | None:
+    # Store-review isolation comes first: no existing bid or offer overrides it.
+    if not review_pairing_allowed(db, order.client_id, profile.user_id):
+        return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Order is not visible to this driver")
     if order.assigned_driver_id == profile.id:
         return None
     driver_bid = db.scalar(select(Bid).where(Bid.order_id == order.id, Bid.driver_id == profile.id))
@@ -293,6 +325,9 @@ def feed_query(db: Session, profile: DriverProfile, order_status: str | None, fr
             DriverRoute.status == "available",
         )
     )
+    review_filter = client_id_matches_review_side(Order.client_id, is_review_driver_profile(db, profile))
+    if review_filter is not None:
+        stmt = stmt.where(review_filter)
     if order_status is not None:
         if order_status not in OPEN_FEED_STATUSES:
             return None
@@ -397,11 +432,16 @@ def create_bid(db: Session, user: User, profile: DriverProfile, order_id: int, p
     eligibility_error = ensure_driver_eligible(profile, user)
     if eligibility_error is not None:
         return eligibility_error
-    order = db.get(Order, order_id)
+    # Lock the order so a concurrent cancel/select-driver cannot commit between
+    # the status check and the bid insert (no active bid on a closed order).
+    order = lock_order(db, order_id)
     if order is None:
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Order not found")
     if order.status not in OPEN_FEED_STATUSES:
         return error_response(status.HTTP_400_BAD_REQUEST, "ORDER_INVALID_STATUS", "Order is not open for bids")
+    locked_eligibility_error = recheck_driver_eligibility_locked(db, profile)
+    if locked_eligibility_error is not None:
+        return locked_eligibility_error
     visible_error = ensure_order_visible(db, profile, order)
     if visible_error is not None:
         return visible_error
@@ -481,11 +521,24 @@ def update_bid(db: Session, user: User, profile: DriverProfile, bid_id: int, pay
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Bid not found")
     if bid.driver_id != profile.id:
         return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "You can update only your own bids")
-    order = db.get(Order, bid.order_id)
-    if bid.status != "active" or order is None or order.status not in OPEN_FEED_STATUSES:
+    # Lock order first, then the bid (same order as select_driver_for_order and
+    # client cancel), and re-read both so the checks below see committed state.
+    order = lock_order(db, bid.order_id)
+    bid = lock_bid_row(db, bid_id)
+    if bid is None:
+        return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Bid not found")
+    if order is None or order.status not in OPEN_FEED_STATUSES:
         return error_response(status.HTTP_400_BAD_REQUEST, "ORDER_INVALID_STATUS", "Order is not open for bids")
     if order.status in TERMINAL_BID_UPDATE_ORDER_STATUSES:
         return error_response(status.HTTP_400_BAD_REQUEST, "ORDER_INVALID_STATUS", "Order is not open for bids")
+    if bid.status != "active":
+        # A closed, accepted or rejected bid is never revived.
+        return error_response(status.HTTP_409_CONFLICT, "BID_NOT_ACTIVE", "Only active bids can be updated")
+    locked_eligibility_error = recheck_driver_eligibility_locked(db, profile)
+    if locked_eligibility_error is not None:
+        return locked_eligibility_error
+    if not review_pairing_allowed(db, order.client_id, profile.user_id):
+        return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Order is not visible to this driver")
     price_changed = payload.price != bid.price
     if price_changed and bid.price_update_count >= MAX_BID_PRICE_UPDATES:
         return error_response(
@@ -530,7 +583,9 @@ def reject_order(db: Session, user: User, profile: DriverProfile, order_id: int,
     eligibility_error = ensure_driver_eligible(profile, user)
     if eligibility_error is not None:
         return eligibility_error
-    order = db.get(Order, order_id)
+    # Order lock first: this path closes/rejects the driver's bid, so it follows
+    # the same order -> bids lock order as select-driver and cancel.
+    order = lock_order(db, order_id)
     if order is None:
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Order not found")
     if order.status in {"cancelled", "confirmed"}:
@@ -703,7 +758,7 @@ def cancel_assigned_order_by_driver(
             "order_number": order.order_number,
             "status": order.status,
             "cancel_reason": order.cancel_reason,
-            "cancelled_at": order.cancelled_at,
+            "cancelled_at": v1_naive(order.cancelled_at),
         },
         "message": "Order cancelled",
     }

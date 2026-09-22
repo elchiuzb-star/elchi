@@ -1,68 +1,190 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ElementType, ReactNode } from "react";
 import {
   ArrowLeft,
+  ArrowRight,
   Bell,
   Camera,
   Check,
   CheckCircle,
+  ChevronLeft,
   ChevronRight,
   FileText,
+  Headphones,
   Home,
   LocateFixed,
   Loader2,
   MapPin,
   Menu,
   Navigation,
+  LogOut,
   Package,
-  Pencil,
-  Search,
+  Phone,
+  RefreshCw,
+  Send,
+  Shield,
   Star,
-  Trash2,
   Truck,
   Upload,
   User,
   X,
-} from "lucide-react";
+} from "./ui/icons";
 
+import {
+  AppearancePicker,
+  BarChart,
+  ChoiceCard,
+  cls,
+  CodeField,
+  ConfirmSheet,
+  ElchiLogo,
+  EmptyState,
+  FaqItem,
+  Field,
+  GhostButton,
+  IconTile,
+  JourneySpine,
+  PhoneField,
+  PrimaryButton,
+  ProfileActionRow,
+  SecondaryButton,
+  SectionLabel,
+  SegmentedControl,
+  SkeletonCard,
+  StatusBadge,
+  StepDots,
+  TopBar,
+  statusLabel,
+} from "./ui/mobile";
 import { ClientMapCanvas } from "../components/maps/ClientMapCanvas";
-import { GoogleMapPicker } from "../components/maps/GoogleMapPicker";
+import { MapAddressPicker } from "../components/maps/MapAddressPicker";
+import { RegionSelector } from "../components/location/RegionSelector";
+import { GeoDistrictSelector } from "../components/location/GeoDistrictSelector";
+import { loadStopOptions, type StopOption } from "../components/location/stops";
+import { MapPointPicker, type MarkedPoint } from "../components/location/MapPointPicker";
+import { AppSidebar, SidebarButton, clientSidebarItems } from "../components/nav/AppSidebar";
+import { SeatPicker, type SeatId } from "../components/passenger/SeatPicker";
+import { reverseGeocode } from "../api/geo.api";
+import { RouteMap } from "./v2/RouteMap";
+import {
+  acceptProposal,
+  cancelListing,
+  counterProposal,
+  createListing,
+  effectiveFlags,
+  getListing,
+  listCorridorDistricts,
+  listDistricts,
+  listRegions,
+  listingMatches,
+  listCorridorRoutes,
+  listCorridorStops,
+  listCorridors,
+  listListingProposals,
+  offersFeed,
+  previewDirection,
+  withdrawProposal,
+  listMyListings,
+  publishListing,
+  type CorridorDTO,
+  type DirectionPreviewDTO,
+  type EffectiveFlagsDTO,
+  type CorridorDistrictDTO,
+  type DistrictDTO,
+  type ListingCreate,
+  type AnyBooking,
+  type BookingClientDTO,
+  type BookingDTO,
+  type FeedItemDTO,
+  type ListingDTO,
+  type MapPointDTO,
+  type MatchDTO,
+  type MediaRefDTO,
+  type StopRefDTO,
+  type ProposalThreadDTO,
+  type RegionDTO,
+  type RouteVersionDTO,
+  type StopDTO,
+} from "../api/v2/marketplace.api";
+import { newIdempotencyKey } from "../api/v2/http";
+import { translate, translateDynamic } from "../i18n";
+import { negotiationActions, turnLabel, type ActorSide } from "./auction";
+import {
+  createTrip,
+  createVehicle,
+  listMyProposals,
+  listMyTrips,
+  listMyVehicles,
+  bookingAction,
+  createTopup,
+  listTopups,
+  requestsFeed,
+  submitProposal,
+  tripAction,
+  wallet as fetchWallet,
+  walletTransactions,
+  type LedgerLineDTO,
+  type TopupDTO,
+  type TripDTO,
+  type VehicleDTO,
+  type WalletDTO,
+} from "../api/v2/driver.api";
+import {
+  addDisputeEvidence,
+  createSavedSearch,
+  createSupportTicket,
+  deleteSavedSearch,
+  myDisputes,
+  mySupportTickets,
+  openDispute,
+  rateBooking,
+  savedSearches,
+  supportContacts as fetchSupportContacts,
+  type DisputeDTO,
+  type SavedSearchDTO,
+  type SupportContactsDTO,
+  type SupportTicketDTO,
+} from "../api/v2/client-extras.api";
+import {
+  acceptAmendment,
+  decideAmendment,
+  decideCashReceipt,
+  getBooking,
+  listAmendments,
+  proposeAmendment,
+  type AmendmentDTO,
+  getBookingCodes,
+  getBookingTracking,
+  listMessages,
+  listMyBookings,
+  reportCashReceipt,
+  sendMessage,
+  type BookingCodesDTO,
+  type BookingTrackingDTO,
+  type CashReceiptDTO,
+  type ChatMessageDTO,
+} from "../api/v2/bookings.api";
 import { ReadOnlyOrderMap } from "../components/maps/ReadOnlyOrderMap";
-import { CitySelector } from "../components/location/CitySelector";
-import { DistrictSelector } from "../components/location/DistrictSelector";
 import { useAuth } from "../auth/AuthContext";
-import { getCities, getSuggestedPrice } from "../api/cities.api";
+import { getCities } from "../api/cities.api";
 import { getDistricts } from "../api/districts.api";
 import { uploadFile } from "../api/files.api";
 import {
   cancelClientOrder,
   confirmClientOrder,
-  createClientOrder,
   getClientOrder,
   listClientOrderBids,
   listClientOrders,
   openClientDispute,
-  publishClientOrder,
   rateClientOrder,
   selectDriver,
-  updateClientOrder,
 } from "../api/client-orders.api";
 import { getClientProfile, updateClientProfile } from "../api/client-profile.api";
 import {
-  createDriverRoute,
-  disableDriverRoute,
-  getDriverFeed,
-  getDriverOrders,
-  getDriverOrderDetail,
   getDriverProfile,
-  getDriverRoutes,
-  rejectOrder,
-  sendBid,
   setDriverAvailability,
   submitDriverDocument,
-  updateDriverOrderStatus,
   updateDriverProfile,
-  updateDriverRoute,
 } from "../api/driver.api";
 import { getNotifications, markNotificationRead } from "../api/notifications.api";
 import type { City, District } from "../types/city";
@@ -73,9 +195,9 @@ import type { NotificationItem } from "../types/notification";
 import type { MobileRole } from "../types/auth";
 import { formatUzs } from "../utils/money";
 import { normalizeUzPhone } from "../utils/phone";
-import { getUzbekErrorMessage } from "../utils/errors";
-import { createGoogleMapsDirectionsUrl, createGoogleMapsSearchUrl, hasLocation } from "../utils/maps";
-import { formatAddressRegion, formatAddressTitle, formatMapSelectionStatus, formatShortAddress } from "../utils/address";
+import { getErrorMessage } from "../utils/errors";
+import { createMapsDirectionsUrl, createMapsSearchUrl, hasLocation } from "../utils/maps";
+import { formatAddressRegion, formatAddressTitle } from "../utils/address";
 
 type Screen =
   | "splash"
@@ -86,25 +208,45 @@ type Screen =
   | "client-home"
   | "client-location-selector"
   | "client-district-selector"
+  | "client-point-picker"
   | "client-route-summary"
-  | "client-order-route"
   | "client-order-address"
+  | "client-order-parcel"
   | "client-order-photo"
   | "client-order-review"
   | "client-success"
   | "client-orders"
+  | "client-offers"
+  | "client-offer-bid"
+  | "client-proposals"
   | "client-order-detail"
+  | "client-listing-detail"
+  | "client-listing-bids"
+  | "client-booking-detail"
+  | "driver-proposals"
+  | "booking-rating"
+  | "booking-dispute"
+  | "booking-chat"
+  | "booking-amendment"
+  | "driver-saved-searches"
+  | "my-disputes"
+  | "support"
+  | "settings"
+  | "listing-matches"
+  | "booking-tracking"
   | "client-bids"
   | "client-confirm"
   | "client-rating"
   | "client-dispute"
   | "client-notifications"
+  | "driver-notifications"
   | "client-profile"
   | "driver-home"
   | "driver-profile-form"
   | "driver-documents"
   | "driver-routes"
   | "driver-add-route"
+  | "driver-offer-create"
   | "driver-feed"
   | "driver-bid"
   | "driver-orders"
@@ -153,6 +295,41 @@ type ConfirmAction =
   | { type: "confirm-delivery" }
   | { type: "cancel-order" };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+const driverVerificationLabels: Record<string, string> = {
+  new: "Yangi",
+  pending: "Ko'rib chiqilmoqda",
+  approved: "Tasdiqlangan",
+  rejected: "Rad etilgan",
+  blocked: "Bloklangan",
+};
+
+/**
+ * How many digits the code has.
+ *
+ * The backend decides it (`ELCHI_OTP_LENGTH`, 5 in this repo's `.env`) and refuses a code of any other
+ * length, so the screen must not hard-code its own number.
+ */
+const OTP_LENGTH = Number(import.meta.env.VITE_OTP_LENGTH) || 5;
+
+/** How long the resend link stays hidden, from the reference client. Long enough that the SMS usually wins. */
+const RESEND_SECONDS = 59;
+
+/** Shown at the bottom of settings. Set at build time; `pilot` when nothing was injected. */
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || "pilot";
+
 const emptyOrder: CreateOrderPayload = {
   from_city_id: 0,
   to_city_id: 0,
@@ -170,37 +347,206 @@ const emptyOrder: CreateOrderPayload = {
   comment: "",
 };
 
-const statusLabels: Record<string, string> = {
-  draft: "Qoralama",
-  published: "E'lon qilingan",
-  bidding: "Takliflar bor",
-  accepted: "Haydovchi tanlangan",
-  picked_up: "Olib ketildi",
-  in_transit: "Yo'lda",
-  delivered: "Yetkazildi",
-  confirmed: "Tasdiqlandi",
-  cancelled: "Bekor qilingan",
-  disputed: "Nizo ochilgan",
-};
-
-const docLabels: Record<DriverDocumentType, string> = {
-  passport: "Pasport",
-  selfie: "Selfi",
-  license: "Haydovchilik guvohnomasi",
-  car_document: "Avtomobil hujjati",
-  car_photo: "Avtomobil rasmi",
-};
-
-const driverVerificationLabels: Record<string, string> = {
-  new: "Yangi",
-  pending: "Ko'rib chiqilmoqda",
-  approved: "Tasdiqlangan",
-  rejected: "Rad etilgan",
-  blocked: "Bloklangan",
-};
-
 const DRIVER_EARNING_STATUSES = new Set(["delivered", "confirmed"]);
 const DRIVER_NET_RATE = 0.85;
+
+/**
+ * One end of the direction the person is composing.
+ *
+ * Q88: an end is a verified stop **or** a place marked on the map, never both - `corridorId` is filled once a
+ * stop pins the end to a corridor. The district and region travel along as the labels the person chose them
+ * by, not as anything the matcher decides on.
+ */
+type DirectionEnd = {
+  region: RegionDTO | null;
+  district: DistrictDTO | null;
+  stop: StopDTO | null;
+  point: MarkedPoint | null;
+  corridorId: string;
+};
+
+const emptyDirectionEnd: DirectionEnd = { region: null, district: null, stop: null, point: null, corridorId: "" };
+
+/** Q68: the parcel kinds the contract allows, in the words the app uses for them. */
+const PARCEL_TYPES: Array<[string, string]> = [
+  ["documents", "Hujjat"],
+  ["box", "Quti"],
+  ["bag", "Sumka"],
+  ["electronics", "Elektronika"],
+  ["clothing", "Kiyim"],
+  ["other", "Boshqa"],
+];
+
+/**
+ * Where the picker's map should open for the end being edited.
+ *
+ * District first, then region, then nothing. The region step is what makes Tashkent city work: there the city
+ * *is* the direction unit (wave 10), so no district is ever chosen and without its own centre the map opened
+ * on the whole country. `null` falls back to the country view, which is the honest answer when the catalogue
+ * has no coordinate - better than opening confidently on the wrong town.
+ */
+/**
+ * Where the map should open for this end, and how closely the catalogue knows that point.
+ *
+ * The district centre is the town itself and only 99 of the 170 districts have one - the catalogue keeps a
+ * hand-checked coordinate or nothing at all, never a guess (migration 0081). For the rest the provincial
+ * capital is the best honest answer: the right province, but not the right town, which is why the caller
+ * zooms out for it.
+ */
+function mapCentreFor(end: DirectionEnd): { lat: number; lng: number; scope: "district" | "region" } | null {
+  const district = end.district;
+  if (district?.center_lat != null && district?.center_lng != null) {
+    return { lat: district.center_lat, lng: district.center_lng, scope: "district" };
+  }
+  const region = end.region;
+  if (region?.center_lat != null && region?.center_lng != null) {
+    // A region that needs no district *is* the local unit (Tashkent city), so its centre is as precise as a
+    // district's and earns the same close zoom. For the others the centre is the provincial capital, which
+    // may be a hundred kilometres from the district chosen - that one has to open wide.
+    return {
+      lat: region.center_lat,
+      lng: region.center_lng,
+      scope: region.requires_district ? "region" : "district",
+    };
+  }
+  return null;
+}
+
+/** How an end reads on screen: the marked address if there is one, else the names it was chosen by. */
+function directionEndLabel(end: DirectionEnd): string {
+  if (end.point) {
+    return (
+      end.point.address?.trim() || [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ")
+    );
+  }
+  if (end.stop) return [end.stop.name_uz, end.stop.district.name_uz].filter(Boolean).join(", ");
+  if (end.district) return [end.district.name_uz, end.region?.name_uz].filter(Boolean).join(", ");
+  return end.region?.name_uz ?? "";
+}
+
+function formatWindowInput(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? "-"
+    : parsed.toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function localInputToIso(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+/** Soum in, minor units out (1 so'm = 100 tiyin). Anything that is not a positive number is 0, never NaN. */
+function soumToMinor(value: string): number {
+  const parsed = Number(value.replace(/\s/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) * 100 : 0;
+}
+
+/**
+ * `bookings.rules.STARTED_STATUSES`: once the service has started the fare is due, so the cash record opens.
+ * Kept in step with the server set - a narrower list would hide the button in exactly the awkward cases
+ * (failed delivery, return) where the two people most need to agree on what was paid.
+ */
+const CASH_RECORDABLE: Record<string, string[]> = {
+  parcel: ["picked_up", "in_transit", "delivered", "delivery_failed", "return_required", "returned", "completed"],
+  passenger: ["onboard", "arrived", "completed"],
+};
+
+/** The passenger ladder, for a booking this client did not create but a driver may still be carrying. */
+const PASSENGER_PROGRESS: Array<[string, string]> = [
+  ["confirmed", "Tasdiqlandi"],
+  ["awaiting_pickup", "Haydovchi bekatda"],
+  ["onboard", "Yo'lda"],
+  ["completed", "Yakunlandi"],
+];
+
+const PARCEL_PROGRESS: Array<[string, string]> = [
+  ["confirmed", "Tasdiqlandi"],
+  ["awaiting_pickup", "Haydovchi bekatda"],
+  ["picked_up", "Yuk olindi"],
+  ["in_transit", "Yo'lda"],
+  ["delivered", "Yetkazildi"],
+  ["completed", "Yakunlandi"],
+];
+
+/** §17.1: the documents a driver has to upload before staff can verify them. */
+const DRIVER_DOCUMENT_TYPES: DriverDocumentType[] = ["passport", "selfie", "license", "car_document", "car_photo"];
+
+/**
+ * Product vocabulary, resolved at render time.
+ *
+ * Each of these was a constant `Record<string, string>` of Uzbek text, which also meant the words were fixed
+ * when the module loaded - so a language change could never reach them. Asking the dictionary per call is what
+ * makes a screen actually change language, and the `?? value` fallback is exactly what the call sites already
+ * did: an unknown code shows as itself rather than as a blank.
+ */
+function matchLabel(value: string): string {
+  return translateDynamic(`match.${value}`) ?? value;
+}
+
+function confirmedStopsNote(): string {
+  return translate("match.confirmedStopsNote");
+}
+
+function vehicleStatusLabel(value: string): string {
+  return translateDynamic(`vehicleStatus.${value}`) ?? value;
+}
+
+function proofCodeLabel(value: string): string {
+  return translateDynamic(`proofCode.${value}`) ?? value;
+}
+
+function trackingWindowText(reason: string): string {
+  return translateDynamic(`trackingWindow.${reason}`) ?? translate("error.TRACKING_WINDOW_NOT_OPEN");
+}
+
+function trackingFreshnessLabel(value: string): string {
+  return translateDynamic(`trackingFreshness.${value}`) ?? value;
+}
+
+function proposalStatusLabel(value: string): string {
+  return translateDynamic(`proposalStatus.${value}`) ?? value;
+}
+
+function disputeTypeLabel(value: string): string {
+  return translateDynamic(`disputeType.${value}`) ?? value;
+}
+
+/** S9/S10: what a participant can raise, as options for a picker. */
+function disputeTypeOptions(): Array<[string, string]> {
+  return ["service", "no_show", "payment", "delivery", "safety", "other"].map((type) => [type, disputeTypeLabel(type)]);
+}
+
+function disputeStatusLabel(value: string): string {
+  return translateDynamic(`disputeStatus.${value}`) ?? value;
+}
+
+function disputeResolutionLabel(value: string): string {
+  return translateDynamic(`disputeResolution.${value}`) ?? value;
+}
+
+function tripStatusLabel(value: string): string {
+  return translateDynamic(`tripStatus.${value}`) ?? value;
+}
+
+function listingStatusLabel(value: string): string {
+  return translateDynamic(`listingStatus.${value}`) ?? value;
+}
+
+function docTypeLabel(value: string): string {
+  return translateDynamic(`docType.${value}`) ?? value;
+}
+
+/** T9: the driver's next trip command, and the words for it. */
+function tripNextAction(status: string): [string, string] | undefined {
+  const action: Record<string, "start_boarding" | "depart" | "complete"> = {
+    planned: "start_boarding",
+    boarding: "depart",
+    in_progress: "complete",
+  };
+  const next = action[status];
+  return next ? [next, translate(`tripAction.${next}`)] : undefined;
+}
 
 function cityName(city: unknown): string {
   if (!city) return "-";
@@ -216,6 +562,101 @@ function districtName(district: unknown): string | null {
   return null;
 }
 
+/**
+ * The catalogue district whose centre is closest to a coordinate.
+ *
+ * Plain great-circle distance over the centres - the catalogue has no boundaries for most districts, so this
+ * is the honest approximation and it is used for one thing only: pre-filling the direction after the person
+ * pressed "locate". The point that is stored is always their own coordinate, never the district's centre.
+ */
+function nearestDistrict(districts: DistrictDTO[], point: { lat: number; lng: number }): DistrictDTO | null {
+  let best: DistrictDTO | null = null;
+  let bestKm = Infinity;
+  for (const district of districts) {
+    if (district.center_lat == null || district.center_lng == null) continue;
+    const km = haversineKm(point, { lat: Number(district.center_lat), lng: Number(district.center_lng) });
+    if (km < bestKm) {
+      bestKm = km;
+      best = district;
+    }
+  }
+  return best;
+}
+
+/** `datetime-local` wants local wall-clock text, and this is "now" in exactly that shape. */
+function localNowInputValue(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
+/**
+ * A departure window worth suggesting: tomorrow morning, open for the working day.
+ *
+ * Typing a date into `datetime-local` by hand is where this screen lost people - a half-typed value reads
+ * as empty and "31.11" is not a date at all. A suggestion that is obviously editable removes the step
+ * without deciding anything: the person still sets the window they want, and the server still checks it.
+ */
+function suggestedDepartureWindow(): { start: string; end: string } {
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
+  start.setHours(9, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(18, 0, 0, 0);
+  const asInput = (value: Date) =>
+    new Date(value.getTime() - value.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  return { start: asInput(start), end: asInput(end) };
+}
+
+/** Distance for a person, not for a log: whole kilometres, and metres only when it is under one. */
+function formatKm(metres: number): string {
+  if (!Number.isFinite(metres) || metres <= 0) return "0 km";
+  return metres < 1000 ? `${Math.round(metres)} m` : `${Math.round(metres / 1000)} km`;
+}
+
+/**
+ * Driving time as "4 soat 10 daqiqa".
+ *
+ * Rounded to five minutes, because the underlying number is a routing estimate over a synthetic geometry
+ * and a minute-precise figure would claim an accuracy it does not have.
+ */
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "-";
+  const rounded = Math.round(seconds / 300) * 300;
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.round((rounded % 3600) / 60);
+  if (hours && minutes) return `${hours} soat ${minutes} daqiqa`;
+  if (hours) return `${hours} soat`;
+  return `${Math.max(5, minutes)} daqiqa`;
+}
+
+/**
+ * The address without its leading country part.
+ *
+ * Yandex writes "Oʻzbekiston, Toshkent, Mirzo Ulugʻbek tumani, ...". The country is the one thing everyone
+ * on this screen already knows, and it was crowding out the part that identifies the place.
+ */
+function withoutCountry(address: string): string {
+  const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
+  const first = (parts[0] ?? "").toLowerCase().replace(/[ʻ'’`]/g, "'");
+  if (first === "o'zbekiston" || first === "uzbekistan" || first === "узбекистан") parts.shift();
+  return parts.join(", ");
+}
+
+/** A marked place the geocoder could not name still has coordinates, and those are exactly as true. */
+function coordinateLabel(lat: number, lng: number): string {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const radiusKm = 6371;
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * radiusKm * Math.asin(Math.sqrt(h));
+}
+
 function districtCenter(district: District | null | undefined): { lat: number; lng: number } | null {
   const lat = district?.center_lat === null || district?.center_lat === undefined ? NaN : Number(district.center_lat);
   const lng = district?.center_lng === null || district?.center_lng === undefined ? NaN : Number(district.center_lng);
@@ -227,6 +668,13 @@ function nullableNumber(value: number | string | null | undefined): number | nul
   if (value === null || value === undefined || value === "") return null;
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+/** The label a commission bar sits under: a day inside a week, a month inside half a year. */
+function incomeBucketKey(at: Date, period: "daily" | "monthly"): string {
+  return period === "daily"
+    ? at.toLocaleDateString("uz-UZ", { day: "2-digit", month: "short" })
+    : at.toLocaleDateString("uz-UZ", { month: "short" });
 }
 
 function shortDate(value?: string): string {
@@ -255,227 +703,57 @@ function toLocalDateTimeInputValue(value?: string | null): string {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
-function cls(...values: Array<string | false | null | undefined>) {
-  return values.filter(Boolean).join(" ");
-}
-
 function moneyNumber(value: number | string | null | undefined): number {
   if (value === null || value === undefined || value === "") return 0;
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : 0;
 }
 
-function driverGrossIncome(order: DriverFeedOrder): number {
-  return moneyNumber(order.gross_income ?? order.final_price);
+/**
+ * When this trip can be at the request's pickup stop, inside the window the client asked for.
+ *
+ * The trip's planned arrival is the honest anchor: the driver offers the half hour around it, not the client's
+ * whole window. `null` means the trip simply does not serve that stop in time, and nothing is offered.
+ */
+function proposalPickupWindow(
+  trip: TripDTO | undefined,
+  request: FeedItemDTO,
+): { start: string; end: string } | null {
+  if (!trip) return null;
+  // Q88: a point-ended request has no stop to anchor on. The server derives the window from the projection
+  // when the proposal is sent, so the screen simply offers the client's own window and lets the server refuse.
+  const originStopId = request.listing.origin_stop?.id;
+  if (!originStopId) {
+    return { start: request.listing.departure_window_start, end: request.listing.departure_window_end };
+  }
+  const at = trip.stops.find((stop) => stop.stop.id === originStopId);
+  if (!at) return null;
+  const arrival = new Date(at.eta_arrival_at ?? at.planned_arrival_at).getTime();
+  const askedFrom = new Date(request.listing.departure_window_start).getTime();
+  const askedTo = new Date(request.listing.departure_window_end).getTime();
+  const start = Math.max(askedFrom, arrival - 30 * 60 * 1000);
+  const end = Math.min(askedTo, arrival + 30 * 60 * 1000);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  return { start: new Date(start).toISOString(), end: new Date(end).toISOString() };
 }
 
-function driverNetIncome(order: DriverFeedOrder): number {
-  const explicitIncome = moneyNumber(order.driver_income);
-  if (explicitIncome > 0) return explicitIncome;
-  return Math.round(driverGrossIncome(order) * DRIVER_NET_RATE);
-}
-
-function driverSystemFee(order: DriverFeedOrder): number {
-  const explicitFee = moneyNumber(order.system_fee);
-  if (explicitFee > 0) return explicitFee;
-  return Math.max(0, driverGrossIncome(order) - driverNetIncome(order));
-}
-
-function driverOrderBid(order: DriverFeedOrder): Bid | null {
-  if (!order.my_bid || typeof order.my_bid !== "object") return null;
-  return order.my_bid as Bid;
-}
-
-function driverOrderBids(order: DriverFeedOrder): Bid[] {
-  return Array.isArray(order.bids) ? order.bids : [];
-}
-
-function isDriverEarningOrder(order: DriverFeedOrder): boolean {
-  return DRIVER_EARNING_STATUSES.has(order.status) && driverGrossIncome(order) > 0;
-}
-
-function localDateKey(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function localMonthKey(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${date.getFullYear()}-${month}`;
-}
-
-function driverIncomeDate(order: DriverFeedOrder): Date {
-  return new Date(order.confirmed_at ?? order.delivered_at ?? order.created_at ?? Date.now());
-}
-
-function buildDriverIncomeSeries(orders: DriverFeedOrder[]) {
-  const today = new Date();
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (6 - index));
-    date.setHours(0, 0, 0, 0);
-    return {
-      key: localDateKey(date),
-      label: date.toLocaleDateString("uz-UZ", { weekday: "short" }),
-      value: 0,
-    };
-  });
-  const byKey = new Map(days.map((day) => [day.key, day]));
-  orders.filter(isDriverEarningOrder).forEach((order) => {
-    const key = localDateKey(driverIncomeDate(order));
-    const bucket = byKey.get(key);
-    if (bucket) bucket.value += driverNetIncome(order);
-  });
-  return days;
-}
-
-function buildDriverMonthlyIncomeSeries(orders: DriverFeedOrder[]) {
-  const today = new Date();
-  const months = Array.from({ length: 6 }, (_, index) => {
-    const date = new Date(today.getFullYear(), today.getMonth() - (5 - index), 1);
-    return {
-      key: localMonthKey(date),
-      label: date.toLocaleDateString("uz-UZ", { month: "short" }),
-      value: 0,
-    };
-  });
-  const byKey = new Map(months.map((month) => [month.key, month]));
-  orders.filter(isDriverEarningOrder).forEach((order) => {
-    const key = localMonthKey(driverIncomeDate(order));
-    const bucket = byKey.get(key);
-    if (bucket) bucket.value += driverNetIncome(order);
-  });
-  return months;
-}
-
-function PrimaryButton(props: { children: string; onClick?: () => void; disabled?: boolean; type?: "button" | "submit" }) {
-  return (
-    <button
-      type={props.type ?? "button"}
-      onClick={props.onClick}
-      disabled={props.disabled}
-      className="flex h-[52px] w-full items-center justify-center rounded-[14px] bg-[#1B4FD8] px-4 text-[16px] font-semibold text-white disabled:bg-[#9CA3AF]"
-    >
-      {props.children}
-    </button>
-  );
-}
-
-function SecondaryButton(props: { children: string; onClick?: () => void; danger?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      className={cls(
-        "flex h-[52px] w-full items-center justify-center rounded-[14px] px-4 text-[15px] font-semibold",
-        props.danger ? "bg-[#FEE2E2] text-[#DC2626]" : "bg-[#EEF2FF] text-[#1B4FD8]",
-      )}
-    >
-      {props.children}
-    </button>
-  );
-}
-
-function Field(props: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  multiline?: boolean;
-  type?: string;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[14px] font-medium text-[#374151]">{props.label}</span>
-      {props.multiline ? (
-        <textarea
-          value={props.value}
-          onChange={(event) => props.onChange(event.target.value)}
-          placeholder={props.placeholder}
-          rows={3}
-          className="resize-none rounded-[12px] border border-[#E5E7EB] bg-white px-4 py-3 text-[15px] text-[#111827] outline-none"
-        />
-      ) : (
-        <input
-          value={props.value}
-          onChange={(event) => props.onChange(event.target.value)}
-          placeholder={props.placeholder}
-          type={props.type ?? "text"}
-          className="h-[52px] rounded-[12px] border border-[#E5E7EB] bg-white px-4 text-[15px] text-[#111827] outline-none"
-        />
-      )}
-    </label>
-  );
-}
-
-function TopBar(props: { title: string; back?: () => void; right?: ReactNode }) {
-  return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[#E5E7EB] bg-white px-5">
-      {props.back && (
-        <button onClick={props.back} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F3F4F6]">
-          <ArrowLeft size={18} />
-        </button>
-      )}
-      <h1 className="flex-1 text-[17px] font-semibold text-[#111827]">{props.title}</h1>
-      {props.right}
-    </header>
-  );
-}
-
-function StatusBadge({ status }: { status?: string }) {
-  return (
-    <span className="rounded-full bg-[#EDE9FE] px-2.5 py-1 text-[12px] font-semibold text-[#6D28D9]">
-      {statusLabels[status ?? ""] ?? status ?? "-"}
-    </span>
-  );
-}
-
-function EmptyState(props: { icon: ElementType; title: string; subtitle?: string; action?: string; onAction?: () => void }) {
-  const Icon = props.icon;
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 py-12 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#F3F4F6]">
-        <Icon size={28} color="#9CA3AF" />
-      </div>
-      <div>
-        <p className="text-[15px] font-semibold text-[#374151]">{props.title}</p>
-        {props.subtitle && <p className="mt-1.5 text-[13px] leading-5 text-[#6B7280]">{props.subtitle}</p>}
-      </div>
-      {props.action && <SecondaryButton onClick={props.onAction}>{props.action}</SecondaryButton>}
-    </div>
-  );
-}
-
-function ProfileActionRow(props: {
-  icon: ElementType;
-  label: string;
-  description?: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  const Icon = props.icon;
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      className="flex min-h-[64px] w-full items-center gap-3 rounded-[14px] bg-white px-4 py-3 text-left"
-    >
-      <span className={cls(
-        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-        props.danger ? "bg-[#FEE2E2] text-[#DC2626]" : "bg-[#EEF2FF] text-[#1B4FD8]",
-      )}>
-        <Icon size={19} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className={cls("block text-[15px] font-semibold", props.danger ? "text-[#DC2626]" : "text-[#111827]")}>
-          {props.label}
-        </span>
-        {props.description && <span className="mt-0.5 block text-[12px] leading-5 text-[#6B7280]">{props.description}</span>}
-      </span>
-      {!props.danger && <ChevronRight size={18} color="#9CA3AF" />}
-    </button>
-  );
+/**
+ * The departure window a driver's trip offer advertises for one of its stops.
+ *
+ * The anchor is the same one the driver's own proposals use: when the car is planned to be at that stop, plus
+ * or minus half an hour. That is not a cosmetic choice - a client answering this offer sends exactly this
+ * window back, and the server checks it against the trip's real ETA at that stop. An invented window would be
+ * published and then refused at the first proposal.
+ */
+function offerWindowForTrip(trip: TripDTO | undefined, originStopId: string): { start: string; end: string } | null {
+  const at = trip?.stops.find((stop) => stop.stop.id === originStopId);
+  if (!at) return null;
+  const arrival = new Date(at.eta_arrival_at ?? at.planned_arrival_at).getTime();
+  if (!Number.isFinite(arrival)) return null;
+  return {
+    start: new Date(arrival - 30 * 60 * 1000).toISOString(),
+    end: new Date(arrival + 30 * 60 * 1000).toISOString(),
+  };
 }
 
 function StatusTimeline({ status }: { status: OrderStatus }) {
@@ -490,112 +768,13 @@ function StatusTimeline({ status }: { status: OrderStatus }) {
   ];
   const index = steps.findIndex((step) => step.status === status);
   const activeIndex = index >= 0 ? index : 0;
+  // The same caravan thread as the direction picker, now carrying progress: a bead per stage, the current one
+  // a pulsing azure ring, the last one the seal. A column of identical dots said nothing about where the
+  // parcel actually is.
   return (
-    <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-      <p className="text-[13px] font-semibold text-[#111827]">Buyurtma holati</p>
-      <div className="mt-3 space-y-2">
-        {steps.map((step, stepIndex) => (
-          <div key={step.status} className="flex items-center gap-2">
-            <span className={cls("h-3 w-3 rounded-full", stepIndex <= activeIndex ? "bg-[#1B4FD8]" : "bg-[#D1D5DB]")} />
-            <span className={cls("text-[13px]", stepIndex <= activeIndex ? "font-semibold text-[#111827]" : "text-[#6B7280]")}>
-              {step.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DriverAuctionBids({ bids }: { bids?: Bid[] }) {
-  const activeBids = bids ?? [];
-  if (!activeBids.length) return null;
-
-  return (
-    <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] font-semibold text-[#111827]">Auksion takliflari</p>
-        <span className="rounded-full bg-[#EEF2FF] px-2.5 py-1 text-[12px] font-semibold text-[#1B4FD8]">
-          {activeBids.length} ta
-        </span>
-      </div>
-      <div className="mt-3 space-y-2">
-        {activeBids.map((bid) => (
-          <div
-            key={bid.id ?? `${bid.order_id}-${bid.price}`}
-            className={cls(
-              "rounded-[12px] border p-3",
-              bid.is_mine ? "border-[#1B4FD8] bg-[#EEF2FF]" : "border-[#E5E7EB] bg-[#F9FAFB]",
-            )}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-[14px] font-semibold text-[#111827]">
-                  {bid.driver?.full_name ?? "Haydovchi"}{bid.is_mine ? " (men)" : ""}
-                </p>
-                <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">
-                  {bid.driver?.car_model ?? "-"} / {bid.driver?.plate_number ?? "-"}
-                </p>
-              </div>
-              <p className="shrink-0 text-[15px] font-bold text-[#1B4FD8]">{formatUzs(bid.price)}</p>
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <div className="rounded-[10px] bg-white px-2 py-1.5">
-                <p className="text-[10px] text-[#6B7280]">Reyting</p>
-                <p className="text-[12px] font-semibold text-[#111827]">{bid.driver?.rating ?? "-"}</p>
-              </div>
-              <div className="rounded-[10px] bg-white px-2 py-1.5">
-                <p className="text-[10px] text-[#6B7280]">Yakunlangan</p>
-                <p className="text-[12px] font-semibold text-[#111827]">{bid.driver?.completed_orders ?? 0} ta</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MiniIncomeChart({ data }: { data: Array<{ key: string; label: string; value: number }> }) {
-  const maxValue = Math.max(...data.map((item) => item.value), 1);
-  return (
-    <div className="mt-4 flex h-[112px] items-end gap-2">
-      {data.map((item) => {
-        const height = item.value > 0 ? Math.max(10, Math.round((item.value / maxValue) * 72)) : 6;
-        return (
-          <div key={item.key} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-            <div className="flex h-[76px] w-full items-end rounded-[10px] bg-[#EEF2FF] px-1.5 pb-1.5">
-              <div
-                className={cls("w-full rounded-[7px]", item.value > 0 ? "bg-[#16A34A]" : "bg-[#CBD5E1]")}
-                style={{ height }}
-              />
-            </div>
-            <span className="text-[10px] font-medium text-[#6B7280]">{item.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ConfirmSheet(props: { title: string; text: string; confirmText: string; cancelText?: string; danger?: boolean; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div className="absolute inset-0 z-[70] flex items-end bg-black/35">
-      <div className="w-full rounded-t-[24px] bg-white p-5 shadow-[0_-8px_30px_rgba(15,23,42,0.18)]">
-        <p className="text-[18px] font-bold text-[#111827]">{props.title}</p>
-        <p className="mt-2 text-[14px] leading-6 text-[#6B7280]">{props.text}</p>
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <button onClick={props.onCancel} className="h-[52px] rounded-[14px] bg-[#F3F4F6] text-[15px] font-semibold text-[#6B7280]">
-            {props.cancelText ?? "Bekor qilish"}
-          </button>
-          <button
-            onClick={props.onConfirm}
-            className={cls("h-[52px] rounded-[14px] text-[15px] font-semibold text-white", props.danger ? "bg-[#DC2626]" : "bg-[#1B4FD8]")}
-          >
-            {props.confirmText}
-          </button>
-        </div>
-      </div>
+    <div className="rounded-[14px] border border-border bg-card p-4">
+      <p className="mb-3 text-[13px] font-semibold text-foreground">Buyurtma holati</p>
+      <JourneySpine steps={steps.map((step) => ({ key: step.status, label: step.label }))} current={activeIndex} />
     </div>
   );
 }
@@ -603,11 +782,11 @@ function ConfirmSheet(props: { title: string; text: string; confirmText: string;
 function CitySelect(props: { label: string; cities: City[]; value: number; onChange: (value: number) => void }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[14px] font-medium text-[#374151]">{props.label}</span>
+      <span className="text-[14px] font-medium text-secondary-foreground">{props.label}</span>
       <select
         value={props.value || ""}
         onChange={(event) => props.onChange(Number(event.target.value))}
-        className="h-[52px] rounded-[12px] border border-[#E5E7EB] bg-white px-4 text-[15px] text-[#111827] outline-none"
+        className="h-[52px] rounded-[12px] border border-border bg-card px-4 text-[15px] text-foreground outline-none"
       >
         <option value="">Shaharni tanlang</option>
         {props.cities.map((city) => (
@@ -620,41 +799,129 @@ function CitySelect(props: { label: string; cities: City[]; value: number; onCha
   );
 }
 
+function PickSelect(props: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: Array<[string, string]>;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[14px] font-medium text-secondary-foreground">{props.label}</span>
+      <select
+        value={props.value}
+        disabled={props.disabled}
+        onChange={(event) => props.onChange(event.target.value)}
+        className="h-[52px] rounded-[12px] border border-border bg-card px-4 text-[15px] text-foreground outline-none disabled:bg-muted"
+      >
+        <option value="">{props.placeholder}</option>
+        {props.options.map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * The beaded segment that joins the two ends of a direction.
+ *
+ * Ported from the reference client's caravan thread: the two places a person picks are one journey, and two
+ * unconnected rows with a grey rule between them say the opposite. The bead column is centred on the node
+ * column of the rows above and below it, so the line reads as continuous.
+ */
+function DirectionLink() {
+  return (
+    <div className="flex items-stretch" aria-hidden="true">
+      <span className="flex w-[60px] shrink-0 justify-center">
+        <span
+          className="w-0.5"
+          style={{
+            minHeight: 18,
+            background: "repeating-linear-gradient(to bottom, var(--primary) 0 3px, transparent 3px 8px)",
+            opacity: 0.65,
+          }}
+        />
+      </span>
+      <span className="flex-1 self-center border-t border-border" />
+    </div>
+  );
+}
+
+/**
+ * One end of a direction.
+ *
+ * `node` decides the marker, and the two are deliberately different shapes rather than two colours of the
+ * same circle: the origin is a hollow azure ring, the destination a filled seal with one sharp corner
+ * pointing at the place. That difference survives greyscale and a glance.
+ */
 function LocationPointRow(props: {
   label: string;
   address: string;
+  /**
+   * What to show on the bold line instead of the address's own first part.
+   *
+   * A Yandex address starts with the country, so every row read "Oʻzbekiston" - the same word twice, above
+   * the one piece of information the row exists to carry. The chosen region is what belongs there.
+   */
+  title?: string;
   hasPoint: boolean;
   onClick: () => void;
-  icon: ElementType;
+  node: "origin" | "destination";
 }) {
-  const Icon = props.icon;
-  const title = formatAddressTitle(props.address);
-  const region = formatAddressRegion(props.address);
+  const title = props.title || formatAddressTitle(props.address);
+  // With an explicit title the whole address is detail; without one, the first part is already the title.
+  const region = props.title ? withoutCountry(props.address) : formatAddressRegion(props.address);
+  const marked = props.hasPoint;
 
   return (
     <button
       type="button"
       onClick={props.onClick}
-      className="flex min-h-[92px] w-full items-center gap-3 bg-white px-4 py-4 text-left"
+      className="el-press flex min-h-[64px] w-full items-center gap-3 bg-card px-4 py-3.5 text-left"
     >
-      <span className={cls(
-        "flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
-        props.hasPoint ? "bg-[#E0F2FE] text-[#0369A1]" : "bg-[#F3F4F6] text-[#6B7280]",
-      )}>
-        <Icon size={21} />
+      <span className="flex w-11 shrink-0 justify-center">
+        {props.node === "origin" ? (
+          <span
+            className="h-4 w-4 rounded-full border-[3px]"
+            style={{
+              borderColor: marked ? "var(--feruza)" : "color-mix(in srgb, var(--foreground) 22%, var(--background))",
+              background: "var(--card)",
+              boxShadow: marked ? "0 0 0 4px color-mix(in srgb, var(--feruza) 14%, transparent)" : "none",
+            }}
+          />
+        ) : (
+          <span
+            className="h-[18px] w-[18px]"
+            style={{
+              background: marked ? "var(--primary)" : "var(--card)",
+              border: marked ? "none" : "2px solid color-mix(in srgb, var(--foreground) 22%, var(--background))",
+              borderRadius: "50% 50% 50% 3px",
+              transform: "rotate(45deg)",
+              boxShadow: marked ? "0 0 0 4px color-mix(in srgb, var(--primary) 16%, transparent)" : "none",
+            }}
+          />
+        )}
       </span>
+      {/* Two lines at most, and the second only when it says something. An empty row asks its question and
+          stops - "Joyni belgilang, manzil avtomatik yoziladi" under every unfilled row was three lines of
+          instruction repeated twice on one screen. */}
       <span className="min-w-0 flex-1">
-        <span className="block text-[12px] font-bold uppercase tracking-wide text-[#6B7280]">{props.label}</span>
-        <span className="mt-1 block break-words text-[16px] font-semibold leading-6 text-[#111827]">
-          {title || "Qidirish yoki xaritadan tanlash"}
+        <span
+          className={cls(
+            "block break-words text-[16px] leading-6",
+            marked ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
+          )}
+        >
+          {title || props.label}
         </span>
-        <span className="mt-1 block text-[12px] text-[#6B7280]">
-          {region || (props.hasPoint ? "Manzil tizim tomonidan avtomatik aniqlandi" : "Joyni belgilang, manzil avtomatik yoziladi")}
-        </span>
+        {marked && region && <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">{region}</span>}
       </span>
-      <span className="shrink-0 text-[13px] font-semibold text-[#1B4FD8]">
-        {props.hasPoint ? "O'zgartirish" : "Tanlash"}
-      </span>
+      <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
     </button>
   );
 }
@@ -664,16 +931,16 @@ function LocationSelectorRow(props: { city: City; onClick: () => void }) {
     <button
       type="button"
       onClick={props.onClick}
-      className="flex min-h-[70px] w-full items-center gap-3 border-b border-[#E5E7EB] px-5 text-left last:border-b-0"
+      className="el-press flex min-h-[70px] w-full items-center gap-3 border-b border-border px-5 text-left last:border-b-0"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[#6B7280]">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <MapPin size={20} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[16px] font-semibold text-[#111827]">{props.city.name_uz}</span>
-        <span className="mt-0.5 block truncate text-[13px] text-[#6B7280]">{props.city.region}</span>
+        <span className="block truncate text-[16px] font-semibold text-foreground">{props.city.name_uz}</span>
+        <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">{props.city.region}</span>
       </span>
-      <ChevronRight size={19} color="#9CA3AF" />
+      <ChevronRight size={19} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
     </button>
   );
 }
@@ -683,16 +950,16 @@ function DistrictSelectorRow(props: { district: District; onClick: () => void })
     <button
       type="button"
       onClick={props.onClick}
-      className="flex min-h-[64px] w-full items-center gap-3 border-b border-[#E5E7EB] px-5 text-left last:border-b-0"
+      className="el-press flex min-h-[64px] w-full items-center gap-3 border-b border-border px-5 text-left last:border-b-0"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[#1B4FD8]">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
         <MapPin size={19} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[16px] font-semibold text-[#111827]">{props.district.name_uz}</span>
-        {props.district.name_ru && <span className="mt-0.5 block truncate text-[13px] text-[#6B7280]">{props.district.name_ru}</span>}
+        <span className="block truncate text-[16px] font-semibold text-foreground">{props.district.name_uz}</span>
+        {props.district.name_ru && <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">{props.district.name_ru}</span>}
       </span>
-      <ChevronRight size={19} color="#9CA3AF" />
+      <ChevronRight size={19} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
     </button>
   );
 }
@@ -700,31 +967,33 @@ function DistrictSelectorRow(props: { district: District; onClick: () => void })
 function RouteSummaryRow(props: {
   label: string;
   address: string;
+  /** Shown when the geocoder had no name for the place: the coordinates, which are exactly as true. */
+  fallback?: string;
   city?: string;
   district?: string | null;
   onEdit: () => void;
   icon: ElementType;
 }) {
   const Icon = props.icon;
-  const title = formatAddressTitle(props.address);
+  const title = formatAddressTitle(props.address) || props.fallback;
   const region = formatAddressRegion(props.address) || props.city;
 
   return (
-    <div className="flex gap-3 border-b border-[#E5E7EB] px-4 py-4 last:border-b-0">
-      <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[#111827]">
+    <div className="flex gap-3 border-b border-border px-4 py-4 last:border-b-0">
+      <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
         <Icon size={20} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold text-[#6B7280]">{props.label}</p>
-        <p className="mt-1 break-words text-[16px] font-semibold leading-6 text-[#111827]">
+        <p className="text-[13px] font-semibold text-muted-foreground">{props.label}</p>
+        <p className="mt-1 break-words text-[16px] font-semibold leading-6 text-foreground">
           {title || "Manzil kiritilmagan"}
         </p>
-        <p className="mt-1 text-[13px] leading-5 text-[#6B7280]">{[region, props.district].filter(Boolean).join(" / ") || "-"}</p>
+        <p className="mt-1 text-[13px] leading-5 text-muted-foreground">{[region, props.district].filter(Boolean).join(" / ") || "-"}</p>
       </div>
       <button
         type="button"
         onClick={props.onEdit}
-        className="h-9 shrink-0 rounded-full bg-[#F3F4F6] px-3 text-[13px] font-semibold text-[#374151]"
+        className="el-press h-9 shrink-0 rounded-full bg-muted px-3 text-[13px] font-semibold text-secondary-foreground"
       >
         O'zgartirish
       </button>
@@ -736,26 +1005,299 @@ function OrderCard({ order, onClick }: { order: ClientOrder | DriverFeedOrder; o
   const fromDistrictLabel = districtName("from_district" in order ? order.from_district : undefined);
   const toDistrictLabel = districtName("to_district" in order ? order.to_district : undefined);
   return (
-    <button onClick={onClick} className="w-full rounded-[16px] border border-[#E5E7EB] bg-white p-4 text-left">
+    <button onClick={onClick} className="el-press w-full rounded-[16px] border border-border bg-card p-4 text-left">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[14px] font-semibold text-[#111827]">
-          <MapPin size={14} color="#1B4FD8" />
+        <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+          <MapPin size={14} color="var(--primary)" />
           {[cityName(order.from_city), fromDistrictLabel].filter(Boolean).join(", ")} {"->"} {[cityName(order.to_city), toDistrictLabel].filter(Boolean).join(", ")}
         </span>
         <StatusBadge status={order.status} />
       </div>
-      <div className="flex items-center justify-between text-[13px] text-[#6B7280]">
+      <div className="flex items-center justify-between text-[13px] text-muted-foreground">
         <span>{shortDate(order.created_at)}</span>
-        <span className="font-semibold text-[#111827]">{formatUzs(("final_price" in order ? order.final_price : null) ?? order.suggested_price)}</span>
+        <span className="font-semibold text-foreground">{formatUzs(("final_price" in order ? order.final_price : null) ?? order.suggested_price)}</span>
       </div>
       {"bids_count" in order && (
-        <p className="mt-2 text-[12px] text-[#6B7280]">{order.bids_count ?? 0} ta taklif</p>
+        <p className="mt-2 text-[12px] text-muted-foreground">{order.bids_count ?? 0} ta taklif</p>
       )}
     </button>
   );
 }
 
-function BottomNav({ role, active, go }: { role: MobileRole; active: Screen; go: (screen: Screen) => void }) {
+/**
+ * A private upload the server said this viewer may see (`MediaRefDTO`).
+ *
+ * The link is short-lived and the bucket is not public, so three things matter here: the image is never
+ * addressed by its storage key, an expired or broken link offers a retry that re-reads the resource (which
+ * mints a fresh URL), and a missing photo is shown as a plain note rather than a broken frame.
+ */
+function ParcelPhoto({
+  photo,
+  label,
+  onRefresh,
+}: {
+  photo: MediaRefDTO | null | undefined;
+  label: string;
+  onRefresh: () => void;
+}) {
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [full, setFull] = useState(false);
+  // One automatic re-read per link. A client clock running ahead would otherwise ask for a fresh URL, get one
+  // it still considers expired, and loop.
+  const refreshedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    setState("loading");
+  }, [photo?.url]);
+
+  // A link that has already expired never loads: re-read before showing a broken frame.
+  useEffect(() => {
+    if (!photo) return;
+    const remaining = new Date(photo.expires_at).getTime() - Date.now();
+    if (remaining <= 0) {
+      if (refreshedFor.current !== photo.url) {
+        refreshedFor.current = photo.url;
+        onRefresh();
+      }
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      refreshedFor.current = photo.url;
+      onRefresh();
+    }, Math.min(remaining, 2_147_483_000));
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photo?.url, photo?.expires_at]);
+
+  return (
+    <div className="rounded-[14px] border border-border bg-card p-4">
+      <p className="text-[12px] text-muted-foreground">{label}</p>
+      {!photo ? (
+        <p className="mt-1 text-[14px] font-medium text-foreground">Rasm yuklanmagan</p>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => state === "ready" && setFull(true)}
+            className="el-press relative mt-2 block h-[180px] w-full overflow-hidden rounded-[12px] bg-muted"
+            aria-label="Posilka rasmini kattalashtirish"
+          >
+            {state !== "ready" && (
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
+                <Package size={26} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
+                {state === "loading" ? "Rasm yuklanmoqda..." : "Rasmni ko'rsatib bo'lmadi"}
+              </span>
+            )}
+            <img
+              src={photo.url}
+              alt="Posilka rasmi"
+              onLoad={() => setState("ready")}
+              onError={() => setState("failed")}
+              className={cls("h-full w-full object-cover", state === "ready" ? "opacity-100" : "opacity-0")}
+            />
+          </button>
+          {state === "failed" && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="el-press mt-2 h-10 w-full rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
+            >
+              Qayta yuklash
+            </button>
+          )}
+        </>
+      )}
+      {full && photo && (
+        <div
+          role="presentation"
+          onClick={() => setFull(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+        >
+          <img src={photo.url} alt="Posilka rasmi" className="max-h-full max-w-full object-contain" />
+          <button
+            type="button"
+            onClick={() => setFull(false)}
+            aria-label="Yopish"
+            className="el-press absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-card/90"
+          >
+            <X size={20} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Naqd to'lov qaydi" - a record that cash changed hands between two people, not a payment ELCHI took.
+ *
+ * The pilot's fare is paid in cash directly to the driver (§9): nothing here moves a balance, the amount is the
+ * agreed fare, and the wording never claims that ELCHI received or settled anything. One side records the
+ * handover, the other confirms it or contests it, and a contested one goes to the operator queue (Q78).
+ */
+function CashAcknowledgement({
+  booking,
+  side,
+  busy,
+  amount,
+  onAmountChange,
+  onReport,
+  onDecide,
+}: {
+  booking: { cash_status: string; total_minor: number; currency: string; version: number; cash_receipt?: CashReceiptDTO | null };
+  side: "client" | "driver";
+  busy: boolean;
+  amount: string;
+  onAmountChange: (value: string) => void;
+  onReport: () => void;
+  onDecide: (decision: "acknowledge" | "contest") => void;
+}) {
+  const receipt = booking.cash_receipt ?? null;
+  const mineAlready = receipt !== null && receipt.reported_by_side === side;
+  return (
+    <div className="rounded-[16px] border border-border bg-card p-4">
+      <p className="text-[15px] font-semibold text-foreground">Naqd to'lov qaydi</p>
+      <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+        Yo'lkira haydovchiga naqd beriladi. Bu yerda faqat qayd qoladi — ELCHI bu pulni qabul qilmaydi.
+      </p>
+      <p className="mt-2 text-[13px] text-muted-foreground">
+        Kelishilgan summa: <span className="font-semibold text-foreground">{formatUzs(booking.total_minor / 100)}</span>
+      </p>
+
+      {booking.cash_status === "unpaid" && (
+        <div className="mt-3 space-y-3">
+          <Field
+            label={side === "driver" ? "Olingan summa (so'm)" : "Berilgan summa (so'm)"}
+            type="number"
+            value={amount}
+            placeholder={String(Math.round(booking.total_minor / 100))}
+            onChange={onAmountChange}
+          />
+          <PrimaryButton disabled={busy || !Number(amount)} onClick={onReport}>
+            {side === "driver" ? "Naqd olindi deb qayd qilish" : "Naqd berildi deb qayd qilish"}
+          </PrimaryButton>
+        </div>
+      )}
+
+      {booking.cash_status === "reported_paid" && receipt && (
+        <div className="mt-3">
+          <p className="text-[13px] text-secondary-foreground">
+            {mineAlready ? "Siz qayd qildingiz" : "Ikkinchi tomon qayd qildi"}: {formatUzs(receipt.amount_minor / 100)} ·{" "}
+            {formatDateTime(receipt.reported_at)}
+          </p>
+          {mineAlready ? (
+            <p className="mt-2 text-[12px] leading-5 text-muted-foreground">Ikkinchi tomonning tasdig'i kutilmoqda.</p>
+          ) : (
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onDecide("acknowledge")}
+                className="el-press h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
+              >
+                Tasdiqlayman
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onDecide("contest")}
+                className="el-press h-11 flex-1 rounded-[12px] bg-destructive/10 text-[14px] font-semibold text-destructive"
+              >
+                Rozi emasman
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {booking.cash_status === "acknowledged" && (
+        <p className="mt-3 text-[13px] font-semibold text-success">Ikkala tomon tasdiqladi.</p>
+      )}
+      {booking.cash_status === "contested" && (
+        <p className="mt-3 text-[13px] font-semibold text-destructive">
+          Kelishmovchilik qayd etildi — operator ko'rib chiqadi.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What to call one end of a direction (Q88).
+ *
+ * An end is either a verified stop or a place the client marked on the map, never both. The reverse-geocoded
+ * address is the friendlier name for a marked place, so it wins when there is one; a district is the fallback
+ * because "Samarqand (fixture)" still tells the person where this is, and a bare coordinate does not.
+ */
+/**
+ * What a list shows while its answer is still in flight.
+ *
+ * Before this, a loading list rendered its empty state - the screen said "there are no offers yet" about an
+ * answer it had not received. Three placeholder cards say the honest thing instead: something is coming, and
+ * this is the shape it will have.
+ */
+function ListSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-3">
+      {Array.from({ length: rows }).map((_, index) => (
+        <SkeletonCard key={index} />
+      ))}
+    </div>
+  );
+}
+
+/** The name a driver saved a direction end by - never the opaque id the API returns. */
+function savedEndLabel(districtId: string | null | undefined, stopId: string | null | undefined, names: Record<string, string>): string {
+  if (districtId) return names[districtId] ?? "Tuman";
+  if (stopId) return "Tanlangan bekat";
+  return "-";
+}
+
+function endLabel(
+  stop: StopRefDTO | null | undefined,
+  point: MapPointDTO | null | undefined,
+  fallback = "Xaritadagi joy",
+): string {
+  if (stop) return stop.name_uz;
+  if (!point) return fallback;
+  return point.address?.trim() || point.district?.name_uz || fallback;
+}
+
+/** `Olib ketish bekati` reads wrong for a marked place; the row says what the end actually is. */
+function endRowLabel(stop: StopRefDTO | null | undefined, stopWord: string, pointWord: string): string {
+  return stop ? stopWord : pointWord;
+}
+
+function ListingCard({ listing, onClick }: { listing: ListingDTO; onClick?: () => void }) {
+  return (
+    <button onClick={onClick} className="el-press w-full rounded-[16px] border border-border bg-card p-4 text-left">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+          <MapPin size={14} color="var(--primary)" />
+          {endLabel(listing.origin_stop, listing.origin_point)} {"->"} {endLabel(listing.destination_stop, listing.destination_point)}
+        </span>
+        <StatusBadge status={listing.status} />
+      </div>
+      <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+        <span>{shortDate(listing.departure_window_start)}</span>
+        <span className="font-semibold text-foreground">{formatUzs(listing.total_minor / 100)}</span>
+      </div>
+    </button>
+  );
+}
+
+function BottomNav({
+  role,
+  active,
+  go,
+  unread = 0,
+}: {
+  role: MobileRole;
+  active: Screen;
+  go: (screen: Screen) => void;
+  /** Unread inbox items, shown as a dot on the bell. In-app is the only channel (Q82), so it has to be seen. */
+  unread?: number;
+}) {
   const tabs =
     role === "client"
       ? [
@@ -772,11 +1314,14 @@ function BottomNav({ role, active, go }: { role: MobileRole; active: Screen; go:
           ["driver-profile", User, "Profil"],
         ];
   return (
-    <nav className="flex h-[72px] shrink-0 border-t border-[#E5E7EB] bg-white">
+    <nav className="flex h-[72px] shrink-0 border-t border-border bg-card">
       {tabs.map(([id, Icon, label]) => (
-        <button key={id as string} onClick={() => go(id as Screen)} className="flex flex-1 flex-col items-center justify-center gap-1">
-          <Icon size={22} color={active === id ? "#1B4FD8" : "#9CA3AF"} />
-          <span className={cls("text-[10px] font-medium", active === id ? "text-[#1B4FD8]" : "text-[#9CA3AF]")}>{label as string}</span>
+        <button key={id as string} onClick={() => go(id as Screen)} className="el-press relative flex flex-1 flex-col items-center justify-center gap-1">
+          {Icon === Bell && unread > 0 && (
+            <span className="absolute right-[calc(50%-16px)] top-3 h-2 w-2 rounded-full bg-destructive" aria-hidden="true" />
+          )}
+          <Icon size={22} color={active === id ? "var(--primary)" : "color-mix(in srgb, var(--foreground) 42%, var(--background))"} />
+          <span className={cls("text-[10px] font-medium", active === id ? "text-primary" : "text-slate-400")}>{label as string}</span>
         </button>
       ))}
     </nav>
@@ -789,6 +1334,11 @@ export function ConnectedApp() {
   const [selectedRole, setSelectedRole] = useState<MobileRole>("client");
   const [phone, setPhone] = useState("+998");
   const [otp, setOtp] = useState("");
+  const [resendIn, setResendIn] = useState(RESEND_SECONDS);
+  const [supportInfo, setSupportInfo] = useState<SupportContactsDTO | null>(null);
+  const [supportTickets, setSupportTickets] = useState<SupportTicketDTO[]>([]);
+  const [supportMessage, setSupportMessage] = useState("");
+  const [incomePeriod, setIncomePeriod] = useState<"daily" | "monthly">("daily");
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [cities, setCities] = useState<City[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
@@ -797,12 +1347,134 @@ export function ConnectedApp() {
   const [selectedToCity, setSelectedToCity] = useState<City | null>(null);
   const [selectedFromDistrict, setSelectedFromDistrict] = useState<District | null>(null);
   const [selectedToDistrict, setSelectedToDistrict] = useState<District | null>(null);
-  const [suggestedPrice, setSuggestedPrice] = useState<number | null>(null);
+  // Stage-2 direction: the same two rows on the home sheet, now on the geo catalogue.
+  const [pickupEnd, setPickupEnd] = useState<DirectionEnd>(emptyDirectionEnd);
+  const [dropoffEnd, setDropoffEnd] = useState<DirectionEnd>(emptyDirectionEnd);
+  const [routeVersion, setRouteVersion] = useState<RouteVersionDTO | null>(null);
+  const [routeDistricts, setRouteDistricts] = useState<CorridorDistrictDTO[]>([]);
+  const [corridorStops, setCorridorStops] = useState<StopDTO[]>([]);
+  /** Verified stops for the end being marked, offered on the map as a shortcut (Q88). */
+  const [stopOptions, setStopOptions] = useState<StopOption[]>([]);
+  const [listingForm, setListingForm] = useState({
+    windowStart: "",
+    windowEnd: "",
+    unitPrice: "",
+    parcelType: "box",
+    weightKg: "",
+    lengthCm: "",
+    widthCm: "",
+    heightCm: "",
+    senderName: "",
+    receiverName: "",
+  });
+  const [listingWarnings, setListingWarnings] = useState<string[]>([]);
+  // Q88/Q89: which service the home sheet is composing, and what the server said about the two marked places.
+  const [serviceMode, setServiceMode] = useState<"parcel" | "passenger">("parcel");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  /** Set while the browser is answering the locate button, so the button can say so. */
+  const [locating, setLocating] = useState(false);
+  const [preview, setPreview] = useState<DirectionPreviewDTO | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  /**
+   * Which seats the person marked on the cabin picture. The *count* is what the listing carries
+   * (`seat_count`); the seats themselves are how the count is chosen, and `SeatPicker` says so on screen.
+   */
+  const [selectedSeats, setSelectedSeats] = useState<SeatId[]>(["rear-right"]);
+  const seatCount = selectedSeats.length;
+  const [myListings, setMyListings] = useState<ListingDTO[]>([]);
+  const [proposalTotal, setProposalTotal] = useState(0);
+  const [listingDetail, setListingDetail] = useState<ListingDTO | null>(null);
+  const [listingThreads, setListingThreads] = useState<ProposalThreadDTO[]>([]);
+  // Stage-2 driver side: trips replace the v1 saved routes, and the feed answers on verified stops.
+  const [directionOwner, setDirectionOwner] = useState<"client" | "driver">("client");
+  const [trips, setTrips] = useState<TripDTO[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleDTO[]>([]);
+  const [corridors, setCorridors] = useState<CorridorDTO[]>([]);
+  const [tripRoutes, setTripRoutes] = useState<RouteVersionDTO[]>([]);
+  const [tripForm, setTripForm] = useState({
+    vehicleId: "",
+    corridorId: "",
+    routeId: "",
+    startAt: "",
+    seats: 4,
+    cargoKg: "20",
+    cargoLitres: "100",
+  });
+  const [requestFeed, setRequestFeed] = useState<FeedItemDTO[]>([]);
+  /** `meta.match_scope` of the last feed answer - what the matching was actually able to measure. */
+  const [matchScope, setMatchScope] = useState<string | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<FeedItemDTO | null>(null);
+  const [proposalTripId, setProposalTripId] = useState("");
+  // Q92: the driver is an author too, not only an answerer. These hold the trip offer being published and the
+  // offers already on the market, so a trip card can show what it is advertised as.
+  const [driverServiceMode, setDriverServiceMode] = useState<"parcel" | "passenger">("parcel");
+  const [myOffers, setMyOffers] = useState<ListingDTO[]>([]);
+  const [offerForm, setOfferForm] = useState({
+    tripId: "",
+    serviceType: "passenger" as "passenger" | "parcel",
+    originStopId: "",
+    destinationStopId: "",
+    price: "",
+  });
+  // Q92, client side: the driver trip offers this client can answer, and the one they are answering.
+  const [offerFeed, setOfferFeed] = useState<FeedItemDTO[]>([]);
+  const [selectedOffer, setSelectedOffer] = useState<FeedItemDTO | null>(null);
+  const [offerBid, setOfferBid] = useState({
+    price: "",
+    seats: 1,
+    weightKg: "",
+    lengthCm: "",
+    widthCm: "",
+    heightCm: "",
+    receiverName: "",
+    receiverPhone: "",
+  });
+  const [driverBookings, setDriverBookings] = useState<AnyBooking[]>([]);
+  const [driverBooking, setDriverBooking] = useState<BookingDTO | null>(null);
+  const [proofCode, setProofCode] = useState("");
+  const [walletState, setWalletState] = useState<WalletDTO | null>(null);
+  const [topups, setTopups] = useState<TopupDTO[]>([]);
+  const [topupAmount, setTopupAmount] = useState("");
+  const [walletLines, setWalletLines] = useState<LedgerLineDTO[]>([]);
+  const [clientBookings, setClientBookings] = useState<AnyBooking[]>([]);
+  const [clientBooking, setClientBooking] = useState<BookingClientDTO | null>(null);
+  const [bookingCodes, setBookingCodes] = useState<BookingCodesDTO | null>(null);
+  // One booking is "open" at a time on the chat/tracking/cash screens; which side is looking decides what the
+  // server returns, so the id and the role travel together.
+  const [openBooking, setOpenBooking] = useState<{ id: string; side: "client" | "driver" } | null>(null);
+  /** B9: the open and settled amendments of the booking on screen, newest first. */
+  /** M3: the directions this driver asked to be told about. */
+  const [saved, setSaved] = useState<SavedSearchDTO[]>([]);
+  const [districtNames, setDistrictNames] = useState<Record<string, string>>({});
+  /** M2: what can serve the listing currently open, ranked by the server (§8.2). */
+  const [matches, setMatches] = useState<MatchDTO[]>([]);
+  const [matchesFor, setMatchesFor] = useState<{ id: string; kind: string } | null>(null);
+  /** S6: the note being attached to an open dispute, keyed by dispute id. */
+  const [evidenceNote, setEvidenceNote] = useState<{ id: string; note: string } | null>(null);
+  const [amendments, setAmendments] = useState<AmendmentDTO[]>([]);
+  const [amendmentForm, setAmendmentForm] = useState({ quantity: "", unitPrice: "", reason: "" });
+  const [chatMessages, setChatMessages] = useState<ChatMessageDTO[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [chatFailed, setChatFailed] = useState<string | null>(null);
+  const [chatWarnings, setChatWarnings] = useState<string[]>([]);
+  const [chatHasMore, setChatHasMore] = useState(false);
+  const [tracking, setTracking] = useState<BookingTrackingDTO | null>(null);
+  const [trackingError, setTrackingError] = useState("");
+  const [cashAmount, setCashAmount] = useState("");
+  const [bookingDisputes, setBookingDisputes] = useState<DisputeDTO[]>([]);
+  const [disputeType, setDisputeType] = useState("service");
+  const [flags, setFlags] = useState<EffectiveFlagsDTO["flags"] | null>(null);
+  // One counter form at a time; `pending` is the guard against a second submit of the same revision.
+  const [counterFor, setCounterFor] = useState<string | null>(null);
+  const [counterPrice, setCounterPrice] = useState("");
+  const [counterPending, setCounterPending] = useState(false);
+  const [myProposals, setMyProposals] = useState<ProposalThreadDTO[]>([]);
   const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
-  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [rating, setRating] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -810,15 +1482,11 @@ export function ConnectedApp() {
   const [disputeComment, setDisputeComment] = useState("");
   const [clientName, setClientName] = useState("");
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
-  const [driverRoutes, setDriverRoutes] = useState<DriverRoute[]>([]);
-  const [driverFeed, setDriverFeed] = useState<DriverFeedOrder[]>([]);
-  const [driverOrder, setDriverOrder] = useState<DriverOrderDetail | null>(null);
-  const [selectedFeedOrder, setSelectedFeedOrder] = useState<DriverFeedOrder | null>(null);
   const [driverForm, setDriverForm] = useState({ full_name: "", car_model: "", car_color: "", plate_number: "" });
-  const [routeForm, setRouteForm] = useState({ from_city_id: 0, from_district_id: null as number | null, to_city_id: 0, to_district_id: null as number | null });
-  const [editingRouteId, setEditingRouteId] = useState<number | null>(null);
+  const [driverSeats, setDriverSeats] = useState(4);
+  const [driverCargoKg, setDriverCargoKg] = useState("20");
+  const [driverCargoLitres, setDriverCargoLitres] = useState("100");
   const [bidPrice, setBidPrice] = useState("");
-  const [incomePeriod, setIncomePeriod] = useState<"daily" | "monthly">("daily");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [locationSelectorMode, setLocationSelectorMode] = useState<"pickup" | "dropoff">("pickup");
   const [districtQuery, setDistrictQuery] = useState("");
@@ -851,7 +1519,7 @@ export function ConnectedApp() {
       await work();
       if (success) setMessage(success);
     } catch (err) {
-      setError(getUzbekErrorMessage(err));
+      setError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -860,6 +1528,25 @@ export function ConnectedApp() {
   useEffect(() => {
     void getCities({ limit: 100 }).then(setCities).catch(() => setCities([]));
   }, []);
+
+  /**
+   * The resend countdown.
+   *
+   * It only runs while the code screen is open, and it restarts whenever that screen is entered - so coming
+   * back after a wrong number does not leave the person staring at a link that is already spent, and leaving
+   * the screen does not keep a timer alive behind it.
+   */
+  useEffect(() => {
+    if (screen !== "otp") return;
+    setResendIn(RESEND_SECONDS);
+  }, [screen]);
+
+  useEffect(() => {
+    if (screen !== "otp" || resendIn <= 0) return;
+    const id = window.setInterval(() => setResendIn((left) => (left > 0 ? left - 1 : 0)), 1000);
+    return () => window.clearInterval(id);
+  }, [screen, resendIn]);
+
 
   useEffect(() => {
     if (auth.isLoading) return;
@@ -881,14 +1568,6 @@ export function ConnectedApp() {
       go(auth.user?.role === "driver" ? "driver-home" : "client-home");
     }
   }, [auth.isAuthenticated, auth.isLoading, auth.user?.role, screen]);
-
-  useEffect(() => {
-    if (orderForm.from_city_id && orderForm.to_city_id && auth.isAuthenticated) {
-      void getSuggestedPrice(orderForm.from_city_id, orderForm.to_city_id)
-        .then((data) => setSuggestedPrice(data.suggested_price))
-        .catch(() => setSuggestedPrice(null));
-    }
-  }, [auth.isAuthenticated, orderForm.from_city_id, orderForm.to_city_id]);
 
   useEffect(() => {
     if (auth.user?.role !== "client" || !auth.user.phone || orderForm.sender_phone) return;
@@ -919,90 +1598,163 @@ export function ConnectedApp() {
     );
   }, [districtQuery, districts]);
 
-  async function openDistrictSelector(city: City, mode: typeof districtMode) {
-    setDistrictCity(city);
-    setDistrictMode(mode);
-    setDistrictQuery("");
-    setDistricts([]);
-    go("client-district-selector");
-    try {
-      setDistricts(await getDistricts(city.id, { limit: 100 }));
-    } catch {
-      setDistricts([]);
-    }
-  }
-
-  function openLocationSelector(mode: "pickup" | "dropoff") {
+  function openLocationSelector(mode: "pickup" | "dropoff", owner: "client" | "driver" = "client") {
     setLocationSelectorMode(mode);
+    setDirectionOwner(owner);
     go("client-location-selector");
   }
 
-  function selectCityForLocation(city: City) {
-    if (locationSelectorMode === "pickup") {
-      setOrderForm((current) => ({
-        ...current,
-        from_city_id: city.id,
-        from_district_id: null,
-        pickup_lat: null,
-        pickup_lng: null,
-        pickup_address: "",
-      }));
-      setSelectedFromCity(city);
-      setSelectedFromDistrict(null);
-      if (city.requires_district) {
-        void openDistrictSelector(city, "client-pickup");
-        return;
-      }
-    } else {
-      setOrderForm((current) => ({
-        ...current,
-        to_city_id: city.id,
-        to_district_id: null,
-        dropoff_lat: null,
-        dropoff_lng: null,
-        dropoff_address: "",
-      }));
-      setSelectedToCity(city);
-      setSelectedToDistrict(null);
-      if (city.requires_district) {
-        void openDistrictSelector(city, "client-dropoff");
-        return;
-      }
-    }
-    setMapPicker(locationSelectorMode);
+  /**
+   * The v2 district catalogue, read once and kept.
+   *
+   * Two callers need it for the same reason - to name the district a coordinate falls in: the locate button
+   * and `markPoint` for a region that has no district step.
+   */
+  const geoDistrictCache = useRef<DistrictDTO[] | null>(null);
+  async function loadGeoDistricts(): Promise<DistrictDTO[]> {
+    if (geoDistrictCache.current) return geoDistrictCache.current;
+    const rows = await listDistricts({ limit: 500 }).catch(() => [] as DistrictDTO[]);
+    if (rows.length) geoDistrictCache.current = rows;
+    return rows;
   }
 
-  function selectDistrict(district: District) {
-    const center = districtCenter(district);
-    if (!center) setError("Bu tuman uchun default koordinata topilmadi");
-    const address = [district.name_uz, districtCity?.name_uz, districtCity?.region].filter(Boolean).join(", ");
-    if (districtMode === "client-pickup") {
+  const activeEnd = locationSelectorMode === "pickup" ? pickupEnd : dropoffEnd;
+  const otherEnd = locationSelectorMode === "pickup" ? dropoffEnd : pickupEnd;
+
+  function applyEnd(end: DirectionEnd) {
+    if (locationSelectorMode === "pickup") {
+      setPickupEnd(end);
       setOrderForm((current) => ({
         ...current,
-        from_district_id: district.id,
-        pickup_lat: center?.lat ?? null,
-        pickup_lng: center?.lng ?? null,
-        pickup_address: center ? address : current.pickup_address,
+        pickup_address: end.stop || end.point ? directionEndLabel(end) : "",
+        pickup_lat: end.point?.lat ?? end.stop?.point.lat ?? null,
+        pickup_lng: end.point?.lng ?? end.stop?.point.lng ?? null,
       }));
-      setSelectedFromDistrict(district);
-      setMapPicker("pickup");
-    } else if (districtMode === "client-dropoff") {
-      setOrderForm((current) => ({
-        ...current,
-        to_district_id: district.id,
-        dropoff_lat: center?.lat ?? null,
-        dropoff_lng: center?.lng ?? null,
-        dropoff_address: center ? address : current.dropoff_address,
-      }));
-      setSelectedToDistrict(district);
-      setMapPicker("dropoff");
-    } else if (districtMode === "driver-from") {
-      setRouteForm((current) => ({ ...current, from_district_id: district.id }));
-      go("driver-add-route");
     } else {
-      setRouteForm((current) => ({ ...current, to_district_id: district.id }));
-      go("driver-add-route");
+      setDropoffEnd(end);
+      setOrderForm((current) => ({
+        ...current,
+        dropoff_address: end.stop || end.point ? directionEndLabel(end) : "",
+        dropoff_lat: end.point?.lat ?? end.stop?.point.lat ?? null,
+        dropoff_lng: end.point?.lng ?? end.stop?.point.lng ?? null,
+      }));
     }
+  }
+
+  /**
+   * Step 1: the region.
+   *
+   * Tashkent city is its own unit (wave 10), so `requires_district` decides whether step 2 is asked at all -
+   * and when it is not, the next screen is the **map**, not a list of stops. Sending a person who chose
+   * "Toshkent shahri" to a stop catalogue was the old stop-first model: Q88 replaced it, because a place is
+   * marked on a map and only six of the country's districts have a verified stop to offer.
+   */
+  function selectRegionForLocation(region: RegionDTO) {
+    applyEnd({ region, district: null, stop: null, point: null, corridorId: "" });
+    setDistrictMode(locationSelectorMode === "pickup" ? "client-pickup" : "client-dropoff");
+    go(region.requires_district ? "client-district-selector" : "client-point-picker");
+  }
+
+  /** Step 2. The map is the last step (Q88): a place, not a stop from a catalogue. */
+  function selectGeoDistrict(district: DistrictDTO) {
+    applyEnd({ ...activeEnd, district, stop: null, point: null, corridorId: "" });
+    go("client-point-picker");
+  }
+
+  /**
+   * Step 3: the place itself. Whether it can be served is the server's answer, asked right after.
+   *
+   * The district is resolved here when the region never asked for one. Tashkent city is the case that
+   * matters: `requires_district` is false there (wave 10), so step 2 is skipped and the end reached the
+   * home screen with `district: null` - and `previewDirection` needs a district id at both ends, so the
+   * effect returned early, no preview was ever fetched, and "Yo'nalishni ko'rish" stayed grey with nothing
+   * on screen to explain why. The nearest catalogue district to the marked place is the honest answer, and
+   * it is only trustworthy because the catalogue now holds real centres rather than the old lattice.
+   */
+  async function markPoint(point: MarkedPoint) {
+    let district = activeEnd.district;
+    if (!district) {
+      const catalogue = await loadGeoDistricts();
+      const withinRegion = activeEnd.region
+        ? catalogue.filter((item) => item.region.id === activeEnd.region?.id)
+        : [];
+      district = nearestDistrict(withinRegion.length ? withinRegion : catalogue, point);
+    }
+    applyEnd({ ...activeEnd, district, stop: null, point });
+    go(directionOwner === "driver" ? "driver-feed" : "client-home");
+  }
+
+  /**
+   * "Where I am now" - the locate button on the home map.
+   *
+   * The browser gives a coordinate and nothing else, so the district has to be worked out here: the nearest
+   * district centre in the v2 catalogue wins. That is only trustworthy because the catalogue now holds real
+   * centres (scripts/backfill_district_centers.py); against the old generated lattice this would have named
+   * a neighbouring district about as often as the right one.
+   *
+   * The address underneath comes from our own server's geocoder, and the coordinate the person gets is their
+   * real position - not the centre of the district it resolved to. If the browser refuses, nothing is
+   * guessed: the person is told and the map stays where it was.
+   */
+  async function useCurrentLocation() {
+    if (locating) return;
+    if (!("geolocation" in navigator)) {
+      setError("Bu brauzer joylashuvni aniqlay olmaydi - joyni xaritadan belgilang.");
+      return;
+    }
+    setLocating(true);
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 60000,
+        });
+      });
+      const here = { lat: position.coords.latitude, lng: position.coords.longitude };
+
+      const [regions, districts] = await Promise.all([
+        listRegions().catch(() => [] as RegionDTO[]),
+        loadGeoDistricts(),
+      ]);
+      const nearest = nearestDistrict(districts, here);
+      const region = nearest ? regions.find((item) => item.id === nearest.region.id) ?? null : null;
+      if (!nearest || !region) {
+        setError("Joylashuvingizga mos tuman katalogda topilmadi - joyni xaritadan belgilang.");
+        return;
+      }
+
+      const named = await reverseGeocode(here).catch(() => null);
+      // `provider: "local"` is the server saying it had no geocoder answer and guessed from the catalogue;
+      // a wrong street name is worse than none, so that case falls back to the coordinates.
+      const address = named && named.provider !== "local" ? (named.formatted_address ?? null) : null;
+
+      setLocationSelectorMode("pickup");
+      setDirectionOwner("client");
+      setPickupEnd({ region, district: nearest, stop: null, point: { ...here, address }, corridorId: "" });
+      setOrderForm((current) => ({
+        ...current,
+        pickup_lat: here.lat,
+        pickup_lng: here.lng,
+        pickup_address: address || `${nearest.name_uz}, ${region.name_uz}`,
+      }));
+      setMessage(`Joylashuvingiz aniqlandi: ${nearest.name_uz}, ${region.name_uz}`);
+    } catch (err) {
+      const denied = typeof err === "object" && err !== null && "code" in err && (err as GeolocationPositionError).code === 1;
+      setError(
+        denied
+          ? "Joylashuvga ruxsat berilmadi - brauzer sozlamasidan ruxsat bering yoki joyni xaritadan belgilang."
+          : "Joylashuvni aniqlab bo'lmadi - joyni xaritadan belgilang.",
+      );
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  /** Step 3: the verified stop the booking is actually agreed on. */
+  function selectGeoStop(stop: StopDTO, corridorId: string) {
+    applyEnd({ ...activeEnd, stop, point: null, corridorId });
+    go(directionOwner === "driver" ? "driver-feed" : "client-home");
   }
 
   function normalizeCityText(value: string) {
@@ -1041,11 +1793,170 @@ export function ConnectedApp() {
     ]));
   }
 
-  const effectiveFromCityId = orderForm.from_city_id;
-  const effectiveToCityId = orderForm.to_city_id;
-  const fromDistrictReady = !fromCity?.requires_district || Boolean(orderForm.from_district_id);
-  const toDistrictReady = !toCity?.requires_district || Boolean(orderForm.to_district_id);
-  const routeDistrictsReady = fromDistrictReady && toDistrictReady;
+  // Both ends of a listing sit on one corridor; if they do not, no confirmed road joins them (spec §6.2).
+  const directionCorridorId = pickupEnd.corridorId || dropoffEnd.corridorId;
+  const sameCorridor = !pickupEnd.corridorId || !dropoffEnd.corridorId || pickupEnd.corridorId === dropoffEnd.corridorId;
+  // Q88: a stop pair resolves locally; a point pair is only ready once the server found a route for it.
+  const bothStops = Boolean(pickupEnd.stop && dropoffEnd.stop && pickupEnd.stop.id !== dropoffEnd.stop.id && sameCorridor);
+  const bothPoints = Boolean(pickupEnd.point && dropoffEnd.point && preview);
+  const directionReady = bothStops || bothPoints;
+  /** Q5: a service is open per corridor, and which service is being asked about depends on the mode. */
+  const serviceClosed =
+    serviceMode === "passenger" ? flags?.passenger_enabled === false : flags?.parcel_enabled === false;
+  const listingUnitMinor = soumToMinor(listingForm.unitPrice);
+
+  /**
+   * The leg is measured **along the route**, so the drive from a marked place to the road is not in it.
+   *
+   * With a real corridor that gap is a couple of kilometres and saying so would be noise. It only matters
+   * where a place sits well off the line - which is exactly what the development radius override allows -
+   * and there the figure above would otherwise read as door-to-door when it is not.
+   */
+  const offRouteNote = useMemo(() => {
+    if (!preview) return null;
+    const worst = Math.max(preview.origin.route_offset_m ?? 0, preview.destination.route_offset_m ?? 0);
+    if (worst < 5000) return null;
+    return `Belgilangan joy yo'ldan ${Math.round(worst / 1000)} km chetda - bu masofa yuqoridagi vaqtga kirmagan.`;
+  }, [preview]);
+
+  /**
+   * Why "Saqlash" is not available yet.
+   *
+   * It used to be a bare `disabled` expression, so a half-typed date - the browser's `datetime-local` hands
+   * back an empty string until every part is filled, and "31.11" never becomes a date at all - left the
+   * button grey with nothing on screen to explain it. The rules here are the server's own: the window must
+   * end after it starts (DB CHECK) and after now (`create_listing`), so a refusal that would have come back
+   * as a 400 is said here instead, before anything is sent.
+   */
+  const saveBlockers = useMemo(() => {
+    const problems: string[] = [];
+    if (!directionReady) problems.push("Ikkala nuqtani belgilang va yo'nalish tekshirilishini kuting.");
+    const start = listingForm.windowStart ? new Date(listingForm.windowStart) : null;
+    const end = listingForm.windowEnd ? new Date(listingForm.windowEnd) : null;
+    const startOk = start !== null && !Number.isNaN(start.getTime());
+    const endOk = end !== null && !Number.isNaN(end.getTime());
+    if (!startOk) problems.push("Jo'nash oynasi boshlanishini to'liq kiriting (kun, oy, yil va vaqt).");
+    if (!endOk) problems.push("Jo'nash oynasi tugashini to'liq kiriting (kun, oy, yil va vaqt).");
+    if (startOk && endOk && end.getTime() <= start.getTime()) {
+      problems.push("Tugash vaqti boshlanish vaqtidan keyin bo'lishi kerak.");
+    }
+    if (endOk && end.getTime() <= Date.now()) {
+      problems.push("Jo'nash oynasi o'tib ketgan - kelajakdagi vaqtni tanlang.");
+    }
+    if (listingUnitMinor <= 0) problems.push("Narxni kiriting.");
+    return problems;
+  }, [directionReady, listingForm.windowStart, listingForm.windowEnd, listingUnitMinor]);
+
+  /**
+   * Q88: the moment both places are marked, ask the server whether a confirmed route serves them.
+   *
+   * The client is never the judge of this - which corridors exist and how far off the road each tolerates are
+   * server facts. A refusal is a normal product state ("not on an ELCHI route yet"), so it is kept as its own
+   * message instead of being thrown into the generic error banner.
+   */
+  useEffect(() => {
+    const from = pickupEnd.point;
+    const to = dropoffEnd.point;
+    if (!from || !to || !pickupEnd.district || !dropoffEnd.district) {
+      setPreview(null);
+      setPreviewError(null);
+      return;
+    }
+    let isActive = true;
+    setPreviewBusy(true);
+    setPreviewError(null);
+    void previewDirection({
+      origin_lat: from.lat,
+      origin_lng: from.lng,
+      origin_district_id: pickupEnd.district.id,
+      destination_lat: to.lat,
+      destination_lng: to.lng,
+      destination_district_id: dropoffEnd.district.id,
+    })
+      .then((result) => {
+        if (!isActive) return;
+        setPreview(result);
+        setPreviewError(null);
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setPreview(null);
+        setPreviewError("Bu ikki nuqta hozircha ELCHI yo'nalishiga mos kelmaydi.");
+      })
+      .finally(() => {
+        if (isActive) setPreviewBusy(false);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, [pickupEnd.point, dropoffEnd.point, pickupEnd.district, dropoffEnd.district]);
+
+
+  // Offer a window the first time the route screen is opened with none set. Only ever fills blanks.
+  useEffect(() => {
+    if (screen !== "client-route-summary") return;
+    setListingForm((current) => {
+      if (current.windowStart && current.windowEnd) return current;
+      const suggested = suggestedDepartureWindow();
+      return {
+        ...current,
+        windowStart: current.windowStart || suggested.start,
+        windowEnd: current.windowEnd || suggested.end,
+      };
+    });
+  }, [screen]);
+
+  /**
+   * F1: a service is enabled **per corridor** (Q5), so the answer depends on which direction is on screen.
+   *
+   * Asking without a corridor resolves the country scope, where a piloted service is still off - reading that
+   * as "closed everywhere" would hide a direction that is actually open. So the corridor is passed as soon as
+   * it is known, and the flags are re-read when it changes. A failed read closes everything (Q26).
+   */
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      setFlags(null);
+      return;
+    }
+    let isActive = true;
+    void effectiveFlags(directionCorridorId || undefined)
+      .then((value) => { if (isActive) setFlags(value.flags); })
+      .catch(() => {
+        if (isActive) setFlags({ passenger_enabled: false, parcel_enabled: false, driver_listing_enabled: false, tracking_enabled: false });
+      });
+    return () => { isActive = false; };
+  }, [auth.isAuthenticated, directionCorridorId]);
+  const parcelReady = Boolean(
+    Number(listingForm.weightKg) > 0
+    && Number(listingForm.lengthCm) > 0
+    && Number(listingForm.widthCm) > 0
+    && Number(listingForm.heightCm) > 0,
+  );
+
+  /**
+   * The districts this direction passes, in travel order (G17). `on_confirmed_route` is what makes the
+   * recommendation honest: a district the corridor owns a stop in but no confirmed road reaches yet is not
+   * "on your way" (Q46 - without a routing provider only confirmed stop matches exist).
+   */
+  useEffect(() => {
+    if (!directionCorridorId || !directionReady) {
+      setRouteVersion(null);
+      setRouteDistricts([]);
+      setCorridorStops([]);
+      return;
+    }
+    let isActive = true;
+    void listCorridorRoutes(directionCorridorId, 1)
+      .then((items) => { if (isActive) setRouteVersion(items[0] ?? null); })
+      .catch(() => { if (isActive) setRouteVersion(null); });
+    void listCorridorDistricts(directionCorridorId)
+      .then((items) => { if (isActive) setRouteDistricts(items); })
+      .catch(() => { if (isActive) setRouteDistricts([]); });
+    void listCorridorStops(directionCorridorId)
+      .then((items) => { if (isActive) setCorridorStops(items); })
+      .catch(() => { if (isActive) setCorridorStops([]); });
+    return () => { isActive = false; };
+  }, [directionCorridorId, directionReady]);
 
   async function loadClientOrders() {
     const result = await listClientOrders({ limit: 50 });
@@ -1062,45 +1973,249 @@ export function ConnectedApp() {
     go(target);
   }
 
+  /**
+   * L1 + L4: the draft is written and published in one go, exactly as the v1 button promised.
+   *
+   * `Idempotency-Key` is generated per attempt (ADR-0005): a repeated tap after a timeout returns the same
+   * draft instead of opening a second listing. The free-text comment is filtered by the server (Q43) and the
+   * warnings it returns are shown as they come back - the screen never hides that something was masked.
+   */
+  /** Q88: one end is a verified stop **or** a marked place - the body carries exactly one of the two. */
+  function endFields(end: DirectionEnd, prefix: "origin" | "destination") {
+    if (end.point && end.district) {
+      return {
+        [`${prefix}_point`]: {
+          lat: end.point.lat,
+          lng: end.point.lng,
+          district_id: end.district.id,
+          address: end.point.address,
+        },
+      };
+    }
+    return { [`${prefix}_stop_id`]: end.stop?.id };
+  }
+
+  async function publishListingDraft() {
+    const haveEnds = (pickupEnd.stop || pickupEnd.point) && (dropoffEnd.stop || dropoffEnd.point);
+    if (!haveEnds) return;
+    const passenger = serviceMode === "passenger";
+    const body = {
+      kind: "request",
+      service_type: passenger ? "passenger" : "parcel",
+      ...endFields(pickupEnd, "origin"),
+      ...endFields(dropoffEnd, "destination"),
+      departure_window_start: localInputToIso(listingForm.windowStart),
+      departure_window_end: localInputToIso(listingForm.windowEnd),
+      price_basis: passenger ? "per_seat" : "total",
+      unit_price_minor: listingUnitMinor,
+      comment: (orderForm.comment ?? "").trim() || null,
+      ...(passenger
+        ? { passenger: { seat_count: seatCount, adults: seatCount } }
+        : {
+            parcel: {
+              parcel_type: listingForm.parcelType,
+              weight_g: Math.round(Number(listingForm.weightKg) * 1000),
+              length_cm: Math.round(Number(listingForm.lengthCm)),
+              width_cm: Math.round(Number(listingForm.widthCm)),
+              height_cm: Math.round(Number(listingForm.heightCm)),
+              payer: "sender",
+              sender: { name: listingForm.senderName.trim(), phone: orderForm.sender_phone.trim() },
+              receiver: { name: listingForm.receiverName.trim(), phone: orderForm.receiver_phone.trim() },
+              photo_file_id: orderForm.cargo_photo_url || null,
+            },
+          }),
+    } as unknown as ListingCreate;
+    const created = await createListing(body, newIdempotencyKey());
+    setListingWarnings(created.warnings.map((warning) => warning.code));
+    await publishListing(created.data.id, created.data.version);
+    resetOrderDraft();
+    await loadMyListings();
+    go("client-success");
+  }
+
+  async function openListing(listingId: string, target: Screen = "client-listing-detail") {
+    const listing = await getListing(listingId);
+    setListingDetail(listing);
+    // My own threads with each driver. The anonymous board of competing offers (P9/Q40) is the *driver*
+    // view of a request - the owner gets 404 there - so it belongs on the driver screens, not here.
+    setListingThreads(await listListingProposals(listingId).catch(() => [] as ProposalThreadDTO[]));
+    go(target);
+  }
+
+  /** B5: the codes belong to the client; the driver never sees them (rules.CLIENT_CODE_KINDS). */
+  async function openClientBooking(bookingId: string) {
+    setClientBooking((await getBooking(bookingId)) as BookingClientDTO);
+    setBookingCodes(await getBookingCodes(bookingId).catch(() => null));
+    setBookingDisputes(await myDisputes({ limit: 20 }).catch(() => [] as DisputeDTO[]));
+    go("client-booking-detail");
+  }
+
+  const CHAT_PAGE = 30;
+
+  /** N6: the thread of one booking. The server returns the masked text, so nothing is re-filtered here. */
+  async function loadChat(bookingId: string, limit = CHAT_PAGE) {
+    const page = await listMessages(bookingId, { limit });
+    setChatMessages(page);
+    setChatHasMore(page.length >= limit);
+  }
+
+  async function openChat(bookingId: string, side: "client" | "driver") {
+    setOpenBooking({ id: bookingId, side });
+    setChatDraft("");
+    setChatFailed(null);
+    setChatWarnings([]);
+    await loadChat(bookingId);
+    go("booking-chat");
+  }
+
+  /**
+   * Saved searches come back as ids. A driver reading `dst_9f2c...` learns nothing, so the district catalogue
+   * is fetched alongside and the ids are resolved to the names the driver picked them by. An id that cannot be
+   * resolved is described ("bekat") rather than printed.
+   */
+  /** Open the ranked matches of a listing this person owns. */
+  async function openMatches(listingId: string, kind: string) {
+    const result = await listingMatches(listingId, { limit: 20 });
+    setMatches(result.data);
+    setMatchesFor({ id: listingId, kind });
+    setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
+    go("listing-matches");
+  }
+
+  async function loadSavedSearches() {
+    const [rows, districts] = await Promise.all([savedSearches(), listDistricts({ limit: 500 })]);
+    setSaved(rows);
+    setDistrictNames(Object.fromEntries(districts.map((district) => [district.id, district.name_uz])));
+  }
+
+  async function loadAmendments(bookingId: string) {
+    setAmendments(await listAmendments(bookingId));
+  }
+
+  /**
+   * Open the amendment screen for a booking.
+   *
+   * The booking is re-read first: an amendment carries `expected_version`, and proposing against a stale one
+   * is exactly the race the version exists to catch.
+   */
+  async function openAmendments(bookingId: string, side: "client" | "driver") {
+    const booking = await getBooking(bookingId);
+    if (side === "driver") setDriverBooking(booking as BookingDTO);
+    else setClientBooking(booking as BookingClientDTO);
+    setOpenBooking({ id: bookingId, side });
+    setAmendmentForm({ quantity: String(booking.quantity), unitPrice: String(Math.round(booking.unit_price_minor / 100)), reason: "" });
+    await loadAmendments(bookingId);
+    go("booking-amendment");
+  }
+
+  async function openTracking(bookingId: string, side: "client" | "driver") {
+    setOpenBooking({ id: bookingId, side });
+    setTrackingError("");
+    try {
+      setTracking(await getBookingTracking(bookingId));
+    } catch (err) {
+      // §10.6: a closed window is a normal answer, not a failure - the screen says which it is.
+      setTracking(null);
+      setTrackingError(getErrorMessage(err));
+    }
+    go("booking-tracking");
+  }
+
+  /** B10: record the handover. The server refuses a client who is not the payer, and that answer is shown. */
+  async function reportCash(bookingId: string, side: "client" | "driver", version: number) {
+    await reportCashReceipt(
+      bookingId,
+      {
+        expected_version: version,
+        amount_minor: soumToMinor(cashAmount),
+        reported_at: new Date().toISOString(),
+        note: null,
+      },
+      newIdempotencyKey(),
+    );
+    setCashAmount("");
+    await (side === "driver" ? openDriverBooking(bookingId) : openClientBooking(bookingId));
+  }
+
+  async function decideCash(bookingId: string, side: "client" | "driver", receipt: CashReceiptDTO, decision: "acknowledge" | "contest") {
+    await decideCashReceipt(bookingId, receipt.id, decision, receipt.version);
+    await (side === "driver" ? openDriverBooking(bookingId) : openClientBooking(bookingId));
+  }
+
+  /**
+   * P6: answer with different terms instead of only accepting or refusing.
+   *
+   * `expected_revision` is what makes it safe: if the other side moved first, the server answers
+   * PROPOSAL_CHANGED and the screen re-reads rather than writing over a revision it never saw. Nothing is
+   * applied optimistically - the thread on screen is always the one the server confirmed.
+   */
+  async function sendCounter(threadId: string, revision: number, reload: () => Promise<void>) {
+    if (counterPending) return;
+    setCounterPending(true);
+    try {
+      await counterProposal(threadId, { expected_revision: revision, unit_price_minor: soumToMinor(counterPrice) });
+      setCounterFor(null);
+      setCounterPrice("");
+      await reload();
+    } catch (error) {
+      // A refused counter usually means the other side moved first: show what is on the server now, not the
+      // stale card the person was looking at, and let the error message explain why nothing was sent.
+      setCounterFor(null);
+      await reload().catch(() => undefined);
+      throw error;
+    } finally {
+      setCounterPending(false);
+    }
+  }
+
+  async function loadMyProposals() {
+    setMyProposals(await listMyProposals({ limit: 30 }));
+  }
+
+  async function loadMyListings() {
+    const [items, bookings] = await Promise.all([
+      listMyListings({ limit: 30 }),
+      listMyBookings({ role: "client", limit: 30 }),
+    ]);
+    setMyListings(items);
+    setClientBookings(bookings);
+    // There is no proposal counter on the listing DTO, so the number is counted from the open listings
+    // themselves rather than guessed - an empty answer means no proposal, not "unknown".
+    const open = items.filter((item) => item.status === "published").slice(0, 10);
+    const counts = await Promise.all(
+      open.map((item) => listListingProposals(item.id).then((threads) => threads.length).catch(() => 0)),
+    );
+    setProposalTotal(counts.reduce((sum, value) => sum + value, 0));
+  }
+
+  /** The trip offers already published for one trip - what that journey is advertised as, and for how much. */
+  function tripOffers(tripId: string) {
+    return myOffers.filter((offer) => offer.trip_id === tripId && offer.status !== "cancelled" && offer.status !== "expired");
+  }
+
   function resetOrderDraft() {
-    setEditingOrderId(null);
     setOrderForm(emptyOrder);
     setSelectedFromCity(null);
     setSelectedToCity(null);
     setSelectedFromDistrict(null);
     setSelectedToDistrict(null);
-  }
-
-  function beginEditOrder(order: OrderDetail) {
-    const fromCityRef = order.from_city ?? null;
-    const toCityRef = order.to_city ?? null;
-    const fromDistrictRef = order.from_district ?? null;
-    const toDistrictRef = order.to_district ?? null;
-    const fromCityId = fromCityRef?.id ?? 0;
-    const toCityId = toCityRef?.id ?? 0;
-
-    setEditingOrderId(order.id);
-    setSelectedFromCity(cities.find((city) => city.id === fromCityId) ?? fromCityRef);
-    setSelectedToCity(cities.find((city) => city.id === toCityId) ?? toCityRef);
-    setSelectedFromDistrict(fromDistrictRef);
-    setSelectedToDistrict(toDistrictRef);
-    setOrderForm({
-      from_city_id: fromCityId,
-      to_city_id: toCityId,
-      from_district_id: fromDistrictRef?.id ?? null,
-      to_district_id: toDistrictRef?.id ?? null,
-      pickup_address: order.pickup_address ?? "",
-      dropoff_address: order.dropoff_address ?? "",
-      pickup_lat: nullableNumber(order.pickup_lat),
-      pickup_lng: nullableNumber(order.pickup_lng),
-      dropoff_lat: nullableNumber(order.dropoff_lat),
-      dropoff_lng: nullableNumber(order.dropoff_lng),
-      sender_phone: order.sender_phone ?? auth.user?.phone ?? "",
-      receiver_phone: order.receiver_phone ?? "",
-      cargo_photo_url: order.cargo_photo_url ?? "",
-      comment: order.comment ?? "",
+    setPickupEnd(emptyDirectionEnd);
+    setDropoffEnd(emptyDirectionEnd);
+    setRouteVersion(null);
+    setRouteDistricts([]);
+    setCorridorStops([]);
+    setListingForm({
+      windowStart: "",
+      windowEnd: "",
+      unitPrice: "",
+      parcelType: "box",
+      weightKg: "",
+      lengthCm: "",
+      widthCm: "",
+      heightCm: "",
+      senderName: "",
+      receiverName: "",
     });
-    go("client-route-summary");
   }
 
   async function loadDriverProfile() {
@@ -1114,39 +2229,124 @@ export function ConnectedApp() {
     });
   }
 
-  async function loadDriverRoutes() {
-    setDriverRoutes(await getDriverRoutes());
+  /**
+   * The driver's planned journeys (T1), the cars they may use - a car is usable only once staff verify it -
+   * and the trip offers they have already put on the market.
+   *
+   * Q92: a driver's own listings live in the same `/me/listings` collection a client's requests do; they are
+   * the same object with the other author. Keeping them next to the trips is what lets a trip card say whether
+   * it is advertised and for how much.
+   */
+  async function loadDriverTrips() {
+    const [tripList, vehicleList, listings] = await Promise.all([
+      listMyTrips({ limit: 30 }),
+      listMyVehicles(),
+      listMyListings({ limit: 30 }).catch(() => [] as ListingDTO[]),
+    ]);
+    setTrips(tripList);
+    setVehicles(vehicleList);
+    setMyOffers(listings.filter((item) => item.kind === "trip_offer"));
   }
 
-  async function loadDriverFeed() {
-    const data = await getDriverFeed({ limit: 50 });
-    setDriverFeed(data.items ?? []);
-  }
-
-  async function loadDriverOrders() {
-    const data = await getDriverOrders({ limit: 50 });
-    setDriverFeed(data.items ?? []);
-  }
-
-  function startEditDriverRoute(route: DriverRoute) {
-    const fromCityRef = typeof route.from_city === "object" && route.from_city && "id" in route.from_city ? route.from_city as City : null;
-    const toCityRef = typeof route.to_city === "object" && route.to_city && "id" in route.to_city ? route.to_city as City : null;
-    const fromDistrictRef = typeof route.from_district === "object" && route.from_district && "id" in route.from_district ? route.from_district as District : null;
-    const toDistrictRef = typeof route.to_district === "object" && route.to_district && "id" in route.to_district ? route.to_district as District : null;
-    setEditingRouteId(route.id);
-    setRouteForm({
-      from_city_id: fromCityRef?.id ?? 0,
-      from_district_id: route.from_district_id ?? fromDistrictRef?.id ?? null,
-      to_city_id: toCityRef?.id ?? 0,
-      to_district_id: route.to_district_id ?? toDistrictRef?.id ?? null,
+  /**
+   * M1: the open client requests this driver may answer.
+   *
+   * The ends are the ones the driver picked in the same selector the client uses. When a district was chosen
+   * the question widens from "this exact stop" to "anywhere in this district", which is how a driver going
+   * Toshkent -> Qarshi also sees the requests of the districts on the way - still on verified stops and the
+   * confirmed route order, never merely "administratively nearby" (spec §6.1, Q46).
+   */
+  async function loadRequestFeed(mode: "parcel" | "passenger" = driverServiceMode) {
+    if (!pickupEnd.stop && !pickupEnd.district) {
+      setRequestFeed([]);
+      return;
+    }
+    const result = await requestsFeed({
+      // Passed in, not read from state: a toggle sets the state and reloads in the same handler, and the state
+      // React has not applied yet would fetch the service the driver just switched away from.
+      service_type: mode,
+      origin_district_id: pickupEnd.district?.id,
+      origin_stop_id: pickupEnd.district ? undefined : pickupEnd.stop?.id,
+      destination_district_id: dropoffEnd.district?.id,
+      destination_stop_id: dropoffEnd.district ? undefined : dropoffEnd.stop?.id,
+      limit: 30,
     });
-    setDistricts([fromDistrictRef, toDistrictRef].filter(Boolean) as District[]);
-    go("driver-add-route");
+    setRequestFeed(result.data);
+    setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
+  }
+
+  /**
+   * Q92, the other half of the same market: the driver trip offers that serve where this client is going.
+   *
+   * The client picked two places on the home sheet; the district of each is what the feed is asked with, so a
+   * client going Toshkent -> Qarshi sees every offer that calls at a verified stop in those districts. Nothing
+   * is matched merely because it is administratively nearby - the server still answers on the confirmed route.
+   *
+   * Seats matter for a passenger offer: a per-seat price is only comparable for the number of seats asked for,
+   * and an offer with fewer seats left than that is not a match at all.
+   */
+  async function loadOfferFeed(mode: "parcel" | "passenger" = serviceMode) {
+    if (!pickupEnd.stop && !pickupEnd.district) {
+      setOfferFeed([]);
+      return;
+    }
+    const result = await offersFeed({
+      service_type: mode,
+      origin_district_id: pickupEnd.district?.id,
+      origin_stop_id: pickupEnd.district ? undefined : pickupEnd.stop?.id,
+      destination_district_id: dropoffEnd.district?.id,
+      destination_stop_id: dropoffEnd.district ? undefined : dropoffEnd.stop?.id,
+      seats: mode === "passenger" ? offerBid.seats : undefined,
+      limit: 30,
+    });
+    setOfferFeed(result.data);
+    setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
+  }
+
+  /**
+   * §9.2: the wallet is the commission account, not earnings. A pending top-up is a request, not money, so it
+   * is shown on its own line and never added to the balance.
+   */
+  async function loadWallet() {
+    const [balance, requests, lines] = await Promise.all([
+      fetchWallet(),
+      listTopups({ limit: 10 }),
+      walletTransactions({ limit: 50 }).catch(() => [] as LedgerLineDTO[]),
+    ]);
+    setWalletState(balance);
+    setTopups(requests);
+    setWalletLines(lines);
+  }
+
+  async function openDriverBooking(bookingId: string) {
+    setProofCode("");
+    setDriverBooking((await getBooking(bookingId)) as BookingDTO);
+    go("driver-order-detail");
+  }
+
+  async function loadDriverBookings() {
+    setDriverBookings(await listMyBookings({ role: "driver", limit: 30 }));
   }
 
   async function loadNotifications() {
     const data = await getNotifications({ limit: 50 });
     setNotifications(data.items ?? []);
+  }
+
+  /**
+   * What support looks like right now: who can be reached (S13), and what this person has already asked.
+   *
+   * Both are allowed to fail quietly. A help screen that itself shows an error is the worst moment for one,
+   * and the ticket form underneath works either way - so a missing answer means "no line", which is also the
+   * truthful pilot answer (Q87).
+   */
+  async function loadSupport() {
+    const [contacts, tickets] = await Promise.all([
+      fetchSupportContacts().catch(() => null),
+      mySupportTickets({ limit: 20 }).catch(() => []),
+    ]);
+    setSupportInfo(contacts);
+    setSupportTickets(Array.isArray(tickets) ? tickets : []);
   }
 
   async function runConfirmAction(action: ConfirmAction) {
@@ -1173,8 +2373,27 @@ export function ConnectedApp() {
 
   useEffect(() => {
     if (!auth.isAuthenticated) return;
-    if (screen === "client-home" || screen === "client-orders") void run(loadClientOrders);
-    if (screen === "client-notifications") void run(loadNotifications);
+    if (screen === "client-home" || screen === "client-orders") {
+      void run(async () => {
+        await loadMyListings();
+        await loadClientOrders();
+        // The tab badge has to be right before the person opens the tab.
+        await loadNotifications().catch(() => undefined);
+      });
+    }
+    if (screen === "client-notifications" || screen === "driver-notifications") void run(loadNotifications);
+    if (screen === "support") void run(loadSupport);
+    if (screen === "client-point-picker") {
+      // Fails quietly: the map is the flow, and the shortcuts are an extra. An empty list is also the
+      // truthful answer for most districts.
+      void loadStopOptions({
+        districtId: activeEnd.district?.id ?? null,
+        regionId: activeEnd.district ? null : (activeEnd.region?.id ?? null),
+        corridorId: otherEnd.corridorId || null,
+      })
+        .then(setStopOptions)
+        .catch(() => setStopOptions([]));
+    }
     if (screen === "client-profile") {
       void run(async () => {
         const profile = await getClientProfile();
@@ -1182,23 +2401,39 @@ export function ConnectedApp() {
         await loadClientOrders();
       });
     }
+    if (screen === "driver-profile-form") void run(loadDriverTrips);
     if (screen === "driver-home" || screen === "driver-profile" || screen === "driver-income") {
       void run(async () => {
         await loadDriverProfile();
-        if (screen === "driver-home" || screen === "driver-income") {
-          try {
-            await loadDriverOrders();
-          } catch {
-            setDriverFeed([]);
-          }
-        }
-        if (screen === "driver-profile") await loadDriverRoutes();
+        // The bell needs a count before the driver opens the inbox, so the badge is truthful on arrival.
+        if (screen === "driver-home") await loadNotifications().catch(() => undefined);
+        if (screen === "driver-home") await loadWallet().catch(() => setWalletState(null));
+        if (screen === "driver-profile") await loadDriverTrips();
       });
     }
-    if (screen === "driver-routes") void run(loadDriverRoutes);
-    if (screen === "driver-feed") void run(loadDriverFeed);
-    if (screen === "driver-orders") void run(loadDriverOrders);
+    if (screen === "my-disputes") void run(async () => setBookingDisputes(await myDisputes()));
+    if (screen === "driver-saved-searches") void run(loadSavedSearches);
+    if (screen === "driver-routes") void run(loadDriverTrips);
+    if (screen === "driver-add-route") {
+      void run(async () => {
+        await loadDriverTrips();
+        setCorridors(await listCorridors());
+      });
+    }
+    if (screen === "driver-feed") void run(loadRequestFeed);
+    if (screen === "driver-offer-create") void run(loadDriverTrips);
+    if (screen === "client-offers") void run(loadOfferFeed);
+    if (screen === "driver-proposals" || screen === "client-proposals") {
+      void run(async () => {
+        if (screen === "driver-proposals") await loadDriverTrips();
+        await loadMyProposals();
+      });
+    }
+    if (screen === "driver-orders") void run(loadDriverBookings);
+    if (screen === "driver-income") void run(loadWallet);
   }, [screen, auth.isAuthenticated]);
+
+  const unreadNotifications = notifications.filter((item) => !item.is_read).length;
 
   const content = (() => {
     if (auth.isLoading) {
@@ -1207,131 +2442,447 @@ export function ConnectedApp() {
 
     if (screen === "splash") {
       return (
-        <main className="flex flex-1 flex-col items-center justify-between bg-[#1B4FD8] px-5 py-12 text-white">
+        /* The reference client's opening: the envoy's seal presses down, the name settles under it, and the
+           caravan thread draws itself from origin to destination. The screen is the calm ground rather than a
+           full-bleed blue, so the seal is the one thing that carries colour. */
+        <main className="flex flex-1 flex-col items-center justify-between bg-background px-5 py-12">
           <div />
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="flex h-24 w-24 items-center justify-center rounded-[28px] bg-white/15">
-              <Truck size={46} />
+          <div className="flex flex-col items-center gap-5 text-center">
+            <div className="anim-stamp relative">
+              <div
+                className="relative flex h-20 w-20 items-center justify-center rounded-[26px] bg-primary"
+                style={{ boxShadow: "var(--shadow-pop)" }}
+              >
+                <span
+                  className="absolute rounded-[18px]"
+                  style={{ inset: 9, border: "1.5px solid color-mix(in srgb, var(--primary-foreground) 35%, transparent)" }}
+                />
+                <Send size={32} weight="fill" className="relative text-primary-foreground" />
+              </div>
             </div>
             <div>
-              <h1 className="text-[38px] font-bold">Elchi</h1>
-              <p className="mt-2 text-[16px] leading-6 text-white/75">Shaharlararo posilka yetkazish xizmati</p>
+              <h1 className="anim-rise stagger-1 font-display text-[26px] font-bold text-foreground">elchi</h1>
+              <p className="anim-rise stagger-2 mt-1.5 text-[14px] leading-6 text-muted-foreground">
+                Shaharlararo posilka va yo'lovchi xizmati
+              </p>
+            </div>
+            <div className="anim-fade stagger-2 mt-2 flex items-center" aria-hidden="true">
+              <span
+                className="h-3 w-3 flex-none rounded-full border-[2.5px]"
+                style={{ borderColor: "var(--feruza)", background: "var(--background)" }}
+              />
+              <span
+                className="anim-grow stagger-3 mx-1 h-0.5 w-24"
+                style={{
+                  background: "repeating-linear-gradient(to right, var(--primary) 0 3px, transparent 3px 8px)",
+                  opacity: 0.7,
+                }}
+              />
+              <span
+                className="anim-fade stagger-5 h-3 w-3 flex-none"
+                style={{ background: "var(--primary)", borderRadius: "50% 50% 50% 3px", transform: "rotate(45deg)" }}
+              />
             </div>
           </div>
-          <PrimaryButton onClick={() => go("onboarding")}>Boshlash</PrimaryButton>
+          <div className="el-fade w-full">
+            <PrimaryButton onClick={() => go("onboarding")}>Boshlash</PrimaryButton>
+          </div>
         </main>
       );
     }
 
     if (screen === "onboarding") {
+      // Each step carries its own tint (reference design): the eye reads three different promises, not one
+      // screen shown three times.
       const steps = [
-        ["Posilkangizni shahardan shaharga yuboring", "Yo'nalishni tanlang, manzillarni kiriting va haydovchilardan taklif oling.", MapPin],
-        ["Haydovchilar narx taklif qiladi", "Sizga mos narx va haydovchini o'zingiz tanlaysiz.", FileText],
-        ["Yetkazildi - tasdiqlang va baholang", "Posilka yetib borgach, buyurtmani tasdiqlang va haydovchiga baho bering.", CheckCircle],
+        ["Posilkangizni shahardan shaharga yuboring", "Yo'nalishni tanlang, manzillarni kiriting va haydovchilardan taklif oling.", MapPin, "var(--accent)", "var(--primary)"],
+        ["Haydovchilar narx taklif qiladi", "Sizga mos narx va haydovchini o'zingiz tanlaysiz.", FileText, "color-mix(in srgb, var(--success) 8%, transparent)", "var(--success)"],
+        ["Yetkazildi - tasdiqlang va baholang", "Posilka yetib borgach, buyurtmani tasdiqlang va haydovchiga baho bering.", CheckCircle, "color-mix(in srgb, var(--warning) 8%, transparent)", "var(--warning)"],
       ] as const;
-      const [title, subtitle, Icon] = steps[onboardingStep];
+      const [title, subtitle, Icon, tint, tone] = steps[onboardingStep];
+      const last = onboardingStep === steps.length - 1;
       return (
-        <main className="flex flex-1 flex-col bg-white px-8 py-8">
-          <div className="flex flex-1 flex-col items-center justify-center text-center">
-            <div className="mb-10 flex h-32 w-32 items-center justify-center rounded-[36px] bg-[#EEF2FF]">
-              <Icon size={60} color="#1B4FD8" />
-            </div>
-            <h2 className="text-[22px] font-bold leading-[30px] text-[#111827]">{title}</h2>
-            <p className="mt-3 text-[15px] leading-6 text-[#6B7280]">{subtitle}</p>
+        <main className="flex flex-1 flex-col bg-card px-8 py-8">
+          {/* The wordmark stays on screen through all three promises, so the person always knows whose app
+              is making them (reference client). */}
+          <div className="anim-fade">
+            <ElchiLogo size={36} />
           </div>
-          <div className="space-y-3">
-            <PrimaryButton onClick={() => (onboardingStep < 2 ? setOnboardingStep(onboardingStep + 1) : go("role"))}>
-              {onboardingStep < 2 ? "Keyingisi" : "Boshlash"}
+          <div className="flex flex-1 flex-col items-center justify-center text-center">
+            {/* `key` restarts the entrance on every step, so the icon arrives with its promise. */}
+            <div
+              key={onboardingStep}
+              className="el-pop mb-10 flex h-32 w-32 items-center justify-center rounded-[36px]"
+              style={{ background: tint }}
+            >
+              <Icon size={60} color={tone} />
+            </div>
+            <div className="mb-8">
+              <StepDots step={onboardingStep} total={steps.length} />
+            </div>
+            <h2 key={`t${onboardingStep}`} className="el-fade text-[22px] font-bold leading-[30px] text-foreground">
+              {title}
+            </h2>
+            <p key={`s${onboardingStep}`} className="el-fade mt-3 text-[15px] leading-6 text-muted-foreground">
+              {subtitle}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <PrimaryButton onClick={() => (last ? go("role") : setOnboardingStep(onboardingStep + 1))}>
+              {last ? "Boshlash" : "Keyingisi"}
             </PrimaryButton>
-            {onboardingStep < 2 && <SecondaryButton onClick={() => go("role")}>O'tkazib yuborish</SecondaryButton>}
+            {!last && <GhostButton onClick={() => go("role")}>O&apos;tkazib yuborish</GhostButton>}
           </div>
         </main>
       );
     }
 
     if (screen === "role") {
+      const roles = [
+        ["client", Package, "Men mijozman", "Posilka yuborish yoki yo'lovchi sifatida borish"],
+        ["driver", Truck, "Men haydovchiman", "Yo'nalishingizga yuk va yo'lovchi olish"],
+      ] as const;
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA] px-5 py-8">
-          <h1 className="text-[26px] font-bold text-[#111827]">Elchiga xush kelibsiz</h1>
-          <p className="mt-2 text-[15px] text-[#6B7280]">Davom etish uchun rolingizni tanlang</p>
-          <div className="mt-8 space-y-3">
-            {[
-              ["client", User, "Men mijozman"],
-              ["driver", Truck, "Men haydovchiman"],
-            ].map(([role, Icon, label]) => (
+        <main className="flex flex-1 flex-col bg-background px-5 pb-8 pt-10">
+          <button
+            type="button"
+            onClick={() => go("onboarding")}
+            aria-label="Orqaga"
+            className="el-press mb-6 flex h-9 w-9 items-center justify-center self-start rounded-xl bg-secondary"
+          >
+            <ChevronLeft size={18} className="text-foreground" />
+          </button>
+          <div className="anim-fade">
+            <ElchiLogo size={36} />
+          </div>
+          <div className="anim-rise stagger-1 mb-8 mt-6">
+            <h2 className="font-display text-[22px] font-bold text-foreground">Qanday davom etamiz?</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">Rolingizni tanlang - keyin ham almashtira olasiz.</p>
+          </div>
+          {/* The reference client selects and moves on in one tap: the role is the question this screen asks,
+              so a second "continue" only adds a step to answer it twice. */}
+          <div className="flex flex-1 flex-col gap-3">
+            {roles.map(([role, Icon, label, description], index) => (
               <button
-                key={role as string}
-                onClick={() => setSelectedRole(role as MobileRole)}
+                key={role}
+                type="button"
+                onClick={() => {
+                  setSelectedRole(role as MobileRole);
+                  go("phone");
+                }}
+                style={{ boxShadow: "var(--shadow-card)" }}
                 className={cls(
-                  "flex w-full items-center gap-4 rounded-[16px] border bg-white p-4 text-left",
-                  selectedRole === role ? "border-[#1B4FD8]" : "border-[#E5E7EB]",
+                  "el-press-soft anim-rise flex items-center gap-4 rounded-2xl border border-border bg-card p-5 text-left hover:border-primary/40",
+                  index === 0 ? "stagger-2" : "stagger-3",
                 )}
               >
-                <Icon size={28} color="#1B4FD8" />
-                <span className="flex-1 text-[16px] font-semibold text-[#111827]">{label as string}</span>
-                {selectedRole === role && <Check size={18} color="#1B4FD8" />}
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+                  <Icon size={26} className="text-primary" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-bold text-foreground">{label}</span>
+                  <span className="mt-0.5 block text-sm text-muted-foreground">{description}</span>
+                </span>
+                <ChevronRight size={18} className="flex-none text-muted-foreground" />
               </button>
             ))}
           </div>
-          <div className="mt-auto">
-            <PrimaryButton onClick={() => go("phone")}>Davom etish</PrimaryButton>
-          </div>
+          <p className="mt-4 text-center text-xs text-muted-foreground">Elchi · UZ · {new Date().getFullYear()}</p>
         </main>
       );
     }
 
     if (screen === "phone") {
+      const phoneDigits = phone.replace(/\D/g, "").replace(/^998/, "");
+      const RoleIcon = selectedRole === "driver" ? Truck : Package;
+      const submit = () =>
+        run(async () => {
+          await auth.requestOtp({ phone, role: selectedRole });
+          go("otp");
+        }, "Kod yuborildi");
       return (
-        <main className="flex flex-1 flex-col bg-white">
-          <TopBar title="Telefon raqami" back={() => go("role")} />
-          <section className="flex flex-1 flex-col gap-5 px-5 py-6">
-            <div>
-              <h2 className="text-[24px] font-bold text-[#111827]">Telefon raqamingizni kiriting</h2>
-              <p className="mt-2 text-[15px] text-[#6B7280]">Tasdiqlash kodi SMS orqali yuboriladi</p>
-            </div>
-            <Field label="Telefon raqam" value={phone} onChange={setPhone} placeholder="+998 __ ___ __ __" />
-            <div className="mt-auto">
-              <PrimaryButton
-                disabled={busy}
+        <main className="flex flex-1 flex-col bg-background px-5 pb-8 pt-10">
+          <button
+            type="button"
+            onClick={() => go("role")}
+            aria-label="Orqaga"
+            className="el-press mb-6 flex h-9 w-9 items-center justify-center self-start rounded-xl bg-secondary"
+          >
+            <ChevronLeft size={18} className="text-foreground" />
+          </button>
+          {/* Which role is being signed in stays on screen, because it decides what the next screens are. */}
+          <div className="anim-fade mb-6 flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/15">
+              <RoleIcon size={15} className="text-primary" />
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                {selectedRole === "driver" ? "Haydovchi" : "Mijoz"}
+              </span>{" "}
+              sifatida
+            </span>
+          </div>
+          <div className="anim-rise stagger-1">
+            <h2 className="font-display mb-1.5 text-[22px] font-bold text-foreground">Telefon raqamingiz</h2>
+            <p className="mb-8 text-sm text-muted-foreground">Tasdiqlash kodi SMS orqali yuboriladi.</p>
+          </div>
+          <div className="anim-rise stagger-2 flex-1">
+            <PhoneField value={phoneDigits} onChange={(digits) => setPhone(`+998${digits}`)} onSubmit={submit} />
+          </div>
+          <PrimaryButton disabled={busy || phoneDigits.length < 9} onClick={submit} icon={Send} busy={busy}>
+            Kod olish
+          </PrimaryButton>
+        </main>
+      );
+    }
+
+    if (screen === "otp") {
+      const verify = () =>
+        run(async () => {
+          const user = await auth.loginWithOtp({ phone: normalizeUzPhone(phone), role: selectedRole, otp });
+          go(user.role === "driver" ? "driver-home" : "client-home");
+        });
+      return (
+        <main className="flex flex-1 flex-col bg-background px-6 pb-6 pt-6">
+          <button
+            type="button"
+            onClick={() => go("phone")}
+            aria-label="Orqaga"
+            className="el-press flex h-9 w-9 items-center justify-center self-start rounded-xl bg-secondary"
+          >
+            <ChevronLeft size={18} className="text-foreground" />
+          </button>
+
+          <div className="anim-rise mt-6 text-center">
+            <h2 className="font-display text-[22px] font-bold text-foreground">Kodni kiriting</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">Kod shu raqamga yuborildi</p>
+            <p className="mt-1 break-all font-mono text-sm font-semibold text-foreground">{phone}</p>
+          </div>
+
+          <div className="anim-rise stagger-2 mt-8">
+            <CodeField label={`${OTP_LENGTH} xonali kod`} value={otp} length={OTP_LENGTH} onChange={setOtp} onComplete={verify} />
+          </div>
+
+          {import.meta.env.DEV && (
+            <p className="mt-3 text-center text-[12px] text-muted-foreground">
+              Mahalliy test kodi: {import.meta.env.VITE_DEV_OTP || "12345"}
+            </p>
+          )}
+
+          <div className="mt-5 flex justify-center">
+            {resendIn > 0 ? (
+              <p className="font-mono text-xs text-muted-foreground">
+                Qayta yuborish 0:{resendIn.toString().padStart(2, "0")}
+              </p>
+            ) : (
+              <button
+                type="button"
                 onClick={() =>
                   run(async () => {
                     await auth.requestOtp({ phone, role: selectedRole });
-                    go("otp");
-                  }, "Kod yuborildi")
+                    setResendIn(RESEND_SECONDS);
+                  }, "Kod qayta yuborildi")
                 }
+                className="el-press flex items-center gap-1 text-xs font-medium text-primary"
               >
-                Kod olish
-              </PrimaryButton>
+                <RefreshCw size={11} />
+                Kodni qayta yuborish
+              </button>
+            )}
+          </div>
+
+          <div className="mt-7">
+            <PrimaryButton disabled={busy || otp.length !== OTP_LENGTH} onClick={verify} icon={ArrowRight} iconAfter busy={busy}>
+              Tasdiqlash
+            </PrimaryButton>
+          </div>
+        </main>
+      );
+    }
+
+
+    if (screen === "support") {
+      /**
+       * Help, ported from the reference client - with one deliberate difference.
+       *
+       * That client shows a "Call" button to a hard-coded number and the line "Har kuni 09:00 - 21:00". In the
+       * pilot there is no answered line: `ELCHI_SUPPORT_PHONE` is empty, so S13 replies `available: false`
+       * with no number and no hours (Q87). A call button that rings nowhere, and opening hours nobody keeps,
+       * are promises the operation cannot honour - so the number and the hours are shown only when the server
+       * says there are any, and otherwise this screen offers the thing that does work: a ticket someone reads.
+       */
+      const faqs = [
+        [
+          "Buyurtma qanday yarataman?",
+          "Olib ketish va yetkazish joyini xaritada belgilang, keyin o'z narxingiz bilan e'lon bering yoki haydovchilarning e'lonlariga narx taklif qiling.",
+        ],
+        [
+          "Narx qanday belgilanadi?",
+          "Narxni siz va haydovchi kelishasiz. Siz narx taklif qilasiz, haydovchi qarshi taklif berishi mumkin; qabul qilingan oxirgi taklif bron narxi bo'ladi. ELCHI narxni o'zi belgilamaydi.",
+        ],
+        [
+          "Buyurtmani bekor qilsam bo'ladimi?",
+          "Ha. Taklif qabul qilinmaguncha e'lonni istalgan vaqtda yopishingiz mumkin. Bron tuzilgandan keyin bekor qilish shartlari bron sahifasida ko'rsatiladi.",
+        ],
+        [
+          "Haydovchining telefoni qachon ochiladi?",
+          "Xizmat boshlanganda: yo'lovchi uchun siz mashinaga chiqqanda, pochta uchun yuk olib ketilganda. Undan oldin aloqa ilova ichidagi chat orqali bo'ladi.",
+        ],
+      ] as const;
+      const contacts = supportInfo;
+      return (
+        <main className="flex flex-1 flex-col bg-background">
+          <TopBar title="Yordam" back={() => go(auth.user?.role === "driver" ? "driver-profile" : "client-profile")} />
+          <section className="el-enter flex-1 space-y-5 overflow-y-auto px-4 py-4">
+            <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/10 p-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                <Headphones size={20} className="text-primary" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">Qo'llab-quvvatlash</p>
+                {contacts?.available && contacts.phone ? (
+                  <>
+                    {contacts.hours_text && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{contacts.hours_text}</p>
+                    )}
+                    <a
+                      href={`tel:${contacts.phone}`}
+                      className="el-press mt-3 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+                    >
+                      <Phone size={15} />
+                      {contacts.phone}
+                    </a>
+                  </>
+                ) : (
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    Hozircha telefon liniyasi yo'q. Murojaatingizni shu yerdan yozib qoldiring - operator ilova
+                    ichida javob beradi.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <SectionLabel>Murojaat yuborish</SectionLabel>
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <textarea
+                  value={supportMessage}
+                  onChange={(event) => setSupportMessage(event.target.value)}
+                  rows={4}
+                  placeholder="Nima bo'ldi? Bron raqamini ham yozsangiz tezroq topamiz."
+                  className="el-focus w-full resize-none rounded-[12px] border-[1.5px] border-border bg-card p-3 text-[15px] text-foreground outline-none placeholder:text-slate-400"
+                />
+                <div className="mt-3">
+                  <PrimaryButton
+                    disabled={busy || supportMessage.trim().length < 5}
+                    busy={busy}
+                    onClick={() =>
+                      run(async () => {
+                        await createSupportTicket(
+                          { kind: "support", message: supportMessage.trim(), booking_id: null },
+                          newIdempotencyKey(),
+                        );
+                        setSupportMessage("");
+                        await loadSupport();
+                      }, "Murojaat yuborildi")
+                    }
+                  >
+                    Yuborish
+                  </PrimaryButton>
+                </div>
+              </div>
+            </div>
+
+            {supportTickets.length > 0 && (
+              <div>
+                <SectionLabel>Murojaatlarim</SectionLabel>
+                <div className="space-y-2">
+                  {supportTickets.map((ticket) => (
+                    <div key={ticket.id} className="rounded-2xl border border-border bg-card p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <StatusBadge status={ticket.status} />
+                        <span className="font-mono text-[11px] text-muted-foreground">{shortDate(ticket.created_at)}</span>
+                      </div>
+                      {ticket.message && (
+                        <p className="mt-2 break-words text-[13px] leading-5 text-foreground">{ticket.message}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <SectionLabel>Savollar</SectionLabel>
+              <div className="flex flex-col gap-2">
+                {faqs.map(([question, answer]) => (
+                  <FaqItem key={question} question={question} answer={answer} />
+                ))}
+              </div>
             </div>
           </section>
         </main>
       );
     }
 
-    if (screen === "otp") {
+    if (screen === "settings") {
+      /**
+       * Settings, ported from the reference client's panel.
+       *
+       * Its notification toggles are not here. That panel keeps them in component state, so they look like
+       * preferences and are forgotten on the next launch; and there is no push provider yet (Q82), so the only
+       * channel is the in-app inbox, which cannot be switched off without silencing the product. A switch that
+       * remembers nothing and controls nothing is worse than no switch.
+       *
+       * The language picker is not here either, for the same kind of reason: the vocabulary layer is
+       * translated but the screen copy is not, so choosing Russian would produce a half-Russian app.
+       */
       return (
-        <main className="flex flex-1 flex-col bg-white">
-          <TopBar title="Tasdiqlash kodi" back={() => go("phone")} />
-          <section className="flex flex-1 flex-col gap-5 px-5 py-6">
-            <p className="text-[15px] leading-6 text-[#6B7280]">Raqamingizga yuborilgan 5 xonali kodni kiriting</p>
-            <Field label="5 xonali kod" value={otp} onChange={setOtp} placeholder="12345" />
-            <p className="text-[13px] text-[#6B7280]">Mahalliy test kodi odatda: 12345</p>
-            <div className="mt-auto space-y-3">
-              <PrimaryButton
-                disabled={busy || otp.trim().length < 6}
-                onClick={() =>
-                  run(async () => {
-                    const user = await auth.loginWithOtp({ phone: normalizeUzPhone(phone), role: selectedRole, otp });
-                    go(user.role === "driver" ? "driver-home" : "client-home");
-                  })
-                }
-              >
-                Tasdiqlash
-              </PrimaryButton>
-              <SecondaryButton onClick={() => run(() => auth.requestOtp({ phone, role: selectedRole }), "Kod qayta yuborildi")}>
-                Kodni qayta yuborish
-              </SecondaryButton>
+        <main className="flex flex-1 flex-col bg-background">
+          <TopBar title="Sozlamalar" back={() => go(auth.user?.role === "driver" ? "driver-profile" : "client-profile")} />
+          <section className="el-enter flex-1 space-y-5 overflow-y-auto px-4 py-4 pb-8">
+            <div>
+              <SectionLabel>Ko'rinish</SectionLabel>
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <AppearancePicker />
+              </div>
             </div>
+
+            <div>
+              <SectionLabel>Akkaunt</SectionLabel>
+              <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+                <button
+                  type="button"
+                  onClick={() => go("support")}
+                  className="el-press flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                >
+                  <IconTile icon={Headphones} size={34} />
+                  <span className="flex-1 text-sm font-medium text-foreground">Yordam</span>
+                  <ChevronRight size={16} className="text-muted-foreground" />
+                </button>
+                <a
+                  href="/privacy"
+                  className="el-press flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                >
+                  <IconTile icon={Shield} size={34} />
+                  <span className="flex-1 text-sm font-medium text-foreground">Maxfiylik siyosati</span>
+                  <ChevronRight size={16} className="text-muted-foreground" />
+                </a>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
+              <button
+                type="button"
+                onClick={() => run(async () => { await auth.logout(); go("role"); })}
+                className="el-press flex w-full items-center gap-3 px-4 py-3.5 text-left"
+              >
+                <IconTile icon={LogOut} size={34} tone="danger" />
+                <span className="flex-1 text-sm font-medium text-destructive">Chiqish</span>
+              </button>
+            </div>
+
+            <p className="text-center text-[10px] text-muted-foreground">Elchi · {APP_VERSION}</p>
           </section>
         </main>
       );
@@ -1339,103 +2890,312 @@ export function ConnectedApp() {
 
     if (screen === "client-home") {
       return (
-        <main className="relative flex flex-1 flex-col overflow-hidden bg-[#E5E7EB]">
+        <main className="relative flex flex-1 flex-col overflow-hidden bg-border">
           <ClientMapCanvas
             pickupLat={orderForm.pickup_lat}
             pickupLng={orderForm.pickup_lng}
             dropoffLat={orderForm.dropoff_lat}
             dropoffLng={orderForm.dropoff_lng}
+            routePolyline={preview?.route_polyline}
           />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 pt-4">
+            <SidebarButton className="pointer-events-auto" onClick={() => setSidebarOpen(true)} />
             <button
               type="button"
-              onClick={() => go("client-orders")}
-              className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-lg"
-              aria-label="Buyurtmalar"
-            >
-              <Menu size={20} />
-            </button>
-            <button
-              type="button"
-              className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#1B4FD8] shadow-lg"
+              onClick={() => void useCurrentLocation()}
+              disabled={locating}
+              className="el-press pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-card text-primary shadow-lg disabled:text-slate-400"
               aria-label="Joriy joylashuv"
+              aria-busy={locating}
             >
               <LocateFixed size={20} />
             </button>
           </div>
-          <section className="absolute inset-x-0 bottom-16 z-10 rounded-t-[26px] bg-white px-5 pb-4 pt-4 shadow-[0_-10px_30px_rgba(15,23,42,0.18)]">
-            <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-[#D1D5DB]" />
-            <h1 className="text-[22px] font-bold text-[#111827]">Yuk yuborish</h1>
-            <p className="mt-1 text-[13px] leading-5 text-[#6B7280]">Shahar va aniq manzilni tanlang, haydovchilardan taklif oling.</p>
-            <div className="mt-4 overflow-hidden rounded-[18px] border border-[#E5E7EB] bg-white">
+          <section className="absolute inset-x-0 bottom-0 z-10 rounded-t-[26px] bg-card px-5 pb-5 pt-4 shadow-[0_-10px_30px_rgba(15,23,42,0.18)]">
+            <div className="mx-auto mb-4 h-1.5 w-20 rounded-full bg-slate-300" />
+            {/* Q89: the passenger service is built but stays behind its flag (K7). With the flag off there is
+                no toggle at all - not a disabled one that invites a support call - and then the heading has to
+                name the mode, because nothing else does. */}
+            {flags?.passenger_enabled ? (
+              <div className="mb-4">
+                <SegmentedControl
+                  value={serviceMode}
+                  options={[["passenger", "Taksi"], ["parcel", "Pochta"]] as const}
+                  onChange={setServiceMode}
+                />
+              </div>
+            ) : (
+              <h1 className="mb-4 text-[22px] font-bold text-foreground">Pochta</h1>
+            )}
+            <div className="overflow-hidden rounded-[18px] border border-border bg-card">
               <LocationPointRow
-                label="Olib ketish joyi"
+                label="Qayerdan?"
+                title={pickupEnd.region?.name_uz}
                 address={orderForm.pickup_address}
                 hasPoint={hasLocation(orderForm.pickup_lat, orderForm.pickup_lng)}
                 onClick={() => openLocationSelector("pickup")}
-                icon={Navigation}
+                node="origin"
               />
-              <div className="ml-[76px] h-px bg-[#E5E7EB]" />
+              <DirectionLink />
               <LocationPointRow
                 label="Qayerga?"
+                title={dropoffEnd.region?.name_uz}
                 address={orderForm.dropoff_address}
                 hasPoint={hasLocation(orderForm.dropoff_lat, orderForm.dropoff_lng)}
                 onClick={() => openLocationSelector("dropoff")}
-                icon={MapPin}
+                node="destination"
               />
             </div>
-            {Boolean(effectiveFromCityId && effectiveToCityId) && (
-              <div className="mt-3 rounded-[14px] bg-[#EEF2FF] px-4 py-3">
-                <p className="text-[12px] font-semibold text-[#1B4FD8]">Tavsiya etilgan narx</p>
-                <p className="mt-0.5 text-[18px] font-bold text-[#111827]">
-                  {suggestedPrice ? formatUzs(suggestedPrice) : "Narx haydovchi bilan kelishiladi"}
-                </p>
-                <p className="mt-1 text-[12px] leading-5 text-[#6B7280]">
-                  Haydovchilar o'z taklifini yuboradi.
+            {previewBusy && (
+              <div className="mt-3 rounded-[14px] bg-muted px-4 py-3">
+                <p className="text-[13px] text-muted-foreground">Yo'nalish tekshirilmoqda...</p>
+              </div>
+            )}
+            {!previewBusy && previewError && (
+              <div className="mt-3 rounded-[14px] bg-destructive/10 px-4 py-3">
+                <p className="text-[13px] font-semibold leading-5 text-destructive">{previewError}</p>
+                <p className="mt-1 text-[12px] leading-5 text-destructive">
+                  Nuqtalardan birini ELCHI yo'nalishiga yaqinroq joyga ko'chiring.
                 </p>
               </div>
             )}
-            <div className="mt-3 grid grid-cols-3 gap-2.5">
-              {[
-                ["Faol", orders.filter((o) => !["confirmed", "cancelled"].includes(o.status)).length],
-                ["Takliflar", orders.reduce((sum, o) => sum + (o.bids_count ?? 0), 0)],
-                ["Yakunlangan", orders.filter((o) => o.status === "confirmed").length],
-              ].map(([label, value]) => (
-                <div key={label as string} className="rounded-[12px] border border-[#E5E7EB] bg-[#F9FAFB] p-2.5 text-center">
-                  <p className="text-[18px] font-bold text-[#111827]">{value}</p>
-                  <p className="text-[11px] text-[#6B7280]">{label}</p>
-                </div>
-              ))}
-            </div>
+            {!previewBusy && preview && (
+              /* The numbers are the **leg between the two marked places**, not the corridor. A corridor can
+                 be 2 316 km long while this trip is 247 km, and putting the corridor's length above a price
+                 field is simply a wrong number in front of a decision. The corridor's own name and the
+                 districts it passes are context, so they sit underneath in muted type. */
+              <div className="mt-3 rounded-[14px] bg-accent px-4 py-3">
+                <p className="text-[20px] font-bold leading-7 text-foreground">
+                  {formatKm(preview.leg_distance_m)} · {formatDuration(preview.leg_duration_s)}
+                </p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  Taxminiy yo'l vaqti · {preview.corridor_name}
+                </p>
+                {offRouteNote && <p className="mt-1.5 text-[12px] leading-5 text-warning">{offRouteNote}</p>}
+              </div>
+            )}
+            {!previewBusy && !preview && !previewError && directionReady && (
+              <div className="mt-3 rounded-[14px] bg-accent px-4 py-3">
+                <p className="text-[12px] font-semibold text-primary">Yo'nalishdagi tumanlar</p>
+                <p className="mt-0.5 text-[15px] font-semibold text-foreground">
+                  {routeDistricts.filter((item) => item.on_confirmed_route).map((item) => item.district.name_uz).join(" - ") || "Yo'nalish yuklanmoqda..."}
+                </p>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                  Shu tumanlardagi haydovchilar ham e'loningizni ko'radi.
+                </p>
+              </div>
+            )}
+            {/* No counts here. This sheet asks one question - where to and where from - and a tally of
+                listings, proposals and finished orders answers a different one. It lives on "Buyurtmalar",
+                which is where somebody goes when that is what they want to know. */}
             <div className="mt-4">
-              <PrimaryButton
-                disabled={!effectiveFromCityId || !effectiveToCityId || !routeDistrictsReady || !orderForm.pickup_address || !orderForm.dropoff_address}
-                onClick={() => {
-                  setOrderForm((current) => ({
-                    ...current,
-                    from_city_id: current.from_city_id || effectiveFromCityId,
-                    to_city_id: current.to_city_id || effectiveToCityId,
-                  }));
-                  go("client-route-summary");
-                }}
-              >
+              {/* The gate has to follow the chosen mode: it used to read `parcel_enabled` even with Taksi
+                  selected, so a closed parcel service would have disabled the passenger flow too - and the
+                  sentence under it would have named the wrong service. */}
+              <PrimaryButton disabled={!directionReady || serviceClosed} onClick={() => go("client-route-summary")}>
                 Yo'nalishni ko'rish
               </PrimaryButton>
-              {orderForm.pickup_address && orderForm.dropoff_address && (!effectiveFromCityId || !effectiveToCityId) && (
-                <p className="mt-2 text-center text-[12px] leading-5 text-[#DC2626]">
-                  Yo'nalishni davom ettirish uchun shaharni tanlang. Manzil qatorini bosib, ro'yxatdan shaharni tanlashingiz mumkin.
+              {serviceClosed && (
+                <p className="mt-2 text-center text-[12px] leading-5 text-destructive">
+                  {serviceMode === "passenger"
+                    ? "Yo'lovchi xizmati bu hududda hali ochilmagan."
+                    : "Pochta xizmati bu hududda hali ochilmagan."}
                 </p>
               )}
-              {orderForm.pickup_address && orderForm.dropoff_address && !routeDistrictsReady && (
-                <p className="mt-2 text-center text-[12px] leading-5 text-[#DC2626]">
-                  Yo'nalishni davom ettirish uchun tuman tanlang.
+              {/* Q92: ELCHI is a market in both directions. The button above publishes this client's own
+                  request with their own price; answering a driver who published theirs is the other way in,
+                  and it now has its own place in the drawer rather than a second button under this one. */}
+              {pickupEnd.stop && dropoffEnd.stop && pickupEnd.stop.id === dropoffEnd.stop.id && (
+                <p className="mt-2 text-center text-[12px] leading-5 text-destructive">
+                  Olib ketish va yetkazish bekati bir xil bo'lishi mumkin emas.
+                </p>
+              )}
+              {pickupEnd.stop && dropoffEnd.stop && !sameCorridor && (
+                <p className="mt-2 text-center text-[12px] leading-5 text-destructive">
+                  Bu ikki bekat orasida tasdiqlangan yo'nalish yo'q.
                 </p>
               )}
             </div>
           </section>
-          <div className="absolute inset-x-0 bottom-0 z-20">
-            <BottomNav role="client" active={screen} go={go} />
-          </div>
+        </main>
+      );
+    }
+
+    if (screen === "client-offers") {
+      return (
+        <main className="flex flex-1 flex-col bg-background">
+          <TopBar title="Haydovchi e'lonlari" back={() => go("client-home")} />
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <p className="text-[13px] leading-5 text-muted-foreground">
+              {serviceMode === "passenger"
+                ? "Shu yo'nalishda safar e'lon qilgan haydovchilar. Narxi to'g'ri kelmasa, o'z narxingizni taklif qiling."
+                : "Shu yo'nalishda yuk oladigan haydovchilar. Narxi to'g'ri kelmasa, o'z narxingizni taklif qiling."}
+            </p>
+            {matchScope === "confirmed_stops" && (offerFeed.length > 0) && (
+              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
+                {confirmedStopsNote()}
+              </p>
+            )}
+            {busy && !offerFeed.length ? <ListSkeleton /> : offerFeed.length ? offerFeed.map((item) => (
+              <div key={item.listing.id} className="rounded-[16px] border border-border bg-card p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                    <MapPin size={14} color="var(--primary)" />
+                    {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+                  </span>
+                  <span className="rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-primary">
+                    {matchLabel(item.match.match_type)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+                  <span>{shortDate(item.listing.departure_window_start)}</span>
+                  <span className="font-semibold text-foreground">
+                    {formatUzs(item.listing.unit_price_minor / 100)}
+                    {item.listing.price_basis === "per_seat" ? " / o'rin" : ""}
+                  </span>
+                </div>
+                {/* Section 8.2 / AC36: no invented 4.5 for a driver nobody has rated - the label is the server's. */}
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  Haydovchi narxi · {item.reputation.completed_bookings} ta bajarilgan safar
+                  {item.reputation.average_rating !== null ? ` · ${item.reputation.average_rating}` : " · hali baholanmagan"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedOffer(item);
+                    setOfferBid({
+                      ...offerBid,
+                      price: String(Math.round(item.listing.unit_price_minor / 100)),
+                      seats: 1,
+                    });
+                    go("client-offer-bid");
+                  }}
+                  className="el-press mt-3 h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
+                >
+                  Narxingizni taklif qiling
+                </button>
+              </div>
+            )) : (
+              <EmptyState
+                icon={Truck}
+                title="Bu yo'nalishda e'lon yo'q"
+                subtitle="O'zingiz e'lon bering - haydovchilar sizga narx taklif qiladi."
+                action="O'zim e'lon beraman"
+                onAction={() => go("client-home")}
+              />
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "client-offer-bid" && selectedOffer) {
+      const offer = selectedOffer.listing;
+      const perSeat = offer.price_basis === "per_seat";
+      const seats = perSeat ? Math.max(1, offerBid.seats) : 1;
+      const priceSoum = Math.round(Number(offerBid.price));
+      const parcelNeeded = offer.service_type === "parcel";
+      const parcelReady = !parcelNeeded || Boolean(
+        Number(offerBid.weightKg) > 0 && Number(offerBid.lengthCm) > 0 && Number(offerBid.widthCm) > 0
+        && Number(offerBid.heightCm) > 0 && offerBid.receiverName.trim() && offerBid.receiverPhone.trim(),
+      );
+      return (
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title="Narxingizni taklif qiling" back={() => go("client-offers")} />
+          <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+            <div className="rounded-[14px] bg-background p-4">
+              <p className="font-semibold text-foreground">
+                {endLabel(offer.origin_stop, offer.origin_point)} {"->"} {endLabel(offer.destination_stop, offer.destination_point)}
+              </p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Haydovchi narxi: {formatUzs(offer.unit_price_minor / 100)}{perSeat ? " / o'rin" : ""}
+              </p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Chiqish: {shortDate(offer.departure_window_start)} - {shortDate(offer.departure_window_end)}
+              </p>
+            </div>
+
+            {perSeat && (
+              <Field
+                label="Nechta o'rin"
+                type="number"
+                value={String(offerBid.seats)}
+                onChange={(value) => setOfferBid({ ...offerBid, seats: Math.max(1, Math.min(8, Number(value) || 1)) })}
+              />
+            )}
+            <Field
+              label={perSeat ? "Bir o'rin uchun narxingiz (so'm)" : "Narxingiz (so'm)"}
+              type="number"
+              value={offerBid.price}
+              onChange={(value) => setOfferBid({ ...offerBid, price: value })}
+              placeholder="Masalan: 180000"
+            />
+            {perSeat && priceSoum > 0 && (
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                {seats} o'rin uchun jami: {formatUzs(priceSoum * seats)}
+              </p>
+            )}
+
+            {parcelNeeded && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Og'irlik (kg)" type="number" value={offerBid.weightKg} onChange={(v) => setOfferBid({ ...offerBid, weightKg: v })} />
+                  <Field label="Uzunlik (sm)" type="number" value={offerBid.lengthCm} onChange={(v) => setOfferBid({ ...offerBid, lengthCm: v })} />
+                  <Field label="Eni (sm)" type="number" value={offerBid.widthCm} onChange={(v) => setOfferBid({ ...offerBid, widthCm: v })} />
+                  <Field label="Balandligi (sm)" type="number" value={offerBid.heightCm} onChange={(v) => setOfferBid({ ...offerBid, heightCm: v })} />
+                </div>
+                {/* W21-4 (Q79): a trip-offer parcel needs a receiver before pickup, and only the sender can give
+                    one - asked for here, where it can still be fixed, not at the driver's `pick_up`. */}
+                <Field label="Qabul qiluvchi ismi" value={offerBid.receiverName} onChange={(v) => setOfferBid({ ...offerBid, receiverName: v })} />
+                <Field label="Qabul qiluvchi telefoni" value={offerBid.receiverPhone} onChange={(v) => setOfferBid({ ...offerBid, receiverPhone: v })} placeholder="+998..." />
+              </>
+            )}
+
+            {/* Section 5.3: an offer reserves nothing. Saying so here is what stops "men taklif berdim" from
+                reading as "joy band qilindi". */}
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Taklif o'rin band qilmaydi - haydovchi qabul qilganda yoki siz uning qarshi taklifini qabul
+              qilganingizda bron yaratiladi.
+            </p>
+
+            <div className="mt-auto">
+              <PrimaryButton
+                disabled={priceSoum <= 0 || !parcelReady || !offer.origin_stop || !offer.destination_stop || busy}
+                onClick={() => void run(async () => {
+                  if (!offer.origin_stop || !offer.destination_stop) return;
+                  await submitProposal(
+                    offer.id,
+                    {
+                      // The trip is the offer's own; the window is the one it advertises, which the server
+                      // checks against that trip's real ETA at the pickup stop.
+                      trip_id: offer.trip_id ?? null,
+                      pickup_stop_id: offer.origin_stop.id,
+                      dropoff_stop_id: offer.destination_stop.id,
+                      pickup_window_start: offer.departure_window_start,
+                      pickup_window_end: offer.departure_window_end,
+                      price_basis: offer.price_basis,
+                      quantity: seats,
+                      unit_price_minor: priceSoum * 100,
+                      parcel: parcelNeeded
+                        ? {
+                            weight_g: Math.round(Number(offerBid.weightKg) * 1000),
+                            length_cm: Math.round(Number(offerBid.lengthCm)),
+                            width_cm: Math.round(Number(offerBid.widthCm)),
+                            height_cm: Math.round(Number(offerBid.heightCm)),
+                            receiver: { name: offerBid.receiverName.trim(), phone: offerBid.receiverPhone.trim() },
+                          }
+                        : null,
+                    },
+                    newIdempotencyKey(),
+                  );
+                  await loadOfferFeed();
+                  go("client-proposals");
+                }, "Taklifingiz yuborildi")}
+              >
+                Taklif yuborish
+              </PrimaryButton>
+            </div>
+          </section>
         </main>
       );
     }
@@ -1443,143 +3203,169 @@ export function ConnectedApp() {
     if (screen === "client-location-selector") {
       const selectorTitle = locationSelectorMode === "pickup" ? "Qayerdan?" : "Qayerga?";
       return (
-        <CitySelector
-          mode={locationSelectorMode}
+        <RegionSelector
           title={selectorTitle}
-          onSelectCity={selectCityForLocation}
-          onBack={() => go("client-home")}
+          onSelectRegion={selectRegionForLocation}
+          onBack={() => go(directionOwner === "driver" ? "driver-feed" : "client-home")}
         />
       );
     }
 
-    if (screen === "client-district-selector") {
-      if (!districtMode.startsWith("driver") && districtCity) {
-        return (
-          <DistrictSelector
-            mode={districtMode === "client-pickup" ? "pickup" : "dropoff"}
-            city={districtCity}
-            onSelectDistrict={selectDistrict}
-            onBack={() => go("client-location-selector")}
-          />
-        );
-      }
+    if (screen === "client-district-selector" && activeEnd.region) {
       return (
-        <main className="flex flex-1 flex-col bg-white">
-          <TopBar title="Tumanni tanlang" back={() => {
-            if (districtMode.startsWith("driver")) go("driver-add-route");
-            else go("client-location-selector");
-          }} />
-          <section className="flex min-h-0 flex-1 flex-col">
-            <div className="border-b border-[#E5E7EB] px-5 py-4">
-              <p className="mb-2 text-[13px] font-semibold text-[#6B7280]">{districtCity?.name_uz}</p>
-              <label className="flex h-12 items-center gap-3 rounded-[16px] border-2 border-[#38BDF8] bg-white px-4">
-                <Search size={19} color="#6B7280" />
-                <input
-                  value={districtQuery}
-                  onChange={(event) => setDistrictQuery(event.target.value)}
-                  placeholder="Tuman qidirish"
-                  className="min-w-0 flex-1 bg-transparent text-[15px] text-[#111827] outline-none"
-                />
-              </label>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {filteredDistricts.length ? (
-                filteredDistricts.map((district) => (
-                  <DistrictSelectorRow key={district.id} district={district} onClick={() => selectDistrict(district)} />
-                ))
-              ) : (
-                <EmptyState icon={MapPin} title="Tumanlar topilmadi" subtitle="Boshqa nom bilan qidirib ko'ring." />
-              )}
-            </div>
-          </section>
-        </main>
+        <GeoDistrictSelector
+          region={activeEnd.region}
+          onSelectDistrict={selectGeoDistrict}
+          onBack={() => go("client-location-selector")}
+        />
+      );
+    }
+
+    if (screen === "client-point-picker") {
+      const title = locationSelectorMode === "pickup" ? "Qayerdan?" : "Qayerga?";
+      return (
+        <MapPointPicker
+          title={title}
+          initial={activeEnd.point}
+          districtCenter={mapCentreFor(activeEnd)}
+          districtName={[activeEnd.district?.name_uz, activeEnd.region?.name_uz].filter(Boolean).join(", ")}
+          searchDistrict={activeEnd.district?.name_uz ?? activeEnd.region?.name_uz ?? null}
+          maxOffsetM={preview?.max_point_offset_m ?? null}
+          routeError={previewError}
+          busy={previewBusy}
+          stops={stopOptions}
+          onSelectStop={(option) => selectGeoStop(option.stop, option.corridorId)}
+          onConfirm={(point) => void markPoint(point)}
+          onBack={() => go(activeEnd.region?.requires_district ? "client-district-selector" : "client-location-selector")}
+        />
       );
     }
 
     if (screen === "client-route-summary") {
       return (
-        <main className="flex flex-1 flex-col bg-white">
-          <TopBar title={editingOrderId ? "Buyurtmani tahrirlash" : "Yo'nalish"} back={() => (editingOrderId ? go("client-order-detail") : go("client-home"))} />
-          <section className="flex flex-1 flex-col px-5 py-5">
-            <div className="overflow-hidden rounded-[18px] border border-[#E5E7EB] bg-white">
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title="Yo'nalish" back={() => go("client-home")} />
+          <section className="el-enter min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            <div className="overflow-hidden rounded-[18px] border border-border bg-card">
+              {/* A Q88 end is a marked place, so its name is the reverse-geocoded address - the stop name is
+                  only there for the minority of ends chosen from the verified catalogue. Reading the stop
+                  alone is why every marked place used to render as "Manzil kiritilmagan". */}
               <RouteSummaryRow
                 label="Olib ketish"
-                address={orderForm.pickup_address}
-                city={fromCity ? `${fromCity.name_uz}${fromCity.region ? `, ${fromCity.region}` : ""}` : undefined}
-                district={fromDistrict?.name_uz}
+                address={pickupEnd.stop?.name_uz ?? pickupEnd.point?.address ?? ""}
+                fallback={pickupEnd.point ? coordinateLabel(pickupEnd.point.lat, pickupEnd.point.lng) : undefined}
+                city={pickupEnd.region?.name_uz}
+                district={pickupEnd.district?.name_uz}
                 onEdit={() => openLocationSelector("pickup")}
                 icon={Navigation}
               />
               <RouteSummaryRow
                 label="Yetkazish"
-                address={orderForm.dropoff_address}
-                city={toCity ? `${toCity.name_uz}${toCity.region ? `, ${toCity.region}` : ""}` : undefined}
-                district={toDistrict?.name_uz}
+                address={dropoffEnd.stop?.name_uz ?? dropoffEnd.point?.address ?? ""}
+                fallback={dropoffEnd.point ? coordinateLabel(dropoffEnd.point.lat, dropoffEnd.point.lng) : undefined}
+                city={dropoffEnd.region?.name_uz}
+                district={dropoffEnd.district?.name_uz}
                 onEdit={() => openLocationSelector("dropoff")}
                 icon={MapPin}
               />
             </div>
-            <div className="mt-4 rounded-[16px] bg-[#F9FAFB] p-4">
-              <p className="text-[13px] font-semibold text-[#374151]">Xarita holati</p>
-              <p className="mt-1 text-[13px] text-[#6B7280]">
-                Olib ketish: {formatMapSelectionStatus(orderForm.pickup_lat, orderForm.pickup_lng)}
-              </p>
-              <p className="mt-1 text-[13px] text-[#6B7280]">
-                Yetkazish: {formatMapSelectionStatus(orderForm.dropoff_lat, orderForm.dropoff_lng)}
-              </p>
-            </div>
-            {Boolean(orderForm.from_city_id && orderForm.to_city_id) && (
-              <div className="mt-4 rounded-[16px] bg-[#EEF2FF] p-4">
-                <p className="text-[13px] font-semibold text-[#1B4FD8]">Tavsiya etilgan narx</p>
-                <p className="mt-1 text-[20px] font-bold text-[#111827]">
-                  {suggestedPrice ? formatUzs(suggestedPrice) : "Narx haydovchi bilan kelishiladi"}
-                </p>
-                <p className="mt-1 text-[13px] leading-5 text-[#6B7280]">
-                  {suggestedPrice ? "Bu tavsiya narx. " : ""}Haydovchilar o'z taklifini yuboradi.
+            {preview && (
+              <div className="mt-4 flex items-baseline justify-between gap-3 rounded-[16px] bg-accent px-4 py-3">
+                <div>
+                  <p className="text-[12px] font-semibold text-primary">Taxminiy yo'l</p>
+                  <p className="mt-0.5 text-[18px] font-bold text-foreground">
+                    {formatKm(preview.leg_distance_m)} · {formatDuration(preview.leg_duration_s)}
+                  </p>
+                </div>
+                <p className="shrink-0 text-right text-[11px] leading-4 text-muted-foreground">
+                  Haydovchi jo'nash
+                  <br />
+                  vaqtini o'zi taklif qiladi
                 </p>
               </div>
             )}
-            <div className="mt-auto">
-              <PrimaryButton disabled={!orderForm.pickup_address || !orderForm.dropoff_address} onClick={() => go("client-order-address")}>
-                Saqlash
-              </PrimaryButton>
-              {editingOrderId && (
-                <button type="button" onClick={() => { resetOrderDraft(); go("client-order-detail"); }} className="mt-3 h-10 w-full text-[14px] font-semibold text-[#6B7280]">
-                  Tahrirlashni bekor qilish
-                </button>
+            {offRouteNote && (
+              <p className="mt-2 rounded-[12px] bg-warning/14 px-4 py-3 text-[12px] leading-5 text-warning">
+                {offRouteNote}
+              </p>
+            )}
+            <div className="mt-4 overflow-hidden rounded-[16px] border border-border bg-slate-50">
+              <RouteMap
+                geometryPolyline={routeVersion?.geometry_polyline}
+                stops={corridorStops}
+                routeStops={routeVersion?.stops ?? []}
+                highlight={{ originStopId: pickupEnd.stop?.id, destinationStopId: dropoffEnd.stop?.id }}
+                note="Tasdiqlangan yo'nalish va uning bekatlari."
+              />
+            </div>
+            {routeDistricts.length > 0 && (
+              <div className="mt-4 rounded-[16px] bg-accent p-4">
+                <p className="text-[13px] font-semibold text-primary">Yo'nalishdagi tumanlar</p>
+                <p className="mt-1 text-[15px] font-semibold leading-6 text-foreground">
+                  {routeDistricts.filter((item) => item.on_confirmed_route).map((item) => item.district.name_uz).join(" - ")}
+                </p>
+                <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
+                  Shu tumanlardagi haydovchilar ham e'loningizni tavsiya sifatida ko'radi.
+                </p>
+              </div>
+            )}
+            <div className="mt-4 space-y-4">
+              <Field
+                label="Jo'nash oynasi boshlanishi"
+                type="datetime-local"
+                min={localNowInputValue()}
+                value={listingForm.windowStart}
+                onChange={(v) => setListingForm({ ...listingForm, windowStart: v })}
+              />
+              <Field
+                label="Jo'nash oynasi tugashi"
+                type="datetime-local"
+                min={listingForm.windowStart || localNowInputValue()}
+                hint="Haydovchilar shu oraliqda jo'nashni taklif qiladi."
+                value={listingForm.windowEnd}
+                onChange={(v) => setListingForm({ ...listingForm, windowEnd: v })}
+              />
+              {serviceMode === "passenger" && (
+                <SeatPicker selected={selectedSeats} onChange={setSelectedSeats} />
+              )}
+              <Field
+                label={serviceMode === "passenger" ? "Bir kishi uchun narx (so'm)" : "Narx (so'm)"}
+                type="number"
+                placeholder="200000"
+                value={listingForm.unitPrice}
+                onChange={(v) => setListingForm({ ...listingForm, unitPrice: v })}
+              />
+              {listingUnitMinor > 0 && (
+                <div className="rounded-[14px] bg-accent px-4 py-3">
+                  <p className="text-[12px] font-semibold text-primary">Jami</p>
+                  <p className="mt-0.5 text-[18px] font-bold text-foreground">
+                    {formatUzs((listingUnitMinor * (serviceMode === "passenger" ? seatCount : 1)) / 100)}
+                  </p>
+                  {serviceMode === "passenger" && seatCount > 1 && (
+                    <p className="mt-0.5 text-[12px] text-muted-foreground">
+                      {seatCount} × {formatUzs(listingUnitMinor / 100)}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">Haydovchilar o'z taklifini yuboradi.</p>
+                </div>
               )}
             </div>
-          </section>
-        </main>
-      );
-    }
-
-    if (screen === "client-order-route") {
-      return (
-        <main className="flex flex-1 flex-col bg-white">
-          <TopBar title="Yo'nalishni tanlang" back={() => go("client-home")} />
-          <section className="flex flex-1 flex-col gap-4 px-5 py-5">
-            <CitySelect cities={cities} label="Qayerdan" value={orderForm.from_city_id} onChange={(v) => setOrderForm({ ...orderForm, from_city_id: v })} />
-            <CitySelect cities={cities} label="Qayerga" value={orderForm.to_city_id} onChange={(v) => setOrderForm({ ...orderForm, to_city_id: v })} />
-            <div className="rounded-[16px] bg-[#EEF2FF] p-4">
-              <p className="text-[13px] font-semibold text-[#1B4FD8]">Tavsiya etilgan narx</p>
-              <p className="mt-1 text-[22px] font-bold text-[#111827]">{formatUzs(suggestedPrice)}</p>
-            </div>
-            <div className="rounded-[16px] border border-[#DBEAFE] bg-white p-4">
-              <div className="flex items-start gap-3">
-                <MapPin className="mt-0.5 shrink-0" size={20} color="#1B4FD8" />
-                <div>
-                  <p className="text-[15px] font-semibold text-[#111827]">Xarita keyingi bosqichda</p>
-                  <p className="mt-1 text-[13px] leading-5 text-[#6B7280]">
-                    Shaharlarni tanlagandan keyin olib ketish va yetkazish joyini xaritadan belgilaysiz.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-auto">
-              <PrimaryButton disabled={!orderForm.from_city_id || !orderForm.to_city_id} onClick={() => go("client-order-address")}>
-                Davom etish
+            <div className="mt-6">
+              <PrimaryButton
+                disabled={saveBlockers.length > 0}
+                onClick={() => go(serviceMode === "passenger" ? "client-order-review" : "client-order-address")}
+              >
+                Saqlash
               </PrimaryButton>
+              {saveBlockers.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {saveBlockers.map((problem) => (
+                    <li key={problem} className="text-[12px] leading-5 text-destructive">
+                      {problem}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </section>
         </main>
@@ -1588,21 +3374,72 @@ export function ConnectedApp() {
 
     if (screen === "client-order-address") {
       return (
-        <main className="flex flex-1 flex-col bg-white">
+        <main className="flex flex-1 flex-col bg-card">
           <TopBar title="Aloqa ma'lumotlari" back={() => go("client-route-summary")} />
-          <section className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-            <div className="rounded-[18px] bg-[#F9FAFB] p-4">
-              <p className="text-[13px] font-semibold text-[#6B7280]">Yo'nalish</p>
-              <p className="mt-1 text-[15px] font-semibold text-[#111827]">{formatShortAddress(orderForm.pickup_address)}</p>
-              <p className="mt-1 text-[15px] font-semibold text-[#111827]">{formatShortAddress(orderForm.dropoff_address)}</p>
+          <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
+            <div className="rounded-[18px] bg-slate-50 p-4">
+              <p className="text-[13px] font-semibold text-muted-foreground">Yo'nalish</p>
+              <p className="mt-1 text-[15px] font-semibold text-foreground">{directionEndLabel(pickupEnd)}</p>
+              <p className="mt-1 text-[15px] font-semibold text-foreground">{directionEndLabel(dropoffEnd)}</p>
             </div>
+            <Field label="Yuboruvchi ismi" value={listingForm.senderName} onChange={(v) => setListingForm({ ...listingForm, senderName: v })} />
             <Field label="Yuboruvchi telefon raqami" value={orderForm.sender_phone} placeholder="+998 __ ___ __ __" onChange={(v) => setOrderForm({ ...orderForm, sender_phone: v })} />
+            <Field label="Qabul qiluvchi ismi" value={listingForm.receiverName} onChange={(v) => setListingForm({ ...listingForm, receiverName: v })} />
             <Field label="Qabul qiluvchi telefon raqami" value={orderForm.receiver_phone} placeholder="+998 __ ___ __ __" onChange={(v) => setOrderForm({ ...orderForm, receiver_phone: v })} />
             <Field label="Izoh" value={orderForm.comment ?? ""} multiline onChange={(v) => setOrderForm({ ...orderForm, comment: v })} />
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Telefon raqamlar taklif qabul qilinmaguncha haydovchiga ko'rsatilmaydi.
+            </p>
             <PrimaryButton
-              disabled={!orderForm.sender_phone || !orderForm.receiver_phone}
-              onClick={() => go("client-order-photo")}
+              disabled={
+                !orderForm.sender_phone
+                || !orderForm.receiver_phone
+                || !listingForm.senderName.trim()
+                || !listingForm.receiverName.trim()
+              }
+              onClick={() => go("client-order-parcel")}
             >
+              Davom etish
+            </PrimaryButton>
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "client-order-parcel") {
+      return (
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title="Posilka ma'lumotlari" back={() => go("client-order-address")} />
+          <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[14px] font-medium text-secondary-foreground">Posilka turi</span>
+              <div className="grid grid-cols-3 gap-2">
+                {PARCEL_TYPES.map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setListingForm({ ...listingForm, parcelType: value })}
+                    className={
+                      listingForm.parcelType === value
+                        ? "el-press h-11 rounded-[12px] border border-primary bg-primary text-[14px] font-semibold text-primary-foreground"
+                        : "el-press h-11 rounded-[12px] border border-border bg-card text-[14px] font-semibold text-foreground"
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Field label="Og'irligi (kg)" type="number" placeholder="3" value={listingForm.weightKg} onChange={(v) => setListingForm({ ...listingForm, weightKg: v })} />
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="Uzunligi (sm)" type="number" placeholder="40" value={listingForm.lengthCm} onChange={(v) => setListingForm({ ...listingForm, lengthCm: v })} />
+              <Field label="Eni (sm)" type="number" placeholder="30" value={listingForm.widthCm} onChange={(v) => setListingForm({ ...listingForm, widthCm: v })} />
+              <Field label="Balandligi (sm)" type="number" placeholder="20" value={listingForm.heightCm} onChange={(v) => setListingForm({ ...listingForm, heightCm: v })} />
+            </div>
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              O'lcham va og'irlik haydovchi mashinasiga sig'ishini tekshirish uchun kerak.
+            </p>
+            <PrimaryButton disabled={!parcelReady} onClick={() => go("client-order-photo")}>
               Davom etish
             </PrimaryButton>
           </section>
@@ -1612,13 +3449,13 @@ export function ConnectedApp() {
 
     if (screen === "client-order-photo") {
       return (
-        <main className="flex flex-1 flex-col bg-white">
-          <TopBar title="Posilka rasmi" back={() => go("client-order-address")} />
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title="Posilka rasmi" back={() => go("client-order-parcel")} />
           <section className="flex flex-1 flex-col gap-4 px-5 py-5">
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-[16px] border border-dashed border-[#1B4FD8] bg-[#EEF2FF] p-8 text-center">
-              <Upload size={30} color="#1B4FD8" />
-              <span className="mt-3 text-[16px] font-semibold text-[#111827]">Rasm yuklash</span>
-              <span className="mt-1 text-[13px] text-[#6B7280]">Posilkani haydovchi ko'rishi uchun bitta rasm yuklang</span>
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-[16px] border border-dashed border-primary bg-accent p-8 text-center">
+              <Upload size={30} color="var(--primary)" />
+              <span className="mt-3 text-[16px] font-semibold text-foreground">Rasm yuklash</span>
+              <span className="mt-1 text-[13px] text-muted-foreground">Posilkani haydovchi ko'rishi uchun bitta rasm yuklang</span>
               <input
                 type="file"
                 accept="image/*"
@@ -1633,8 +3470,15 @@ export function ConnectedApp() {
                 }}
               />
             </label>
-            {orderForm.cargo_photo_url && <p className="text-[13px] text-[#16A34A]">Rasm tayyor: {orderForm.cargo_photo_url}</p>}
-            {!orderForm.cargo_photo_url && <p className="text-[13px] text-[#DC2626]">Posilka rasmini yuklang</p>}
+            {orderForm.cargo_photo_url && (
+              <div className="space-y-2">
+                {/* The upload returns a signed link: render it, never print it - a URL with a signature in it
+                    is a credential, not a label. */}
+                <img src={orderForm.cargo_photo_url} alt="Yuklangan posilka rasmi" className="h-[180px] w-full rounded-[12px] object-cover" />
+                <p className="text-[13px] text-success">Rasm tayyor</p>
+              </div>
+            )}
+            {!orderForm.cargo_photo_url && <p className="text-[13px] text-destructive">Posilka rasmini yuklang</p>}
             <div className="mt-auto">
               <PrimaryButton disabled={!orderForm.cargo_photo_url} onClick={() => go("client-order-review")}>
                 Buyurtmani ko'rib chiqish
@@ -1646,72 +3490,117 @@ export function ConnectedApp() {
     }
 
     if (screen === "client-order-review") {
-      const isEditing = editingOrderId !== null;
+      const passengerMode = serviceMode === "passenger";
       const canPublish = Boolean(
-        orderForm.from_city_id
-        && orderForm.to_city_id
-        && routeDistrictsReady
-        && orderForm.pickup_address
-        && orderForm.dropoff_address
-        && orderForm.sender_phone
-        && orderForm.receiver_phone
-        && orderForm.cargo_photo_url,
+        directionReady
+        && listingForm.windowStart
+        && listingForm.windowEnd
+        && listingUnitMinor > 0
+        && (passengerMode
+          || (parcelReady
+            && orderForm.sender_phone
+            && orderForm.receiver_phone
+            && listingForm.senderName.trim()
+            && listingForm.receiverName.trim())),
       );
 
       return (
-        <main className="relative flex min-h-0 flex-1 flex-col bg-[#F7F8FA]">
-          <TopBar title={isEditing ? "O'zgarishlarni tekshiring" : "Buyurtmani tekshiring"} back={() => go("client-order-photo")} />
-          <section className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
-            {[
-              ["Yo'nalish", `${fromCity?.name_uz ?? "-"} -> ${toCity?.name_uz ?? "-"}`],
-              ["Olib ketish tumani", fromDistrict?.name_uz ?? (fromCity?.requires_district ? "-" : "Talab qilinmaydi")],
-              ["Olib ketish", orderForm.pickup_address],
-              ["Olib ketish xaritasi", hasLocation(orderForm.pickup_lat, orderForm.pickup_lng) ? "Xaritada belgilangan" : "Xaritada belgilanmagan"],
-              ["Yetkazish tumani", toDistrict?.name_uz ?? (toCity?.requires_district ? "-" : "Talab qilinmaydi")],
-              ["Yetkazish", orderForm.dropoff_address],
-              ["Yetkazish xaritasi", hasLocation(orderForm.dropoff_lat, orderForm.dropoff_lng) ? "Xaritada belgilangan" : "Xaritada belgilanmagan"],
-              ["Telefonlar", `${orderForm.sender_phone} / ${orderForm.receiver_phone}`],
-              ["Posilka rasmi", orderForm.cargo_photo_url ? "Yuklangan" : "Yuklanmagan"],
-              ["Tavsiya narx", formatUzs(suggestedPrice)],
-              ["Izoh", orderForm.comment || "-"],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <p className="text-[12px] text-[#6B7280]">{label}</p>
-                <p className="mt-1 text-[15px] font-semibold text-[#111827]">{value}</p>
-              </div>
-            ))}
+        <main className="relative flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar
+            title="Buyurtmani tekshiring"
+            back={() => go(passengerMode ? "client-route-summary" : "client-order-photo")}
+          />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
+            {/* Every row carries a fact or it is not here.
+                This screen used to print "-" three times over: two stop rows, which a Q88 direction never
+                has because its ends are marked places, and the districts on the route, which were read from
+                a corridor id that only a stop end ever sets. A review that shows a dash is asking somebody
+                to confirm something it did not manage to tell them. */}
+            {(() => {
+              const endRow = (label: string, end: DirectionEnd): [string, string, string?] => {
+                const place =
+                  end.stop?.name_uz
+                  || end.point?.address
+                  || (end.point ? coordinateLabel(end.point.lat, end.point.lng) : "");
+                const where = [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ");
+                return [label, place || where || "-", end.stop ? `Tasdiqlangan bekat · ${where}` : where];
+              };
+              // The districts come from the preview, which is the answer for *these two places*; the
+              // corridor-wide list is only populated when an end was picked from the stop catalogue.
+              const onRoute =
+                (preview?.districts_on_route ?? []).join(" - ")
+                || routeDistricts.filter((item) => item.on_confirmed_route).map((item) => item.district.name_uz).join(" - ");
+              const totalMinor = listingUnitMinor * (passengerMode ? seatCount : 1);
+
+              const rows: Array<[string, string, string?]> = [
+                [
+                  "Yo'nalish",
+                  `${pickupEnd.region?.name_uz ?? "-"} -> ${dropoffEnd.region?.name_uz ?? "-"}`,
+                  preview?.corridor_name,
+                ],
+                endRow("Olib ketish joyi", pickupEnd),
+                endRow("Yetkazish joyi", dropoffEnd),
+              ];
+              if (preview) {
+                rows.push([
+                  "Taxminiy yo'l",
+                  `${formatKm(preview.leg_distance_m)} · ${formatDuration(preview.leg_duration_s)}`,
+                  offRouteNote ?? undefined,
+                ]);
+              }
+              if (onRoute) rows.push(["Yo'nalishdagi tumanlar", onRoute, "Shu tumanlardagi haydovchilar ham ko'radi"]);
+              rows.push([
+                "Jo'nash oynasi",
+                `${formatWindowInput(listingForm.windowStart)} - ${formatWindowInput(listingForm.windowEnd)}`,
+              ]);
+              rows.push(
+                passengerMode
+                  ? ["Narx", formatUzs(totalMinor / 100), `${seatCount} × ${formatUzs(listingUnitMinor / 100)} (bir kishi uchun)`]
+                  : ["Narx", formatUzs(totalMinor / 100), "Haydovchilar o'z taklifini yuboradi"],
+              );
+              if (passengerMode) {
+                rows.push(["Yo'lovchilar", `${seatCount} kishi`, "O'rin haydovchi bilan kelishiladi"]);
+              } else {
+                const parcelName = PARCEL_TYPES.find(([value]) => value === listingForm.parcelType)?.[1] ?? "-";
+                rows.push([
+                  "Posilka",
+                  `${parcelName}, ${listingForm.weightKg || "-"} kg`,
+                  `${listingForm.lengthCm || "-"} x ${listingForm.widthCm || "-"} x ${listingForm.heightCm || "-"} sm`,
+                ]);
+                rows.push(["Yuboruvchi", listingForm.senderName || "-", orderForm.sender_phone || "Telefon kiritilmagan"]);
+                rows.push(["Qabul qiluvchi", listingForm.receiverName || "-", orderForm.receiver_phone || "Telefon kiritilmagan"]);
+                rows.push(["Posilka rasmi", orderForm.cargo_photo_url ? "Yuklangan" : "Yuklanmagan"]);
+              }
+              if (orderForm.comment) rows.push(["Izoh", orderForm.comment]);
+
+              return rows.map(([label, value, detail]) => (
+                <div key={label} className="rounded-[14px] border border-border bg-card p-4">
+                  <p className="text-[12px] text-muted-foreground">{label}</p>
+                  <p className="mt-1 break-words text-[15px] font-semibold leading-6 text-foreground">{value}</p>
+                  {detail && <p className="mt-0.5 break-words text-[12px] leading-5 text-muted-foreground">{detail}</p>}
+                </div>
+              ));
+            })()}
           </section>
-          <div className="absolute inset-x-0 bottom-0 z-20 border-t border-[#E5E7EB] bg-white px-5 py-4 shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
+          <div className="absolute inset-x-0 bottom-0 z-20 border-t border-border bg-card px-5 py-4 shadow-[0_-8px_20px_rgba(15,23,42,0.08)]">
             {!canPublish && (
-              <p className="mb-2 text-center text-[12px] leading-5 text-[#DC2626]">
-                E'lon qilish uchun yo'nalish, telefonlar va posilka rasmi to'liq bo'lishi kerak.
+              <p className="mb-2 text-center text-[12px] leading-5 text-destructive">
+                {passengerMode
+                  ? "E'lon qilish uchun yo'nalish, vaqt va narx to'liq bo'lishi kerak."
+                  : "E'lon qilish uchun yo'nalish, telefonlar va posilka rasmi to'liq bo'lishi kerak."}
               </p>
             )}
             <PrimaryButton
               disabled={busy || !canPublish}
-              onClick={() =>
-                run(async () => {
-                  if (editingOrderId !== null) {
-                    const updated = await updateClientOrder(editingOrderId, orderForm);
-                    setOrderDetail(updated as OrderDetail);
-                    setSelectedOrderId(updated.id);
-                    resetOrderDraft();
-                    await loadClientOrders();
-                    go("client-order-detail");
-                    return;
-                  }
-                  const created = await createClientOrder(orderForm);
-                  const published = await publishClientOrder(created.id);
-                  setSelectedOrderId(published.id ?? created.id);
-                  resetOrderDraft();
-                  await loadClientOrders();
-                  go("client-success");
-                })
-              }
+              onClick={() => void run(publishListingDraft)}
             >
-              {isEditing ? "O'zgarishlarni saqlash" : "Buyurtmani e'lon qilish"}
+              Buyurtmani e'lon qilish
             </PrimaryButton>
-            <button type="button" onClick={() => go("client-order-address")} className="mt-3 h-10 w-full text-[14px] font-semibold text-[#1B4FD8]">
+            <button
+              type="button"
+              onClick={() => go(passengerMode ? "client-route-summary" : "client-order-address")}
+              className="el-press mt-3 h-10 w-full text-[14px] font-semibold text-primary"
+            >
               Tahrirlash
             </button>
           </div>
@@ -1721,11 +3610,17 @@ export function ConnectedApp() {
 
     if (screen === "client-success") {
       return (
-        <main className="flex flex-1 flex-col items-center justify-center bg-white px-6 text-center">
-          <CheckCircle size={72} color="#16A34A" />
-          <h1 className="mt-5 text-[24px] font-bold text-[#111827]">Buyurtma e'lon qilindi</h1>
-          <p className="mt-2 text-[15px] leading-6 text-[#6B7280]">Haydovchilardan takliflar kutilmoqda</p>
-          <p className="mt-1 text-[14px] leading-6 text-[#6B7280]">Taklif kelganda sizga xabar beramiz</p>
+        <main className="flex flex-1 flex-col items-center justify-center bg-card px-6 text-center">
+          <CheckCircle size={72} color="var(--success)" />
+          <h1 className="mt-5 text-[24px] font-bold text-foreground">Buyurtma e'lon qilindi</h1>
+          <p className="mt-2 text-[15px] leading-6 text-muted-foreground">Haydovchilardan takliflar kutilmoqda</p>
+          <p className="mt-1 text-[14px] leading-6 text-muted-foreground">Taklif kelganda sizga xabar beramiz</p>
+          {listingWarnings.length > 0 && (
+            <div className="mt-5 w-full rounded-[14px] bg-warning/14 px-4 py-3 text-left">
+              <p className="text-[13px] font-semibold text-warning">Izohdagi aloqa ma'lumotlari yashirildi</p>
+              <p className="mt-1 text-[12px] leading-5 text-warning">{listingWarnings.join(", ")}</p>
+            </div>
+          )}
           <div className="mt-8 w-full">
             <PrimaryButton onClick={() => go("client-orders")}>Buyurtmalarimga o'tish</PrimaryButton>
           </div>
@@ -1735,21 +3630,57 @@ export function ConnectedApp() {
 
     if (screen === "client-orders") {
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
-          <section className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            <h1 className="text-[24px] font-bold text-[#111827]">Buyurtmalar</h1>
-            {orders.length ? orders.map((order) => <OrderCard key={order.id} order={order} onClick={() => void run(() => openClientOrder(order.id))} />) : <EmptyState icon={Package} title="Hozircha buyurtmalar yo'q" />}
+        <main className="flex flex-1 flex-col bg-background">
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <div className="flex items-center gap-3">
+              <SidebarButton className="shadow-none ring-1 ring-border" onClick={() => setSidebarOpen(true)} />
+              <h1 className="text-[24px] font-bold text-foreground">Buyurtmalar</h1>
+            </div>
+            {clientBookings.map((raw) => {
+              const booking = raw as BookingClientDTO;
+              return (
+                <button
+                  key={booking.id}
+                  onClick={() => void run(() => openClientBooking(booking.id))}
+                  className="el-press w-full rounded-[16px] border border-border bg-card p-4 text-left"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                      <MapPin size={14} color="var(--primary)" />
+                      {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
+                  {endLabel(booking.dropoff.stop, booking.dropoff.point)}
+                    </span>
+                    <StatusBadge status={booking.service_status} />
+                  </div>
+                  <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+                    <span>{shortDate(booking.pickup.window_start ?? undefined)}</span>
+                    <span className="font-semibold text-foreground">{formatUzs(booking.total_minor / 100)}</span>
+                  </div>
+                </button>
+              );
+            })}
+            {myListings.map((listing) => (
+              <ListingCard key={listing.id} listing={listing} onClick={() => void run(() => openListing(listing.id))} />
+            ))}
+            {!myListings.length && !clientBookings.length && !orders.length && <EmptyState icon={Package} title="Hozircha buyurtmalar yo'q" />}
+            {orders.length > 0 && (
+              <>
+                <p className="pt-2 text-[13px] font-semibold text-muted-foreground">Eski buyurtmalar</p>
+                {orders.map((order) => (
+                  <OrderCard key={order.id} order={order} onClick={() => void run(() => openClientOrder(order.id))} />
+                ))}
+              </>
+            )}
           </section>
-          <BottomNav role="client" active={screen} go={go} />
         </main>
       );
     }
 
     if (screen === "client-order-detail" && orderDetail) {
       return (
-        <main className="flex min-h-0 flex-1 flex-col bg-[#F7F8FA]">
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
           <TopBar title="Buyurtma tafsilotlari" back={() => go("client-orders")} />
-          <section className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
             <OrderCard order={orderDetail} />
             {[
               ["Olib ketish", orderDetail.pickup_address],
@@ -1758,25 +3689,25 @@ export function ConnectedApp() {
               ["Qabul qiluvchi", orderDetail.receiver_phone],
               ["Izoh", orderDetail.comment || "-"],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <p className="text-[12px] text-[#6B7280]">{label}</p>
-                <p className="mt-1 text-[14px] font-medium text-[#111827]">{value}</p>
+              <div key={label} className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[12px] text-muted-foreground">{label}</p>
+                <p className="mt-1 text-[14px] font-medium text-foreground">{value}</p>
               </div>
             ))}
             {orderDetail.assigned_driver && (
-              <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <p className="text-[12px] text-[#6B7280]">Haydovchi</p>
-                <p className="mt-1 text-[15px] font-semibold text-[#111827]">{orderDetail.assigned_driver.full_name ?? "Haydovchi"}</p>
-                <p className="text-[13px] text-[#6B7280]">{orderDetail.assigned_driver.car_model} / {orderDetail.assigned_driver.plate_number}</p>
+              <div className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[12px] text-muted-foreground">Haydovchi</p>
+                <p className="mt-1 text-[15px] font-semibold text-foreground">{orderDetail.assigned_driver.full_name ?? "Haydovchi"}</p>
+                <p className="text-[13px] text-muted-foreground">{orderDetail.assigned_driver.car_model} / {orderDetail.assigned_driver.plate_number}</p>
               </div>
             )}
             {(hasLocation(orderDetail.pickup_lat, orderDetail.pickup_lng) || hasLocation(orderDetail.dropoff_lat, orderDetail.dropoff_lng)) && (
-              <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <p className="text-[12px] text-[#6B7280]">Xarita nuqtalari</p>
-                <p className="mt-1 text-[14px] font-medium text-[#111827]">
+              <div className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[12px] text-muted-foreground">Xarita nuqtalari</p>
+                <p className="mt-1 text-[14px] font-medium text-foreground">
                   {hasLocation(orderDetail.pickup_lat, orderDetail.pickup_lng) ? "Olib ketish joyi belgilangan" : "Olib ketish joyi belgilanmagan"}
                 </p>
-                <p className="mt-1 text-[14px] font-medium text-[#111827]">
+                <p className="mt-1 text-[14px] font-medium text-foreground">
                   {hasLocation(orderDetail.dropoff_lat, orderDetail.dropoff_lng) ? "Yetkazish joyi belgilangan" : "Yetkazish joyi belgilanmagan"}
                 </p>
                 <button
@@ -1789,7 +3720,7 @@ export function ConnectedApp() {
                     destinationLat: orderDetail.dropoff_lat,
                     destinationLng: orderDetail.dropoff_lng,
                   })}
-                  className="mt-3 h-10 w-full rounded-[10px] bg-[#EEF2FF] text-[14px] font-semibold text-[#1B4FD8]"
+                  className="el-press mt-3 h-10 w-full rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
                 >
                   Xaritada ko'rish
                 </button>
@@ -1800,11 +3731,6 @@ export function ConnectedApp() {
               <EmptyState icon={Package} title="Hozircha takliflar yo'q" subtitle="Haydovchilar taklif yuborishi bilan shu yerda ko'rasiz" />
             )}
             {orderDetail.status === "delivered" && <PrimaryButton onClick={() => setConfirmAction({ type: "confirm-delivery" })}>Yetkazilganini tasdiqlash</PrimaryButton>}
-            {["draft", "published", "bidding"].includes(orderDetail.status) && (
-              <SecondaryButton onClick={() => beginEditOrder(orderDetail)}>
-                Buyurtmani tahrirlash
-              </SecondaryButton>
-            )}
             {["published", "bidding"].includes(orderDetail.status) && <PrimaryButton onClick={() => void run(() => openClientOrder(orderDetail.id, "client-bids"))}>Takliflarni ko'rish</PrimaryButton>}
             {["draft", "published", "bidding", "accepted"].includes(orderDetail.status) && (
               <SecondaryButton danger onClick={() => setConfirmAction({ type: "cancel-order" })}>
@@ -1819,20 +3745,1107 @@ export function ConnectedApp() {
       );
     }
 
+    if (screen === "client-booking-detail" && clientBooking) {
+      const booking = clientBooking;
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title="Buyurtma tafsilotlari" back={() => go("client-orders")} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                  <MapPin size={14} color="var(--primary)" />
+                  {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
+                  {endLabel(booking.dropoff.stop, booking.dropoff.point)}
+                </span>
+                <StatusBadge status={booking.service_status} />
+              </div>
+              <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+                <span>{shortDate(booking.pickup.window_start ?? undefined)}</span>
+                <span className="font-semibold text-foreground">{formatUzs(booking.total_minor / 100)}</span>
+              </div>
+            </div>
+            <div className="rounded-[14px] border border-border bg-card p-4">
+              <p className="text-[12px] text-muted-foreground">Yo'lkira</p>
+              <p className="mt-1 text-[14px] font-medium text-foreground">
+                {formatUzs(booking.total_minor / 100)} — haydovchiga naqd to'lanadi
+              </p>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                To'lov ilova orqali o'tmaydi; ELCHI bu summani qabul qilmaydi.
+              </p>
+            </div>
+            {booking.service_type === "parcel" && (
+              <ParcelPhoto
+                photo={booking.parcel_photo}
+                label="Posilka rasmi"
+                onRefresh={() => void run(() => openClientBooking(booking.id))}
+              />
+            )}
+            {(bookingCodes?.codes ?? []).map((code) => (
+              <div key={code.kind} className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[12px] text-muted-foreground">{proofCodeLabel(code.kind)}</p>
+                <p className="mt-1 text-[22px] font-bold tracking-[0.2em] text-foreground">{code.code}</p>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                  {code.kind === "delivery_code"
+                    ? "Bu kodni faqat qabul qiluvchiga bering."
+                    : "Bu kodni haydovchiga posilkani topshirayotganda ayting."}
+                </p>
+              </div>
+            ))}
+            {(CASH_RECORDABLE[booking.service_type] ?? []).includes(booking.service_status) && (
+              <CashAcknowledgement
+                booking={booking}
+                side="client"
+                busy={busy}
+                amount={cashAmount}
+                onAmountChange={setCashAmount}
+                onReport={() => void run(() => reportCash(booking.id, "client", booking.version), "Qayd saqlandi")}
+                onDecide={(decision) =>
+                  booking.cash_receipt && void run(() => decideCash(booking.id, "client", booking.cash_receipt!, decision), "Javob saqlandi")
+                }
+              />
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void run(() => openChat(booking.id, "client"))}
+                className="el-press h-11 flex-1 rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
+              >
+                Xabarlar
+              </button>
+              <button
+                type="button"
+                onClick={() => void run(() => openTracking(booking.id, "client"))}
+                className="el-press h-11 flex-1 rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
+              >
+                Kuzatuv
+              </button>
+            </div>
+            {["awaiting_pickup", "boarding", "picked_up", "in_transit"].includes(booking.service_status) && (
+              <SecondaryButton onClick={() => void run(() => openAmendments(booking.id, "client"))}>
+                Shartlarni o'zgartirish
+              </SecondaryButton>
+            )}
+            {booking.service_status === "completed" && (
+              <PrimaryButton disabled={busy} onClick={() => { setRating(5); setRatingComment(""); go("booking-rating"); }}>
+                Haydovchini baholash
+              </PrimaryButton>
+            )}
+            {["picked_up", "in_transit", "delivered", "completed"].includes(booking.service_status) && (
+              <SecondaryButton onClick={() => { setDisputeType("service"); setDisputeComment(""); go("booking-dispute"); }}>
+                Muammo haqida xabar berish
+              </SecondaryButton>
+            )}
+            {bookingDisputes.filter((item) => item.booking_id === booking.id).map((item) => (
+              <div key={item.id} className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[12px] text-muted-foreground">Nizo</p>
+                <p className="mt-1 text-[14px] font-medium text-foreground">
+                  {disputeTypeLabel(item.type)} · {disputeStatusLabel(item.status)}
+                </p>
+              </div>
+            ))}
+            {booking.service_status === "delivered" && (
+              <PrimaryButton
+                disabled={busy}
+                onClick={() => void run(async () => {
+                  await bookingAction(booking.id, "complete", { expected_version: booking.version });
+                  await openClientBooking(booking.id);
+                  await loadMyListings();
+                }, "Buyurtma yakunlandi")}
+              >
+                Yetkazilganini tasdiqlash
+              </PrimaryButton>
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "driver-proposals" || screen === "client-proposals") {
+      // Q92: one negotiation, two authors. Who opened the thread does not decide what this screen shows - what
+      // decides it is who spoke last, because AC05 forbids accepting your own version. So the same list serves
+      // a driver answering a client's request and a client answering a driver's trip offer.
+      const mySide: ActorSide = screen === "client-proposals" ? "client" : "driver";
+      return (
+        <main className="flex flex-1 flex-col bg-background">
+          <TopBar title="Takliflarim" back={() => go(mySide === "client" ? "client-profile" : "driver-profile")} />
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            {busy && !myProposals.length ? <ListSkeleton /> : myProposals.length ? myProposals.map((thread) => {
+              const version = thread.current_version;
+              // AC05 and the rest of the auction rules live in `./auction`, so this screen, the listing's bid
+              // screen and any future one answer the same way - and the rule is testable without a browser.
+              const actions = negotiationActions(thread, mySide);
+              const { open, theirTurn } = actions;
+              return (
+                <div key={thread.id} className="rounded-[16px] border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[15px] font-semibold text-foreground">
+                        {version ? `${endLabel(version.pickup_stop, version.pickup_point)} -> ${endLabel(version.dropoff_stop, version.dropoff_point)}` : "-"}
+                      </p>
+                      <p className="mt-1 text-[13px] text-muted-foreground">
+                        {version ? `${shortDate(version.pickup_window_start)} - ${shortDate(version.pickup_window_end)}` : "-"}
+                      </p>
+                      <p className="mt-1 text-[12px] text-muted-foreground">
+                        {turnLabel(actions, mySide)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-[17px] font-bold text-primary">
+                      {version ? formatUzs(version.total_minor / 100) : "-"}
+                    </p>
+                  </div>
+
+                  {!open && version && (
+                    <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
+                      Yopilgan ({proposalStatusLabel(version.status)}) — javob berib bo'lmaydi.
+                    </p>
+                  )}
+
+                  {open && version && counterFor === thread.id && (
+                    <div className="mt-3 space-y-3">
+                      <Field
+                        label="Yangi narx (so'm)"
+                        type="number"
+                        value={counterPrice}
+                        placeholder={String(Math.round(version.total_minor / 100))}
+                        onChange={setCounterPrice}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={counterPending || busy || soumToMinor(counterPrice) <= 0}
+                          onClick={() => void run(() => sendCounter(thread.id, version.revision, loadMyProposals), "Qarshi taklif yuborildi")}
+                          className="h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
+                        >
+                          {counterPending ? "Yuborilmoqda..." : "Yuborish"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setCounterFor(null); setCounterPrice(""); }}
+                          className="el-press h-11 flex-1 rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
+                        >
+                          Bekor qilish
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {open && version && counterFor !== thread.id && (
+                    <div className="mt-3 space-y-2">
+                      {actions.canAccept && (
+                        <PrimaryButton
+                          disabled={busy}
+                          onClick={() => void run(async () => {
+                            const listing = await getListing(thread.listing_id);
+                            await acceptProposal(
+                              thread.id,
+                              { proposal_version_id: version.id, expected_listing_terms_version: listing.terms_version },
+                              newIdempotencyKey(),
+                            );
+                            await loadMyProposals();
+                            if (mySide === "client") await loadMyListings();
+                            else await loadDriverBookings();
+                          }, "Kelishuv tuzildi")}
+                        >
+                          {mySide === "client" ? "Haydovchi narxini qabul qilish" : "Mijoz narxini qabul qilish"}
+                        </PrimaryButton>
+                      )}
+                      {actions.canCounter ? (
+                        <button
+                          type="button"
+                          onClick={() => { setCounterFor(thread.id); setCounterPrice(String(Math.round(version.total_minor / 100))); }}
+                          className="el-press h-11 w-full rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
+                        >
+                          Boshqa narx taklif qilish ({actions.revisionsLeft} marta qoldi)
+                        </button>
+                      ) : (
+                        <p className="text-[12px] leading-5 text-muted-foreground">Narxni o'zgartirish imkoni tugadi.</p>
+                      )}
+                      {actions.canWithdraw && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void run(async () => {
+                            await withdrawProposal(thread.id, version.revision);
+                            await loadMyProposals();
+                          }, "Taklif qaytarib olindi")}
+                          className="el-press h-11 w-full rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
+                        >
+                          Taklifni qaytarib olish
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            }) : (
+              <EmptyState
+                icon={Package}
+                title="Taklif yubormagansiz"
+                subtitle={mySide === "client"
+                  ? "Haydovchi e'lonlaridan birini tanlab o'z narxingizni taklif qiling."
+                  : "«Moslar» bo'limidan mijoz so'roviga narx taklif qiling."}
+              />
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "booking-rating" && clientBooking) {
+      const booking = clientBooking;
+      return (
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title="Haydovchini baholang" back={() => go("client-booking-detail")} />
+          <section className="flex flex-1 flex-col gap-5 px-5 py-6">
+            <p className="text-center text-[14px] text-muted-foreground">1 dan 5 gacha baho bering</p>
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button type="button" className="el-press" key={value} onClick={() => setRating(value)} aria-label={`${value} yulduz`}>
+                  <Star fill={value <= rating ? "var(--warning)" : "none"} color="var(--warning)" size={34} />
+                </button>
+              ))}
+            </div>
+            <Field label="Izoh qoldiring" value={ratingComment} multiline onChange={setRatingComment} />
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Izoh nashr etilishidan oldin tekshiriladi; aloqa ma'lumotlari yashiriladi.
+            </p>
+            <div className="mt-auto">
+              <PrimaryButton
+                disabled={busy}
+                onClick={() => void run(async () => {
+                  const result = await rateBooking(
+                    booking.id,
+                    { subject_side: "driver", stars: rating, comment: ratingComment.trim() || null },
+                    newIdempotencyKey(),
+                  );
+                  setListingWarnings(result.warnings.map((warning) => warning.code));
+                  await openClientBooking(booking.id);
+                }, "Baho yuborildi")}
+              >
+                Bahoni yuborish
+              </PrimaryButton>
+              <button type="button" onClick={() => go("client-booking-detail")} className="el-press mt-3 h-10 w-full text-[14px] font-semibold text-muted-foreground">
+                Keyinroq
+              </button>
+            </div>
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "booking-dispute" && clientBooking) {
+      const booking = clientBooking;
+      return (
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title="Muammo haqida xabar berish" back={() => go("client-booking-detail")} />
+          <section className="flex flex-1 flex-col gap-4 px-5 py-5">
+            <PickSelect
+              label="Muammo turi"
+              placeholder="Turini tanlang"
+              value={disputeType}
+              options={disputeTypeOptions()}
+              onChange={setDisputeType}
+            />
+            <Field label="Izoh" value={disputeComment} multiline onChange={setDisputeComment} />
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Nizo ochilganda safar GPS nuqtalari dalil sifatida saqlanadi (Q77).
+            </p>
+            <div className="mt-auto">
+              <PrimaryButton
+                disabled={busy || disputeComment.trim().length < 5}
+                onClick={() => void run(async () => {
+                  await openDispute(
+                    booking.id,
+                    { type: disputeType as DisputeDTO["type"], description: disputeComment.trim() },
+                    newIdempotencyKey(),
+                  );
+                  setDisputeComment("");
+                  await openClientBooking(booking.id);
+                }, "Nizo ochildi. Operatorlar muammoni ko'rib chiqadi")}
+              >
+                Yuborish
+              </PrimaryButton>
+            </div>
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "booking-amendment" && openBooking) {
+      // B9 / Q60: after a booking exists, only the quantity and the unit price may still move, and only by
+      // agreement. Everything else in the snapshot is frozen in the database - so this screen offers exactly
+      // the two fields that can legally change, and nothing that would quietly rewrite what was agreed.
+      const side = openBooking.side;
+      const booking = side === "driver" ? driverBooking : clientBooking;
+      if (!booking) return <EmptyState icon={Package} title="Bron topilmadi" />;
+      const back = () => go(side === "driver" ? "driver-order-detail" : "client-booking-detail");
+      const quantity = Number(amendmentForm.quantity);
+      const unitMinor = soumToMinor(amendmentForm.unitPrice);
+      const changed =
+        (Number.isFinite(quantity) && quantity >= 1 && quantity !== booking.quantity) ||
+        (unitMinor > 0 && unitMinor !== booking.unit_price_minor);
+      const newTotal = booking.price_basis === "per_seat" ? unitMinor * Math.max(quantity, 1) : unitMinor;
+      const open = amendments.filter((item) => item.status === "proposed");
+
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title="Shartlarni o'zgartirish" back={back} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <p className="text-[12px] text-muted-foreground">Hozirgi kelishuv</p>
+              <p className="mt-1 text-[15px] font-semibold text-foreground">
+                {booking.quantity} × {formatUzs(booking.unit_price_minor / 100)} = {formatUzs(booking.total_minor / 100)}
+              </p>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                O'zgartirish ikkinchi tomon qabul qilgandan keyingina kuchga kiradi. Qabul qilinmaguncha bron
+                shu shartlarda qoladi.
+              </p>
+            </div>
+
+            {open.length === 0 && (
+              <div className="space-y-3 rounded-[16px] border border-border bg-card p-4">
+                <p className="text-[13px] font-semibold text-foreground">Yangi shart taklif qilish</p>
+                <Field
+                  label={booking.service_type === "passenger" ? "O'rinlar soni" : "Miqdor"}
+                  type="number"
+                  value={amendmentForm.quantity}
+                  onChange={(value) => setAmendmentForm({ ...amendmentForm, quantity: value })}
+                />
+                <Field
+                  label={booking.price_basis === "per_seat" ? "Bir o'rin narxi (so'm)" : "Narx (so'm)"}
+                  type="number"
+                  value={amendmentForm.unitPrice}
+                  onChange={(value) => setAmendmentForm({ ...amendmentForm, unitPrice: value })}
+                />
+                <Field
+                  label="Sabab"
+                  value={amendmentForm.reason}
+                  onChange={(value) => setAmendmentForm({ ...amendmentForm, reason: value })}
+                  placeholder="Nega o'zgartirmoqchisiz?"
+                  hint="Ikkinchi tomon shu izohni ko'radi."
+                />
+                {changed && unitMinor > 0 && (
+                  <p className="rounded-[12px] bg-accent px-3 py-2.5 text-[13px] font-semibold text-primary">
+                    Yangi jami: {formatUzs(newTotal / 100)}
+                  </p>
+                )}
+                <PrimaryButton
+                  disabled={busy || !changed || unitMinor <= 0 || amendmentForm.reason.trim().length < 3}
+                  onClick={() => void run(async () => {
+                    await proposeAmendment(
+                      booking.id,
+                      {
+                        expected_version: booking.version,
+                        changes: { quantity, unit_price_minor: unitMinor },
+                        reason: amendmentForm.reason.trim(),
+                      },
+                      newIdempotencyKey(),
+                    );
+                    await loadAmendments(booking.id);
+                  }, "Taklif yuborildi")}
+                >
+                  Taklif yuborish
+                </PrimaryButton>
+              </div>
+            )}
+
+            {amendments.length === 0 ? (
+              <p className="text-[13px] leading-5 text-muted-foreground">Hozircha o'zgartirish takliflari yo'q.</p>
+            ) : (
+              amendments.map((item) => {
+                const mine = item.author_side === side;
+                const pending = item.status === "proposed";
+                return (
+                  <div key={item.id} className="rounded-[16px] border border-border bg-card p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-semibold text-foreground">
+                          {item.new_quantity} × {formatUzs(item.new_unit_price_minor / 100)}
+                        </p>
+                        <p className="mt-1 text-[12px] text-muted-foreground">
+                          {mine ? "Sizning taklifingiz" : "Ikkinchi tomon taklifi"}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[17px] font-bold text-primary">{formatUzs(item.new_total_minor / 100)}</p>
+                        <StatusBadge status={item.status} />
+                      </div>
+                    </div>
+                    {pending && !mine && (
+                      <div className="mt-3 space-y-2">
+                        <PrimaryButton
+                          disabled={busy}
+                          onClick={() => void run(async () => {
+                            await acceptAmendment(item.id, item.version);
+                            // Re-open rather than only reloading the list: accepting changes the booking's
+                            // terms *and* its version, and the next amendment is proposed against that version.
+                            await openAmendments(booking.id, side);
+                          }, "Yangi shartlar kuchga kirdi")}
+                        >
+                          Qabul qilish
+                        </PrimaryButton>
+                        <SecondaryButton
+                          danger
+                          onClick={() => void run(async () => {
+                            await decideAmendment(item.id, "reject", item.version);
+                            await loadAmendments(booking.id);
+                          }, "Rad etildi")}
+                        >
+                          Rad etish
+                        </SecondaryButton>
+                      </div>
+                    )}
+                    {pending && mine && (
+                      <div className="mt-3">
+                        <SecondaryButton
+                          onClick={() => void run(async () => {
+                            await decideAmendment(item.id, "withdraw", item.version);
+                            await loadAmendments(booking.id);
+                          }, "Taklif qaytarib olindi")}
+                        >
+                          Taklifni qaytarib olish
+                        </SecondaryButton>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "driver-saved-searches") {
+      // The direction currently on the feed is what gets saved - the driver has already chosen it there, and
+      // asking for it a second time in a second form is how a screen like this stops being used.
+      const canSave = Boolean((pickupEnd.district || pickupEnd.stop) && (dropoffEnd.district || dropoffEnd.stop));
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title="Saqlangan yo'nalishlar" back={() => go("driver-feed")} />
+          <section className="el-enter el-stagger min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <p className="text-[13px] leading-5 text-muted-foreground">
+              Yo'nalishni saqlasangiz, shu yo'nalishda yangi mijoz so'rovi chiqqanda bildirishnoma olasiz.
+              Bildirishnomalar ilova ichida ko'rinadi.
+            </p>
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <p className="text-[13px] font-semibold text-foreground">Hozirgi yo'nalish</p>
+              <p className="mt-1 text-[14px] text-foreground">
+                {directionEndLabel(pickupEnd)} {"->"} {directionEndLabel(dropoffEnd)}
+              </p>
+              <div className="mt-3">
+                <PrimaryButton
+                  disabled={busy || !canSave}
+                  onClick={() => void run(async () => {
+                    const from = new Date();
+                    const to = new Date(Date.now() + 14 * 24 * 3600 * 1000);
+                    await createSavedSearch(
+                      {
+                        service_type: driverServiceMode,
+                        side: "requests",
+                        origin_district_id: pickupEnd.district?.id,
+                        origin_stop_id: pickupEnd.district ? undefined : pickupEnd.stop?.id,
+                        destination_district_id: dropoffEnd.district?.id,
+                        destination_stop_id: dropoffEnd.district ? undefined : dropoffEnd.stop?.id,
+                        time_window_start: from.toISOString(),
+                        time_window_end: to.toISOString(),
+                        quantity: 1,
+                        notify: true,
+                      } as Parameters<typeof createSavedSearch>[0],
+                      newIdempotencyKey(),
+                    );
+                    await loadSavedSearches();
+                  }, "Yo'nalish saqlandi")}
+                >
+                  Shu yo'nalishni saqlash
+                </PrimaryButton>
+                {!canSave && (
+                  <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+                    Avval «Moslar» sahifasida ikkala uchni tanlang.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {busy && !saved.length ? <ListSkeleton rows={2} /> : saved.length ? saved.map((item) => (
+              <div key={item.id} className="rounded-[16px] border border-border bg-card p-4">
+                <p className="text-[14px] font-semibold text-foreground">
+                  {savedEndLabel(item.origin_district_id, item.origin_stop_id, districtNames)} {"->"}{" "}
+                  {savedEndLabel(item.destination_district_id, item.destination_stop_id, districtNames)}
+                </p>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  {shortDate(item.time_window_start)} - {shortDate(item.time_window_end)}
+                  {item.notify ? " · bildirishnoma yoqilgan" : " · bildirishnoma o'chirilgan"}
+                </p>
+                <div className="mt-3">
+                  <SecondaryButton
+                    danger
+                    onClick={() => void run(async () => {
+                      await deleteSavedSearch(item.id);
+                      await loadSavedSearches();
+                    }, "O'chirildi")}
+                  >
+                    O'chirish
+                  </SecondaryButton>
+                </div>
+              </div>
+            )) : (
+              <EmptyState
+                icon={Navigation}
+                title="Saqlangan yo'nalish yo'q"
+                subtitle="Tez-tez yuradigan yo'nalishingizni saqlab qo'ying — yangi so'rovlardan xabar topasiz."
+              />
+            )}
+          </section>
+          <div className="absolute inset-x-0 bottom-0 z-20">
+            <BottomNav role="driver" active={screen} go={go} />
+          </div>
+        </main>
+      );
+    }
+
+    if (screen === "my-disputes") {
+      // S6: a dispute is the one place where what the two people say is weighed by a third. Evidence is the
+      // part that decides it, so it has to be addable after the first report - people remember the photo late.
+      const side = auth.user?.role === "driver" ? "driver" : "client";
+      const back = () => go(side === "driver" ? "driver-profile" : "client-profile");
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title="Nizolarim" back={back} />
+          <section className="el-enter el-stagger min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            {busy && !bookingDisputes.length ? <ListSkeleton rows={2} /> : bookingDisputes.length ? bookingDisputes.map((item) => {
+              const open = !["resolved", "rejected", "withdrawn", "closed"].includes(item.status);
+              const editing = evidenceNote?.id === item.id;
+              return (
+                <div key={item.id} className="rounded-[16px] border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-semibold text-foreground">
+                        {disputeTypeLabel(item.type)}
+                      </p>
+                      <p className="mt-1 text-[12px] text-muted-foreground">{shortDate(item.created_at)}</p>
+                    </div>
+                    <StatusBadge status={item.status} />
+                  </div>
+                  <p className="mt-2 text-[13px] leading-5 text-secondary-foreground">{item.description}</p>
+
+                  {item.evidence.length > 0 && (
+                    <div className="mt-3 space-y-1.5 rounded-[12px] bg-slate-50 p-3">
+                      <p className="text-[12px] font-semibold text-muted-foreground">Dalillar</p>
+                      {item.evidence.map((entry, index) => (
+                        <p key={index} className="text-[12px] leading-5 text-secondary-foreground">
+                          {entry.note || "Fayl biriktirildi"}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {item.resolution && (
+                    <p className="mt-3 rounded-[12px] bg-accent px-3 py-2.5 text-[13px] leading-5 text-primary">
+                      Qaror: {item.resolution.text || disputeResolutionLabel(item.resolution.code ?? "") || item.resolution.code}
+                    </p>
+                  )}
+
+                  {open && !editing && (
+                    <div className="mt-3">
+                      <SecondaryButton onClick={() => setEvidenceNote({ id: item.id, note: "" })}>
+                        Dalil qo&apos;shish
+                      </SecondaryButton>
+                    </div>
+                  )}
+                  {open && editing && (
+                    <div className="mt-3 space-y-2">
+                      <Field
+                        label="Qo'shimcha izoh"
+                        multiline
+                        value={evidenceNote.note}
+                        onChange={(note) => setEvidenceNote({ id: item.id, note })}
+                        hint="Telefon raqam va havolalar avtomatik yashiriladi."
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={busy || evidenceNote.note.trim().length < 3}
+                          onClick={() => void run(async () => {
+                            await addDisputeEvidence(item.id, { note: evidenceNote.note.trim(), file_ids: [] }, newIdempotencyKey());
+                            setEvidenceNote(null);
+                            setBookingDisputes(await myDisputes());
+                          }, "Dalil qo'shildi")}
+                          className="el-press h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
+                        >
+                          Yuborish
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEvidenceNote(null)}
+                          className="el-press h-11 flex-1 rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
+                        >
+                          Bekor qilish
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }) : (
+              <EmptyState
+                icon={FileText}
+                title="Nizo yo'q"
+                subtitle="Buyurtmada muammo bo'lsa, bron ekranidan «Muammo haqida xabar berish» tugmasi orqali ochasiz."
+              />
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "listing-matches" && matchesFor) {
+      // A request's matches are trip offers; a trip offer's matches are client requests. Same endpoint, same
+      // ranking, and in both directions the person picks - nothing here accepts anything on their behalf.
+      const isRequest = matchesFor.kind === "request";
+      const back = () => go(isRequest ? "client-listing-detail" : "driver-routes");
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title={isRequest ? "Mos safarlar" : "Mos so'rovlar"} back={back} />
+          <section className="el-enter el-stagger min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <p className="text-[13px] leading-5 text-muted-foreground">
+              {isRequest
+                ? "E'loningizdagi yo'nalish, vaqt va miqdor bo'yicha mos safarlar. Tartib — tavsiya, tanlov sizniki."
+                : "Safaringizga mos mijoz so'rovlari. Tartib — tavsiya, tanlov sizniki."}
+            </p>
+            {matchScope === "confirmed_stops" && matches.length > 0 && (
+              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
+                {confirmedStopsNote()}
+              </p>
+            )}
+            {busy && !matches.length ? <ListSkeleton /> : matches.length ? matches.map((item) => (
+              <div key={item.listing.id} className="rounded-[16px] border border-border bg-card p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="min-w-0 flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                    <MapPin size={14} color="var(--primary)" />
+                    <span className="truncate">
+                      {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"}{" "}
+                      {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-primary">
+                    {matchLabel(item.match.match_type)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+                  <span>{shortDate(item.listing.departure_window_start)}</span>
+                  <span className="font-semibold text-foreground">
+                    {formatUzs((item.comparable_total_minor ?? item.listing.total_minor) / 100)}
+                  </span>
+                </div>
+                {item.reputation.completed_bookings > 0 && (
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    {item.reputation.completed_bookings} ta bajarilgan buyurtma
+                    {/* U6: no invented rating for a new account (§8.2) - the label says which case this is. */}
+                    {item.reputation.average_rating !== null && item.reputation.average_rating !== undefined
+                      ? ` · reyting ${item.reputation.average_rating.toFixed(1)}`
+                      : " · hali baholanmagan"}
+                  </p>
+                )}
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isRequest) {
+                        setSelectedOffer(item as unknown as FeedItemDTO);
+                        setOfferBid({ ...offerBid, price: String(Math.round(item.listing.unit_price_minor / 100)), seats: 1 });
+                        go("client-offer-bid");
+                      } else {
+                        setSelectedRequest(item as unknown as FeedItemDTO);
+                        setBidPrice(String(Math.round(item.listing.total_minor / 100)));
+                        setProposalTripId(trips[0]?.id ?? "");
+                        go("driver-bid");
+                      }
+                    }}
+                    className="el-press h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
+                  >
+                    Narx taklif qilish
+                  </button>
+                </div>
+              </div>
+            )) : (
+              <EmptyState
+                icon={Truck}
+                title={isRequest ? "Hozircha mos safar yo'q" : "Hozircha mos so'rov yo'q"}
+                subtitle={isRequest
+                  ? "Haydovchilar safar e'lon qilgach shu yerda ko'rinadi. E'loningiz o'z holicha ham haydovchilarga ko'rinib turadi."
+                  : "Mijozlar so'rov qo'ygach shu yerda ko'rinadi."}
+              />
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "booking-chat" && openBooking) {
+      const thread = openBooking;
+      const back = () => go(thread.side === "driver" ? "driver-order-detail" : "client-booking-detail");
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title="Xabarlar" back={back} />
+          <section className="el-enter min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
+            {chatHasMore && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void run(() => loadChat(thread.id, chatMessages.length + CHAT_PAGE))}
+                className="el-press h-9 w-full rounded-[10px] bg-card text-[13px] font-semibold text-primary"
+              >
+                Oldingi xabarlar
+              </button>
+            )}
+            {chatMessages.length === 0 && !busy && (
+              <EmptyState
+                icon={Bell}
+                title="Xabar yo'q"
+                subtitle="Xizmat boshlangunicha aloqa faqat shu chat orqali bo'ladi."
+              />
+            )}
+            {chatMessages.map((message) => (
+              <div
+                key={message.id}
+                className={cls(
+                  "max-w-[80%] rounded-[14px] px-3.5 py-2.5",
+                  message.is_mine ? "ml-auto bg-primary text-primary-foreground" : "mr-auto bg-card text-foreground",
+                )}
+              >
+                <p className="whitespace-pre-wrap text-[14px] leading-5">
+                  {message.moderation_status === "hidden_by_staff" ? "Xabar operator tomonidan yashirildi" : message.text}
+                </p>
+                <p className={cls("mt-1 text-[11px]", message.is_mine ? "text-primary-foreground/70" : "text-slate-400")}>
+                  {formatDateTime(message.created_at)}
+                </p>
+              </div>
+            ))}
+          </section>
+          <div className="shrink-0 border-t border-border bg-card px-5 py-3">
+            {chatWarnings.length > 0 && (
+              <p className="mb-2 text-[12px] leading-5 text-warning">
+                Aloqa ma'lumotlari yashirildi: {chatWarnings.join(", ")}
+              </p>
+            )}
+            {chatFailed && (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-[10px] bg-destructive/10 px-3 py-2">
+                <span className="min-w-0 flex-1 truncate text-[12px] text-destructive">Yuborilmadi: {chatFailed}</span>
+                <button
+                  type="button"
+                  onClick={() => { setChatDraft(chatFailed); setChatFailed(null); }}
+                  className="el-press shrink-0 text-[12px] font-semibold text-destructive"
+                >
+                  Qayta urinish
+                </button>
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <textarea
+                value={chatDraft}
+                onChange={(event) => setChatDraft(event.target.value)}
+                rows={1}
+                placeholder="Xabar yozing"
+                className="min-h-[44px] flex-1 resize-none rounded-[12px] border border-border bg-card px-4 py-2.5 text-[15px] text-foreground outline-none"
+              />
+              <button
+                type="button"
+                disabled={chatSending || !chatDraft.trim()}
+                onClick={() => {
+                  const text = chatDraft.trim();
+                  if (!text || chatSending) return;   // double-submit protection: one send in flight
+                  setChatSending(true);
+                  setChatDraft("");
+                  setChatFailed(null);
+                  void sendMessage(thread.id, { text }, newIdempotencyKey())
+                    .then((result) => {
+                      setChatWarnings(result.warnings.map((warning) => warning.code));
+                      return loadChat(thread.id, Math.max(chatMessages.length + 1, CHAT_PAGE));
+                    })
+                    .catch(() => setChatFailed(text))
+                    .finally(() => setChatSending(false));
+                }}
+                className="el-press flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-primary text-primary-foreground disabled:bg-slate-400"
+                aria-label="Yuborish"
+              >
+                <Navigation size={18} />
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+              Telefon raqam va havolalar avtomatik yashiriladi.
+            </p>
+          </div>
+        </main>
+      );
+    }
+
+    if (screen === "booking-tracking" && openBooking) {
+      const thread = openBooking;
+      const booking = thread.side === "driver" ? driverBooking : clientBooking;
+      const back = () => go(thread.side === "driver" ? "driver-order-detail" : "client-booking-detail");
+      const liveOpen = Boolean(flags?.tracking_enabled && tracking?.window.is_open && tracking?.last_point);
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title="Kuzatuv" back={back} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <p className="text-[13px] font-semibold text-secondary-foreground">Holat kuzatuvi</p>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                Buyurtma bosqichlari — haydovchi belgilagan holatlar bo'yicha.
+              </p>
+              <ol className="mt-3 space-y-2">
+                {(booking?.service_type === "passenger" ? PASSENGER_PROGRESS : PARCEL_PROGRESS).map(([status, label]) => {
+                  const ladder = booking?.service_type === "passenger" ? PASSENGER_PROGRESS : PARCEL_PROGRESS;
+                  const index = ladder.findIndex(([value]) => value === booking?.service_status);
+                  const position = ladder.findIndex(([value]) => value === status);
+                  const done = index >= 0 && position <= index;
+                  return (
+                    <li key={status} className="flex items-center gap-3">
+                      <span className={cls("h-2.5 w-2.5 shrink-0 rounded-full", done ? "bg-success" : "bg-slate-300")} />
+                      <span className={cls("text-[14px]", done ? "font-semibold text-foreground" : "text-slate-400")}>{label}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <p className="text-[13px] font-semibold text-secondary-foreground">Jonli joylashuv</p>
+              {trackingError && <p className="mt-1 text-[13px] text-destructive">{trackingError}</p>}
+              {!trackingError && !flags?.tracking_enabled && (
+                <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
+                  Bu yo'nalishda jonli kuzatuv hali yoqilmagan.
+                </p>
+              )}
+              {!trackingError && flags?.tracking_enabled && !liveOpen && (
+                <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
+                  {trackingWindowText(tracking?.window.reason ?? "")}
+                </p>
+              )}
+              {liveOpen && tracking?.last_point && (
+                <>
+                  <p className="mt-1 flex items-center gap-2 text-[14px] font-medium text-foreground">
+                    {/*
+                      The one thing on screen allowed to keep moving, and only while the fix really is current
+                      (AC27/AC28): a dot that kept pulsing over a stale point would be the app claiming a live
+                      GPS it does not have.
+                    */}
+                    <span
+                      className={cls(
+                        "h-2.5 w-2.5 shrink-0 rounded-full",
+                        tracking.freshness === "fresh" ? "el-live-dot bg-success" : "bg-slate-400",
+                      )}
+                    />
+                    Oxirgi nuqta: {formatDateTime(tracking.last_point.captured_at)}
+                  </p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    {tracking.last_point.lat.toFixed(5)}, {tracking.last_point.lng.toFixed(5)}
+                    {tracking.last_point.low_accuracy ? " · aniqligi past" : ""}
+                  </p>
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                    Manba: haydovchining telefoni. Yangilanish: {trackingFreshnessLabel(tracking.freshness)}.
+                  </p>
+                </>
+              )}
+            </div>
+
+            {tracking?.eta_window_start && (
+              <div className="rounded-[16px] bg-accent p-4">
+                <p className="text-[13px] font-semibold text-primary">Taxminiy yetib kelish</p>
+                <p className="mt-1 text-[15px] font-semibold text-foreground">
+                  {shortDate(tracking.eta_window_start)} - {shortDate(tracking.eta_window_end ?? undefined)}
+                </p>
+                {tracking.eta_is_estimate && (
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">Bu taxmin, kafolat emas.</p>
+                )}
+              </div>
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "client-listing-detail" && listingDetail) {
+      const listing = listingDetail;
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title="Buyurtma tafsilotlari" back={() => go("client-orders")} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
+            <ListingCard listing={listing} />
+            {[
+              [endRowLabel(listing.origin_stop, "Olib ketish bekati", "Olib ketish joyi"), endLabel(listing.origin_stop, listing.origin_point)],
+              [endRowLabel(listing.destination_stop, "Yetkazish bekati", "Yetkazish joyi"), endLabel(listing.destination_stop, listing.destination_point)],
+              ["Jo'nash oynasi", `${shortDate(listing.departure_window_start)} - ${shortDate(listing.departure_window_end)}`],
+              ["Narx", formatUzs(listing.total_minor / 100)],
+              ["Posilka", listing.parcel
+                ? `${PARCEL_TYPES.find(([value]) => value === listing.parcel?.parcel_type)?.[1] ?? "-"}, ${Math.round((listing.parcel.weight_g ?? 0) / 100) / 10} kg`
+                : "-"],
+              ["Izoh", listing.comment || "-"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[12px] text-muted-foreground">{label}</p>
+                <p className="mt-1 text-[14px] font-medium text-foreground">{value}</p>
+              </div>
+            ))}
+            <ParcelPhoto
+              photo={listing.parcel?.photo}
+              label="Posilka rasmi"
+              onRefresh={() => void run(() => openListing(listing.id))}
+            />
+            {listing.status === "published" && listingThreads.length === 0 && (
+              <EmptyState icon={Package} title="Hozircha takliflar yo'q" subtitle="Haydovchilar taklif yuborishi bilan shu yerda ko'rasiz" />
+            )}
+            {listingThreads.length > 0 && (
+              <PrimaryButton onClick={() => go("client-listing-bids")}>Takliflarni ko'rish</PrimaryButton>
+            )}
+            {listing.status === "published" && (
+              <SecondaryButton onClick={() => void run(() => openMatches(listing.id, listing.kind))}>
+                Mos safarlarni ko'rish
+              </SecondaryButton>
+            )}
+            {["draft", "published", "paused"].includes(listing.status) && (
+              <SecondaryButton
+                danger
+                onClick={() =>
+                  void run(async () => {
+                    await cancelListing(listing.id, listing.version, "client_changed_plan");
+                    await loadMyListings();
+                    go("client-orders");
+                  }, "Buyurtma bekor qilindi")
+                }
+              >
+                Buyurtmani bekor qilish
+              </SecondaryButton>
+            )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "client-listing-bids" && listingDetail) {
+      const listing = listingDetail;
+      return (
+        <main className="flex flex-1 flex-col bg-background">
+          <TopBar title="Haydovchi takliflari" back={() => go("client-listing-detail")} />
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            {busy && !listingThreads.length ? <ListSkeleton /> : listingThreads.length ? listingThreads.map((thread) => {
+              const version = thread.current_version;
+              return (
+                <div key={thread.id} className="rounded-[16px] border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[16px] font-semibold text-foreground">{thread.driver.label}</p>
+                      <p className="text-[13px] text-muted-foreground">
+                        {version ? `${endLabel(version.pickup_stop, version.pickup_point)} -> ${endLabel(version.dropoff_stop, version.dropoff_point)}` : "-"}
+                      </p>
+                      <p className="mt-1 text-[13px] text-muted-foreground">
+                        {version ? `${shortDate(version.pickup_window_start)} - ${shortDate(version.pickup_window_end)}` : "-"}
+                      </p>
+                    </div>
+                    <p className="text-[17px] font-bold text-primary">{version ? formatUzs(version.total_minor / 100) : "-"}</p>
+                  </div>
+                  {version?.message && <p className="mt-2 text-[13px] leading-5 text-secondary-foreground">{version.message}</p>}
+                  {version && version.status === "active" && version.author_side === "driver" && (
+                    <div className="mt-3">
+                      {counterFor === thread.id ? (
+                        <div className="space-y-3">
+                          <Field
+                            label="Sizning narxingiz (so'm)"
+                            type="number"
+                            value={counterPrice}
+                            placeholder={String(Math.round(version.total_minor / 100))}
+                            onChange={setCounterPrice}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={counterPending || busy || soumToMinor(counterPrice) <= 0}
+                              onClick={() => void run(() => sendCounter(thread.id, version.revision, () => openListing(listing.id, "client-listing-bids")), "Qarshi taklif yuborildi")}
+                              className="h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
+                            >
+                              {counterPending ? "Yuborilmoqda..." : "Yuborish"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setCounterFor(null); setCounterPrice(""); }}
+                              className="el-press h-11 flex-1 rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
+                            >
+                              Bekor qilish
+                            </button>
+                          </div>
+                        </div>
+                      ) : version.price_revisions_left.client > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => { setCounterFor(thread.id); setCounterPrice(String(Math.round(version.total_minor / 100))); }}
+                          className="el-press h-11 w-full rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
+                        >
+                          Boshqa narx taklif qilish ({version.price_revisions_left.client} marta qoldi)
+                        </button>
+                      ) : (
+                        <p className="text-[12px] leading-5 text-muted-foreground">
+                          Narxni o'zgartirish imkoni tugadi — taklifni qabul qiling yoki rad eting.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {version && version.status === "active" && version.author_side === "client" && (
+                    <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
+                      Sizning qarshi taklifingiz yuborildi — haydovchining javobi kutilmoqda.
+                    </p>
+                  )}
+                  {version && version.status === "active" && version.author_side === "driver" && (
+                    <div className="mt-3">
+                      <PrimaryButton
+                        disabled={busy}
+                        onClick={() =>
+                          void run(async () => {
+                            const accepted = await acceptProposal(
+                              thread.id,
+                              { proposal_version_id: version.id, expected_listing_terms_version: listing.terms_version },
+                              newIdempotencyKey(),
+                            );
+                            void accepted;
+                            await openListing(listing.id);
+                          }, "Haydovchi tanlandi")
+                        }
+                      >
+                        Shu haydovchini tanlash
+                      </PrimaryButton>
+                    </div>
+                  )}
+                  {version && version.status !== "active" && (
+                    <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
+                      Bu taklif yopilgan ({proposalStatusLabel(version.status)}) — javob berib bo'lmaydi.
+                    </p>
+                  )}
+                </div>
+              );
+            }) : <EmptyState icon={Package} title="Hozircha takliflar yo'q" subtitle="Haydovchilar taklif yuborishi bilan shu yerda ko'rasiz" />}
+            <p className="pt-2 text-center text-[12px] leading-5 text-muted-foreground">
+              Haydovchining ismi, telefoni va davlat raqami taklif qabul qilinmaguncha ko'rsatilmaydi.
+            </p>
+          </section>
+        </main>
+      );
+    }
+
     if (screen === "client-bids") {
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
+        <main className="flex flex-1 flex-col bg-background">
           <TopBar title="Haydovchi takliflari" back={() => go("client-order-detail")} />
-          <section className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            {bids.length ? bids.map((bid) => (
-              <div key={bid.id ?? bid.bid_id} className="rounded-[16px] border border-[#E5E7EB] bg-white p-4">
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            {busy && !bids.length ? <ListSkeleton /> : bids.length ? bids.map((bid) => (
+              <div key={bid.id ?? bid.bid_id} className="rounded-[16px] border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[16px] font-semibold text-[#111827]">{bid.driver?.full_name ?? "Haydovchi"}</p>
-                    <p className="text-[13px] text-[#6B7280]">{bid.driver?.car_model ?? "-"} / {bid.driver?.plate_number ?? "-"}</p>
-                    <p className="mt-1 text-[13px] text-[#6B7280]">Reyting: {bid.driver?.rating ?? "-"}</p>
+                    <p className="text-[16px] font-semibold text-foreground">{bid.driver?.full_name ?? "Haydovchi"}</p>
+                    <p className="text-[13px] text-muted-foreground">{bid.driver?.car_model ?? "-"} / {bid.driver?.plate_number ?? "-"}</p>
+                    <p className="mt-1 text-[13px] text-muted-foreground">Reyting: {bid.driver?.rating ?? "-"}</p>
                   </div>
-                  <p className="text-[17px] font-bold text-[#1B4FD8]">{formatUzs(bid.price)}</p>
+                  <p className="text-[17px] font-bold text-primary">{formatUzs(bid.price)}</p>
                 </div>
                 <div className="mt-4">
                   <PrimaryButton
@@ -1850,11 +4863,11 @@ export function ConnectedApp() {
 
     if (screen === "client-confirm" && orderDetail) {
       return (
-        <main className="flex flex-1 flex-col bg-white">
+        <main className="flex flex-1 flex-col bg-card">
           <TopBar title="Buyurtmani tasdiqlang" back={() => go("client-order-detail")} />
           <section className="flex flex-1 flex-col justify-center gap-5 px-5 text-center">
-            <CheckCircle className="mx-auto" size={72} color="#16A34A" />
-            <p className="text-[16px] leading-6 text-[#374151]">Posilka yetib kelgan bo'lsa, buyurtmani tasdiqlang.</p>
+            <CheckCircle className="mx-auto" size={72} color="var(--success)" />
+            <p className="text-[16px] leading-6 text-secondary-foreground">Posilka yetib kelgan bo'lsa, buyurtmani tasdiqlang.</p>
             <PrimaryButton onClick={() => run(async () => { await confirmClientOrder(orderDetail.id); go("client-rating"); }, "Buyurtma tasdiqlandi")}>Tasdiqlash</PrimaryButton>
           </section>
         </main>
@@ -1863,21 +4876,21 @@ export function ConnectedApp() {
 
     if (screen === "client-rating" && selectedOrderId) {
       return (
-        <main className="flex flex-1 flex-col bg-white">
+        <main className="flex flex-1 flex-col bg-card">
           <TopBar title="Haydovchini baholang" back={() => go("client-orders")} />
           <section className="flex flex-1 flex-col gap-5 px-5 py-6">
-            <p className="text-center text-[14px] text-[#6B7280]">1 dan 5 gacha baho bering</p>
+            <p className="text-center text-[14px] text-muted-foreground">1 dan 5 gacha baho bering</p>
             <div className="flex justify-center gap-2">
               {[1, 2, 3, 4, 5].map((value) => (
-                <button key={value} onClick={() => setRating(value)}>
-                  <Star fill={value <= rating ? "#F59E0B" : "none"} color="#F59E0B" size={34} />
+                <button type="button" className="el-press" key={value} onClick={() => setRating(value)} aria-label={`${value} yulduz`}>
+                  <Star fill={value <= rating ? "var(--warning)" : "none"} color="var(--warning)" size={34} />
                 </button>
               ))}
             </div>
             <Field label="Izoh qoldiring" value={ratingComment} multiline onChange={setRatingComment} />
             <div className="mt-auto">
               <PrimaryButton onClick={() => run(async () => { await rateClientOrder(selectedOrderId, { rating, comment: ratingComment || null }); go("client-orders"); }, "Baho yuborildi")}>Bahoni yuborish</PrimaryButton>
-              <button type="button" onClick={() => go("client-orders")} className="mt-3 h-10 w-full text-[14px] font-semibold text-[#6B7280]">
+              <button type="button" onClick={() => go("client-orders")} className="el-press mt-3 h-10 w-full text-[14px] font-semibold text-muted-foreground">
                 Keyinroq
               </button>
             </div>
@@ -1889,15 +4902,15 @@ export function ConnectedApp() {
     if (screen === "client-dispute" && orderDetail) {
       const reasons = ["Haydovchi kelmadi", "Posilka kechikdi", "Narx bo'yicha kelishmovchilik", "Boshqa muammo"];
       return (
-        <main className="flex flex-1 flex-col bg-white">
+        <main className="flex flex-1 flex-col bg-card">
           <TopBar title="Muammo haqida xabar berish" back={() => go("client-order-detail")} />
           <section className="flex flex-1 flex-col gap-4 px-5 py-5">
             <label className="flex flex-col gap-1.5">
-              <span className="text-[14px] font-medium text-[#374151]">Muammo turi</span>
+              <span className="text-[14px] font-medium text-secondary-foreground">Muammo turi</span>
               <select
                 value={disputeReason}
                 onChange={(event) => setDisputeReason(event.target.value)}
-                className="h-[52px] rounded-[12px] border border-[#E5E7EB] bg-white px-4 text-[15px] text-[#111827] outline-none"
+                className="h-[52px] rounded-[12px] border border-border bg-card px-4 text-[15px] text-foreground outline-none"
               >
                 {reasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
               </select>
@@ -1919,12 +4932,20 @@ export function ConnectedApp() {
       );
     }
 
-    if (screen === "client-notifications") {
+    if (screen === "client-notifications" || screen === "driver-notifications") {
+      // One inbox, both sides. There is no push provider yet (Q82), so this screen *is* the delivery channel -
+      // a driver without it simply never learns that a client answered.
+      const inboxRole: MobileRole = screen === "driver-notifications" ? "driver" : "client";
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
-          <section className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            <h1 className="text-[24px] font-bold text-[#111827]">Bildirishnomalar</h1>
-            {notifications.length ? notifications.map((item) => (
+        <main className="flex flex-1 flex-col bg-background">
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <div className="flex items-center gap-3">
+              {inboxRole === "client" && (
+                <SidebarButton className="shadow-none ring-1 ring-border" onClick={() => setSidebarOpen(true)} />
+              )}
+              <h1 className="text-[24px] font-bold text-foreground">Bildirishnomalar</h1>
+            </div>
+            {busy && !notifications.length ? <ListSkeleton /> : notifications.length ? notifications.map((item) => (
               <button
                 key={item.id}
                 onClick={() => run(async () => {
@@ -1933,14 +4954,14 @@ export function ConnectedApp() {
                   const orderId = item.order_id ?? (item.entity_type === "order" ? item.entity_id : undefined);
                   if (orderId) await openClientOrder(orderId, item.type === "new_bid" ? "client-bids" : "client-order-detail");
                 })}
-                className={cls("w-full rounded-[14px] border bg-white p-4 text-left", item.is_read ? "border-[#E5E7EB]" : "border-[#BFDBFE]")}
+                className={cls("el-press w-full rounded-[14px] border bg-card p-4 text-left", item.is_read ? "border-border" : "border-blue-200")}
               >
-                <p className="text-[15px] font-semibold text-[#111827]">{item.title}</p>
-                <p className="mt-1 text-[13px] text-[#6B7280]">{item.message ?? item.body}</p>
+                <p className="text-[15px] font-semibold text-foreground">{item.title}</p>
+                <p className="mt-1 text-[13px] text-muted-foreground">{item.message ?? item.body}</p>
               </button>
             )) : <EmptyState icon={Bell} title="Hozircha bildirishnomalar yo'q" />}
           </section>
-          <BottomNav role="client" active={screen} go={go} />
+          {inboxRole === "driver" && <BottomNav role={inboxRole} active={screen} go={go} unread={unreadNotifications} />}
         </main>
       );
     }
@@ -1951,18 +4972,18 @@ export function ConnectedApp() {
       const totalBids = orders.reduce((sum, order) => sum + (order.bids_count ?? 0), 0);
       const latestOrder = orders[0];
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
+        <main className="flex flex-1 flex-col bg-background">
           <TopBar title="Profil" back={() => go("client-home")} />
-          <section className="flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
-            <div className="rounded-[18px] border border-[#E5E7EB] bg-white p-4">
+          <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
+            <div className="rounded-[18px] border border-border bg-card p-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[#1B4FD8]">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
                   <User size={28} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[18px] font-bold text-[#111827]">{clientName || auth.user?.full_name || "Mijoz"}</p>
-                  <p className="mt-0.5 text-[13px] text-[#6B7280]">{auth.user?.phone}</p>
-                  <span className="mt-2 inline-flex rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#15803D]">
+                  <p className="truncate text-[18px] font-bold text-foreground">{clientName || auth.user?.full_name || "Mijoz"}</p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">{auth.user?.phone}</p>
+                  <span className="mt-2 inline-flex rounded-full bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success">
                     Mijoz akkaunti
                   </span>
                 </div>
@@ -1974,41 +4995,44 @@ export function ConnectedApp() {
                 ["Faol", activeOrders],
                 ["Taklif", totalBids],
               ].map(([label, value]) => (
-                <div key={label as string} className="rounded-[12px] border border-[#E5E7EB] bg-white p-3 text-center">
-                  <p className="text-[20px] font-bold text-[#111827]">{value}</p>
-                  <p className="text-[11px] text-[#6B7280]">{label}</p>
+                <div key={label as string} className="rounded-[12px] border border-border bg-card p-3 text-center">
+                  <p className="text-[20px] font-bold text-foreground">{value}</p>
+                  <p className="text-[11px] text-muted-foreground">{label}</p>
                 </div>
               ))}
             </div>
-            <div className="rounded-[16px] border border-[#E5E7EB] bg-white p-4">
-              <p className="text-[13px] font-semibold text-[#6B7280]">Buyurtmalar holati</p>
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <p className="text-[13px] font-semibold text-muted-foreground">Buyurtmalar holati</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-[12px] bg-[#F9FAFB] p-3">
-                  <p className="text-[17px] font-bold text-[#111827]">{completedOrders}</p>
-                  <p className="text-[12px] text-[#6B7280]">Yakunlangan</p>
+                <div className="rounded-[12px] bg-slate-50 p-3">
+                  <p className="text-[17px] font-bold text-foreground">{completedOrders}</p>
+                  <p className="text-[12px] text-muted-foreground">Yakunlangan</p>
                 </div>
-                <div className="rounded-[12px] bg-[#F9FAFB] p-3">
-                  <p className="text-[17px] font-bold text-[#111827]">{latestOrder ? statusLabels[latestOrder.status] : "-"}</p>
-                  <p className="text-[12px] text-[#6B7280]">So'nggi buyurtma</p>
+                <div className="rounded-[12px] bg-slate-50 p-3">
+                  <p className="text-[17px] font-bold text-foreground">{latestOrder ? statusLabel(latestOrder.status) : "-"}</p>
+                  <p className="text-[12px] text-muted-foreground">So'nggi buyurtma</p>
                 </div>
               </div>
             </div>
-            <div className="rounded-[16px] border border-[#E5E7EB] bg-white p-4">
-              <p className="text-[13px] font-semibold text-[#6B7280]">Shaxsiy ma'lumotlar</p>
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <p className="text-[13px] font-semibold text-muted-foreground">Shaxsiy ma'lumotlar</p>
               <div className="mt-3 space-y-3">
                 <Field label="Ism familiya" value={clientName} onChange={setClientName} placeholder="Masalan: Ali Valiyev" />
                 <PrimaryButton onClick={() => run(async () => { await updateClientProfile(clientName); await auth.refreshMe(); }, "Profil yangilandi")}>Saqlash</PrimaryButton>
               </div>
             </div>
             <div className="space-y-2">
-              <p className="px-1 text-[13px] font-semibold text-[#6B7280]">Tezkor amallar</p>
+              <p className="px-1 text-[13px] font-semibold text-muted-foreground">Tezkor amallar</p>
               <ProfileActionRow icon={Package} label="Buyurtmalarim" description="Yaratilgan buyurtmalar va holatlarni ko'rish" onClick={() => go("client-orders")} />
+              <ProfileActionRow icon={Truck} label="Takliflarim" description="Haydovchi e'lonlariga yuborgan narx takliflaringiz" onClick={() => go("client-proposals")} />
               <ProfileActionRow icon={Bell} label="Bildirishnomalar" description="Takliflar va buyurtma yangiliklari" onClick={() => go("client-notifications")} />
+              <ProfileActionRow icon={FileText} label="Nizolarim" description="Ochilgan nizolar, ularning holati va dalillar" onClick={() => go("my-disputes")} />
+              <ProfileActionRow icon={Headphones} label="Yordam" description="Savollar va operatorga murojaat" onClick={() => go("support")} />
+              <ProfileActionRow icon={Shield} label="Sozlamalar" description="Ko'rinish, maxfiylik va akkaunt" onClick={() => go("settings")} />
               <ProfileActionRow icon={Home} label="Bosh sahifa" description="Yangi buyurtma yaratish oynasiga qaytish" onClick={() => go("client-home")} />
               <ProfileActionRow danger icon={X} label="Chiqish" description="Akkauntdan xavfsiz chiqish" onClick={() => run(async () => { await auth.logout(); go("role"); })} />
             </div>
           </section>
-          <BottomNav role="client" active={screen} go={go} />
         </main>
       );
     }
@@ -2016,42 +5040,57 @@ export function ConnectedApp() {
     if (screen === "driver-home") {
       const approved = driverProfile?.verification_status === "approved";
       const showOnboardingActions = Boolean(driverProfile && !approved);
-      const earningOrders = driverFeed.filter(isDriverEarningOrder);
-      const netIncome = earningOrders.reduce((sum, order) => sum + driverNetIncome(order), 0);
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
-          <section className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+        <main className="flex flex-1 flex-col bg-background">
+          <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
             <div className="flex items-start justify-between gap-3">
-              <h1 className="min-w-0 flex-1 text-[24px] font-bold text-[#111827]">{approved ? "Bosh sahifa" : "Profilni to'ldiring"}</h1>
+              <h1 className="min-w-0 flex-1 text-[24px] font-bold text-foreground">{approved ? "Bosh sahifa" : "Profilni to'ldiring"}</h1>
+              {/* The driver's way into the inbox, with the unread count on it - the reference client's bell.
+                  The nav bar already carries five tabs, and a sixth would be unreadable at this width. */}
+              <button
+                type="button"
+                onClick={() => go("driver-notifications")}
+                aria-label={unreadNotifications > 0 ? `Bildirishnomalar, ${unreadNotifications} ta o'qilmagan` : "Bildirishnomalar"}
+                className="el-press relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-border bg-card"
+              >
+                <Bell size={18} className="text-foreground" />
+                {unreadNotifications > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1">
+                    <span className="text-[9px] font-bold leading-none text-primary-foreground">
+                      {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                    </span>
+                  </span>
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => go("driver-income")}
-                className="shrink-0 rounded-[14px] border border-[#DDE7FF] bg-white px-3 py-2 text-right shadow-sm"
-                aria-label="Sof daromad"
+                className="el-press shrink-0 rounded-[14px] border border-blue-100 bg-card px-3 py-2 text-right shadow-sm"
+                aria-label="Komissiya balansi"
               >
-                <span className="block text-[10px] font-semibold text-[#6B7280]">Sof daromad</span>
-                <span className="mt-0.5 flex items-center justify-end gap-1 text-[13px] font-bold text-[#111827]">
-                  {formatUzs(netIncome)}
-                  <ChevronRight size={14} color="#9CA3AF" />
+                <span className="block text-[10px] font-semibold text-muted-foreground">Komissiya balansi</span>
+                <span className="mt-0.5 flex items-center justify-end gap-1 text-[13px] font-bold text-foreground">
+                  {walletState ? formatUzs(walletState.available_minor / 100) : "-"}
+                  <ChevronRight size={14} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
                 </span>
               </button>
             </div>
-            <div className="rounded-[16px] border border-[#E5E7EB] bg-white p-4">
-              <p className="text-[15px] font-semibold text-[#111827]">Tasdiqlash holati: {driverProfile?.verification_status ?? "new"}</p>
-              <p className="mt-2 text-[14px] leading-6 text-[#6B7280]">{approved ? "Faol bo'lsangiz, yo'nalishingizga mos buyurtmalar ko'rinadi" : "Buyurtmalarni ko'rish uchun avval profil va hujjatlaringizni yuboring."}</p>
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <p className="text-[15px] font-semibold text-foreground">Tasdiqlash holati: {driverProfile?.verification_status ?? "new"}</p>
+              <p className="mt-2 text-[14px] leading-6 text-muted-foreground">{approved ? "Faol bo'lsangiz, yo'nalishingizga mos buyurtmalar ko'rinadi" : "Buyurtmalarni ko'rish uchun avval profil va hujjatlaringizni yuboring."}</p>
             </div>
-            <div className="rounded-[16px] border border-[#E5E7EB] bg-white p-4">
+            <div className="rounded-[16px] border border-border bg-card p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[15px] font-semibold text-[#111827]">Faollik holati</p>
-                  <p className="text-[13px] text-[#6B7280]">{approved ? "Faolman" : "Tasdiqlanmaguncha faol bo'la olmaysiz"}</p>
+                  <p className="text-[15px] font-semibold text-foreground">Faollik holati</p>
+                  <p className="text-[13px] text-muted-foreground">{approved ? "Faolman" : "Tasdiqlanmaguncha faol bo'la olmaysiz"}</p>
                 </div>
                 <button
                   disabled={!approved || busy}
                   onClick={() => run(async () => { await setDriverAvailability(!driverProfile?.is_available); await loadDriverProfile(); }, "Faollik yangilandi")}
-                  className={cls("h-8 w-14 rounded-full p-1", driverProfile?.is_available ? "bg-[#1B4FD8]" : "bg-[#D1D5DB]", !approved && "opacity-60")}
+                  className={cls("el-press h-8 w-14 rounded-full p-1", driverProfile?.is_available ? "bg-primary" : "bg-slate-300", !approved && "opacity-60")}
                 >
-                  <span className={cls("block h-6 w-6 rounded-full bg-white transition", driverProfile?.is_available && "translate-x-6")} />
+                  <span className={cls("block h-6 w-6 rounded-full bg-card transition", driverProfile?.is_available && "translate-x-6")} />
                 </button>
               </div>
             </div>
@@ -2070,14 +5109,58 @@ export function ConnectedApp() {
 
     if (screen === "driver-profile-form") {
       return (
-        <main className="flex flex-1 flex-col bg-white">
+        <main className="flex flex-1 flex-col bg-card">
           <TopBar title="Haydovchi profili" back={() => go("driver-home")} />
-          <section className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+          <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
             <Field label="Ism familiya" value={driverForm.full_name} onChange={(v) => setDriverForm({ ...driverForm, full_name: v })} />
             <Field label="Avtomobil modeli" value={driverForm.car_model} placeholder="Masalan: Cobalt" onChange={(v) => setDriverForm({ ...driverForm, car_model: v })} />
             <Field label="Avtomobil rangi" value={driverForm.car_color} placeholder="Masalan: Oq" onChange={(v) => setDriverForm({ ...driverForm, car_color: v })} />
             <Field label="Davlat raqami" value={driverForm.plate_number} placeholder="Masalan: 01 A 123 AA" onChange={(v) => setDriverForm({ ...driverForm, plate_number: v })} />
-            <PrimaryButton onClick={() => run(async () => { await updateDriverProfile(driverForm); await loadDriverProfile(); go("driver-home"); }, "Profil saqlandi")}>Saqlash</PrimaryButton>
+            <Field
+              label="Yo'lovchi o'rinlari"
+              type="number"
+              value={String(driverSeats)}
+              onChange={(v) => setDriverSeats(Math.max(1, Number(v) || 1))}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Yuk uchun joy (kg)" type="number" value={driverCargoKg} onChange={setDriverCargoKg} />
+              <Field label="Yuk hajmi (litr)" type="number" value={driverCargoLitres} onChange={setDriverCargoLitres} />
+            </div>
+            {vehicles.map((vehicle) => (
+              <div key={vehicle.id} className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[12px] text-muted-foreground">Avtomobil holati</p>
+                <p className="mt-1 text-[14px] font-medium text-foreground">
+                  {vehicle.make_model} · {vehicle.plate_masked ?? vehicle.plate_number ?? "-"} · {vehicleStatusLabel(vehicle.verification_status)}
+                </p>
+              </div>
+            ))}
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Avtomobil hujjatlari tekshirilgunicha yo'nalish qo'sha olmaysiz.
+            </p>
+            <PrimaryButton
+              onClick={() => run(async () => {
+                await updateDriverProfile(driverForm);
+                const plate = driverForm.plate_number.replace(/\s/g, "").toUpperCase();
+                const known = vehicles.some((vehicle) => (vehicle.plate_number ?? "").replace(/\s/g, "").toUpperCase() === plate);
+                // The same car the v1 profile carries, registered once on the stage-2 side so a trip can use it.
+                if (plate && driverForm.car_model.trim() && driverForm.car_color.trim() && !known) {
+                  await createVehicle({
+                    plate_number: plate,
+                    make_model: driverForm.car_model.trim(),
+                    color: driverForm.car_color.trim(),
+                    seat_capacity: driverSeats,
+                    // The ceiling every trip of this car is measured against (AC12).
+                    cargo_max_weight_g: Math.round(Number(driverCargoKg) * 1000),
+                    cargo_max_volume_ml: Math.round(Number(driverCargoLitres) * 1000),
+                  });
+                }
+                await loadDriverProfile();
+                await loadDriverTrips();
+                go("driver-home");
+              }, "Profil saqlandi")}
+            >
+              Saqlash
+            </PrimaryButton>
           </section>
         </main>
       );
@@ -2085,14 +5168,14 @@ export function ConnectedApp() {
 
     if (screen === "driver-documents") {
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
+        <main className="flex flex-1 flex-col bg-background">
           <TopBar title="Hujjatlar" back={() => go("driver-home")} />
-          <section className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            {(Object.keys(docLabels) as DriverDocumentType[]).map((type) => (
-              <label key={type} className="flex cursor-pointer items-center gap-3 rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <Camera size={24} color="#1B4FD8" />
-                <span className="flex-1 text-[15px] font-semibold text-[#111827]">{docLabels[type]}</span>
-                <span className="text-[13px] text-[#1B4FD8]">Yuklash</span>
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            {DRIVER_DOCUMENT_TYPES.map((type) => (
+              <label key={type} className="flex cursor-pointer items-center gap-3 rounded-[14px] border border-border bg-card p-4">
+                <Camera size={24} color="var(--primary)" />
+                <span className="flex-1 text-[15px] font-semibold text-foreground">{docTypeLabel(type)}</span>
+                <span className="text-[13px] text-primary">Yuklash</span>
                 <input
                   type="file"
                   accept="image/*,.pdf"
@@ -2115,49 +5198,115 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-routes") {
-      const visibleRoutes = driverRoutes.filter((route) => route.status !== "unavailable");
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
-          <section className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
+        <main className="flex flex-1 flex-col bg-background">
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <div className="flex items-center justify-between">
-              <h1 className="text-[24px] font-bold text-[#111827]">Yo'nalishlarim</h1>
+              <h1 className="text-[24px] font-bold text-foreground">Yo'nalishlarim</h1>
               <button
                 onClick={() => {
-                  setEditingRouteId(null);
-                  setRouteForm({ from_city_id: 0, from_district_id: null, to_city_id: 0, to_district_id: null });
+                  setTripForm({ vehicleId: "", corridorId: "", routeId: "", startAt: "", seats: 4, cargoKg: "20", cargoLitres: "100" });
+                  setTripRoutes([]);
                   go("driver-add-route");
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1B4FD8] text-white"
+                className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
               >
                 +
               </button>
             </div>
-            {visibleRoutes.length ? visibleRoutes.map((route) => (
-              <div key={route.id} className="relative rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <div className="absolute right-3 top-3 flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => startEditDriverRoute(route)}
-                    aria-label="Yo'nalishni tahrirlash"
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EEF2FF] text-[#1B4FD8]"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => run(async () => { await disableDriverRoute(route.id); await loadDriverRoutes(); }, "Yo'nalish o'chirildi")}
-                    aria-label="Yo'nalishni o'chirish"
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FEE2E2] text-[#DC2626]"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-                <p className="pr-20 text-[15px] font-semibold leading-6 text-[#111827]">
-                  {[cityName(route.from_city), districtName(route.from_district)].filter(Boolean).join(", ")} {"->"} {[cityName(route.to_city), districtName(route.to_district)].filter(Boolean).join(", ")}
+            {busy && !trips.length ? <ListSkeleton /> : trips.length ? trips.map((trip) => {
+              const nextAction = tripNextAction(trip.status);
+              return (
+              <div key={trip.id} className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[15px] font-semibold leading-6 text-foreground">
+                  {trip.stops[0]?.stop.name_uz ?? "-"} {"->"} {trip.stops[trip.stops.length - 1]?.stop.name_uz ?? "-"}
                 </p>
-                <p className="mt-1 text-[13px] text-[#16A34A]">Status: Faol</p>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  {shortDate(trip.planned_start_at)} · {trip.stops.length} bekat · {trip.seat_capacity} o'rin
+                </p>
+                <p className="mt-1 text-[13px] text-success">Status: {tripStatusLabel(trip.status)}</p>
+                {nextAction && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(async () => {
+                      await tripAction(trip.id, nextAction[0], { expected_version: trip.version });
+                      await loadDriverTrips();
+                    }, "Safar holati yangilandi")}
+                    className="el-press mt-3 h-10 w-full rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
+                  >
+                    {nextAction[1]}
+                  </button>
+                )}
+                {trip.status === "planned" && (
+                  <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+                    Chiqish oynasi jo'nashdan 60 daqiqa oldin ochiladi.
+                  </p>
+                )}
+                {/* Q92: the driver is an author in this market, not only an answerer. A planned trip can be
+                    put up with the driver's own starting price, and clients answer it with theirs. */}
+                {tripOffers(trip.id).map((offer) => (
+                  <div key={offer.id} className="mt-2 rounded-[12px] bg-slate-50 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        {offer.service_type === "passenger" ? "Yo'lovchi e'loni" : "Yuk e'loni"}
+                      </span>
+                      <span className="text-[13px] font-bold text-primary">
+                        {formatUzs(offer.unit_price_minor / 100)}
+                        {offer.price_basis === "per_seat" ? " / o'rin" : ""}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[12px] text-muted-foreground">
+                      {listingStatusLabel(offer.status)} · boshlang'ich narx, mijoz o'z narxini taklif qiladi
+                    </p>
+                    {offer.status === "draft" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void run(async () => {
+                          await publishListing(offer.id, offer.version);
+                          await loadDriverTrips();
+                        }, "E'lon bozorga chiqarildi")}
+                        className="el-press mt-2 h-9 w-full rounded-[10px] bg-primary text-[13px] font-semibold text-primary-foreground"
+                      >
+                        Bozorga chiqarish
+                      </button>
+                    )}
+                    {offer.status === "published" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void run(() => openMatches(offer.id, offer.kind))}
+                        className="el-press mt-2 h-9 w-full rounded-[10px] bg-accent text-[13px] font-semibold text-primary"
+                      >
+                        Mos so'rovlarni ko'rish
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {trip.status === "planned" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const first = trip.stops[0]?.stop.id ?? "";
+                      const last = trip.stops[trip.stops.length - 1]?.stop.id ?? "";
+                      setOfferForm({
+                        tripId: trip.id,
+                        serviceType: flags?.passenger_enabled ? "passenger" : "parcel",
+                        originStopId: first,
+                        destinationStopId: last,
+                        price: "",
+                      });
+                      go("driver-offer-create");
+                    }}
+                    className="el-press mt-3 h-10 w-full rounded-[10px] border border-primary text-[14px] font-semibold text-primary"
+                  >
+                    Narx bilan e'lon qilish
+                  </button>
+                )}
               </div>
-            )) : <EmptyState icon={Navigation} title="Hozircha yo'nalish qo'shilmagan" action="Yo'nalish qo'shish" onAction={() => go("driver-add-route")} />}
+              );
+            }) : <EmptyState icon={Navigation} title="Hozircha yo'nalish qo'shilmagan" action="Yo'nalish qo'shish" onAction={() => go("driver-add-route")} />}
           </section>
           <BottomNav role="driver" active={screen} go={go} />
         </main>
@@ -2165,60 +5314,248 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-add-route") {
-      const isEditingRoute = editingRouteId !== null;
-      const routeFromCity = cities.find((city) => city.id === routeForm.from_city_id);
-      const routeToCity = cities.find((city) => city.id === routeForm.to_city_id);
-      const routeFromDistrict = districts.find((district) => district.id === routeForm.from_district_id);
-      const routeToDistrict = districts.find((district) => district.id === routeForm.to_district_id);
-      const routeReady = Boolean(
-        routeForm.from_city_id
-        && routeForm.to_city_id
-        && (!routeFromCity?.requires_district || routeForm.from_district_id)
-        && (!routeToCity?.requires_district || routeForm.to_district_id),
+      const approvedVehicles = vehicles.filter((vehicle) => vehicle.verification_status === "approved");
+      const chosenRoute = tripRoutes.find((route) => route.id === tripForm.routeId);
+      const tripReady = Boolean(
+        tripForm.vehicleId && chosenRoute && tripForm.startAt && tripForm.seats > 0
+        && Number(tripForm.cargoKg) > 0 && Number(tripForm.cargoLitres) > 0,
       );
       return (
-        <main className="flex flex-1 flex-col bg-white">
-          <TopBar title={isEditingRoute ? "Yo'nalishni tahrirlash" : "Yo'nalish qo'shish"} back={() => { setEditingRouteId(null); go("driver-routes"); }} />
-          <section className="flex flex-1 flex-col gap-4 px-5 py-5">
-            <CitySelect label="Qayerdan" cities={cities} value={routeForm.from_city_id} onChange={(v) => setRouteForm({ ...routeForm, from_city_id: v, from_district_id: null })} />
-            {routeFromCity?.requires_district && (
-              <button
-                type="button"
-                onClick={() => void openDistrictSelector(routeFromCity, "driver-from")}
-                className="flex h-[52px] items-center justify-between rounded-[12px] border border-[#E5E7EB] bg-white px-4 text-left"
-              >
-                <span className="text-[15px] font-medium text-[#111827]">{routeFromDistrict?.name_uz ?? "Qayerdan tumani"}</span>
-                <ChevronRight size={18} color="#9CA3AF" />
-              </button>
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title="Yo'nalish qo'shish" back={() => go("driver-routes")} />
+          <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
+            <PickSelect
+              label="Avtomobil"
+              placeholder={approvedVehicles.length ? "Avtomobilni tanlang" : "Tasdiqlangan avtomobil yo'q"}
+              value={tripForm.vehicleId}
+              options={approvedVehicles.map((vehicle) => [
+                vehicle.id,
+                vehicle.make_model + " · " + (vehicle.plate_masked ?? vehicle.plate_number ?? "-") + " · " + vehicle.seat_capacity + " o'rin",
+              ] as [string, string])}
+              onChange={(value) => {
+                const picked = approvedVehicles.find((vehicle) => vehicle.id === value);
+                setTripForm({
+                  ...tripForm,
+                  vehicleId: value,
+                  seats: picked?.seat_capacity ?? tripForm.seats,
+                  cargoKg: picked?.cargo_max_weight_g ? String(Math.round(picked.cargo_max_weight_g / 1000)) : tripForm.cargoKg,
+                  cargoLitres: picked?.cargo_max_volume_ml ? String(Math.round(picked.cargo_max_volume_ml / 1000)) : tripForm.cargoLitres,
+                });
+              }}
+            />
+            {approvedVehicles.length === 0 && (
+              <p className="text-[12px] leading-5 text-destructive">
+                Avtomobil hujjatlari tekshirilgandan keyin safar rejalashtirish mumkin bo'ladi.
+              </p>
             )}
-            <CitySelect label="Qayerga" cities={cities} value={routeForm.to_city_id} onChange={(v) => setRouteForm({ ...routeForm, to_city_id: v, to_district_id: null })} />
-            {routeToCity?.requires_district && (
-              <button
-                type="button"
-                onClick={() => void openDistrictSelector(routeToCity, "driver-to")}
-                className="flex h-[52px] items-center justify-between rounded-[12px] border border-[#E5E7EB] bg-white px-4 text-left"
-              >
-                <span className="text-[15px] font-medium text-[#111827]">{routeToDistrict?.name_uz ?? "Qayerga tumani"}</span>
-                <ChevronRight size={18} color="#9CA3AF" />
-              </button>
+            <PickSelect
+              label="Qayerdan - qayerga"
+              placeholder="Yo'nalishni tanlang"
+              value={tripForm.corridorId}
+              options={corridors.map((corridor) => [corridor.id, corridor.name] as [string, string])}
+              onChange={(value) => {
+                setTripForm({ ...tripForm, corridorId: value, routeId: "" });
+                setTripRoutes([]);
+                if (value) void run(async () => setTripRoutes(await listCorridorRoutes(value)));
+              }}
+            />
+            <PickSelect
+              label="Marshrut"
+              placeholder={tripForm.corridorId ? "Marshrutni tanlang" : "Avval yo'nalishni tanlang"}
+              disabled={!tripForm.corridorId}
+              value={tripForm.routeId}
+              options={tripRoutes.map((route) => [
+                route.id,
+                route.stops.length + " bekat · " + Math.round(route.distance_m / 1000) + " km · " + Math.round(route.duration_s / 3600) + " soat",
+              ] as [string, string])}
+              onChange={(value) => setTripForm({ ...tripForm, routeId: value })}
+            />
+            {Boolean(tripForm.corridorId) && tripRoutes.length === 0 && (
+              <p className="text-[12px] leading-5 text-destructive">
+                Bu yo'nalishda tasdiqlangan marshrut yo'q — operator marshrut qo'shishi kerak.
+              </p>
             )}
+            <Field
+              label="Jo'nash vaqti"
+              type="datetime-local"
+              value={tripForm.startAt}
+              onChange={(v) => setTripForm({ ...tripForm, startAt: v })}
+            />
+            <Field
+              label="Bo'sh o'rinlar"
+              type="number"
+              value={String(tripForm.seats)}
+              onChange={(v) => setTripForm({ ...tripForm, seats: Math.max(1, Number(v) || 1) })}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Field
+                label="Yuk uchun joy (kg)"
+                type="number"
+                value={tripForm.cargoKg}
+                onChange={(v) => setTripForm({ ...tripForm, cargoKg: v })}
+              />
+              <Field
+                label="Yuk hajmi (litr)"
+                type="number"
+                value={tripForm.cargoLitres}
+                onChange={(v) => setTripForm({ ...tripForm, cargoLitres: v })}
+              />
+            </div>
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Safar operator tasdiqlagan marshrut bo'yicha rejalashtiriladi. Yuk uchun joy ko'rsatilmasa,
+              posilka takliflari yuborilmaydi.
+            </p>
+            <PrimaryButton
+              disabled={!tripReady || busy}
+              onClick={() => void run(async () => {
+                if (!chosenRoute) return;
+                const start = new Date(tripForm.startAt);
+                await createTrip({
+                  vehicle_id: tripForm.vehicleId,
+                  route_version_id: chosenRoute.id,
+                  planned_start_at: start.toISOString(),
+                  planned_end_at: new Date(start.getTime() + chosenRoute.duration_s * 1000).toISOString(),
+                  seat_capacity: tripForm.seats,
+                  // AC12: the capacity the trip really offers; without it no parcel proposal can be sent.
+                  cargo_capacity_weight_g: Math.round(Number(tripForm.cargoKg) * 1000),
+                  cargo_capacity_volume_ml: Math.round(Number(tripForm.cargoLitres) * 1000),
+                  max_detour_minutes: 15,
+                  max_detour_m: 5000,
+                  pickup_wait_minutes: 10,
+                  stops: chosenRoute.stops.map((stop, index) => ({
+                    stop_id: stop.stop_id,
+                    seq: index + 1,
+                    planned_arrival_at: new Date(start.getTime() + (stop.cumulative_duration_s ?? 0) * 1000).toISOString(),
+                    dwell_minutes: 5,
+                  })),
+                });
+                await loadDriverTrips();
+                go("driver-routes");
+              }, "Yo'nalish qo'shildi")}
+            >
+              Saqlash
+            </PrimaryButton>
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "driver-offer-create") {
+      const trip = trips.find((item) => item.id === offerForm.tripId);
+      const stopOptions = (trip?.stops ?? []).map((stop) => [stop.stop.id, stop.stop.name_uz] as [string, string]);
+      const window = offerWindowForTrip(trip, offerForm.originStopId);
+      const seatsOrOne = offerForm.serviceType === "passenger" ? (trip?.seat_capacity ?? 1) : 1;
+      const priceSoum = Math.round(Number(offerForm.price));
+      const hasCargoRoom = Boolean(trip?.cargo_capacity_weight_g || trip?.cargo_capacity_volume_ml);
+      const offerReady = Boolean(
+        trip && offerForm.originStopId && offerForm.destinationStopId
+        && offerForm.originStopId !== offerForm.destinationStopId
+        && window && priceSoum > 0
+        && (offerForm.serviceType === "passenger" || hasCargoRoom),
+      );
+      return (
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title="Safarni e'lon qilish" back={() => go("driver-routes")} />
+          <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+            <div className="rounded-[14px] bg-background p-4">
+              <p className="font-semibold text-foreground">
+                {(trip?.stops[0]?.stop.name_uz ?? "-")} {"->"} {(trip?.stops[(trip?.stops.length ?? 1) - 1]?.stop.name_uz ?? "-")}
+              </p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                {trip ? shortDate(trip.planned_start_at) : "-"} · {trip?.seat_capacity ?? 0} o'rin
+              </p>
+            </div>
+
+            {/* Q92: both service types are the driver's to publish. Passenger stays behind its flag (K7/Q91) -
+                the model is always there, only the way in is gated. */}
+            {flags?.passenger_enabled && (
+              <SegmentedControl
+                value={offerForm.serviceType}
+                options={[["passenger", "Yo'lovchi"], ["parcel", "Yuk"]] as const}
+                onChange={(value) => setOfferForm({ ...offerForm, serviceType: value })}
+              />
+            )}
+
+            <PickSelect
+              label="Qayerdan"
+              placeholder="Bekatni tanlang"
+              value={offerForm.originStopId}
+              options={stopOptions}
+              onChange={(value) => setOfferForm({ ...offerForm, originStopId: value })}
+            />
+            <PickSelect
+              label="Qayerga"
+              placeholder="Bekatni tanlang"
+              value={offerForm.destinationStopId}
+              options={stopOptions}
+              onChange={(value) => setOfferForm({ ...offerForm, destinationStopId: value })}
+            />
+            {offerForm.originStopId === offerForm.destinationStopId && offerForm.originStopId !== "" && (
+              <p className="text-[12px] leading-5 text-destructive">Ikki bekat bir xil bo'lishi mumkin emas.</p>
+            )}
+            {window && (
+              <div className="rounded-[14px] bg-accent px-4 py-3">
+                <p className="text-[12px] font-semibold text-primary">Chiqish vaqti</p>
+                <p className="mt-0.5 text-[15px] font-semibold text-foreground">
+                  {shortDate(window.start)} - {shortDate(window.end)}
+                </p>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                  Safar shu bekatga rejalashtirilgan vaqt atrofida. Mijoz shu oynada taklif yuboradi.
+                </p>
+              </div>
+            )}
+
+            <Field
+              label={offerForm.serviceType === "passenger" ? "Bir o'rin narxi (so'm)" : "Yuk uchun narx (so'm)"}
+              type="number"
+              value={offerForm.price}
+              onChange={(value) => setOfferForm({ ...offerForm, price: value })}
+              placeholder="Masalan: 200000"
+            />
+            {offerForm.serviceType === "passenger" && priceSoum > 0 && (
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                {seatsOrOne} o'rin uchun jami: {formatUzs(priceSoum * seatsOrOne)}
+              </p>
+            )}
+            {offerForm.serviceType === "parcel" && !hasCargoRoom && (
+              <p className="text-[12px] leading-5 text-destructive">
+                Bu safarda yuk uchun joy ko'rsatilmagan — yuk e'lonini joylash uchun safarni yuk sig'imi bilan
+                rejalashtiring.
+              </p>
+            )}
+            {/* §5.3 / Q90: this is a starting price in an auction, not a tariff. Saying so here is what keeps
+                the driver from reading the number back as a guaranteed fare. */}
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Bu — boshlang'ich narxingiz. Mijoz o'z narxini taklif qiladi, siz qarshi taklif yuborasiz. Bron
+              faqat ikkalangiz kelishgandan keyin yaratiladi; e'lon o'rin yoki balansni band qilmaydi.
+            </p>
+
             <div className="mt-auto">
               <PrimaryButton
-                disabled={!routeReady}
-                onClick={() => run(async () => {
-                  if (editingRouteId !== null) {
-                    await updateDriverRoute(editingRouteId, routeForm);
-                    setEditingRouteId(null);
-                    await loadDriverRoutes();
-                    go("driver-routes");
-                    return;
-                  }
-                  await createDriverRoute(routeForm);
-                  await loadDriverRoutes();
+                disabled={!offerReady || busy}
+                onClick={() => void run(async () => {
+                  if (!trip || !window) return;
+                  const created = await createListing(
+                    {
+                      kind: "trip_offer",
+                      service_type: offerForm.serviceType,
+                      trip_id: trip.id,
+                      origin_stop_id: offerForm.originStopId,
+                      destination_stop_id: offerForm.destinationStopId,
+                      departure_window_start: window.start,
+                      departure_window_end: window.end,
+                      price_basis: offerForm.serviceType === "passenger" ? "per_seat" : "total",
+                      unit_price_minor: priceSoum * 100,
+                    } as ListingCreate,
+                    newIdempotencyKey(),
+                  );
+                  // L1 creates a draft; the market only sees it once it is published (§5.3).
+                  await publishListing(created.data.id, created.data.version);
+                  await loadDriverTrips();
                   go("driver-routes");
-                }, isEditingRoute ? "Yo'nalish yangilandi" : "Yo'nalish qo'shildi")}
+                }, "E'lon bozorga chiqarildi")}
               >
-                {isEditingRoute ? "O'zgarishlarni saqlash" : "Saqlash"}
+                E'lon qilish
               </PrimaryButton>
             </div>
           </section>
@@ -2226,222 +5563,457 @@ export function ConnectedApp() {
       );
     }
 
-    if (screen === "driver-feed" || screen === "driver-orders") {
+    if (screen === "driver-feed") {
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
-          <section className="flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            <h1 className="text-[24px] font-bold text-[#111827]">{screen === "driver-feed" ? "Mos buyurtmalar" : "Buyurtmalar tarixi"}</h1>
-            {driverFeed.length ? driverFeed.map((order) => {
-              const myBid = driverOrderBid(order);
-              return (
-                <div key={order.id} className="rounded-[16px] border border-[#E5E7EB] bg-white p-4">
-                  <OrderCard order={order} onClick={() => run(async () => { setDriverOrder(await getDriverOrderDetail(order.id) as DriverOrderDetail); go("driver-order-detail"); })} />
-                  {myBid && (
-                    <div className="mt-3 rounded-[12px] bg-[#EEF2FF] p-3">
-                      <p className="text-[12px] font-semibold text-[#1B4FD8]">Mening taklifim</p>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <p className="text-[15px] font-bold text-[#111827]">{formatUzs(myBid.price)}</p>
-                        <StatusBadge status={myBid.status} />
-                      </div>
-                    </div>
-                  )}
-                  {driverOrderBids(order).length > 0 && (
-                    <div className="mt-3">
-                      <DriverAuctionBids bids={driverOrderBids(order)} />
-                    </div>
-                  )}
-                  {screen === "driver-orders" && isDriverEarningOrder(order) && (
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      {[
-                        ["Brutto", driverGrossIncome(order)],
-                        ["15% ulush", driverSystemFee(order)],
-                        ["Sof", driverNetIncome(order)],
-                      ].map(([label, value]) => (
-                        <div key={label as string} className="rounded-[12px] bg-[#F9FAFB] p-2.5 text-center">
-                          <p className="text-[12px] font-bold text-[#111827]">{formatUzs(value as number)}</p>
-                          <p className="text-[10px] text-[#6B7280]">{label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {screen === "driver-feed" && (
-                    myBid ? (
-                      <div className="mt-3">
-                        <button onClick={() => run(async () => { await rejectOrder(order.id, "Mos emas"); await loadDriverFeed(); }, "Rad etildi")} className="h-10 w-full rounded-[10px] bg-[#F3F4F6] text-[14px] font-semibold text-[#6B7280]">Mos emas deb belgilash</button>
-                      </div>
-                    ) : (
-                      <div className="mt-3 flex gap-2">
-                        <button onClick={() => run(async () => { await rejectOrder(order.id, "Mos emas"); await loadDriverFeed(); }, "Rad etildi")} className="h-10 flex-1 rounded-[10px] bg-[#F3F4F6] text-[14px] font-semibold text-[#6B7280]">Rad etish</button>
-                        <button onClick={() => { setSelectedFeedOrder(order); setBidPrice(""); go("driver-bid"); }} className="h-10 flex-1 rounded-[10px] bg-[#1B4FD8] text-[14px] font-semibold text-white">Taklif yuborish</button>
-                      </div>
-                    )
-                  )}
+        <main className="flex flex-1 flex-col bg-background">
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <h1 className="text-[24px] font-bold text-foreground">Mos buyurtmalar</h1>
+            {/* Q92: a client request exists for both services, so the driver's feed has to be askable for both.
+                Passenger stays behind its flag (Q91) - the model is never removed, only the way in is gated. */}
+            {flags?.passenger_enabled && (
+              <SegmentedControl
+                value={driverServiceMode}
+                options={[["passenger", "Taksi"], ["parcel", "Pochta"]] as const}
+                onChange={(value) => {
+                  setDriverServiceMode(value);
+                  void run(() => loadRequestFeed(value));
+                }}
+              />
+            )}
+            <div className="overflow-hidden rounded-[18px] border border-border bg-card">
+              <LocationPointRow
+                label="Qayerdan?"
+                address={directionEndLabel(pickupEnd)}
+                hasPoint={Boolean(pickupEnd.district || pickupEnd.stop)}
+                onClick={() => openLocationSelector("pickup", "driver")}
+                node="origin"
+              />
+              <DirectionLink />
+              <LocationPointRow
+                label="Qayerga?"
+                address={directionEndLabel(dropoffEnd)}
+                hasPoint={Boolean(dropoffEnd.district || dropoffEnd.stop)}
+                onClick={() => openLocationSelector("dropoff", "driver")}
+                node="destination"
+              />
+            </div>
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Tuman tanlansa, shu tumandagi barcha tasdiqlangan bekatlarning e'lonlari ko'rinadi.
+            </p>
+            <button
+              type="button"
+              onClick={() => go("driver-saved-searches")}
+              className="el-press flex h-10 w-full items-center justify-center rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
+            >
+              Saqlangan yo'nalishlar
+            </button>
+            {matchScope === "confirmed_stops" && requestFeed.length > 0 && (
+              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
+                {confirmedStopsNote()}
+              </p>
+            )}
+            {busy && !requestFeed.length ? <ListSkeleton /> : requestFeed.length ? requestFeed.map((item) => (
+              <div key={item.listing.id} className="rounded-[16px] border border-border bg-card p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                    <MapPin size={14} color="var(--primary)" />
+                    {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+                  </span>
+                  <span className="rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-primary">
+                    {matchLabel(item.match.match_type)}
+                  </span>
                 </div>
-              );
-            }) : <EmptyState icon={Package} title={screen === "driver-feed" ? "Hozircha mos buyurtmalar yo'q" : "Buyurtmalar tarixi bo'sh"} />}
+                <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+                  <span>{shortDate(item.listing.departure_window_start)}</span>
+                  <span className="font-semibold text-foreground">{formatUzs(item.listing.total_minor / 100)}</span>
+                </div>
+                <div className="mt-3">
+                  <button
+                    onClick={() => {
+                      setSelectedRequest(item);
+                      setBidPrice(String(Math.round(item.listing.total_minor / 100)));
+                      setProposalTripId(trips[0]?.id ?? "");
+                      go("driver-bid");
+                    }}
+                    className="el-press h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
+                  >
+                    Taklif yuborish
+                  </button>
+                </div>
+              </div>
+            )) : (
+              <EmptyState
+                icon={Package}
+                title="Hozircha mos buyurtmalar yo'q"
+                subtitle={pickupEnd.stop || pickupEnd.district ? "Boshqa yo'nalish yoki sanani tanlab ko'ring" : "Avval qayerdan va qayerga ekanini tanlang"}
+              />
+            )}
           </section>
           <BottomNav role="driver" active={screen} go={go} />
         </main>
       );
     }
 
-    if (screen === "driver-bid" && selectedFeedOrder) {
+    if (screen === "driver-orders") {
       return (
-        <main className="flex flex-1 flex-col bg-white">
+        <main className="flex flex-1 flex-col bg-background">
+          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <h1 className="text-[24px] font-bold text-foreground">Buyurtmalar tarixi</h1>
+            {busy && !driverBookings.length ? <ListSkeleton /> : driverBookings.length ? driverBookings.map((raw) => {
+              const booking = raw as BookingDTO;
+              return (
+                <button
+                  key={booking.id}
+                  onClick={() => void run(() => openDriverBooking(booking.id))}
+                  className="el-press w-full rounded-[16px] border border-border bg-card p-4 text-left"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                      <MapPin size={14} color="var(--primary)" />
+                      {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
+                  {endLabel(booking.dropoff.stop, booking.dropoff.point)}
+                    </span>
+                    <StatusBadge status={booking.service_status} />
+                  </div>
+                  <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+                    <span>{shortDate(booking.pickup.window_start ?? undefined)}</span>
+                    <span className="font-semibold text-foreground">{formatUzs(booking.total_minor / 100)}</span>
+                  </div>
+                </button>
+              );
+            }) : <EmptyState icon={Package} title="Buyurtmalar tarixi bo'sh" />}
+          </section>
+          <BottomNav role="driver" active={screen} go={go} />
+        </main>
+      );
+    }
+
+    if (screen === "driver-bid" && selectedRequest) {
+      const request = selectedRequest;
+      const plannedTrips = trips.filter((trip) => trip.status === "planned");
+      // The offered pickup window is when this trip is actually at that stop, clipped to what the client asked
+      // for. The server refuses a window the trip cannot keep, so the screen says so before sending.
+      const chosenTrip = plannedTrips.find((trip) => trip.id === proposalTripId);
+      const pickupWindow = proposalPickupWindow(chosenTrip, request);
+      return (
+        <main className="flex flex-1 flex-col bg-card">
           <TopBar title="Narx taklif qiling" back={() => go("driver-feed")} />
-          <section className="flex flex-1 flex-col gap-4 px-5 py-5">
-            <div className="rounded-[14px] bg-[#F7F8FA] p-4">
-              <p className="font-semibold text-[#111827]">{cityName(selectedFeedOrder.from_city)} {"->"} {cityName(selectedFeedOrder.to_city)}</p>
-              <p className="text-[13px] text-[#6B7280]">Tavsiya narx: {formatUzs(selectedFeedOrder.suggested_price)}</p>
+          <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+            <div className="rounded-[14px] bg-background p-4">
+              <p className="font-semibold text-foreground">
+                {endLabel(request.listing.origin_stop, request.listing.origin_point)} {"->"}{" "}
+                {endLabel(request.listing.destination_stop, request.listing.destination_point)}
+              </p>
+              <p className="text-[13px] text-muted-foreground">Mijoz narxi: {formatUzs(request.listing.total_minor / 100)}</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Jo'nash: {shortDate(request.listing.departure_window_start)} - {shortDate(request.listing.departure_window_end)}
+              </p>
             </div>
-            <DriverAuctionBids bids={driverOrderBids(selectedFeedOrder)} />
-            <Field label="Taklif narxi" type="number" value={bidPrice} onChange={setBidPrice} placeholder="Masalan: 55000" />
+            <PickSelect
+              label="Safar"
+              placeholder={plannedTrips.length ? "Safarni tanlang" : "Rejalashtirilgan safar yo'q"}
+              value={proposalTripId}
+              options={plannedTrips.map((trip) => [
+                trip.id,
+                (trip.stops[0]?.stop.name_uz ?? "-") + " -> " + (trip.stops[trip.stops.length - 1]?.stop.name_uz ?? "-") + " · " + shortDate(trip.planned_start_at),
+              ] as [string, string])}
+              onChange={setProposalTripId}
+            />
+            {plannedTrips.length === 0 && (
+              <p className="text-[12px] leading-5 text-destructive">
+                Taklif yuborish uchun avval "Yo'nalishlar" bo'limida safar rejalashtiring.
+              </p>
+            )}
+            {chosenTrip && !pickupWindow && (
+              <p className="text-[12px] leading-5 text-destructive">
+                Bu safar mijoz so'ragan vaqtga to'g'ri kelmaydi — boshqa safarni tanlang yoki yangi safar rejalashtiring.
+              </p>
+            )}
+            {pickupWindow && (
+              <div className="rounded-[14px] bg-accent px-4 py-3">
+                <p className="text-[12px] font-semibold text-primary">Olib ketish vaqti</p>
+                <p className="mt-0.5 text-[15px] font-semibold text-foreground">
+                  {shortDate(pickupWindow.start)} - {shortDate(pickupWindow.end)}
+                </p>
+              </div>
+            )}
+            <Field label="Taklif narxi" type="number" value={bidPrice} onChange={setBidPrice} placeholder="Masalan: 200000" />
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              Taklif o'rin yoki balansni band qilmaydi — mijoz qabul qilganda bron yaratiladi.
+            </p>
             <div className="mt-auto">
-              <PrimaryButton disabled={!Number(bidPrice) || Number(bidPrice) <= 0} onClick={() => run(async () => { await sendBid(selectedFeedOrder.id, { price: Number(bidPrice) }); await loadDriverFeed(); go("driver-feed"); }, "Taklif yuborildi")}>Taklif yuborish</PrimaryButton>
+              <PrimaryButton
+                disabled={!Number(bidPrice) || Number(bidPrice) <= 0 || !proposalTripId || !pickupWindow || busy}
+                onClick={() => void run(async () => {
+                  await submitProposal(
+                    request.listing.id,
+                    {
+                      trip_id: proposalTripId,
+                      // Q88: a point-ended request supplies its own places; sending stop ids is refused.
+                      pickup_stop_id: request.listing.origin_stop?.id ?? null,
+                      dropoff_stop_id: request.listing.destination_stop?.id ?? null,
+                      pickup_window_start: pickupWindow?.start ?? request.listing.departure_window_start,
+                      pickup_window_end: pickupWindow?.end ?? request.listing.departure_window_end,
+                      price_basis: request.listing.price_basis,
+                      quantity: request.listing.quantity,
+                      unit_price_minor: Math.round(Number(bidPrice)) * 100,
+                    },
+                    newIdempotencyKey(),
+                  );
+                  await loadRequestFeed();
+                  go("driver-feed");
+                }, "Taklif yuborildi")}
+              >
+                Taklif yuborish
+              </PrimaryButton>
             </div>
           </section>
         </main>
       );
     }
 
-    if (screen === "driver-order-detail" && driverOrder) {
+    if (screen === "driver-order-detail" && driverBooking) {
+      const booking = driverBooking;
+      // The order the parcel machine really takes (verified against the API, 17.09.2026):
+      // confirmed -> arrive_at_pickup -> pick_up (code) -> start_transit -> deliver (code) -> client completes.
       const nextAction =
-        driverOrder.status === "accepted" ? ["picked_up", "Olib ketildi deb belgilash"] :
-        driverOrder.status === "picked_up" ? ["in_transit", "Yo'lga chiqdi deb belgilash"] :
-        driverOrder.status === "in_transit" ? ["delivered", "Yetkazildi deb belgilash"] : null;
+        booking.service_status === "confirmed" ? ["arrive_at_pickup", "Yetib keldim deb belgilash"] :
+        booking.service_status === "awaiting_pickup" ? ["pick_up", "Olib ketildi deb belgilash"] :
+        booking.service_status === "picked_up" ? ["start_transit", "Yo'lga chiqdi deb belgilash"] :
+        booking.service_status === "in_transit" ? ["deliver", "Yetkazildi deb belgilash"] : null;
+      // B5: pick-up and delivery both need the code the client holds.
+      const needsCode = nextAction?.[0] === "pick_up" || nextAction?.[0] === "deliver";
       return (
-        <main className="flex min-h-0 flex-1 flex-col bg-[#F7F8FA]">
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
           <TopBar title="Buyurtma tafsilotlari" back={() => go("driver-orders")} />
-          <section className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
-            <OrderCard order={driverOrder} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                  <MapPin size={14} color="var(--primary)" />
+                  {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
+                  {endLabel(booking.dropoff.stop, booking.dropoff.point)}
+                </span>
+                <StatusBadge status={booking.service_status} />
+              </div>
+              <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+                <span>{shortDate(booking.pickup.window_start ?? undefined)}</span>
+                <span className="font-semibold text-foreground">{formatUzs(booking.total_minor / 100)}</span>
+              </div>
+            </div>
             {[
-              ["Olib ketish manzili", driverOrder.pickup_address ?? driverOrder.pickup_area],
-              ["Yetkazish manzili", driverOrder.dropoff_address ?? driverOrder.dropoff_area],
-              ["Yuboruvchi telefon", driverOrder.sender_phone ?? "Tanlangandan keyin ko'rinadi"],
-              ["Qabul qiluvchi telefon", driverOrder.receiver_phone ?? "Tanlangandan keyin ko'rinadi"],
-              ["Izoh", driverOrder.comment || "-"],
+              [endRowLabel(booking.pickup.stop, "Olib ketish bekati", "Olib ketish joyi"),
+               endLabel(booking.pickup.stop, booking.pickup.point)],
+              [endRowLabel(booking.dropoff.stop, "Yetkazish bekati", "Yetkazish joyi"),
+               endLabel(booking.dropoff.stop, booking.dropoff.point)],
+              ["Mijoz", booking.client?.display_name ?? "Tanlangandan keyin ko'rinadi"],
+              // Q44: the participant phones open when the service starts, not at accept.
+              ["Telefon", booking.client?.contact_phone ?? "Xizmat boshlanganda ochiladi"],
+              // §9: the fare is cash between the two people; it never passes through ELCHI or the wallet.
+              ["Yo'lkira", `${formatUzs(booking.total_minor / 100)} — haydovchiga naqd to'lanadi`],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <p className="text-[12px] text-[#6B7280]">{label}</p>
-                <p className="mt-1 text-[14px] font-medium text-[#111827]">{value}</p>
+              <div key={label} className="rounded-[14px] border border-border bg-card p-4">
+                <p className="text-[12px] text-muted-foreground">{label}</p>
+                <p className="mt-1 text-[14px] font-medium text-foreground">{value}</p>
               </div>
             ))}
-            <DriverAuctionBids bids={driverOrderBids(driverOrder)} />
-            {isDriverEarningOrder(driverOrder) && (
-              <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <p className="text-[13px] font-semibold text-[#111827]">Daromad hisoboti</p>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {[
-                    ["Brutto", driverGrossIncome(driverOrder)],
-                    ["15% ulush", driverSystemFee(driverOrder)],
-                    ["Sof", driverNetIncome(driverOrder)],
-                  ].map(([label, value]) => (
-                    <div key={label as string} className="rounded-[12px] bg-[#F9FAFB] p-2.5 text-center">
-                      <p className="text-[12px] font-bold text-[#111827]">{formatUzs(value as number)}</p>
-                      <p className="text-[10px] text-[#6B7280]">{label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            {booking.service_type === "parcel" && (
+              <ParcelPhoto
+                photo={booking.parcel_photo}
+                label="Posilka rasmi"
+                onRefresh={() => void run(() => openDriverBooking(booking.id))}
+              />
             )}
-            {(hasLocation(driverOrder.pickup_lat, driverOrder.pickup_lng) || hasLocation(driverOrder.dropoff_lat, driverOrder.dropoff_lng)) && (
-              <div className="rounded-[14px] border border-[#E5E7EB] bg-white p-4">
-                <p className="text-[12px] text-[#6B7280]">Xarita nuqtalari</p>
-                <p className="mt-1 text-[14px] font-medium text-[#111827]">Olib ketish va yetkazish joylari belgilangan</p>
-                <button
-                  type="button"
-                  onClick={() => setReadOnlyMap({
-                    pickupLat: driverOrder.pickup_lat,
-                    pickupLng: driverOrder.pickup_lng,
-                    dropoffLat: driverOrder.dropoff_lat,
-                    dropoffLng: driverOrder.dropoff_lng,
-                    destinationLat: driverOrder.dropoff_lat,
-                    destinationLng: driverOrder.dropoff_lng,
-                  })}
-                  className="mt-3 h-10 w-full rounded-[10px] bg-[#EEF2FF] text-[14px] font-semibold text-[#1B4FD8]"
-                >
-                  Xaritada ko'rish
-                </button>
-              </div>
+            {needsCode && (
+              <>
+                <Field
+                  label={nextAction?.[0] === "pick_up" ? "Topshirish kodi" : "Yetkazish kodi"}
+                  value={proofCode}
+                  onChange={setProofCode}
+                  placeholder="6 xonali kod"
+                />
+                <p className="text-[12px] leading-5 text-muted-foreground">
+                  {nextAction?.[0] === "pick_up"
+                    ? "Kodni jo'natuvchidan oling."
+                    : "Kodni faqat qabul qiluvchidan oling — jo'natuvchidan emas."}
+                </p>
+              </>
             )}
-            {nextAction && <PrimaryButton onClick={() => run(async () => { await updateDriverOrderStatus(driverOrder.id, nextAction[0] as "picked_up" | "in_transit" | "delivered"); setDriverOrder(await getDriverOrderDetail(driverOrder.id) as DriverOrderDetail); }, "Status yangilandi")}>{nextAction[1]}</PrimaryButton>}
+            {(CASH_RECORDABLE[booking.service_type] ?? []).includes(booking.service_status) && (
+              <CashAcknowledgement
+                booking={booking}
+                side="driver"
+                busy={busy}
+                amount={cashAmount}
+                onAmountChange={setCashAmount}
+                onReport={() => void run(() => reportCash(booking.id, "driver", booking.version), "Qayd saqlandi")}
+                onDecide={(decision) =>
+                  booking.cash_receipt && void run(() => decideCash(booking.id, "driver", booking.cash_receipt!, decision), "Javob saqlandi")
+                }
+              />
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void run(() => openChat(booking.id, "driver"))}
+                className="el-press h-11 flex-1 rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
+              >
+                Xabarlar
+              </button>
+              <button
+                type="button"
+                onClick={() => void run(() => openTracking(booking.id, "driver"))}
+                className="el-press h-11 flex-1 rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
+              >
+                Kuzatuv
+              </button>
+            </div>
+            {["awaiting_pickup", "boarding", "picked_up", "in_transit"].includes(booking.service_status) && (
+              <SecondaryButton onClick={() => void run(() => openAmendments(booking.id, "driver"))}>
+                Shartlarni o'zgartirish
+              </SecondaryButton>
+            )}
+            {nextAction && (
+              <PrimaryButton
+                disabled={busy || (needsCode && proofCode.trim().length < 4)}
+                onClick={() => void run(async () => {
+                  await bookingAction(booking.id, nextAction[0], {
+                    expected_version: booking.version,
+                    code: needsCode ? proofCode.trim() : null,
+                  });
+                  await openDriverBooking(booking.id);
+                  await loadDriverBookings();
+                }, "Status yangilandi")}
+              >
+                {nextAction[1]}
+              </PrimaryButton>
+            )}
           </section>
         </main>
       );
     }
 
     if (screen === "driver-income") {
-      const earningOrders = driverFeed.filter(isDriverEarningOrder);
-      const grossIncome = earningOrders.reduce((sum, order) => sum + driverGrossIncome(order), 0);
-      const netIncome = earningOrders.reduce((sum, order) => sum + driverNetIncome(order), 0);
-      const systemFee = earningOrders.reduce((sum, order) => sum + driverSystemFee(order), 0);
-      const incomeSeries = incomePeriod === "daily" ? buildDriverIncomeSeries(driverFeed) : buildDriverMonthlyIncomeSeries(driverFeed);
-      const recentEarningOrders = earningOrders.slice(0, 5);
+      // §9.1-9.3: only the commission account is real money here. `capture` is what ELCHI took, `reversal` what
+      // it gave back; the fare never enters this ledger because ELCHI never handles it.
+      const approvedTopups = walletLines
+        .filter((line) => line.kind === "topup" && line.direction === "credit")
+        .reduce((sum, line) => sum + line.amount_minor, 0);
+      const reversedCommission = walletLines
+        .filter((line) => line.kind === "reversal" && line.direction === "credit")
+        .reduce((sum, line) => sum + line.amount_minor, 0);
+      /**
+       * The reference client charts a driver's *earnings*. Stage 2 cannot: the fare is cash between the
+       * client and the driver and never touches ELCHI, so an earnings figure here would be invented money
+       * (AGENTS.md section 9). What this platform genuinely recorded is the commission it captured, which is
+       * what the chart shows - and it says so above the bars.
+       */
+      const buckets = new Map<string, number>();
+      const now = new Date();
+      const span = incomePeriod === "daily" ? 7 : 6;
+      for (let back = span - 1; back >= 0; back -= 1) {
+        const at = new Date(now);
+        if (incomePeriod === "daily") at.setDate(at.getDate() - back);
+        else at.setMonth(at.getMonth() - back);
+        buckets.set(incomeBucketKey(at, incomePeriod), 0);
+      }
+      for (const line of walletLines) {
+        if (line.kind !== "commission_capture" || line.direction !== "debit") continue;
+        const key = incomeBucketKey(new Date(line.occurred_at), incomePeriod);
+        if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + line.amount_minor);
+      }
+      const chart = [...buckets].map(([label, value]) => ({ label, value }));
       return (
-        <main className="flex min-h-0 flex-1 flex-col bg-[#F7F8FA]">
-          <TopBar title="Daromad" back={() => go("driver-home")} />
-          <section className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
-            <div className="rounded-[18px] border border-[#E5E7EB] bg-white p-4">
-              <p className="text-[13px] font-semibold text-[#6B7280]">Sof daromad</p>
-              <p className="mt-1 text-[30px] font-bold text-[#111827]">{formatUzs(netIncome)}</p>
-              <p className="mt-1 text-[12px] leading-5 text-[#6B7280]">15% tizim ulushi ayirilgandan keyingi summa</p>
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title="Komissiya balansi" back={() => go("driver-home")} />
+          <section className="el-enter min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
+            <div className="rounded-[18px] border border-border bg-card p-4">
+              <p className="text-[13px] font-semibold text-muted-foreground">Ishlatish mumkin</p>
+              <p className="mt-1 text-[30px] font-bold text-foreground">
+                {walletState ? formatUzs(walletState.available_minor / 100) : "-"}
+              </p>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                ELCHI komissiyalarini to'lash uchun balans. Yo'lkira bu yerda hisoblanmaydi — uni mijoz
+                haydovchiga naqd to'laydi.
+              </p>
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <div className="rounded-[12px] bg-[#F9FAFB] p-3">
-                  <p className="text-[15px] font-bold text-[#111827]">{formatUzs(grossIncome)}</p>
-                  <p className="text-[11px] text-[#6B7280]">Brutto</p>
+                <div className="rounded-[12px] bg-slate-50 p-3">
+                  <p className="text-[15px] font-bold text-foreground">
+                    {walletState ? formatUzs(walletState.held_minor / 100) : "-"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Ushlab qolingan komissiya</p>
                 </div>
-                <div className="rounded-[12px] bg-[#F9FAFB] p-3">
-                  <p className="text-[15px] font-bold text-[#111827]">{formatUzs(systemFee)}</p>
-                  <p className="text-[11px] text-[#6B7280]">Tizim ulushi</p>
+                <div className="rounded-[12px] bg-slate-50 p-3">
+                  <p className="text-[15px] font-bold text-foreground">{formatUzs(reversedCommission / 100)}</p>
+                  <p className="text-[11px] text-muted-foreground">Qaytarilgan komissiya</p>
+                </div>
+                <div className="rounded-[12px] bg-slate-50 p-3">
+                  <p className="text-[15px] font-bold text-foreground">{formatUzs(approvedTopups / 100)}</p>
+                  <p className="text-[11px] text-muted-foreground">To'ldirishlar</p>
+                </div>
+                <div className="rounded-[12px] bg-slate-50 p-3">
+                  <p className="text-[15px] font-bold text-foreground">
+                    {walletState ? formatUzs(walletState.pending_topups_minor / 100) : "-"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Tasdiqlanmagan so'rov</p>
                 </div>
               </div>
             </div>
-            <div className="rounded-[18px] border border-[#E5E7EB] bg-white p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[15px] font-semibold text-[#111827]">Grafik</p>
-                  <p className="mt-0.5 text-[12px] text-[#6B7280]">{incomePeriod === "daily" ? "Oxirgi 7 kun" : "Oxirgi 6 oy"}</p>
-                </div>
-                <div className="grid grid-cols-2 rounded-[12px] bg-[#F3F4F6] p-1">
-                  {[
-                    ["daily", "Kun"],
-                    ["monthly", "Oy"],
-                  ].map(([value, label]) => (
+            <div className="rounded-[18px] border border-border bg-card p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[15px] font-semibold text-foreground">Ushlangan komissiya</p>
+                <div className="flex gap-1 rounded-lg bg-secondary p-0.5">
+                  {(["daily", "monthly"] as const).map((period) => (
                     <button
-                      key={value}
+                      key={period}
                       type="button"
-                      onClick={() => setIncomePeriod(value as "daily" | "monthly")}
+                      onClick={() => setIncomePeriod(period)}
                       className={cls(
-                        "h-8 rounded-[9px] px-3 text-[12px] font-semibold",
-                        incomePeriod === value ? "bg-white text-[#1B4FD8] shadow-sm" : "text-[#6B7280]",
+                        "el-press rounded-md px-3 py-1 text-xs font-medium",
+                        incomePeriod === period ? "bg-card text-foreground" : "text-muted-foreground",
                       )}
                     >
-                      {label}
+                      {period === "daily" ? "7 kun" : "6 oy"}
                     </button>
                   ))}
                 </div>
               </div>
-              <MiniIncomeChart data={incomeSeries} />
+              <BarChart data={chart} formatValue={(value) => formatUzs(value / 100)} empty="Hali komissiya ushlanmagan" />
+              <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
+                Bu ELCHI olgan komissiya. Yo'lkira mijozdan sizga naqd o'tadi va bu yerda ko'rinmaydi.
+              </p>
+            </div>
+            <div className="rounded-[18px] border border-border bg-card p-4">
+              <p className="text-[15px] font-semibold text-foreground">Balansni to'ldirish</p>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                So'rov moliya xodimi tasdiqlagandan keyin balansga qo'shiladi.
+              </p>
+              <div className="mt-3 space-y-3">
+                <Field label="Summa (so'm)" type="number" value={topupAmount} placeholder="100000" onChange={setTopupAmount} />
+                <PrimaryButton
+                  disabled={busy || soumToMinor(topupAmount) <= 0}
+                  onClick={() => void run(async () => {
+                    await createTopup({ amount_minor: soumToMinor(topupAmount), method: "bank_transfer" }, newIdempotencyKey());
+                    setTopupAmount("");
+                    await loadWallet();
+                  }, "To'ldirish so'rovi yuborildi")}
+                >
+                  So'rov yuborish
+                </PrimaryButton>
+              </div>
             </div>
             <div className="space-y-2">
-              <p className="px-1 text-[13px] font-semibold text-[#6B7280]">So'nggi daromadlar</p>
-              {recentEarningOrders.length ? recentEarningOrders.map((order) => (
-                <button
-                  key={order.id}
-                  type="button"
-                  onClick={() => run(async () => { setDriverOrder(await getDriverOrderDetail(order.id) as DriverOrderDetail); go("driver-order-detail"); })}
-                  className="flex w-full items-center justify-between gap-3 rounded-[14px] border border-[#E5E7EB] bg-white p-4 text-left"
-                >
+              <p className="px-1 text-[13px] font-semibold text-muted-foreground">To'ldirish so'rovlari</p>
+              {topups.length ? topups.map((topup) => (
+                <div key={topup.id} className="flex items-center justify-between gap-3 rounded-[14px] border border-border bg-card p-4">
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-semibold text-[#111827]">
-                      {cityName(order.from_city)} {"->"} {cityName(order.to_city)}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] text-[#6B7280]">{shortDate(order.confirmed_at ?? order.delivered_at ?? order.created_at)}</span>
+                    <span className="block text-[14px] font-semibold text-foreground">{formatUzs(topup.amount_minor / 100)}</span>
+                    <span className="mt-0.5 block text-[12px] text-muted-foreground">{shortDate(topup.created_at)}</span>
                   </span>
-                  <span className="shrink-0 text-[14px] font-bold text-[#16A34A]">{formatUzs(driverNetIncome(order))}</span>
-                </button>
+                  <StatusBadge status={topup.status} />
+                </div>
               )) : (
-                <EmptyState icon={Package} title="Daromad hali yo'q" subtitle="Yetkazilgan buyurtmalar shu yerda ko'rinadi." />
+                <EmptyState icon={Package} title="So'rov yo'q" subtitle="Balansni to'ldirish so'rovlari shu yerda ko'rinadi." />
               )}
             </div>
           </section>
@@ -2454,27 +6026,27 @@ export function ConnectedApp() {
       const vehicleInfo = [driverProfile?.car_model, driverProfile?.car_color, driverProfile?.plate_number].filter(Boolean).join(" / ") || "Avtomobil ma'lumoti kiritilmagan";
       const verificationLabel = driverVerificationLabels[driverProfile?.verification_status ?? "new"] ?? driverProfile?.verification_status ?? "Yangi";
       return (
-        <main className="flex flex-1 flex-col bg-[#F7F8FA]">
+        <main className="flex flex-1 flex-col bg-background">
           <TopBar title="Profil" back={() => go("driver-home")} />
-          <section className="flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
-            <div className="rounded-[18px] border border-[#E5E7EB] bg-white p-4">
+          <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
+            <div className="rounded-[18px] border border-border bg-card p-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#EEF2FF] text-[#1B4FD8]">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
                   <Truck size={28} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[18px] font-bold text-[#111827]">{driverProfile?.full_name ?? driverProfile?.user?.full_name ?? "Haydovchi"}</p>
-                  <p className="mt-0.5 text-[13px] text-[#6B7280]">{driverProfile?.user?.phone ?? auth.user?.phone}</p>
+                  <p className="truncate text-[18px] font-bold text-foreground">{driverProfile?.full_name ?? driverProfile?.user?.full_name ?? "Haydovchi"}</p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">{driverProfile?.user?.phone ?? auth.user?.phone}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span className={cls(
                       "rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                      driverProfile?.verification_status === "approved" ? "bg-[#ECFDF5] text-[#15803D]" : "bg-[#FEF3C7] text-[#92400E]",
+                      driverProfile?.verification_status === "approved" ? "bg-success/10 text-success" : "bg-warning/14 text-warning",
                     )}>
                       {verificationLabel}
                     </span>
                     <span className={cls(
                       "rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                      driverProfile?.is_available ? "bg-[#EEF2FF] text-[#1B4FD8]" : "bg-[#F3F4F6] text-[#6B7280]",
+                      driverProfile?.is_available ? "bg-accent text-primary" : "bg-muted text-muted-foreground",
                     )}>
                       {driverProfile?.is_available ? "Faol" : "Faol emas"}
                     </span>
@@ -2488,59 +6060,63 @@ export function ConnectedApp() {
                 ["Bajarilgan", driverProfile?.completed_orders ?? 0],
                 ["Jami", driverProfile?.total_orders ?? 0],
               ].map(([label, value]) => (
-                <div key={label as string} className="rounded-[12px] border border-[#E5E7EB] bg-white p-3 text-center">
-                  <p className="text-[20px] font-bold text-[#111827]">{value}</p>
-                  <p className="text-[11px] text-[#6B7280]">{label}</p>
+                <div key={label as string} className="rounded-[12px] border border-border bg-card p-3 text-center">
+                  <p className="text-[20px] font-bold text-foreground">{value}</p>
+                  <p className="text-[11px] text-muted-foreground">{label}</p>
                 </div>
               ))}
             </div>
-            <div className="rounded-[16px] border border-[#E5E7EB] bg-white p-4">
+            <div className="rounded-[16px] border border-border bg-card p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[15px] font-semibold text-[#111827]">Faollik holati</p>
-                  <p className="mt-1 text-[13px] text-[#6B7280]">
+                  <p className="text-[15px] font-semibold text-foreground">Faollik holati</p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
                     {driverProfile?.verification_status === "approved" ? (driverProfile?.is_available ? "Buyurtma qabul qilishga tayyor" : "Vaqtincha faol emas") : "Avval admin tasdiqlashi kerak"}
                   </p>
                 </div>
                 <button
                   disabled={driverProfile?.verification_status !== "approved" || busy}
                   onClick={() => run(async () => { await setDriverAvailability(!driverProfile?.is_available); await loadDriverProfile(); }, "Faollik yangilandi")}
-                  className={cls("h-8 w-14 rounded-full p-1", driverProfile?.is_available ? "bg-[#1B4FD8]" : "bg-[#D1D5DB]", driverProfile?.verification_status !== "approved" && "opacity-60")}
+                  className={cls("el-press h-8 w-14 rounded-full p-1", driverProfile?.is_available ? "bg-primary" : "bg-slate-300", driverProfile?.verification_status !== "approved" && "opacity-60")}
                 >
-                  <span className={cls("block h-6 w-6 rounded-full bg-white transition", driverProfile?.is_available && "translate-x-6")} />
+                  <span className={cls("block h-6 w-6 rounded-full bg-card transition", driverProfile?.is_available && "translate-x-6")} />
                 </button>
               </div>
             </div>
-            <div className="rounded-[16px] border border-[#E5E7EB] bg-white p-4">
+            <div className="rounded-[16px] border border-border bg-card p-4">
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[#374151]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-secondary-foreground">
                   <Truck size={19} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-[#6B7280]">Avtomobil</p>
-                  <p className="mt-1 break-words text-[15px] font-semibold text-[#111827]">{vehicleInfo}</p>
+                  <p className="text-[13px] font-semibold text-muted-foreground">Avtomobil</p>
+                  <p className="mt-1 break-words text-[15px] font-semibold text-foreground">{vehicleInfo}</p>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {[
                   ["Holat", verificationLabel],
-                  ["Yo'nalish", driverRoutes.length],
+                  ["Yo'nalish", trips.length],
                   ["Nizo", driverProfile?.dispute_count ?? 0],
                 ].map(([label, value]) => (
-                  <div key={label as string} className="rounded-[12px] bg-[#F9FAFB] p-2.5 text-center">
-                    <p className="break-words text-[13px] font-bold text-[#111827]">{value}</p>
-                    <p className="text-[11px] text-[#6B7280]">{label}</p>
+                  <div key={label as string} className="rounded-[12px] bg-slate-50 p-2.5 text-center">
+                    <p className="break-words text-[13px] font-bold text-foreground">{value}</p>
+                    <p className="text-[11px] text-muted-foreground">{label}</p>
                   </div>
                 ))}
               </div>
             </div>
             <div className="space-y-2">
-              <p className="px-1 text-[13px] font-semibold text-[#6B7280]">Tezkor amallar</p>
+              <p className="px-1 text-[13px] font-semibold text-muted-foreground">Tezkor amallar</p>
               <ProfileActionRow icon={User} label="Profilni tahrirlash" description="Ism, avtomobil va davlat raqamini yangilash" onClick={() => go("driver-profile-form")} />
               <ProfileActionRow icon={FileText} label="Hujjatlar" description="Pasport, guvohnoma va avtomobil hujjatlari" onClick={() => go("driver-documents")} />
               <ProfileActionRow icon={Navigation} label="Yo'nalishlarim" description="Qaysi yo'nalishlarda ishlashingizni boshqarish" onClick={() => go("driver-routes")} />
+              <ProfileActionRow icon={Package} label="Takliflarim" description="Yuborilgan takliflar va mijozning javoblari" onClick={() => go("driver-proposals")} />
               <ProfileActionRow icon={Package} label="Buyurtmalarim" description="Qabul qilingan buyurtmalar tarixi" onClick={() => go("driver-orders")} />
-              <ProfileActionRow icon={Home} label="Bosh sahifa" description="Daromad va mos buyurtmalar oynasiga qaytish" onClick={() => go("driver-home")} />
+              <ProfileActionRow icon={FileText} label="Nizolarim" description="Ochilgan nizolar, ularning holati va dalillar" onClick={() => go("my-disputes")} />
+              <ProfileActionRow icon={Headphones} label="Yordam" description="Savollar va operatorga murojaat" onClick={() => go("support")} />
+              <ProfileActionRow icon={Shield} label="Sozlamalar" description="Ko'rinish, maxfiylik va akkaunt" onClick={() => go("settings")} />
+              <ProfileActionRow icon={Home} label="Bosh sahifa" description="Balans va mos buyurtmalar oynasiga qaytish" onClick={() => go("driver-home")} />
               <ProfileActionRow danger icon={X} label="Chiqish" description="Akkauntdan xavfsiz chiqish" onClick={() => run(async () => { await auth.logout(); go("role"); })} />
             </div>
           </section>
@@ -2553,20 +6129,42 @@ export function ConnectedApp() {
   })();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0B1120] p-4 font-[Inter]">
-      <div className="relative flex h-[844px] w-[390px] max-w-full flex-col overflow-hidden rounded-[36px] border-[7px] border-[#2C3347] bg-[#F7F8FA] shadow-2xl">
-        <div className="flex h-11 shrink-0 items-center justify-between bg-white px-6 text-[13px] font-semibold text-[#111827]">
+    <div className="flex min-h-screen items-center justify-center bg-[var(--shell-canvas)] p-4 font-[Inter]">
+      <div className="relative flex h-[844px] w-[390px] max-w-full flex-col overflow-hidden rounded-[36px] border-[7px] border-[var(--shell-bezel)] bg-background shadow-2xl">
+        <div className="flex h-11 shrink-0 items-center justify-between bg-card px-6 text-[13px] font-semibold text-foreground">
           <span>9:41</span>
           <span>LTE 100%</span>
         </div>
         {(message || error || busy) && (
-          <div className={cls("px-5 py-2 text-[13px] font-medium", error ? "bg-[#FEE2E2] text-[#DC2626]" : "bg-[#DCFCE7] text-[#15803D]")}>
+          <div className={cls("px-5 py-2 text-[13px] font-medium", error ? "bg-destructive/10 text-destructive" : "bg-success/12 text-success")}>
             {busy ? "Yuklanmoqda..." : error || message}
           </div>
         )}
         <div className="flex min-h-0 flex-1 flex-col">{content}</div>
+        {/* One drawer for the whole client side, mounted over the shell rather than inside each screen, so
+            it keeps its open state while `content` swaps underneath it. */}
+        {auth.isAuthenticated && selectedRole === "client" && (
+          <AppSidebar
+            open={sidebarOpen}
+            active={screen}
+            items={clientSidebarItems(unreadNotifications)}
+            subtitle={auth.user?.full_name || auth.user?.phone || undefined}
+            onSelect={(id) => {
+              setSidebarOpen(false);
+              go(id as Screen);
+            }}
+            onClose={() => setSidebarOpen(false)}
+            onLogout={() => {
+              setSidebarOpen(false);
+              void run(async () => {
+                await auth.logout();
+                go("role");
+              });
+            }}
+          />
+        )}
         {mapPicker && (mapPicker === "pickup" ? fromCity : toCity) && (
-          <GoogleMapPicker
+          <MapAddressPicker
             mode={mapPicker}
             city={(mapPicker === "pickup" ? fromCity : toCity)!}
             district={mapPicker === "pickup" ? fromDistrict : toDistrict}
@@ -2602,7 +6200,7 @@ export function ConnectedApp() {
           />
         )}
         {readOnlyMap && (
-          <div className="absolute inset-0 z-50 flex flex-col bg-white">
+          <div className="absolute inset-0 z-50 flex flex-col bg-card">
             <TopBar title="Xarita nuqtalari" back={() => setReadOnlyMap(null)} />
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
               <ReadOnlyOrderMap
@@ -2613,22 +6211,22 @@ export function ConnectedApp() {
               />
               {hasLocation(readOnlyMap.pickupLat, readOnlyMap.pickupLng) && (
                 <a
-                  href={createGoogleMapsSearchUrl(Number(readOnlyMap.pickupLat), Number(readOnlyMap.pickupLng))}
+                  href={createMapsSearchUrl(Number(readOnlyMap.pickupLat), Number(readOnlyMap.pickupLng))}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex h-[48px] items-center justify-center rounded-[12px] bg-[#EEF2FF] text-[14px] font-semibold text-[#1B4FD8]"
+                  className="flex h-[48px] items-center justify-center rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
                 >
-                  Olib ketish joyini Google Maps'da ochish
+                  Olib ketish joyini Yandex Xaritada ochish
                 </a>
               )}
               {hasLocation(readOnlyMap.destinationLat, readOnlyMap.destinationLng) && (
                 <a
-                  href={createGoogleMapsDirectionsUrl(Number(readOnlyMap.destinationLat), Number(readOnlyMap.destinationLng))}
+                  href={createMapsDirectionsUrl(Number(readOnlyMap.destinationLat), Number(readOnlyMap.destinationLng))}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex h-[48px] items-center justify-center rounded-[12px] bg-[#1B4FD8] text-[14px] font-semibold text-white"
+                  className="flex h-[48px] items-center justify-center rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground"
                 >
-                  Google Maps'da ochish
+                  Yandex Xaritada ochish
                 </a>
               )}
             </div>
@@ -2659,8 +6257,8 @@ export function ConnectedApp() {
             onConfirm={() => run(async () => runConfirmAction(confirmAction), confirmAction.type === "cancel-order" ? "Buyurtma bekor qilindi" : undefined)}
           />
         )}
-        <div className="flex h-[34px] shrink-0 items-center justify-center bg-white">
-          <div className="h-1.5 w-32 rounded-full bg-[#D1D5DB]" />
+        <div className="flex h-[34px] shrink-0 items-center justify-center bg-card">
+          <div className="h-1.5 w-32 rounded-full bg-slate-300" />
         </div>
       </div>
     </div>

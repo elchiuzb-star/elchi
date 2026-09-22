@@ -13,6 +13,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models import User
+from app.utils.file_access import normalize_storage_key, resolve_upload_path
 
 
 @pytest.fixture()
@@ -78,7 +79,7 @@ def upload(
 def test_authenticated_user_can_upload_valid_cargo_photo(upload_client: tuple[TestClient, str, Path]) -> None:
     client, token, upload_dir = upload_client
 
-    response = upload(client, token, "cargo_photo", "photo.jpg", b"fake-image", "image/jpeg")
+    response = upload(client, token, "cargo_photo", "photo.jpg", b"\xff\xd8\xff\xe0fake-image", "image/jpeg")
 
     assert response.status_code == 200
     body = response.json()
@@ -86,13 +87,18 @@ def test_authenticated_user_can_upload_valid_cargo_photo(upload_client: tuple[Te
     assert body["message"] == "File uploaded successfully"
     assert body["data"]["type"] == "cargo_photo"
     assert body["data"]["mime_type"] == "image/jpeg"
-    assert body["data"]["size_bytes"] == len(b"fake-image")
+    assert body["data"]["size_bytes"] == len(b"\xff\xd8\xff\xe0fake-image")
     assert body["data"]["original_filename"] == "photo.jpg"
-    assert body["data"]["file_url"].startswith("/uploads/cargo_photo/")
-    assert not body["data"]["file_url"].endswith("photo.jpg")
+    file_url = body["data"]["file_url"]
+    assert file_url.startswith("/api/v1/files/cargo_photo/")
+    assert "exp=" in file_url and "sig=" in file_url
+    assert "photo.jpg" not in file_url
 
-    relative_path = body["data"]["file_url"].removeprefix("/uploads/").replace("/", "\\")
-    assert (upload_dir / relative_path).exists()
+    key = normalize_storage_key(file_url)
+    assert key is not None
+    stored_path = resolve_upload_path(key)
+    assert stored_path is not None and stored_path.exists()
+    assert stored_path.is_relative_to(upload_dir.resolve())
     assert (upload_dir / "cargo_photo").exists()
 
 
@@ -171,7 +177,7 @@ def test_passport_accepts_pdf(upload_client: tuple[TestClient, str, Path]) -> No
     response = upload(client, token, "passport", "passport.pdf", b"%PDF-1.4", "application/pdf")
 
     assert response.status_code == 200
-    assert response.json()["data"]["file_url"].endswith(".pdf")
+    assert response.json()["data"]["file_url"].split("?", 1)[0].endswith(".pdf")
 
 
 def test_cargo_photo_rejects_pdf(upload_client: tuple[TestClient, str, Path]) -> None:

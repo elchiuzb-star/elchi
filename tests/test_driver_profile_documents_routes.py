@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -5,15 +7,30 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models
+from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models import AuditLog, City, DriverDocument, DriverProfile, DriverRoute, User
+from app.utils.file_access import normalize_storage_key
+
+
+def upload_document_file(client: TestClient, token: str, document_type: str, filename: str = "doc.jpg") -> str:
+    response = client.post(
+        "/api/v1/files/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"type": document_type},
+        files={"file": (filename, b"\xff\xd8\xff\xe0fake-document-bytes", "image/jpeg")},
+    )
+    assert response.status_code == 200
+    return response.json()["data"]["file_url"]
 
 
 @pytest.fixture()
-def driver_client() -> tuple[TestClient, dict[str, str], sessionmaker]:
+def driver_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, dict[str, str], sessionmaker]:
+    monkeypatch.setattr(settings, "upload_dir", str(tmp_path / "uploads"))
+    monkeypatch.setattr(settings, "public_upload_base_url", "/uploads")
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -229,10 +246,11 @@ def test_non_driver_and_anonymous_cannot_access_driver_profile(driver_client) ->
 def test_driver_can_submit_document_and_status_becomes_pending(driver_client) -> None:
     client, tokens, session_factory = driver_client
 
+    file_url = upload_document_file(client, tokens["driver"], "passport")
     response = client.post(
         "/api/v1/driver/documents",
         headers=headers(tokens["driver"]),
-        json={"document_type": "passport", "file_url": "/uploads/passport/2026/06/doc.jpg"},
+        json={"document_type": "passport", "file_url": file_url},
     )
 
     assert response.status_code == 200
@@ -250,15 +268,17 @@ def test_driver_can_submit_document_and_status_becomes_pending(driver_client) ->
 def test_uploading_same_document_type_replaces_existing_record(driver_client) -> None:
     client, tokens, session_factory = driver_client
 
+    old_url = upload_document_file(client, tokens["driver"], "license", "old.jpg")
+    new_url = upload_document_file(client, tokens["driver"], "license", "new.jpg")
     first = client.post(
         "/api/v1/driver/documents",
         headers=headers(tokens["driver"]),
-        json={"document_type": "license", "file_url": "/uploads/license/2026/06/old.jpg"},
+        json={"document_type": "license", "file_url": old_url},
     )
     second = client.post(
         "/api/v1/driver/documents",
         headers=headers(tokens["driver"]),
-        json={"document_type": "license", "file_url": "/uploads/license/2026/06/new.jpg"},
+        json={"document_type": "license", "file_url": new_url},
     )
 
     assert first.status_code == 200
@@ -267,7 +287,7 @@ def test_uploading_same_document_type_replaces_existing_record(driver_client) ->
     db = session_factory()
     docs = list(db.scalars(select(DriverDocument).where(DriverDocument.document_type == "license")))
     assert len(docs) == 1
-    assert docs[0].file_url.endswith("new.jpg")
+    assert docs[0].file_url == "/uploads/" + normalize_storage_key(new_url)
     db.close()
 
 

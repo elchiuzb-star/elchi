@@ -15,7 +15,7 @@ import {
   Truck,
   User,
   X,
-} from "lucide-react";
+} from "./ui/icons";
 
 import {
   approveDriver,
@@ -75,16 +75,16 @@ function Button(props: {
   const tone = props.tone ?? "neutral";
   const className =
     tone === "primary"
-      ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+      ? "border-primary bg-primary text-primary-foreground hover:bg-primary"
       : tone === "danger"
-        ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
+        ? "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/25"
+        : "border-border bg-card text-secondary-foreground hover:bg-slate-50";
   return (
     <button
       type={props.type ?? "button"}
       onClick={props.onClick}
       disabled={props.disabled}
-      className={`inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`el-press inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {props.children}
     </button>
@@ -99,14 +99,14 @@ function Input(props: {
   type?: string;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <input
         value={props.value}
         type={props.type ?? "text"}
         placeholder={props.placeholder}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       />
     </label>
   );
@@ -119,12 +119,12 @@ function Select(props: {
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <select
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       >
         {props.children}
       </select>
@@ -169,20 +169,20 @@ function searchableText(driver: AdminDriver) {
 
 function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <div className="mt-1 text-sm font-semibold text-slate-950">{children || "-"}</div>
+    <div className="rounded-[12px] border border-border bg-card p-3">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="mt-1 text-sm font-semibold text-foreground">{children || "-"}</div>
     </div>
   );
 }
 
 function ModalShell(props: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
-      <section className="w-full max-w-md rounded-lg border border-slate-200 bg-white shadow-xl">
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h3 className="text-base font-bold text-slate-950">{props.title}</h3>
-          <button onClick={props.onClose} className="rounded-md p-1 text-slate-500 hover:bg-slate-100" aria-label="Yopish">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-foreground/40 p-4">
+      <section className="w-full max-w-md rounded-[12px] border border-border bg-card shadow-xl">
+        <header className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h3 className="text-base font-bold text-foreground">{props.title}</h3>
+          <button onClick={props.onClose} className="el-press rounded-[10px] p-1 text-muted-foreground hover:bg-muted" aria-label="Yopish">
             <X size={18} />
           </button>
         </header>
@@ -203,20 +203,20 @@ function ApproveModal(props: {
   return (
     <ModalShell title="Haydovchini tasdiqlash" onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-          <p className="font-bold text-slate-950">{driverName(props.driver)}</p>
-          <p className="text-slate-500">{driverPhone(props.driver)}</p>
+        <div className="rounded-[10px] border border-border bg-slate-50 p-3 text-sm">
+          <p className="font-bold text-foreground">{driverName(props.driver)}</p>
+          <p className="text-muted-foreground">{driverPhone(props.driver)}</p>
         </div>
         {missing.length ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <div className="rounded-[10px] border border-warning/28 bg-warning/14 p-3 text-sm text-warning">
             <p className="font-bold">Majburiy hujjatlar yetishmaydi</p>
             <p className="mt-1">Yetishmayapti: {missing.map((item) => driverDocumentLabels[item]).join(", ")}</p>
           </div>
         ) : (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-700">Barcha majburiy hujjatlar yuklangan.</div>
+          <div className="rounded-[10px] border border-success/25 bg-success/12 p-3 text-sm font-medium text-success">Barcha majburiy hujjatlar yuklangan.</div>
         )}
         <Input label="Izoh" value={comment} onChange={setComment} placeholder="Ixtiyoriy izoh" />
-        <p className="text-xs text-slate-500">Tasdiqlash haydovchini avtomatik faol qilmaydi.</p>
+        <p className="text-xs text-muted-foreground">Tasdiqlash haydovchini avtomatik faol qilmaydi.</p>
         <div className="flex justify-end gap-2">
           <Button onClick={props.onClose}>Bekor qilish</Button>
           <Button tone="primary" disabled={props.busy} onClick={() => props.onSubmit(comment)}>Tasdiqlash</Button>
@@ -240,11 +240,11 @@ function ReasonModal(props: {
   return (
     <ModalShell title={props.title} onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        {props.warning && <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">{props.warning}</div>}
+        {props.warning && <div className="rounded-[10px] border border-warning/28 bg-warning/14 p-3 text-sm font-medium text-warning">{props.warning}</div>}
         {props.suggestions && (
           <div className="flex flex-wrap gap-2">
             {props.suggestions.map((suggestion) => (
-              <button key={suggestion} onClick={() => setReason(suggestion)} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+              <button key={suggestion} onClick={() => setReason(suggestion)} className="el-press rounded-full border border-border px-3 py-1 text-xs font-semibold text-secondary-foreground hover:bg-slate-50">
                 {suggestion}
               </button>
             ))}
@@ -272,32 +272,32 @@ function DocumentPreviewModal({ document, onClose }: { document: AdminDriverDocu
   const url = document.file_url;
   const title = driverDocumentLabels[document.document_type];
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/70 p-4">
-      <section className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl">
-        <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-foreground/70 p-4">
+      <section className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[12px] border border-border bg-card shadow-2xl">
+        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <h3 className="text-base font-bold text-slate-950">{title}</h3>
-            <p className="text-xs text-slate-500">{document.created_at ? `Yuklangan ${formatAdminDate(document.created_at)}` : "Yuklangan fayl"}</p>
+            <h3 className="text-base font-bold text-foreground">{title}</h3>
+            <p className="text-xs text-muted-foreground">{document.created_at ? `Yuklangan ${formatAdminDate(document.created_at)}` : "Yuklangan fayl"}</p>
           </div>
           <div className="flex items-center gap-2">
-            {url && <a href={url} target="_blank" rel="noreferrer" className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Yangi oynada ochish</a>}
-            <button onClick={onClose} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label="Yopish">
+            {url && <a href={url} target="_blank" rel="noreferrer" className="rounded-[10px] border border-border px-3 py-2 text-sm font-semibold text-secondary-foreground hover:bg-slate-50">Yangi oynada ochish</a>}
+            <button onClick={onClose} className="el-press rounded-[10px] p-2 text-muted-foreground hover:bg-muted" aria-label="Yopish">
               <X size={18} />
             </button>
           </div>
         </header>
-        <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4">
+        <div className="min-h-0 flex-1 overflow-auto bg-background p-4">
           {!url ? (
-            <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Fayl yuklanmagan</div>
+            <div className="rounded-[12px] border border-border bg-card p-10 text-center text-sm text-muted-foreground">Fayl yuklanmagan</div>
           ) : isImageFile(url) ? (
-            <img src={url} alt={title} className="mx-auto max-h-[76vh] max-w-full rounded-md bg-white object-contain shadow-sm" />
+            <img src={url} alt={title} className="mx-auto max-h-[76vh] max-w-full rounded-[10px] bg-card object-contain shadow-sm" />
           ) : isPdfFile(url) ? (
-            <iframe src={url} title={title} className="h-[76vh] w-full rounded-md border border-slate-200 bg-white" />
+            <iframe src={url} title={title} className="h-[76vh] w-full rounded-[10px] border border-border bg-card" />
           ) : (
-            <div className="rounded-lg border border-slate-200 bg-white p-10 text-center">
+            <div className="rounded-[12px] border border-border bg-card p-10 text-center">
               <FileText size={36} className="mx-auto text-slate-400" />
-              <p className="mt-3 text-sm font-semibold text-slate-700">Bu fayl turini panel ichida ko'rsatib bo'lmadi.</p>
-              <a href={url} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Faylni ochish</a>
+              <p className="mt-3 text-sm font-semibold text-secondary-foreground">Bu fayl turini panel ichida ko'rsatib bo'lmadi.</p>
+              <a href={url} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-[10px] bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary">Faylni ochish</a>
             </div>
           )}
         </div>
@@ -309,27 +309,27 @@ function DocumentPreviewModal({ document, onClose }: { document: AdminDriverDocu
 function DocumentCard({ document, onPreview }: { document: AdminDriverDocument; onPreview: (document: AdminDriverDocument) => void }) {
   const isImage = isImageFile(document.file_url);
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="rounded-[12px] border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-bold text-slate-950">{driverDocumentLabels[document.document_type]}</p>
-          <p className="mt-1 text-xs text-slate-500">{document.created_at ? `Yuklangan ${formatAdminDate(document.created_at)}` : "Yuklanmagan"}</p>
+          <p className="font-bold text-foreground">{driverDocumentLabels[document.document_type]}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{document.created_at ? `Yuklangan ${formatAdminDate(document.created_at)}` : "Yuklanmagan"}</p>
         </div>
-        <Badge className={document.status === "approved" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : document.status === "rejected" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-blue-200 bg-blue-50 text-blue-700"}>
+        <Badge className={document.status === "approved" ? "border-success/25 bg-success/12 text-success" : document.status === "rejected" ? "border-destructive/25 bg-destructive/10 text-destructive" : "border-blue-200 bg-accent text-primary"}>
           {document.status}
         </Badge>
       </div>
       {isImage && document.file_url && (
-        <button type="button" onClick={() => onPreview(document)} className="mt-3 block w-full overflow-hidden rounded-md border border-slate-200 text-left hover:border-blue-300">
+        <button type="button" onClick={() => onPreview(document)} className="el-press mt-3 block w-full overflow-hidden rounded-[10px] border border-border text-left hover:border-blue-300">
           <img src={document.file_url} alt={document.document_type} className="h-28 w-full object-cover" />
         </button>
       )}
       {document.file_url ? (
-        <button type="button" onClick={() => onPreview(document)} className="mt-3 inline-flex text-sm font-semibold text-blue-700 hover:underline">Hujjatni ko'rish</button>
+        <button type="button" onClick={() => onPreview(document)} className="el-press mt-3 inline-flex text-sm font-semibold text-primary hover:underline">Hujjatni ko'rish</button>
       ) : (
-        <p className="mt-3 text-sm text-slate-500">Yuklanmagan</p>
+        <p className="mt-3 text-sm text-muted-foreground">Yuklanmagan</p>
       )}
-      {document.rejection_reason && <p className="mt-2 text-sm text-rose-700">Reason: {document.rejection_reason}</p>}
+      {document.rejection_reason && <p className="mt-2 text-sm text-destructive">Reason: {document.rejection_reason}</p>}
     </div>
   );
 }
@@ -352,17 +352,24 @@ function DriverDrawer(props: {
   const documents = requiredDriverDocuments.map((documentType) => yuklanganDocuments.get(documentType) ?? { document_type: documentType, status: "missing" as const });
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={props.onClose} />
-      <aside className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-3xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl">
-        <header className="border-b border-slate-200 bg-white p-5">
+      {/* The scrim is decoration: it closes the drawer as a convenience, and the drawer itself carries the
+          dialog semantics and a real close button. Marking it presentational keeps a screen reader from
+          announcing a clickable region with no name. */}
+      <div className="fixed inset-0 z-50 bg-foreground/30" role="presentation" onClick={props.onClose} />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-3xl flex-col border-l border-border bg-slate-50 shadow-2xl"
+      >
+        <header className="border-b border-border bg-card p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold text-slate-950">{driverName(driver)}</h2>
+                <h2 className="text-xl font-bold text-foreground">{driverName(driver)}</h2>
                 <Badge className={getDriverVerificationBadgeClass(driver.verification_status)}>{getDriverVerificationLabel(driver.verification_status)}</Badge>
                 <Badge className={getAvailabilityBadgeClass(driver.is_available, driver.verification_status)}>{getAvailabilityLabel(driver.is_available, driver.verification_status)}</Badge>
               </div>
-              <p className="mt-1 text-sm text-slate-500">{driverPhone(driver)} · Yaratilgan {formatAdminDate(driver.created_at)} · Yangilangan {formatAdminDate(driver.updated_at)}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{driverPhone(driver)} · Yaratilgan {formatAdminDate(driver.created_at)} · Yangilangan {formatAdminDate(driver.updated_at)}</p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button onClick={props.onRefresh}><RefreshCw size={15} /> Yangilash</Button>
@@ -373,9 +380,9 @@ function DriverDrawer(props: {
             {canApproveDriver(driver, props.user) && <Button tone="primary" disabled={props.busy} onClick={() => setModal("approve")}><BadgeCheck size={15} /> Tasdiqlash</Button>}
             {canRejectDriver(driver, props.user) && <Button disabled={props.busy} onClick={() => setModal("reject")}><X size={15} /> Rad etish</Button>}
             {canBlockDriver(driver, props.user) && <Button tone="danger" disabled={props.busy} onClick={() => setModal("block")}><Ban size={15} /> Bloklash</Button>}
-            {!["admin", "super_admin"].includes(props.user.role) && <span className="rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-500">Amallar uchun ruxsat yo'q</span>}
+            {!["admin", "super_admin"].includes(props.user.role) && <span className="rounded-[10px] bg-background px-3 py-2 text-sm font-semibold text-muted-foreground">Amallar uchun ruxsat yo'q</span>}
           </div>
-          <div className="mt-4 flex gap-2 border-b border-slate-200">
+          <div className="mt-4 flex gap-2 border-b border-border">
             {[
               ["overview", "Umumiy"],
               ["documents", "Hujjatlar"],
@@ -383,7 +390,7 @@ function DriverDrawer(props: {
               ["orders", "Buyurtmalar"],
               ["audit", "Audit"],
             ].map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key as typeof tab)} className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-950"}`}>{label}</button>
+              <button key={key} onClick={() => setTab(key as typeof tab)} className={`el-press border-b-2 px-3 py-2 text-sm font-semibold ${tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{label}</button>
             ))}
           </div>
         </header>
@@ -423,14 +430,14 @@ function DriverDrawer(props: {
           {tab === "routes" && (
             <section className="grid gap-3">
               {(driver.routes ?? []).length ? (driver.routes ?? []).map((route) => (
-                <div key={route.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                <div key={route.id} className="rounded-[12px] border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="font-bold text-slate-950">{routeName(route)}</p>
-                    <Badge className={route.status === "available" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : route.status === "busy" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-600"}>{route.status}</Badge>
+                    <p className="font-bold text-foreground">{routeName(route)}</p>
+                    <Badge className={route.status === "available" ? "border-success/25 bg-success/12 text-success" : route.status === "busy" ? "border-blue-200 bg-accent text-primary" : "border-border bg-slate-50 text-secondary-foreground"}>{route.status}</Badge>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">Created {formatAdminDate(route.created_at)} · Reverse route is not automatic.</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Created {formatAdminDate(route.created_at)} · Reverse route is not automatic.</p>
                 </div>
-              )) : <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Yo'nalishlar yo'q</div>}
+              )) : <div className="rounded-[12px] border border-border bg-card p-10 text-center text-sm text-muted-foreground">Yo'nalishlar yo'q</div>}
             </section>
           )}
 
@@ -440,12 +447,12 @@ function DriverDrawer(props: {
               <DetailItem label="Yakunlangan buyurtmalar">{driver.completed_orders ?? 0}</DetailItem>
               <DetailItem label="Bekor qilingan buyurtmalar">{driver.cancelled_orders ?? 0}</DetailItem>
               <DetailItem label="Nizolar">{driver.dispute_count ?? 0}</DetailItem>
-              <div className="md:col-span-4 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Biriktirilgan so'nggi buyurtmalar endpointi hali mavjud emas.</div>
+              <div className="md:col-span-4 rounded-[12px] border border-border bg-card p-5 text-sm text-secondary-foreground">Biriktirilgan so'nggi buyurtmalar endpointi hali mavjud emas.</div>
             </section>
           )}
 
           {tab === "audit" && (
-            <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Audit yozuvlari Audit jurnali modulida mavjud. Haydovchiga alohida audit endpointi hali mavjud emas.</div>
+            <div className="rounded-[12px] border border-border bg-card p-5 text-sm text-secondary-foreground">Audit yozuvlari Audit jurnali modulida mavjud. Haydovchiga alohida audit endpointi hali mavjud emas.</div>
           )}
         </div>
       </aside>
@@ -604,30 +611,30 @@ export function AdminDriversPanel({ user }: DriversPanelProps) {
     <div className="grid min-w-0 gap-5">
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-950">Haydovchilar</h2>
-          <p className="mt-1 text-sm text-slate-500">Haydovchi profillari, hujjatlari, yo'nalishlari va tekshiruvini boshqaring</p>
+          <h2 className="text-2xl font-bold text-foreground">Haydovchilar</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Haydovchi profillari, hujjatlari, yo'nalishlari va tekshiruvini boshqaring</p>
         </div>
         <Button disabled={busy} onClick={() => void loadDrivers()}><RefreshCw size={16} /> Yangilash</Button>
       </section>
 
-      {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
+      {error && <div className="rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">{error}</div>}
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
         {summary.map(([label, count, Icon]) => (
-          <div key={label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div key={label} className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
               <Icon size={16} className="text-slate-400" />
             </div>
-            <p className="mt-3 text-2xl font-bold text-slate-950">{count}</p>
+            <p className="mt-3 text-2xl font-bold text-foreground">{count}</p>
           </div>
         ))}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
         <div className="mb-4 flex flex-wrap gap-2">
           {driverTabs.map((tab) => (
-            <button key={tab.key} onClick={() => changeTab(tab)} className={`rounded-md border px-3 py-2 text-sm font-semibold ${activeTab === tab.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>{tab.label}</button>
+            <button key={tab.key} onClick={() => changeTab(tab)} className={`el-press rounded-[10px] border px-3 py-2 text-sm font-semibold ${activeTab === tab.key ? "border-primary bg-accent text-primary" : "border-border bg-card text-secondary-foreground hover:bg-slate-50"}`}>{tab.label}</button>
           ))}
         </div>
         <div className="grid gap-3 lg:grid-cols-4 xl:grid-cols-6">
@@ -671,34 +678,34 @@ export function AdminDriversPanel({ user }: DriversPanelProps) {
         </div>
       </section>
 
-      <section className="max-w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-border bg-card shadow-sm">
         <div className="min-w-0 overflow-x-auto">
           <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 {["Haydovchi", "Telefon", "Transport", "Raqam", "Tekshiruv", "Mavjudlik", "Hujjatlar", "Yo'nalishlar", "Buyurtmalar", "Yaratilgan", "Amallar"].map((label) => (
                   <th key={label} className="px-4 py-3 font-semibold">{label}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-muted">
               {busy && !drivers.length ? Array.from({ length: 5 }).map((_, index) => (
-                <tr key={index}><td colSpan={11} className="px-4 py-3"><div className="h-8 animate-pulse rounded bg-slate-100" /></td></tr>
+                <tr key={index}><td colSpan={11} className="px-4 py-3"><div className="h-8 animate-pulse rounded bg-background" /></td></tr>
               )) : visibleDrivers.length ? visibleDrivers.map((driver) => (
                 <tr key={driver.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <p className="font-bold text-slate-950">{driverName(driver)}</p>
-                    <p className="text-xs text-slate-500">Haydovchi #{driver.id}</p>
+                    <p className="font-bold text-foreground">{driverName(driver)}</p>
+                    <p className="text-xs text-muted-foreground">Haydovchi #{driver.id}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-slate-800">{driverPhone(driver)}</p>
-                    {driver.user?.is_phone_verified && <p className="text-xs text-emerald-700">Tasdiqlangan</p>}
+                    <p className="font-semibold text-secondary-foreground">{driverPhone(driver)}</p>
+                    {driver.user?.is_phone_verified && <p className="text-xs text-success">Tasdiqlangan</p>}
                   </td>
                   <td className="px-4 py-3">
                     <p>{value(driver.car_model)}</p>
-                    <p className="text-xs text-slate-500">{value(driver.car_color)}</p>
+                    <p className="text-xs text-muted-foreground">{value(driver.car_color)}</p>
                   </td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">{value(driver.plate_number)}</td>
+                  <td className="px-4 py-3 font-semibold text-secondary-foreground">{value(driver.plate_number)}</td>
                   <td className="px-4 py-3"><Badge className={getDriverVerificationBadgeClass(driver.verification_status)}>{getDriverVerificationLabel(driver.verification_status)}</Badge></td>
                   <td className="px-4 py-3"><Badge className={getAvailabilityBadgeClass(driver.is_available, driver.verification_status)}>{getAvailabilityLabel(driver.is_available, driver.verification_status)}</Badge></td>
                   <td className="px-4 py-3">{driver.documents_count ?? 0}/{driver.required_documents_count ?? 5} yuklangan</td>
@@ -716,15 +723,15 @@ export function AdminDriversPanel({ user }: DriversPanelProps) {
                 <tr>
                   <td colSpan={11} className="px-4 py-14 text-center">
                     <Truck size={32} className="mx-auto text-slate-300" />
-                    <p className="mt-3 font-semibold text-slate-700">Haydovchilar topilmadi</p>
-                    <p className="mt-1 text-sm text-slate-500">Filtrlarni tozalab yoki ro'yxatni yangilab ko'ring.</p>
+                    <p className="mt-3 font-semibold text-secondary-foreground">Haydovchilar topilmadi</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Filtrlarni tozalab yoki ro'yxatni yangilab ko'ring.</p>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600">
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-secondary-foreground">
           <span>Page {filters.page ?? 1} of {totalPages || 1} · {total} jami</span>
           <div className="flex gap-2">
             <Button disabled={busy || (filters.page ?? 1) <= 1} onClick={() => setPage(Math.max(1, (filters.page ?? 1) - 1))}><ChevronLeft size={15} /> Oldingi</Button>

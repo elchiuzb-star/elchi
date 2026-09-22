@@ -185,6 +185,37 @@ def test_non_staff_cannot_list_drivers(admin_drivers_client, role: str) -> None:
     assert response.json()["error"] == {"code": "FORBIDDEN", "message": "Admin access required"}
 
 
+def test_u5_staff_role_from_user_roles_is_accepted(admin_drivers_client) -> None:
+    """U5 (wave 3.1): in this module the effective roles are `users.role` plus the active `user_roles` rows.
+
+    Q3 still holds: a marketplace account does not become staff through user_roles (the combination is refused),
+    and the v1 route keeps its paths, status codes and messages.
+    """
+    from app.modules.identity.models import UserRole
+
+    client, tokens, session_factory, ids = admin_drivers_client
+    approve = f"/api/v1/admin/drivers/{ids['driver']}/approve"
+    refused = client.post(approve, json={}, headers=headers(tokens["operator"]))
+    assert refused.status_code == 403
+    assert refused.json()["error"]["message"] == "Only admin or super_admin can perform driver verification actions"
+
+    db = session_factory()
+    db.add(UserRole(user_id=ids["operator"], role="admin", status="active"))  # promoted in user_roles only
+    db.add(UserRole(user_id=ids["client"], role="operator", status="active"))  # Q3: marketplace + staff is refused
+    db.commit()
+    db.close()
+
+    assert client.get("/api/v1/admin/drivers", headers=headers(tokens["client"])).status_code == 403
+    assert client.post(approve, json={}, headers=headers(tokens["operator"])).status_code == 200
+
+    db = session_factory()
+    db.query(UserRole).filter(UserRole.user_id == ids["operator"]).update({"status": "revoked"})
+    db.commit()
+    db.close()
+    after = client.post(f"/api/v1/admin/drivers/{ids['driver']}/block", json={"reason": "x"}, headers=headers(tokens["operator"]))
+    assert after.status_code == 403  # revoking the row takes the admin rights away again
+
+
 def test_admin_driver_list_requires_authentication(admin_drivers_client) -> None:
     client, _tokens, _session_factory, _ids = admin_drivers_client
 
@@ -424,6 +455,63 @@ def test_cannot_approve_or_block_already_blocked_driver(admin_drivers_client) ->
     assert block_again.json()["error"] == {"code": "DRIVER_ALREADY_BLOCKED", "message": "Driver is already blocked"}
 
 
+def test_block_without_v2_business_is_full_block_with_additive_fields(admin_drivers_client) -> None:
+    """Q15: no v2 trips/bookings (v2 tables absent in this suite) -> unchanged v1 full block."""
+    client, tokens, session_factory, ids = admin_drivers_client
+    driver = create_driver(session_factory, ids, verification_status="approved")
+
+    response = client.post(
+        f"/api/v1/admin/drivers/{driver['driver_id']}/block",
+        headers=headers(tokens["admin"]),
+        json={"reason": "Fraud suspicion"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"success", "data", "message"} and body["message"] == "Driver blocked"
+    data = body["data"]
+    assert data["user_status"] == "blocked"
+    assert data["block_type"] == "full"
+    assert data["v2_eligibility_blocked"] is False
+    assert data["v2_active_trip_count"] == 0 and data["v2_active_booking_count"] == 0
+
+
+def test_admin_cannot_request_emergency_block(admin_drivers_client) -> None:
+    client, tokens, session_factory, ids = admin_drivers_client
+    driver = create_driver(session_factory, ids, verification_status="approved")
+
+    response = client.post(
+        f"/api/v1/admin/drivers/{driver['driver_id']}/block",
+        headers=headers(tokens["admin"]),
+        json={"reason": "Fraud suspicion", "emergency": True},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "success": False,
+        "error": {"code": "FORBIDDEN", "message": "Only super_admin can perform an emergency full block"},
+    }
+    db = session_factory()
+    assert db.get(DriverProfile, driver["driver_id"]).verification_status == "approved"
+    assert db.get(User, driver["user_id"]).status == "active"
+    db.close()
+
+
+def test_super_admin_emergency_block_is_full_block(admin_drivers_client) -> None:
+    client, tokens, session_factory, ids = admin_drivers_client
+    driver = create_driver(session_factory, ids, verification_status="approved")
+
+    response = client.post(
+        f"/api/v1/admin/drivers/{driver['driver_id']}/block",
+        headers=headers(tokens["super_admin"]),
+        json={"reason": "Emergency", "emergency": True},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["user_status"] == "blocked" and data["block_type"] == "full"
+
+
 def test_consecutive_approve_then_reject_does_not_create_inconsistent_state(admin_drivers_client) -> None:
     client, tokens, session_factory, ids = admin_drivers_client
 
@@ -472,8 +560,19 @@ def test_stage_15_does_not_add_forbidden_fields(admin_drivers_client) -> None:
 
 
 def db_has_no_tracking_artifacts() -> bool:
+    # Stage-1 guard, scoped to legacy v1 models (wave 3 integration, A0a): chat and tracking are stage-2 scope in
+    # wired v2 modules (app.modules.*), which may share Base.metadata in the same process. v1 models must still not
+    # grow such tables.
     forbidden_table_names = {"chat_messages", "tracking_events", "payments", "proofs"}
-    return forbidden_table_names.isdisjoint(Base.metadata.tables.keys())
+    return forbidden_table_names.isdisjoint(legacy_v1_table_names())
+
+
+def legacy_v1_table_names() -> set[str]:
+    return {
+        mapper.local_table.name
+        for mapper in Base.registry.mappers
+        if mapper.class_.__module__.startswith("app.models")
+    }
 
 
 @pytest.mark.parametrize("role", ["operator", "admin", "super_admin"])

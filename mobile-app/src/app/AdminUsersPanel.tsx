@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Eye, Lock, Pencil, Plus, RefreshCw, Search, Shield, Unlock, UserRound } from "lucide-react";
+import { Eye, Lock, Pencil, Plus, RefreshCw, Search, Shield, Unlock, UserRound } from "./ui/icons";
 
 import {
   blockStaffUser,
@@ -30,15 +30,15 @@ function Button(props: { children: ReactNode; onClick?: () => void; disabled?: b
   const tone = props.tone ?? "primary";
   const className =
     tone === "danger"
-      ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+      ? "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/25"
       : tone === "neutral"
-        ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-        : "border-blue-600 bg-blue-600 text-white hover:bg-blue-700";
+        ? "border-border bg-card text-secondary-foreground hover:bg-slate-50"
+        : "border-primary bg-primary text-primary-foreground hover:bg-primary";
   return (
     <button
       onClick={props.onClick}
       disabled={props.disabled}
-      className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`el-press inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {props.children}
     </button>
@@ -47,14 +47,14 @@ function Button(props: { children: ReactNode; onClick?: () => void; disabled?: b
 
 function TextField(props: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <input
         value={props.value}
         type={props.type ?? "text"}
         placeholder={props.placeholder}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       />
     </label>
   );
@@ -62,12 +62,12 @@ function TextField(props: { label: string; value: string; onChange: (value: stri
 
 function SelectField<T extends string>(props: { label: string; value: T; onChange: (value: T) => void; options: Array<{ value: T; label: string }> }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <select
         value={props.value}
         onChange={(event) => props.onChange(event.target.value as T)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       >
         {props.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
@@ -77,11 +77,11 @@ function SelectField<T extends string>(props: { label: string; value: T; onChang
 
 function Modal(props: { title: string; children: ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4">
+      <div className="w-full max-w-lg rounded-[12px] bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-muted px-5 py-4">
           <h2 className="text-lg font-bold">{props.title}</h2>
-          <button onClick={props.onClose} className="rounded-md px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100">Yopish</button>
+          <button onClick={props.onClose} className="el-press rounded-[10px] px-2 py-1 text-sm font-semibold text-muted-foreground hover:bg-muted">Yopish</button>
         </div>
         <div className="p-5">{props.children}</div>
       </div>
@@ -170,8 +170,8 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
     <div className="grid min-w-0 gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-slate-500">Faqat xodimlar kirishini boshqarish. Mijoz va haydovchi akkauntlari o'z oqimlarida boshqariladi.</p>
-          {!isSuperAdmin && <p className="mt-1 text-xs font-semibold text-amber-700">Faqat ko'rish rejimi. Xodimlarni o'zgartirish uchun super administrator roli kerak.</p>}
+          <p className="text-sm text-muted-foreground">Faqat xodimlar kirishini boshqarish. Mijoz va haydovchi akkauntlari o'z oqimlarida boshqariladi.</p>
+          {!isSuperAdmin && <p className="mt-1 text-xs font-semibold text-warning">Faqat ko'rish rejimi. Xodimlarni o'zgartirish uchun super administrator roli kerak.</p>}
         </div>
         <div className="flex gap-2">
           <Button tone="neutral" disabled={busy} onClick={() => void load()}><RefreshCw size={16} /> Yangilash</Button>
@@ -179,7 +179,7 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
         </div>
       </div>
 
-      {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>}
+      {error && <div className="rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">{error}</div>}
 
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         {[
@@ -190,14 +190,14 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
           ["Faol", summary.active],
           ["Bloklangan", summary.blocked],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
-            <p className="mt-2 text-2xl font-bold text-slate-950">{value}</p>
+          <div key={label} className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">{label}</p>
+            <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
           </div>
         ))}
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
         <div className="grid gap-3 xl:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr]">
           <label className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -205,22 +205,22 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Telefon yoki ism bo'yicha qidirish"
-              className="h-10 w-full rounded-md border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-10 w-full rounded-[10px] border border-border pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
             />
           </label>
-          <select value={filters.role ?? ""} onChange={(event) => setFilters({ ...filters, role: event.target.value || undefined, page: 1 })} className="h-10 rounded-md border border-slate-200 px-3 text-sm">
+          <select value={filters.role ?? ""} onChange={(event) => setFilters({ ...filters, role: event.target.value || undefined, page: 1 })} className="h-10 rounded-[10px] border border-border px-3 text-sm">
             <option value="">Barcha rollar</option>
             <option value="operator">Operator</option>
             <option value="admin">Admin</option>
             <option value="super_admin">Super administrator</option>
           </select>
-          <select value={filters.status ?? ""} onChange={(event) => setFilters({ ...filters, status: event.target.value || undefined, page: 1 })} className="h-10 rounded-md border border-slate-200 px-3 text-sm">
+          <select value={filters.status ?? ""} onChange={(event) => setFilters({ ...filters, status: event.target.value || undefined, page: 1 })} className="h-10 rounded-[10px] border border-border px-3 text-sm">
             <option value="">Barcha holatlar</option>
             <option value="active">Faol</option>
             <option value="blocked">Bloklangan</option>
             <option value="inactive">Nofaol</option>
           </select>
-          <select value={filters.is_phone_verified ?? ""} onChange={(event) => setFilters({ ...filters, is_phone_verified: event.target.value || undefined, page: 1 })} className="h-10 rounded-md border border-slate-200 px-3 text-sm">
+          <select value={filters.is_phone_verified ?? ""} onChange={(event) => setFilters({ ...filters, is_phone_verified: event.target.value || undefined, page: 1 })} className="h-10 rounded-[10px] border border-border px-3 text-sm">
             <option value="">Telefon tasdig'i</option>
             <option value="verified">Tasdiqlangan</option>
             <option value="unverified">Tasdiqlanmagan</option>
@@ -229,23 +229,23 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
             type="date"
             value={filters.created_from ?? ""}
             onChange={(event) => setFilters({ ...filters, created_from: event.target.value || undefined, page: 1 })}
-            className="h-10 rounded-md border border-slate-200 px-3 text-sm"
+            className="h-10 rounded-[10px] border border-border px-3 text-sm"
             aria-label="Boshlanish sanasi"
           />
           <input
             type="date"
             value={filters.created_to ?? ""}
             onChange={(event) => setFilters({ ...filters, created_to: event.target.value || undefined, page: 1 })}
-            className="h-10 rounded-md border border-slate-200 px-3 text-sm"
+            className="h-10 rounded-[10px] border border-border px-3 text-sm"
             aria-label="Tugash sanasi"
           />
         </div>
       </section>
 
-      <section className="max-w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-border bg-card shadow-sm">
         <div className="min-w-0 overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="bg-slate-50 text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">Foydalanuvchi</th>
                 <th>Telefon</th>
@@ -257,12 +257,12 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
                 <th className="px-4">Amallar</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-muted">
               {items.map((staffUser) => (
                 <tr key={staffUser.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <div className="font-semibold text-slate-950">{staffUser.full_name || "Ism yo'q"}</div>
-                    <div className="text-xs text-slate-500">ID {staffUser.id}</div>
+                    <div className="font-semibold text-foreground">{staffUser.full_name || "Ism yo'q"}</div>
+                    <div className="text-xs text-muted-foreground">ID {staffUser.id}</div>
                   </td>
                   <td>{staffUser.phone}</td>
                   <td>{adminRoleLabel(staffUser.role)}</td>
@@ -272,14 +272,14 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
                   <td>{formatAdminDate(staffUser.last_login_at)}</td>
                   <td className="px-4">
                     <div className="flex flex-wrap gap-2">
-                      <button onClick={() => void openDetail(staffUser)} className="rounded-md border border-slate-200 p-2 text-slate-600 hover:bg-white" title="Tafsilotlarni ko'rish"><Eye size={16} /></button>
+                      <button onClick={() => void openDetail(staffUser)} className="el-press rounded-[10px] border border-border p-2 text-secondary-foreground hover:bg-card" title="Tafsilotlarni ko'rish"><Eye size={16} /></button>
                       {isSuperAdmin && (
                         <>
-                          <button onClick={() => beginEdit(staffUser)} className="rounded-md border border-slate-200 p-2 text-slate-600 hover:bg-white" title="Xodimni tahrirlash"><Pencil size={16} /></button>
+                          <button onClick={() => beginEdit(staffUser)} className="el-press rounded-[10px] border border-border p-2 text-secondary-foreground hover:bg-card" title="Xodimni tahrirlash"><Pencil size={16} /></button>
                           {staffUser.status === "blocked" ? (
-                            <button onClick={() => { setStatusTarget({ user: staffUser, action: "unblock" }); setReason(""); }} className="rounded-md border border-emerald-200 p-2 text-emerald-700 hover:bg-emerald-50" title="Blokdan chiqarish"><Unlock size={16} /></button>
+                            <button onClick={() => { setStatusTarget({ user: staffUser, action: "unblock" }); setReason(""); }} className="el-press rounded-[10px] border border-success/25 p-2 text-success hover:bg-success/12" title="Blokdan chiqarish"><Unlock size={16} /></button>
                           ) : (
-                            <button onClick={() => { setStatusTarget({ user: staffUser, action: "block" }); setReason(""); }} className="rounded-md border border-rose-200 p-2 text-rose-700 hover:bg-rose-50" title="Bloklash"><Lock size={16} /></button>
+                            <button onClick={() => { setStatusTarget({ user: staffUser, action: "block" }); setReason(""); }} className="el-press rounded-[10px] border border-destructive/25 p-2 text-destructive hover:bg-destructive/10" title="Bloklash"><Lock size={16} /></button>
                           )}
                         </>
                       )}
@@ -287,7 +287,7 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-500">Xodimlar topilmadi</td></tr>}
+              {items.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">Xodimlar topilmadi</td></tr>}
             </tbody>
           </table>
         </div>
@@ -334,7 +334,7 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
       {statusTarget && (
         <Modal title={statusTarget.action === "block" ? "Xodimni bloklash" : "Xodimni blokdan chiqarish"} onClose={() => setStatusTarget(null)}>
           <div className="grid gap-4">
-            <p className="text-sm text-slate-600">{statusTarget.user.phone} · {adminRoleLabel(statusTarget.user.role)}</p>
+            <p className="text-sm text-secondary-foreground">{statusTarget.user.phone} · {adminRoleLabel(statusTarget.user.role)}</p>
             <TextField label="Sabab" value={reason} onChange={setReason} placeholder="Sabab kiritish shart" />
             <div className="flex justify-end gap-2">
               <Button tone="neutral" onClick={() => setStatusTarget(null)}>Bekor qilish</Button>
@@ -356,34 +356,34 @@ export function AdminUsersPanel({ user }: { user: AuthUser }) {
       )}
 
       {detail && (
-        <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md border-l border-slate-200 bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md border-l border-border bg-card shadow-xl">
+          <div className="flex items-center justify-between border-b border-muted px-5 py-4">
             <h2 className="text-lg font-bold">Xodim tafsilotlari</h2>
-            <button onClick={() => setDetail(null)} className="rounded-md px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100">Yopish</button>
+            <button onClick={() => setDetail(null)} className="el-press rounded-[10px] px-2 py-1 text-sm font-semibold text-muted-foreground hover:bg-muted">Yopish</button>
           </div>
           <div className="grid gap-4 p-5">
-            <div className="rounded-lg border border-slate-200 p-4">
+            <div className="rounded-[12px] border border-border p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-700"><UserRound size={20} /></div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-primary"><UserRound size={20} /></div>
                 <div>
                   <div className="font-bold">{detail.full_name || "Ism yo'q"}</div>
-                  <div className="text-sm text-slate-500">{detail.phone}</div>
+                  <div className="text-sm text-muted-foreground">{detail.phone}</div>
                 </div>
               </div>
               <div className="mt-4 grid gap-2 text-sm">
-                <p><span className="text-slate-500">Rol:</span> {adminRoleLabel(detail.role)}</p>
-                <p><span className="text-slate-500">Holat:</span> {adminStatusLabel(detail.status)}</p>
-                <p><span className="text-slate-500">Telefon tasdiqlangan:</span> {detail.is_phone_verified ? "Ha" : "Yo'q"}</p>
-                <p><span className="text-slate-500">Yaratilgan:</span> {formatAdminDate(detail.created_at)}</p>
-                <p><span className="text-slate-500">So'nggi kirish:</span> {formatAdminDate(detail.last_login_at)}</p>
+                <p><span className="text-muted-foreground">Rol:</span> {adminRoleLabel(detail.role)}</p>
+                <p><span className="text-muted-foreground">Holat:</span> {adminStatusLabel(detail.status)}</p>
+                <p><span className="text-muted-foreground">Telefon tasdiqlangan:</span> {detail.is_phone_verified ? "Ha" : "Yo'q"}</p>
+                <p><span className="text-muted-foreground">Yaratilgan:</span> {formatAdminDate(detail.created_at)}</p>
+                <p><span className="text-muted-foreground">So'nggi kirish:</span> {formatAdminDate(detail.last_login_at)}</p>
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 p-4">
+            <div className="rounded-[12px] border border-border p-4">
               <div className="flex items-center gap-2 font-bold"><Shield size={17} /> Rol va ruxsatlar</div>
-              <p className="mt-2 text-sm text-slate-600">Ruxsatlar backendda rol orqali boshqariladi. Super administratorlar xodimlarni boshqaradi; administrator va operatorlar biriktirilgan admin modullarida ishlaydi.</p>
+              <p className="mt-2 text-sm text-secondary-foreground">Ruxsatlar backendda rol orqali boshqariladi. Super administratorlar xodimlarni boshqaradi; administrator va operatorlar biriktirilgan admin modullarida ishlaydi.</p>
             </div>
-            <div className="rounded-lg border border-slate-200 p-4 text-sm text-slate-600">Sessiyalar ko'rinishi kelajakdagi backend endpointi uchun ajratilgan.</div>
-            <div className="rounded-lg border border-slate-200 p-4 text-sm text-slate-600">Audit izi Audit jurnali sahifasida mavjud.</div>
+            <div className="rounded-[12px] border border-border p-4 text-sm text-secondary-foreground">Sessiyalar ko'rinishi kelajakdagi backend endpointi uchun ajratilgan.</div>
+            <div className="rounded-[12px] border border-border p-4 text-sm text-secondary-foreground">Audit izi Audit jurnali sahifasida mavjud.</div>
           </div>
         </div>
       )}

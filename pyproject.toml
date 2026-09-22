@@ -2,3 +2,6 @@
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+markers = [
+    "pg: needs PostgreSQL 16 + PostGIS (ELCHI_TEST_PG_URL, see docker-compose.test.yml); skipped when the server is unreachable",
+]

@@ -1,4 +1,23 @@
-api.elchigo.uz {
+# Edge proxy for the Elchi API. Host-agnostic: the site address comes from
+# ELCHI_DOMAIN (set in the env file, passed by docker-compose.prod.yml); the
+# default keeps today's hostname. TLS is obtained by Caddy via ACME -- no DNS
+# provider API is involved, so any registrar/host works (ADR-0011).
+{
+	# Handler error logs (e.g. a 502 from reverse_proxy) include the request
+	# URI; strip signed download parameters there as well.
+	log default {
+		output stderr
+		format filter {
+			wrap json
+			request>uri query {
+				delete exp
+				delete sig
+			}
+		}
+	}
+}
+
+{$ELCHI_DOMAIN:api.elchigo.uz} {
 	encode zstd gzip
 
 	# Slightly above ELCHI_MAX_DOCUMENT_UPLOAD_MB (10) so the API returns its
@@ -11,16 +30,44 @@ api.elchigo.uz {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
+		# "?" = default only. The API sends `Referrer-Policy: no-referrer` on
+		# every response (signed file downloads, future tracking share pages,
+		# spec §10.6); an unconditional value here would overwrite it and leak
+		# the signed URL's origin to third parties.
+		?Referrer-Policy "strict-origin-when-cross-origin"
 		-Server
 	}
 
+	# Readiness is for monitoring only (decision 33): it reveals dependency state.
+	# ELCHI_MONITORING_CIDRS = space-separated CIDRs of the uptime/monitoring
+	# sources. Default 0.0.0.0/32 matches no real peer = deny everyone (404).
+	# /health/live and /api/v1/health stay public.
+	@ready_not_from_monitoring {
+		path /health/ready /health/ready/*
+		not remote_ip {$ELCHI_MONITORING_CIDRS:0.0.0.0/32}
+	}
+	respond @ready_not_from_monitoring 404
+
+	# Caddy replaces any client-supplied X-Forwarded-For with the real peer
+	# address (no trusted_proxies configured), which is what app/api/v1/auth.py
+	# relies on for per-IP OTP limits. Do not add trusted_proxies unless another
+	# proxy/CDN sits in front, and then list only its ranges.
 	reverse_proxy api:8000
 
 	log {
 		output file /data/access.log {
 			roll_size 50MB
 			roll_keep 5
+		}
+		# Signed file URLs (GET /api/v1/files/<key>?exp=..&sig=..) are bearer
+		# credentials until they expire: never persist exp/sig. Caddy already
+		# redacts Authorization/Cookie headers by default.
+		format filter {
+			wrap json
+			request>uri query {
+				delete exp
+				delete sig
+			}
 		}
 	}
 }

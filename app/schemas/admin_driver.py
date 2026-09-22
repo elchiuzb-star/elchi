@@ -32,3 +32,7 @@ class AdminDriverBlock(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str | None = None
+    # Q15 (additive, optional): a driver with active v2 trips/bookings is by default blocked
+    # only for new business (v2 eligibility block); ``emergency=true`` also suspends the
+    # account (stops trip operation, tracking, sessions) and is super_admin only.
+    emergency: bool = False

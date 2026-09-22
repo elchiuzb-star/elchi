@@ -13,7 +13,7 @@ import {
   Truck,
   User,
   X,
-} from "lucide-react";
+} from "./ui/icons";
 
 import {
   cancelAdminOrder,
@@ -88,9 +88,9 @@ function statusBadge(status?: string | null) {
 }
 
 function outlineButtonClass(tone: "neutral" | "primary" | "danger" = "neutral") {
-  if (tone === "primary") return "border-blue-600 bg-blue-600 text-white hover:bg-blue-700";
-  if (tone === "danger") return "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100";
-  return "border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
+  if (tone === "primary") return "border-primary bg-primary text-primary-foreground hover:bg-primary";
+  if (tone === "danger") return "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/25";
+  return "border-border bg-card text-secondary-foreground hover:bg-slate-50";
 }
 
 function AdminButton(props: {
@@ -105,7 +105,7 @@ function AdminButton(props: {
       type={props.type ?? "button"}
       onClick={props.onClick}
       disabled={props.disabled}
-      className={`inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${outlineButtonClass(props.tone)} disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`el-press inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border px-3 text-sm font-semibold transition ${outlineButtonClass(props.tone)} disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {props.children}
     </button>
@@ -120,14 +120,14 @@ function Input(props: {
   type?: string;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <input
         value={props.value}
         type={props.type ?? "text"}
         placeholder={props.placeholder}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       />
     </label>
   );
@@ -140,12 +140,12 @@ function Select(props: {
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <select
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       >
         {props.children}
       </select>
@@ -155,20 +155,20 @@ function Select(props: {
 
 function DetailItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <div className="mt-1 text-sm font-semibold text-slate-950">{value || "-"}</div>
+    <div className="rounded-[12px] border border-border bg-card p-3">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="mt-1 text-sm font-semibold text-foreground">{value || "-"}</div>
     </div>
   );
 }
 
 function ModalShell(props: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
-      <section className="w-full max-w-md rounded-lg border border-slate-200 bg-white shadow-xl">
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h3 className="text-base font-bold text-slate-950">{props.title}</h3>
-          <button onClick={props.onClose} className="rounded-md p-1 text-slate-500 hover:bg-slate-100" aria-label="Yopish">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-foreground/40 p-4">
+      <section className="w-full max-w-md rounded-[12px] border border-border bg-card shadow-xl">
+        <header className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h3 className="text-base font-bold text-foreground">{props.title}</h3>
+          <button onClick={props.onClose} className="el-press rounded-[10px] p-1 text-muted-foreground hover:bg-muted" aria-label="Yopish">
             <X size={18} />
           </button>
         </header>
@@ -239,7 +239,7 @@ function AssignDriverModal(props: {
   return (
     <ModalShell title="Haydovchi biriktirish" onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        <label className="relative grid gap-1.5 text-sm font-medium text-slate-700">
+        <label className="relative grid gap-1.5 text-sm font-medium text-secondary-foreground">
           Haydovchi
           <input
             value={driverQuery}
@@ -247,10 +247,10 @@ function AssignDriverModal(props: {
             onFocus={() => setDriverListOpen(true)}
             onBlur={() => window.setTimeout(() => setDriverListOpen(false), 120)}
             placeholder="Ism, telefon yoki raqam orqali qidiring"
-            className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
           />
           {driverListOpen && (
-            <div className="absolute left-0 right-0 top-[68px] z-[80] max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+            <div className="absolute left-0 right-0 top-[68px] z-[80] max-h-56 overflow-y-auto rounded-[10px] border border-border bg-card py-1 shadow-lg">
               {visibleDrivers.length ? visibleDrivers.map((driver) => {
                 const active = String(driver.id) === driverId;
                 return (
@@ -259,22 +259,22 @@ function AssignDriverModal(props: {
                     key={String(driver.id)}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => selectDriver(driver)}
-                    className={`block w-full px-3 py-2 text-left text-sm hover:bg-blue-50 ${active ? "bg-blue-50 text-blue-700" : "text-slate-700"}`}
+                    className={`el-press block w-full px-3 py-2 text-left text-sm hover:bg-accent ${active ? "bg-accent text-primary" : "text-secondary-foreground"}`}
                   >
                     <span className="block font-semibold">{driverLabel(driver)}</span>
-                    <span className="block text-xs text-slate-500">ID {String(driver.id)}</span>
+                    <span className="block text-xs text-muted-foreground">ID {String(driver.id)}</span>
                   </button>
                 );
               }) : (
-                <div className="px-3 py-3 text-sm text-slate-500">Mos haydovchi topilmadi</div>
+                <div className="px-3 py-3 text-sm text-muted-foreground">Mos haydovchi topilmadi</div>
               )}
             </div>
           )}
-          {selectedDriver && <span className="text-xs font-semibold text-emerald-700">Tanlandi: {driverLabel(selectedDriver)}</span>}
+          {selectedDriver && <span className="text-xs font-semibold text-success">Tanlandi: {driverLabel(selectedDriver)}</span>}
         </label>
         <Input label="Yakuniy narx" value={finalPrice} onChange={setFinalPrice} type="number" />
         <Input label="Sabab" value={reason} onChange={setReason} placeholder="Sabab kiritish shart" />
-        <p className="text-xs text-slate-500">Ro'yxatda tasdiqlangan faol haydovchilar ko'rsatiladi. Backend yo'nalish mosligini biriktirish vaqtida tekshiradi.</p>
+        <p className="text-xs text-muted-foreground">Ro'yxatda tasdiqlangan faol haydovchilar ko'rsatiladi. Backend yo'nalish mosligini biriktirish vaqtida tekshiradi.</p>
         <div className="flex justify-end gap-2">
           <AdminButton onClick={props.onClose}>Bekor qilish</AdminButton>
           <AdminButton tone="primary" disabled={props.busy || !valid} onClick={() => props.onSubmit({ driver_id: Number(driverId), final_price: Number(finalPrice), reason })}>Biriktirish</AdminButton>
@@ -293,7 +293,7 @@ function CancelOrderModal(props: {
   return (
     <ModalShell title="Buyurtmani bekor qilish" onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+        <div className="rounded-[10px] border border-warning/28 bg-warning/14 p-3 text-sm font-medium text-warning">
           Bu amal mijoz va haydovchiga ta'sir qilishi mumkin. Davom etilsinmi?
         </div>
         <Input label="Sabab" value={reason} onChange={setReason} placeholder="Sabab kiritish shart" />
@@ -325,17 +325,24 @@ function OrdersDrawer(props: {
   const canCancel = order.status !== "cancelled";
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={props.onClose} />
-      <aside className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-3xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl">
-        <header className="border-b border-slate-200 bg-white p-5">
+      {/* The scrim is decoration: it closes the drawer as a convenience, and the drawer itself carries the
+          dialog semantics and a real close button. Marking it presentational keeps a screen reader from
+          announcing a clickable region with no name. */}
+      <div className="fixed inset-0 z-50 bg-foreground/30" role="presentation" onClick={props.onClose} />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-3xl flex-col border-l border-border bg-slate-50 shadow-2xl"
+      >
+        <header className="border-b border-border bg-card p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold text-slate-950">{order.order_number ?? `Order #${order.id}`}</h2>
+                <h2 className="text-xl font-bold text-foreground">{order.order_number ?? `Order #${order.id}`}</h2>
                 {statusBadge(order.status)}
-                {order.dispute && <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">Dispute opened</span>}
+                {order.dispute && <span className="inline-flex rounded-full border border-destructive/25 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">Dispute opened</span>}
               </div>
-              <p className="mt-1 text-sm text-slate-500">Created {formatAdminDate(order.created_at)} · Updated {formatAdminDate(order.updated_at)}</p>
+              <p className="mt-1 text-sm text-muted-foreground">Created {formatAdminDate(order.created_at)} · Updated {formatAdminDate(order.updated_at)}</p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <AdminButton onClick={props.onRefresh}><RefreshCw size={15} /> Yangilash</AdminButton>
@@ -347,14 +354,14 @@ function OrdersDrawer(props: {
             <AdminButton disabled={props.busy || !canAssign} onClick={() => setModal("assign")}>Assign driver</AdminButton>
             <AdminButton tone="danger" disabled={props.busy || !canCancel} onClick={() => setModal("cancel")}>Buyurtmani bekor qilish</AdminButton>
           </div>
-          <div className="mt-4 flex gap-2 border-b border-slate-200">
+          <div className="mt-4 flex gap-2 border-b border-border">
             {[
               ["overview", "Umumiy"],
               ["bids", "Takliflar"],
               ["history", "Holat tarixi"],
               ["audit", "Audit"],
             ].map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key as typeof tab)} className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-950"}`}>{label}</button>
+              <button key={key} onClick={() => setTab(key as typeof tab)} className={`el-press border-b-2 px-3 py-2 text-sm font-semibold ${tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{label}</button>
             ))}
           </div>
         </header>
@@ -363,7 +370,7 @@ function OrdersDrawer(props: {
           {tab === "overview" && (
             <div className="grid min-w-0 gap-5">
               {order.dispute && (
-                <section className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                <section className="rounded-[12px] border border-destructive/25 bg-destructive/10 p-4 text-sm text-destructive">
                   <p className="font-bold">Dispute opened</p>
                   <p className="mt-1">Reason: {order.dispute.reason ?? "-"}</p>
                   <p>Status: {order.dispute.status ?? "-"}</p>
@@ -384,8 +391,8 @@ function OrdersDrawer(props: {
                 <DetailItem label="Yetkazish koordinatalari" value={order.dropoff_lat && order.dropoff_lng ? `${order.dropoff_lat}, ${order.dropoff_lng}` : "Xaritada nuqta tanlanmagan"} />
               </section>
               {(order.pickup_lat || order.dropoff_lat) && (
-                <section className="rounded-lg border border-slate-200 bg-white p-4">
-                  <p className="mb-3 text-sm font-bold text-slate-950">Map preview</p>
+                <section className="rounded-[12px] border border-border bg-card p-4">
+                  <p className="mb-3 text-sm font-bold text-foreground">Map preview</p>
                   <ReadOnlyOrderMap pickupLat={order.pickup_lat} pickupLng={order.pickup_lng} dropoffLat={order.dropoff_lat} dropoffLng={order.dropoff_lng} />
                 </section>
               )}
@@ -395,11 +402,11 @@ function OrdersDrawer(props: {
                 <DetailItem label="Qabul qiluvchi telefoni" value={order.receiver_phone ?? "-"} />
               </section>
               <section className="grid gap-3 md:grid-cols-2">
-                <DetailItem label="Yuk rasmi" value={order.cargo_photo_url ? <a href={order.cargo_photo_url} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">Open photo</a> : "-"} />
+                <DetailItem label="Yuk rasmi" value={order.cargo_photo_url ? <a href={order.cargo_photo_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">Open photo</a> : "-"} />
                 <DetailItem label="Izoh" value={order.comment ?? "-"} />
               </section>
-              <section className="rounded-lg border border-slate-200 bg-white p-4">
-                <p className="text-sm font-bold text-slate-950">Assigned driver</p>
+              <section className="rounded-[12px] border border-border bg-card p-4">
+                <p className="text-sm font-bold text-foreground">Assigned driver</p>
                 {order.assigned_driver ? (
                   <div className="mt-3 grid gap-3 md:grid-cols-3">
                     <DetailItem label="Haydovchi" value={driverName(order.assigned_driver)} />
@@ -408,15 +415,15 @@ function OrdersDrawer(props: {
                     <DetailItem label="Reyting" value={order.assigned_driver.rating ?? "-"} />
                     <DetailItem label="Tekshiruv" value={order.assigned_driver.verification_status ?? "-"} />
                   </div>
-                ) : <p className="mt-3 text-sm text-slate-500">No driver assigned</p>}
+                ) : <p className="mt-3 text-sm text-muted-foreground">No driver assigned</p>}
               </section>
-              <section className="rounded-lg border border-slate-200 bg-white p-4">
-                <p className="text-sm font-bold text-slate-950">Status timeline</p>
+              <section className="rounded-[12px] border border-border bg-card p-4">
+                <p className="text-sm font-bold text-foreground">Status timeline</p>
                 <div className="mt-4 grid gap-3 md:grid-cols-4">
                   {timelineStatuses.map((item) => {
                     const active = item === order.status || Boolean(order[`${item}_at` as keyof AdminOrder]);
                     return (
-                      <div key={item} className={`rounded-md border px-3 py-2 text-xs font-semibold ${active ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+                      <div key={item} className={`rounded-[10px] border px-3 py-2 text-xs font-semibold ${active ? "border-blue-200 bg-accent text-primary" : "border-border bg-slate-50 text-muted-foreground"}`}>
                         {statusLabel(item)}
                       </div>
                     );
@@ -429,38 +436,38 @@ function OrdersDrawer(props: {
           {tab === "bids" && (
             <section className="grid gap-3">
               {(order.bids ?? []).length ? (order.bids ?? []).map((bid: AdminOrderBid) => (
-                <div key={bid.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                <div key={bid.id} className="rounded-[12px] border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-bold text-slate-950">{bid.driver_name ?? `Driver #${bid.driver_id}`}</p>
-                      <p className="text-sm text-slate-500">{[bid.car_model, bid.plate_number, bid.driver_phone].filter(Boolean).join(" / ") || "-"}</p>
+                      <p className="font-bold text-foreground">{bid.driver_name ?? `Driver #${bid.driver_id}`}</p>
+                      <p className="text-sm text-muted-foreground">{[bid.car_model, bid.plate_number, bid.driver_phone].filter(Boolean).join(" / ") || "-"}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-slate-950">{formatAdminMoney(bid.price)}</p>
+                      <p className="font-bold text-foreground">{formatAdminMoney(bid.price)}</p>
                       {statusBadge(bid.status)}
                     </div>
                   </div>
-                  <p className="mt-3 text-sm text-slate-600">{bid.comment || "Izoh yo'q"}</p>
-                  <p className="mt-2 text-xs text-slate-500">Rating: {bid.driver_rating ?? "-"} · Created {formatAdminDate(bid.created_at)}</p>
+                  <p className="mt-3 text-sm text-secondary-foreground">{bid.comment || "Izoh yo'q"}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Rating: {bid.driver_rating ?? "-"} · Created {formatAdminDate(bid.created_at)}</p>
                 </div>
-              )) : <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">No bids yet</div>}
+              )) : <div className="rounded-[12px] border border-border bg-card p-10 text-center text-sm text-muted-foreground">No bids yet</div>}
             </section>
           )}
 
           {tab === "history" && (
             <section className="grid gap-3">
               {(order.status_history ?? []).length ? (order.status_history ?? []).map((item, index) => (
-                <div key={`${item.created_at}-${index}`} className="rounded-lg border border-slate-200 bg-white p-4">
-                  <p className="font-semibold text-slate-950">{statusLabel(item.old_status)} → {statusLabel(item.new_status)}</p>
-                  <p className="mt-1 text-sm text-slate-600">{item.reason ?? "Sabab yo'q"}</p>
-                  <p className="mt-2 text-xs text-slate-500">{item.changed_by_role ?? "-"} · {formatAdminDate(item.created_at)}</p>
+                <div key={`${item.created_at}-${index}`} className="rounded-[12px] border border-border bg-card p-4">
+                  <p className="font-semibold text-foreground">{statusLabel(item.old_status)} → {statusLabel(item.new_status)}</p>
+                  <p className="mt-1 text-sm text-secondary-foreground">{item.reason ?? "Sabab yo'q"}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{item.changed_by_role ?? "-"} · {formatAdminDate(item.created_at)}</p>
                 </div>
-              )) : <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">No status history</div>}
+              )) : <div className="rounded-[12px] border border-border bg-card p-10 text-center text-sm text-muted-foreground">No status history</div>}
             </section>
           )}
 
           {tab === "audit" && (
-            <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
+            <div className="rounded-[12px] border border-border bg-card p-5 text-sm text-secondary-foreground">
               Audit yozuvlari Audit jurnali modulida mavjud. Buyurtmaga alohida audit endpointi hali mavjud emas.
             </div>
           )}
@@ -623,27 +630,27 @@ export function AdminOrdersPanel({ user }: OrdersPanelProps) {
     <div className="grid min-w-0 gap-5">
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-950">Orders</h2>
-          <p className="mt-1 text-sm text-slate-500">Manage client orders, bids, drivers, statuses, and disputes</p>
+          <h2 className="text-2xl font-bold text-foreground">Orders</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Manage client orders, bids, drivers, statuses, and disputes</p>
         </div>
         <AdminButton disabled={busy} onClick={() => void loadOrders()}><RefreshCw size={16} /> Yangilash</AdminButton>
       </section>
 
-      {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
+      {error && <div className="rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">{error}</div>}
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
         {summary.map(([label, value, Icon]) => (
-          <div key={label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div key={label} className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
               <Icon size={16} className="text-slate-400" />
             </div>
-            <p className="mt-3 text-2xl font-bold text-slate-950">{value}</p>
+            <p className="mt-3 text-2xl font-bold text-foreground">{value}</p>
           </div>
         ))}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
         <div className="mb-4 flex flex-wrap gap-2">
           {statusTabs.map((tab) => (
             <button
@@ -655,7 +662,7 @@ export function AdminOrdersPanel({ user }: OrdersPanelProps) {
                 setDraftFilters((current) => ({ ...current, status: next.status, page: 1 }));
                 void loadOrders(next);
               }}
-              className={`rounded-md border px-3 py-2 text-sm font-semibold ${activeTab === tab.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`el-press rounded-[10px] border px-3 py-2 text-sm font-semibold ${activeTab === tab.key ? "border-primary bg-accent text-primary" : "border-border bg-card text-secondary-foreground hover:bg-slate-50"}`}
             >
               {tab.label}
             </button>
@@ -707,45 +714,45 @@ export function AdminOrdersPanel({ user }: OrdersPanelProps) {
         </div>
       </section>
 
-      <section className="max-w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-border bg-card shadow-sm">
         <div className="min-w-0 overflow-x-auto">
           <table className="w-full min-w-[1080px] border-collapse text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 {["Buyurtma", "Holat", "Yo'nalish", "Tumanlar", "Mijoz", "Biriktirilgan haydovchi", "Takliflar", "Tavsiya narx", "Yakuniy narx", "Created at", "Amallar"].map((label) => (
                   <th key={label} className="px-4 py-3 font-semibold">{label}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-muted">
               {busy && !orders.length ? (
                 Array.from({ length: 5 }).map((_, index) => (
                   <tr key={index}>
                     <td colSpan={11} className="px-4 py-3">
-                      <div className="h-8 animate-pulse rounded bg-slate-100" />
+                      <div className="h-8 animate-pulse rounded bg-background" />
                     </td>
                   </tr>
                 ))
               ) : visibleOrders.length ? visibleOrders.map((order) => (
                 <tr key={order.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <p className="font-bold text-slate-950">{order.order_number ?? `#${order.id}`}</p>
-                    <p className="text-xs text-slate-500">#{order.id}</p>
+                    <p className="font-bold text-foreground">{order.order_number ?? `#${order.id}`}</p>
+                    <p className="text-xs text-muted-foreground">#{order.id}</p>
                   </td>
                   <td className="px-4 py-3">{statusBadge(order.status)}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">{refName(order.from_city)} → {refName(order.to_city)}</td>
-                  <td className="px-4 py-3 text-slate-600">{order.from_district || order.to_district ? `${refName(order.from_district)} → ${refName(order.to_district)}` : "-"}</td>
+                  <td className="px-4 py-3 font-semibold text-secondary-foreground">{refName(order.from_city)} → {refName(order.to_city)}</td>
+                  <td className="px-4 py-3 text-secondary-foreground">{order.from_district || order.to_district ? `${refName(order.from_district)} → ${refName(order.to_district)}` : "-"}</td>
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-slate-800">{order.client?.phone ?? order.client_phone ?? "-"}</p>
-                    <p className="text-xs text-slate-500">{order.sender_phone ?? "-"}</p>
+                    <p className="font-semibold text-secondary-foreground">{order.client?.phone ?? order.client_phone ?? "-"}</p>
+                    <p className="text-xs text-muted-foreground">{order.sender_phone ?? "-"}</p>
                   </td>
                   <td className="px-4 py-3">
                     {order.assigned_driver ? (
                       <>
-                        <p className="font-semibold text-slate-800">{driverName(order.assigned_driver)}</p>
-                        <p className="text-xs text-slate-500">{[order.assigned_driver.car_model, order.assigned_driver.plate_number].filter(Boolean).join(" / ")}</p>
+                        <p className="font-semibold text-secondary-foreground">{driverName(order.assigned_driver)}</p>
+                        <p className="text-xs text-muted-foreground">{[order.assigned_driver.car_model, order.assigned_driver.plate_number].filter(Boolean).join(" / ")}</p>
                       </>
-                    ) : <span className="text-slate-500">Not assigned</span>}
+                    ) : <span className="text-muted-foreground">Not assigned</span>}
                   </td>
                   <td className="px-4 py-3">{order.bids_count ?? 0} bids</td>
                   <td className="px-4 py-3">{formatAdminMoney(order.suggested_price)}</td>
@@ -759,15 +766,15 @@ export function AdminOrdersPanel({ user }: OrdersPanelProps) {
                 <tr>
                   <td colSpan={11} className="px-4 py-14 text-center">
                     <ClipboardList size={32} className="mx-auto text-slate-300" />
-                    <p className="mt-3 font-semibold text-slate-700">No orders found</p>
-                    <p className="mt-1 text-sm text-slate-500">Try clearing filters or refreshing the list.</p>
+                    <p className="mt-3 font-semibold text-secondary-foreground">No orders found</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Try clearing filters or refreshing the list.</p>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600">
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-secondary-foreground">
           <span>Page {filters.page ?? 1} of {totalPages || 1} · {total} total</span>
           <div className="flex gap-2">
             <AdminButton disabled={busy || (filters.page ?? 1) <= 1} onClick={() => setPage(Math.max(1, (filters.page ?? 1) - 1))}><ChevronLeft size={15} /> Oldingi</AdminButton>

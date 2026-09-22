@@ -1,5 +1,10 @@
 # Moving the API to another server
 
+> **Stage 2 (2026-09):** for any new server move use
+> [`docs/ops/POSTGRES_POSTGIS_MIGRATION.md`](ops/POSTGRES_POSTGIS_MIGRATION.md) (alpine → PostGIS
+> dump/restore) and [`docs/ops/UZ_HOSTING_RUNBOOK.md`](ops/UZ_HOSTING_RUNBOOK.md) (Uzbekistan
+> hosting, decision K3). This document is kept for history.
+
 Runbook for moving the backend from one host to another with a few minutes of
 downtime. Written for `5.182.26.98` → `178.104.56.36`, but nothing here is
 specific to those addresses.

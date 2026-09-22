@@ -106,6 +106,18 @@ Only the assigned driver receives full pickup/dropoff addresses and sender/recei
 | Admin drivers | `GET /api/v1/admin/drivers`, `POST /api/v1/admin/drivers/{id}/approve` |
 | Audit logs | `GET /api/v1/admin/audit-logs` |
 
+### Driver block and stage-2 obligations (Q15, additive, 15.09.2026)
+
+`POST /api/v1/admin/drivers/{id}/block` accepts `{"reason": "...", "emergency": false}`. The response shape is unchanged
+(`{success, data, message}`); `data` gains `block_type` (`new_business_only` | `full`), `v2_eligibility_blocked`,
+`v2_active_trip_count` and `v2_active_booking_count`.
+
+- Driver with active v2 trips or bookings: by default only new business is blocked (v2 eligibility block); the
+  account, active trips, tracking, proofs and support keep working (`block_type = new_business_only`).
+- `emergency: true` fully suspends the account (`block_type = full`) and is allowed only for `super_admin`; other
+  roles get `403 FORBIDDEN`.
+- Driver without v2 business: the previous full block behaviour is unchanged.
+
 ## Cities And Tariffs
 
 Public city lists return active cities only by default:

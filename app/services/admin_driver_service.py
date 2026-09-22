@@ -16,9 +16,13 @@ from app.schemas.admin_driver import (
 )
 from app.services.audit_service import write_audit_log
 from app.services.city_service import pagination
+from app.services.driver_locks import lock_driver_user_and_profile
 from app.services.driver_service import normalize_plate_number, normalize_plate_number_key
+from app.services.review_accounts import is_review_account_phone
 from app.services.notification_service import create_notification
 from app.utils.api_response import error_response
+from app.utils.file_access import signed_file_url
+from app.utils.legacy_time import v1_naive
 
 ADMIN_DRIVER_VIEW_ROLES = {"operator", "admin", "super_admin"}
 ADMIN_DRIVER_MUTATION_ROLES = {"admin", "super_admin"}
@@ -75,6 +79,8 @@ def driver_list_item_to_dict(driver: DriverProfile) -> dict[str, Any]:
         "dispute_count": driver.dispute_count,
         "created_at": driver.created_at,
         "updated_at": driver.updated_at,
+        # Additive: store-review account (ELCHI_REVIEW_LOGIN_PHONES allowlist).
+        "is_review_account": is_review_account_phone(driver.user.phone if driver.user else None),
     }
 
 
@@ -82,11 +88,11 @@ def document_to_dict(document: DriverDocument) -> dict[str, Any]:
     return {
         "id": document.id,
         "document_type": document.document_type,
-        "file_url": document.file_url,
+        "file_url": signed_file_url(document.file_url),
         "status": document.status,
         "rejection_reason": document.rejection_reason,
         "reviewed_by": document.reviewed_by,
-        "reviewed_at": document.reviewed_at,
+        "reviewed_at": v1_naive(document.reviewed_at),
         "created_at": document.created_at,
     }
 
@@ -121,6 +127,7 @@ def driver_detail_to_dict(driver: DriverProfile, db: Session) -> dict[str, Any]:
         "routes": [route_to_dict(route, db) for route in routes],
         "created_at": driver.created_at,
         "updated_at": driver.updated_at,
+        "is_review_account": is_review_account_phone(driver.user.phone if driver.user else None),
     }
 
 
@@ -188,13 +195,19 @@ def get_admin_driver_detail(db: Session, driver_id: int) -> dict[str, Any] | JSO
     return driver_detail_to_dict(driver, db)
 
 
-def get_driver_for_update(db: Session, driver_id: int) -> DriverProfile | JSONResponse:
-    driver = db.scalar(
-        select(DriverProfile)
-        .where(DriverProfile.id == driver_id)
-        .with_for_update()
+def get_driver_for_update(db: Session, driver_id: int, *, plate_change: bool = False) -> DriverProfile | JSONResponse:
+    # N-A: a plate change is a unique-column update, so the profile is locked FOR
+    # UPDATE up front instead of being upgraded from NO KEY UPDATE mid-transaction.
+    # Lock order users -> driver_profiles, same relative order as select-driver
+    # and admin assign (which take order -> bids first). block_driver, approve,
+    # reject and vehicle edits never lock orders/bids, so no cycle exists; see
+    # app/services/driver_locks.py. Routes and refresh sessions come after.
+    driver, locked_user = lock_driver_user_and_profile(
+        db, driver_id, profile_mode="update" if plate_change else "no_key_update"
     )
-    if driver is None:
+    # L1: a driver whose account deletion committed first is gone for every admin
+    # mutation (block/approve/reject/vehicle); never write over the tombstone.
+    if driver is None or locked_user is None or locked_user.status == "deleted":
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Driver not found")
     db.refresh(driver, attribute_names=["user", "documents", "routes"])
     return driver
@@ -218,7 +231,7 @@ def mark_documents_reviewed(db: Session, actor: User, driver: DriverProfile, doc
             "status": document.status,
             "rejection_reason": document.rejection_reason,
             "reviewed_by": document.reviewed_by,
-            "reviewed_at": document.reviewed_at,
+            "reviewed_at": v1_naive(document.reviewed_at),
         }
         document.status = document_status
         document.reviewed_by = actor.id
@@ -236,7 +249,7 @@ def mark_documents_reviewed(db: Session, actor: User, driver: DriverProfile, doc
                 "status": document.status,
                 "rejection_reason": document.rejection_reason,
                 "reviewed_by": document.reviewed_by,
-                "reviewed_at": document.reviewed_at,
+                "reviewed_at": v1_naive(document.reviewed_at),
             },
             reason=reason,
         )
@@ -288,7 +301,7 @@ def update_driver_vehicle(
     driver_id: int,
     payload: AdminDriverVehicleUpdate,
 ) -> dict[str, Any] | JSONResponse:
-    driver = get_driver_for_update(db, driver_id)
+    driver = get_driver_for_update(db, driver_id, plate_change="plate_number" in payload.model_fields_set)
     if isinstance(driver, JSONResponse):
         return driver
 
@@ -394,22 +407,98 @@ def reject_driver(db: Session, actor: User, driver_id: int, payload: AdminDriver
     }
 
 
+BLOCK_TYPE_FULL = "full"
+BLOCK_TYPE_NEW_BUSINESS_ONLY = "new_business_only"
+
+
+def _driver_v2_obligations(db: Session, driver_user_id: int) -> tuple[int, int]:
+    """(active v2 trips, active v2 bookings) of the driver, via the bookings service (Q15).
+
+    Read-only, called after the driver's users/driver_profiles locks: v2 trip create and
+    accept lock the driver's users row first, so no trip/booking can appear in between
+    (AC41). Zeros when the v2 tables are absent (legacy SQLite suite).
+    """
+    from app.modules.platform import service as platform_service
+
+    if not platform_service.table_exists(db, "bookings"):
+        return 0, 0
+    from app.modules.bookings import service as bookings_service
+
+    obligations = bookings_service.driver_v2_obligations(db, driver_user_id)
+    if not obligations.has_active_v2_business:
+        return 0, 0
+    return len(obligations.active_trip_ids), obligations.active_booking_count
+
+
+def _apply_v2_eligibility_block(db: Session, actor: User, driver_user_id: int, reason: str) -> bool | JSONResponse:
+    """Q15/D16: v2 eligibility block through the identity service (removes only new-business
+    capabilities). Returns True if a block row was created, False if one was already active."""
+    from app.contracts.errors import DomainError
+    from app.modules.identity import service as identity_service
+
+    try:
+        state = identity_service.get_driver_eligibility(db, driver_user_id)
+        if state.blocked_reason is not None:
+            return False
+        identity_service.block_driver_eligibility(
+            db, driver_user_id=driver_user_id, actor_user_id=actor.id, expected_version=state.version, reason=reason
+        )
+    except DomainError as exc:
+        db.rollback()
+        return error_response(exc.http_status, exc.code.value, exc.message, exc.details)
+    return True
+
+
+def _actor_is_super_admin(db: Session, actor: User) -> bool:
+    """BR L2: effective roles (legacy ``users.role`` or an active ``user_roles`` row) via the identity service.
+    Falls back to the legacy role when the v2 identity tables are absent (legacy SQLite suite)."""
+    from app.contracts.enums import Role
+    from app.modules.platform import service as platform_service
+
+    if not platform_service.table_exists(db, "user_roles"):
+        return actor.role == Role.SUPER_ADMIN.value
+    from app.modules.identity import service as identity_service
+
+    return Role.SUPER_ADMIN in identity_service.get_capabilities(db, actor.id).roles
+
+
 def block_driver(db: Session, actor: User, driver_id: int, payload: AdminDriverBlock) -> dict[str, Any] | JSONResponse:
     reason = require_reason(payload.reason)
     if isinstance(reason, JSONResponse):
         return reason
+    emergency = bool(payload.emergency)
+    if emergency and not _actor_is_super_admin(db, actor):
+        return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Only super_admin can perform an emergency full block")
+    # Lock order (ADR-0017 §13): users -> driver_profiles, then read-only v2 trips/bookings,
+    # then driver_eligibility_blocks (identity service; it re-takes the same users lock),
+    # then routes / refresh_sessions. Never orders or bids.
     driver = get_driver_for_update(db, driver_id)
     if isinstance(driver, JSONResponse):
         return driver
-    if driver.verification_status == "blocked":
+    v2_trip_count, v2_booking_count = _driver_v2_obligations(db, driver.user_id)
+    has_v2_business = bool(v2_trip_count or v2_booking_count)
+    # Q15: a driver with active v2 business keeps the account (trip operation, GPS, proofs,
+    # support continue); only super_admin's explicit emergency block suspends it.
+    full_block = emergency or not has_v2_business
+    # A driver already blocked for new business only may still be escalated by an emergency block.
+    if driver.verification_status == "blocked" and not (emergency and driver.user.status != "blocked"):
         return error_response(status.HTTP_400_BAD_REQUEST, "DRIVER_ALREADY_BLOCKED", "Driver is already blocked")
 
+    v2_eligibility_blocked = False
+    if has_v2_business:
+        created = _apply_v2_eligibility_block(db, actor, driver.user_id, reason)
+        if isinstance(created, JSONResponse):
+            return created
+        v2_eligibility_blocked = True
+
+    block_type = BLOCK_TYPE_FULL if full_block else BLOCK_TYPE_NEW_BUSINESS_ONLY
     old_status = driver.verification_status
     old_available = driver.is_available
     old_user_status = driver.user.status
     driver.verification_status = "blocked"
     driver.is_available = False
-    driver.user.status = "blocked"
+    if full_block:
+        driver.user.status = "blocked"
     db.add_all([driver, driver.user])
     disabled_count = 0
     for route in driver.routes:
@@ -419,14 +508,21 @@ def block_driver(db: Session, actor: User, driver_id: int, payload: AdminDriverB
             db.add(route)
     now = datetime.now(timezone.utc)
     revoked_session_count = 0
-    for session in db.scalars(
-        select(RefreshSession).where(
-            RefreshSession.user_id == driver.user_id,
-            RefreshSession.is_revoked == False,  # noqa: E712
+    # New-business-only block keeps the driver signed in: the active trip, GPS and proofs need the app (D16).
+    refresh_sessions = (
+        db.scalars(
+            select(RefreshSession).where(
+                RefreshSession.user_id == driver.user_id,
+                RefreshSession.is_revoked == False,  # noqa: E712
+            )
         )
-    ):
+        if full_block
+        else ()
+    )
+    for session in refresh_sessions:
         session.is_revoked = True
         session.revoked_at = now
+        session.revoked_reason = "admin_revoke"  # §17.6: staff ended it, so the access token dies with it
         revoked_session_count += 1
         db.add(session)
     active_orders_count = db.scalar(
@@ -447,6 +543,10 @@ def block_driver(db: Session, actor: User, driver_id: int, payload: AdminDriverB
             "verification_status": driver.verification_status,
             "user_status": driver.user.status,
             "is_available": driver.is_available,
+            "block_type": block_type,
+            "emergency": emergency,
+            "v2_active_trip_count": v2_trip_count,
+            "v2_active_booking_count": v2_booking_count,
         },
         reason=reason,
     )
@@ -474,4 +574,9 @@ def block_driver(db: Session, actor: User, driver_id: int, payload: AdminDriverB
         "revoked_refresh_sessions_count": revoked_session_count,
         "active_orders_count": active_orders_count,
         "warning": "Driver has active orders. Admin must resolve them manually." if active_orders_count else None,
+        # Q15 additive fields.
+        "block_type": block_type,
+        "v2_eligibility_blocked": v2_eligibility_blocked,
+        "v2_active_trip_count": v2_trip_count,
+        "v2_active_booking_count": v2_booking_count,
     }

@@ -18,8 +18,10 @@ from app.schemas.driver import (
     DriverRouteStatusUpdate,
 )
 from app.services.audit_service import write_audit_log
+from app.services.driver_locks import LockMode, lock_driver_user_and_profile
 from app.services.city_service import district_ref, pagination, validate_active_city_district_pair
 from app.utils.api_response import error_response
+from app.utils.file_access import FileReferenceError, resolve_attachment, signed_file_url
 
 
 def normalize_plate_number(value: str | None) -> str | None:
@@ -104,6 +106,26 @@ def profile_update_dict(profile: DriverProfile) -> dict[str, Any]:
     }
 
 
+def lock_driver_self_service(
+    db: Session,
+    user: User,
+    profile: DriverProfile,
+    *,
+    user_mode: LockMode = "key_share",
+    profile_mode: LockMode = "no_key_update",
+) -> JSONResponse | None:
+    """Lock users -> driver_profiles before any other row a self-service write touches.
+
+    Account deletion locks users FOR UPDATE and then deletes documents/routes; by
+    taking the users lock first, this transaction waits for deletion while holding
+    nothing (no deadlock) and then sees the deleted status. See driver_locks.py.
+    """
+    locked_profile, locked_user = lock_driver_user_and_profile(db, profile.id, user_mode=user_mode, profile_mode=profile_mode)
+    if locked_profile is None or locked_user is None or locked_user.status != "active":
+        return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "User account is not active")
+    return None
+
+
 def update_driver_profile(
     db: Session,
     user: User,
@@ -111,6 +133,16 @@ def update_driver_profile(
     payload: DriverProfileUpdate,
 ) -> DriverProfile | JSONResponse:
     update_data = payload.model_dump(exclude_unset=True)
+    lock_error = lock_driver_self_service(
+        db,
+        user,
+        profile,
+        user_mode="no_key_update" if "full_name" in update_data else "key_share",
+        # N-A: a plate change updates a unique column -> FOR UPDATE up front.
+        profile_mode="update" if "plate_number" in update_data else "no_key_update",
+    )
+    if lock_error is not None:
+        return lock_error
 
     # Approved drivers may only edit their name. Vehicle details are locked and
     # can be changed by an admin/operator on request.
@@ -197,6 +229,9 @@ def submit_driver_document(
     if payload.size_bytes is not None and payload.size_bytes > settings.max_document_upload_mb * 1024 * 1024:
         return error_response(status.HTTP_400_BAD_REQUEST, "DRIVER_DOCUMENT_TOO_LARGE", "Driver document is too large")
 
+    lock_error = lock_driver_self_service(db, user, profile)
+    if lock_error is not None:
+        return lock_error
     old_status = profile.verification_status
     document = db.scalar(
         select(DriverDocument).where(
@@ -204,9 +239,25 @@ def submit_driver_document(
             DriverDocument.document_type == payload.document_type,
         )
     )
+    try:
+        stored_file_url = resolve_attachment(
+            payload.file_url,
+            user_id=user.id,
+            expected_upload_type=payload.document_type,
+            current_stored=document.file_url if document is not None else None,
+        )
+    except FileReferenceError:
+        stored_file_url = None
+    if stored_file_url is None:
+        return error_response(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "Invalid file reference",
+            {"field": "file_url"},
+        )
     if document is None:
         document = DriverDocument(driver_id=profile.id, document_type=payload.document_type)
-    document.file_url = payload.file_url
+    document.file_url = stored_file_url
     document.status = "pending"
     document.rejection_reason = None
     document.reviewed_by = None
@@ -223,7 +274,7 @@ def submit_driver_document(
         document.id,
         "driver_document_uploaded",
         old_value={"verification_status": old_status},
-        new_value=document_to_dict(document),
+        new_value=document_to_dict(document, sign_urls=False),
     )
     if old_status != profile.verification_status and profile.verification_status == "pending":
         write_audit_log(
@@ -251,12 +302,13 @@ def list_driver_documents(db: Session, profile: DriverProfile) -> list[DriverDoc
     )
 
 
-def document_to_dict(document: DriverDocument) -> dict[str, Any]:
+def document_to_dict(document: DriverDocument, *, sign_urls: bool = True) -> dict[str, Any]:
+    # sign_urls=False for audit logs: they keep the stored value, never a signature.
     return {
         "document_id": document.id,
         "driver_id": document.driver_id,
         "document_type": document.document_type,
-        "file_url": document.file_url,
+        "file_url": signed_file_url(document.file_url) if sign_urls else document.file_url,
         "status": document.status,
         "rejection_reason": document.rejection_reason,
     }
@@ -268,6 +320,9 @@ def update_availability(
     profile: DriverProfile,
     payload: DriverAvailabilityUpdate,
 ) -> DriverProfile | JSONResponse:
+    lock_error = lock_driver_self_service(db, user, profile)
+    if lock_error is not None:
+        return lock_error
     if payload.is_available:
         if user.status == "blocked":
             return error_response(status.HTTP_403_FORBIDDEN, "DRIVER_BLOCKED", "Driver is blocked")
@@ -340,6 +395,9 @@ def create_driver_route(
     profile: DriverProfile,
     payload: DriverRouteCreate,
 ) -> DriverRoute | JSONResponse:
+    lock_error = lock_driver_self_service(db, user, profile)
+    if lock_error is not None:
+        return lock_error
     if profile.verification_status != "approved":
         return error_response(
             status.HTTP_400_BAD_REQUEST,
@@ -425,6 +483,9 @@ def update_route_status(
 ) -> DriverRoute | JSONResponse:
     if payload.status not in ALLOWED_ROUTE_STATUSES:
         return error_response(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "Invalid route status")
+    lock_error = lock_driver_self_service(db, user, profile)
+    if lock_error is not None:
+        return lock_error
     route = get_owned_route(db, profile, route_id)
     if isinstance(route, JSONResponse):
         return route
@@ -462,6 +523,9 @@ def update_driver_route(
     route_id: int,
     payload: DriverRouteCreate,
 ) -> DriverRoute | JSONResponse:
+    lock_error = lock_driver_self_service(db, user, profile)
+    if lock_error is not None:
+        return lock_error
     route = get_owned_route(db, profile, route_id)
     if isinstance(route, JSONResponse):
         return route
@@ -526,6 +590,9 @@ def disable_driver_route(db: Session, user: User, profile: DriverProfile, route_
     Drivers can keep routes and toggle them available/unavailable via
     ``update_route_status``; this is the explicit "remove route" action.
     """
+    lock_error = lock_driver_self_service(db, user, profile)
+    if lock_error is not None:
+        return lock_error
     route = get_owned_route(db, profile, route_id)
     if isinstance(route, JSONResponse):
         return route

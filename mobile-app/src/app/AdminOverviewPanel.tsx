@@ -18,7 +18,7 @@ import {
   Truck,
   UserCheck,
   WalletCards,
-} from "lucide-react";
+} from "./ui/icons";
 
 import { getAdminOverview, type AdminOverviewData } from "../api/admin-overview.api";
 import type { AuthUser } from "../types/auth";
@@ -44,14 +44,14 @@ function Card(props: { title: string; value: number; note: string; icon: typeof 
   return (
     <Comp
       onClick={props.onClick}
-      className="rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-200 hover:shadow-md"
+      className="rounded-[12px] border border-border bg-card p-4 text-left shadow-sm transition hover:border-blue-200 hover:shadow-md"
     >
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-500">{props.title}</span>
+        <span className="text-sm font-semibold text-muted-foreground">{props.title}</span>
         <Icon size={18} className="text-slate-400" />
       </div>
-      <div className="mt-3 text-2xl font-bold text-slate-950">{props.value}</div>
-      <div className="mt-1 text-xs text-slate-500">{props.note}</div>
+      <div className="mt-3 text-2xl font-bold text-foreground">{props.value}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{props.note}</div>
     </Comp>
   );
 }
@@ -60,30 +60,30 @@ function MoneyCard(props: { title: string; value: number; note: string; icon: ty
   const Icon = props.icon;
   const tone = props.tone ?? "slate";
   const toneClass = {
-    blue: "bg-blue-50 text-blue-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    amber: "bg-amber-50 text-amber-700",
-    slate: "bg-slate-50 text-slate-600",
+    blue: "bg-accent text-primary",
+    emerald: "bg-success/12 text-success",
+    amber: "bg-warning/14 text-warning",
+    slate: "bg-slate-50 text-secondary-foreground",
   }[tone];
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-500">{props.title}</p>
-          <p className="mt-3 text-xl font-bold text-slate-950">{formatAdminMoney(props.value)}</p>
+          <p className="text-sm font-semibold text-muted-foreground">{props.title}</p>
+          <p className="mt-3 text-xl font-bold text-foreground">{formatAdminMoney(props.value)}</p>
         </div>
-        <span className={`flex h-9 w-9 items-center justify-center rounded-md ${toneClass}`}><Icon size={18} /></span>
+        <span className={`flex h-9 w-9 items-center justify-center rounded-[10px] ${toneClass}`}><Icon size={18} /></span>
       </div>
-      <p className="mt-2 text-xs text-slate-500">{props.note}</p>
+      <p className="mt-2 text-xs text-muted-foreground">{props.note}</p>
     </div>
   );
 }
 
 function Panel(props: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <h2 className="text-sm font-bold text-slate-950">{props.title}</h2>
+    <section className="rounded-[12px] border border-border bg-card shadow-sm">
+      <div className="flex items-center justify-between border-b border-muted px-4 py-3">
+        <h2 className="text-sm font-bold text-foreground">{props.title}</h2>
         {props.action}
       </div>
       <div className="p-4">{props.children}</div>
@@ -93,7 +93,7 @@ function Panel(props: { title: string; action?: ReactNode; children: ReactNode }
 
 function SmallButton(props: { children: ReactNode; onClick: () => void }) {
   return (
-    <button onClick={props.onClick} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+    <button onClick={props.onClick} className="el-press rounded-[10px] border border-border bg-card px-3 py-1.5 text-xs font-semibold text-secondary-foreground hover:bg-slate-50">
       {props.children}
     </button>
   );
@@ -126,10 +126,10 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
   }, []);
 
   if (busy && !data) {
-    return <div className="rounded-lg border border-slate-200 bg-white p-8 text-sm text-slate-500">Bosh sahifa yuklanmoqda...</div>;
+    return <div className="rounded-[12px] border border-border bg-card p-8 text-sm text-muted-foreground">Bosh sahifa yuklanmoqda...</div>;
   }
   if (error && !data) {
-    return <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</div>;
+    return <div className="rounded-[12px] border border-destructive/25 bg-destructive/10 p-4 text-sm font-semibold text-destructive">{error}</div>;
   }
   if (!data) return null;
 
@@ -147,19 +147,24 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
     <div className="grid min-w-0 gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-slate-500">{user.full_name || user.phone} uchun operatsiyalar holati</p>
-          {data.warnings.length > 0 && <p className="mt-1 text-xs font-semibold text-amber-700">{data.warnings.join(". ")}</p>}
+          <p className="text-sm text-muted-foreground">{user.full_name || user.phone} uchun operatsiyalar holati</p>
+          {data.warnings.length > 0 && <p className="mt-1 text-xs font-semibold text-warning">{data.warnings.join(". ")}</p>}
         </div>
         <button
           onClick={() => void load()}
           disabled={busy}
-          className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          className="el-press inline-flex h-9 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-sm font-semibold text-secondary-foreground hover:bg-slate-50 disabled:opacity-50"
         >
           <RefreshCw size={16} /> Yangilash
         </button>
       </div>
 
       <Panel title="Moliyaviy hisobot">
+        <p className="mb-4 rounded-[12px] bg-warning/14 px-3 py-2 text-[13px] leading-5 text-warning">
+          Bu bo'lim v1 buyurtmalari bo'yicha <strong>hisoblangan</strong> summalarni ko'rsatadi. Yo'lkira
+          haydovchiga naqd to'lanadi va ELCHI uni inkassatsiya qilmaydi, shuning uchun bu sonlar tushum yoki sof
+          foyda emas.
+        </p>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MoneyCard
             title="Jami buyurtma summasi"
@@ -169,23 +174,23 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
             tone="blue"
           />
           <MoneyCard
-            title="Tizim foydasi"
+            title="Hisoblangan tizim ulushi"
             value={data.finance.systemProfit}
-            note={`Buyurtmalardan olingan tizim ulushi: ${systemProfitShare}`}
+            note={`Hisoblangan, inkassatsiya qilingan pul emas. Buyurtma summasidan ulush: ${systemProfitShare}`}
             icon={TrendingUp}
             tone="emerald"
           />
           <MoneyCard
-            title="Haydovchilar daromadi"
+            title="Haydovchilarga qoladigan summa"
             value={data.finance.driverIncome}
-            note="Tizim solig'i chegirilgandan keyingi umumiy summa"
+            note="Hisob-kitob: kelishilgan summadan tizim ulushi ayirilgan. Naqd to'lov ELCHI orqali o'tmaydi."
             icon={WalletCards}
             tone="amber"
           />
           <MoneyCard
             title="O'rtacha buyurtma"
             value={data.finance.averageOrderAmount}
-            note={`Har bir buyurtmadan o'rtacha foyda: ${formatAdminMoney(data.finance.averageSystemProfit)}`}
+            note={`Har bir buyurtmadan o'rtacha hisoblangan ulush: ${formatAdminMoney(data.finance.averageSystemProfit)}`}
             icon={Banknote}
           />
           <MoneyCard
@@ -196,9 +201,9 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
             tone="emerald"
           />
           <MoneyCard
-            title="Yakunlanganlardan foyda"
+            title="Yakunlanganlardan hisoblangan ulush"
             value={data.finance.completedSystemProfit}
-            note={`Yakunlangan buyurtmalar bo'yicha tizim ulushi: ${completedProfitShare}`}
+            note={`Hisoblangan ulush, tushum emas. Yakunlangan buyurtmalar bo'yicha: ${completedProfitShare}`}
             icon={Percent}
             tone="emerald"
           />
@@ -243,9 +248,9 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
             ["Tuman talab qiladigan hududlar", districtIssueCities.length, "cities"],
             ["Faol tarifsiz yo'nalishlar", data.stats.missingTariffs, "tariffs"],
           ].map(([label, count, target]) => (
-            <button key={label} onClick={() => onNavigate(target as AdminSection)} className="rounded-md border border-slate-200 p-3 text-left hover:bg-slate-50">
-              <div className="text-xl font-bold text-slate-950">{count}</div>
-              <div className="text-sm font-semibold text-slate-600">{label}</div>
+            <button key={label} onClick={() => onNavigate(target as AdminSection)} className="el-press rounded-[10px] border border-border p-3 text-left hover:bg-slate-50">
+              <div className="text-xl font-bold text-foreground">{count}</div>
+              <div className="text-sm font-semibold text-secondary-foreground">{label}</div>
             </button>
           ))}
         </div>
@@ -255,7 +260,7 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
         <Panel title="So'nggi buyurtmalar" action={<SmallButton onClick={() => onNavigate("orders")}>Buyurtmalarni ochish</SmallButton>}>
           <div className="min-w-0 overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="text-xs uppercase text-slate-500">
+              <thead className="text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="py-2">Buyurtma</th>
                   <th>Yo'nalish</th>
@@ -264,7 +269,7 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
                   <th>Yaratilgan</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-muted">
                 {data.orders.slice(0, 8).map((order) => (
                   <tr key={order.id}>
                     <td className="py-3 font-semibold">{order.order_number || order.code || `#${order.id}`}</td>
@@ -274,7 +279,7 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
                     <td>{formatShortAdminDate(order.created_at)}</td>
                   </tr>
                 ))}
-                {data.orders.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-slate-500">Buyurtmalar yuklanmadi</td></tr>}
+                {data.orders.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">Buyurtmalar yuklanmadi</td></tr>}
               </tbody>
             </table>
           </div>
@@ -283,12 +288,12 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
         <Panel title="Haydovchilarni tekshirish navbati" action={<SmallButton onClick={() => onNavigate("drivers")}>Ko'rib chiqish</SmallButton>}>
           <div className="grid gap-3">
             {pendingDrivers.slice(0, 5).map((driver) => (
-              <div key={driver.id} className="rounded-md border border-slate-200 p-3">
+              <div key={driver.id} className="rounded-[10px] border border-border p-3">
                 <div className="font-semibold">{driver.full_name || driver.user?.full_name || driver.phone || driver.user?.phone || `Haydovchi #${driver.id}`}</div>
-                <div className="mt-1 text-xs text-slate-500">{driver.plate_number || "Raqam belgisi yo'q"} · {driver.documents_count ?? 0}/{driver.required_documents_count ?? 0} hujjat</div>
+                <div className="mt-1 text-xs text-muted-foreground">{driver.plate_number || "Raqam belgisi yo'q"} · {driver.documents_count ?? 0}/{driver.required_documents_count ?? 0} hujjat</div>
               </div>
             ))}
-            {pendingDrivers.length === 0 && <p className="text-sm text-slate-500">Tekshiruv kutayotgan haydovchilar yo'q.</p>}
+            {pendingDrivers.length === 0 && <p className="text-sm text-muted-foreground">Tekshiruv kutayotgan haydovchilar yo'q.</p>}
           </div>
         </Panel>
       </div>
@@ -297,17 +302,17 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
         <Panel title="Nizolar navbati" action={<SmallButton onClick={() => onNavigate("disputes")}>Nizolarni ochish</SmallButton>}>
           <div className="grid gap-2 text-sm">
             {openDisputes.slice(0, 5).map((dispute) => (
-              <div key={String(dispute.id)} className="rounded-md border border-slate-200 p-3">
+              <div key={String(dispute.id)} className="rounded-[10px] border border-border p-3">
                 <div className="font-semibold">{String(dispute.reason ?? "Nizo")}</div>
-                <div className="text-xs text-slate-500">{formatAdminDate(String(dispute.created_at ?? ""))}</div>
+                <div className="text-xs text-muted-foreground">{formatAdminDate(String(dispute.created_at ?? ""))}</div>
               </div>
             ))}
-            {openDisputes.length === 0 && <p className="text-slate-500">Ochiq nizolar yo'q.</p>}
+            {openDisputes.length === 0 && <p className="text-muted-foreground">Ochiq nizolar yo'q.</p>}
           </div>
         </Panel>
 
         <Panel title="Hudud va tariflar holati" action={<SmallButton onClick={() => onNavigate("cities")}>Hududlarni ochish</SmallButton>}>
-          <div className="grid gap-2 text-sm text-slate-700">
+          <div className="grid gap-2 text-sm text-secondary-foreground">
             <p>{data.districts.length} ta tuman yuklandi: {data.stats.activeCities} ta faol hudud.</p>
             <p>{districtIssueCities.length} ta faol hududga hali tuman kerak.</p>
             <p>{data.stats.missingTariffs} ta faol hudud juftligida faol tarif yo'q.</p>
@@ -317,12 +322,12 @@ export function AdminOverviewPanel({ user, onNavigate }: { user: AuthUser; onNav
         <Panel title="So'nggi faollik" action={<SmallButton onClick={() => onNavigate("audit")}>Audit jurnalini ochish</SmallButton>}>
           <div className="grid gap-2 text-sm">
             {data.audits.slice(0, 5).map((audit) => (
-              <div key={String(audit.id)} className="rounded-md border border-slate-200 p-3">
+              <div key={String(audit.id)} className="rounded-[10px] border border-border p-3">
                 <div className="font-semibold">{String(audit.action ?? "faollik")}</div>
-                <div className="text-xs text-slate-500">{formatAdminDate(String(audit.created_at ?? ""))}</div>
+                <div className="text-xs text-muted-foreground">{formatAdminDate(String(audit.created_at ?? ""))}</div>
               </div>
             ))}
-            {data.audits.length === 0 && <p className="text-slate-500">Audit faolligi yuklanmadi.</p>}
+            {data.audits.length === 0 && <p className="text-muted-foreground">Audit faolligi yuklanmadi.</p>}
           </div>
         </Panel>
       </div>

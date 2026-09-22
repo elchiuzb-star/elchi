@@ -96,7 +96,7 @@ def order_payload(ids: dict[str, int]) -> dict:
         "dropoff_lng": 66.9597,
         "sender_phone": "+998901234567",
         "receiver_phone": "+998911112233",
-        "cargo_photo_url": "/uploads/cargo_photo/2026/06/photo.jpg",
+        "cargo_photo_url": None,
         "comment": "Ehtiyot qilib olib boring",
     }
     if "from_district" in ids:

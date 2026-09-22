@@ -92,9 +92,11 @@ def headers(token: str) -> dict[str, str]:
 def request_and_verify_otp(client: TestClient, phone: str, role: str) -> dict:
     request_response = client.post("/api/v1/auth/request-otp", json={"phone": phone, "role": role})
     assert request_response.status_code == 200
-    assert request_response.json()["data"]["dev_otp"] == "12345"
+    dev_otp = request_response.json()["data"]["dev_otp"]
+    assert dev_otp == settings.dev_mock_otp
+    assert len(dev_otp) == settings.otp_length
 
-    verify_response = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": role, "otp": "12345"})
+    verify_response = client.post("/api/v1/auth/verify-otp", json={"phone": phone, "role": role, "otp": dev_otp})
     assert verify_response.status_code == 200
     body = verify_response.json()
     assert body["access_token"]
@@ -118,7 +120,7 @@ def upload_cargo_photo(client: TestClient, token: str) -> str:
         "/api/v1/files/upload",
         headers=headers(token),
         data={"type": "cargo_photo"},
-        files={"file": ("cargo.jpg", b"fake-image-bytes", "image/jpeg")},
+        files={"file": ("cargo.jpg", b"\xff\xd8\xff\xe0fake-image-bytes", "image/jpeg")},
     )
     assert response.status_code == 200
     return response.json()["data"]["file_url"]
@@ -137,8 +139,13 @@ def test_full_mvp_happy_path_and_database_consistency(final_qa_client) -> None:
     assert driver_me.status_code == 200
     assert driver_me.json()["role"] == "driver"
 
+    # Staff never reach the OTP path (commit 2ba7f0b): no public admin
+    # registration and no OTP login, they sign in via /auth/staff-login.
     public_admin = client.post("/api/v1/auth/request-otp", json={"phone": "+998991000003", "role": "admin"})
-    assert public_admin.status_code == 403
+    assert public_admin.status_code == 400
+    assert public_admin.json()["error"]["code"] == "PASSWORD_LOGIN_REQUIRED"
+    with session_factory() as check_db:
+        assert check_db.scalar(select(User).where(User.phone == "+998991000003")) is None
 
     city_a_id = create_city(client, tokens["admin"], "Toshkent", "Toshkent")
     city_b_id = create_city(client, tokens["admin"], "Samarqand", "Samarqand")
@@ -193,10 +200,17 @@ def test_full_mvp_happy_path_and_database_consistency(final_qa_client) -> None:
 
     document_types = ["passport", "selfie", "license", "car_document", "car_photo"]
     for document_type in document_types:
+        uploaded = client.post(
+            "/api/v1/files/upload",
+            headers=headers(driver_token),
+            data={"type": document_type},
+            files={"file": ("file.jpg", b"\xff\xd8\xff\xe0fake-image-bytes", "image/jpeg")},
+        )
+        assert uploaded.status_code == 200
         response = client.post(
             "/api/v1/driver/documents",
             headers=headers(driver_token),
-            json={"document_type": document_type, "file_url": f"/uploads/{document_type}/2026/06/file.jpg"},
+            json={"document_type": document_type, "file_url": uploaded.json()["data"]["file_url"]},
         )
         assert response.status_code == 200
         assert response.json()["data"]["status"] == "pending"
@@ -205,7 +219,7 @@ def test_full_mvp_happy_path_and_database_consistency(final_qa_client) -> None:
         "/api/v1/files/upload",
         headers=headers(client_token),
         data={"type": "pickup_proof"},
-        files={"file": ("proof.jpg", b"fake-image-bytes", "image/jpeg")},
+        files={"file": ("proof.jpg", b"\xff\xd8\xff\xe0fake-image-bytes", "image/jpeg")},
     )
     assert rejected_upload_type.status_code == 400
 
@@ -431,7 +445,7 @@ def test_stage20_core_permission_regressions(final_qa_client) -> None:
     anonymous_upload = client.post(
         "/api/v1/files/upload",
         data={"type": "cargo_photo"},
-        files={"file": ("cargo.jpg", b"fake-image-bytes", "image/jpeg")},
+        files={"file": ("cargo.jpg", b"\xff\xd8\xff\xe0fake-image-bytes", "image/jpeg")},
     )
     assert anonymous_upload.status_code == 401
 

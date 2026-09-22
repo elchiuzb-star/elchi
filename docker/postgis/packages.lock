@@ -1,0 +1,110 @@
+# Packages added on top of postgres:16.15-trixie@sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
+# by docker/postgis/Dockerfile, as installed in image
+# sha256:35bf2116ee7a52a0442bdf84ba90a442f74376056b6dace42d4669e7d6a95819 (built 2026-09-13T22:28:28Z, linux/amd64).
+#
+# Pinned in the Dockerfile: postgresql-16-postgis-3, postgresql-16-postgis-3-scripts (exact version, held).
+# NOT pinned (transitive Debian/pgdg libraries below): Debian's trixie and trixie-security repositories do
+# not keep superseded versions, so an exact pin would break the next rebuild after a security update
+# (only snapshot.debian.org keeps them). Reproducibility is therefore provided by Q51: build once,
+# push to the private registry in Uzbekistan, deploy by digest. This file is the bill of materials of
+# the pushed image; regenerate it when the image is rebuilt and diff it in review:
+#
+#   docker run --rm --entrypoint dpkg-query <base> -W -f '${Package}=${Version}\n' | sort > base.pkgs
+#   docker run --rm --entrypoint dpkg-query <image> -W -f '${Package}=${Version}\n' | sort > image.pkgs
+#   comm -13 base.pkgs image.pkgs
+ca-certificates=20250419
+fontconfig-config=2.15.0-2.3
+fonts-dejavu-core=2.37-8
+fonts-dejavu-mono=2.37-8
+gdal-data=3.13.2+dfsg-1.pgdg13+1
+gdal-plugins=3.13.2+dfsg-1.pgdg13+1
+libabsl20240722=20240722.0-4
+libaec0=1.1.3-1+b1
+libaom3=3.12.1-1+deb13u1
+libarmadillo14=1:14.2.3+dfsg-1+b1
+libarpack2t64=3.9.1-6
+libavif16=1.2.1-1.2
+libblas3=3.12.1-6
+libblosc1=1.21.5+ds-1+b2
+libboost-serialization1.83.0=1.83.0-4.2
+libbrotli1=1.1.0-2+b7
+libcfitsio10t64=4.6.2-2
+libcurl3t64-gnutls=8.14.1-2+deb13u5
+libcurl4t64=8.14.1-2+deb13u5
+libdav1d7=1.5.1-1
+libde265-0=1.0.15-1+deb13u2
+libdeflate0=1.23-2
+libexpat1=2.8.3-1~deb13u1
+libfontconfig1=2.15.0-2.3
+libfreetype6=2.13.3+dfsg-1+deb13u1
+libfreexl1=2.0.0-1+b3
+libfyba0t64=4.1.1-11+b1
+libgav1-1=0.19.0-3+b1
+libgdal36=3.10.3+dfsg-1
+libgeos-c1t64=3.14.1-2.pgdg13+1
+libgeos3.14.1=3.14.1-2.pgdg13+1
+libgeotiff5=1.7.4-1
+libgfortran5=14.2.0-19
+libgif7=5.2.2-1+deb13u1
+libgmpxx4ldbl=2:6.3.0+dfsg-3
+libgpgme11t64=1.24.2-3
+libgpgmepp6t64=1.24.2-3
+libhdf4-0-alt=4.3.0-1+b1
+libhdf5-310=1.14.5+repack-3
+libhdf5-hl-310=1.14.5+repack-3
+libheif-plugin-dav1d=1.19.8-1+deb13u1
+libheif-plugin-libde265=1.19.8-1+deb13u1
+libheif1=1.19.8-1+deb13u1
+libjbig0=2.1-6.1+b2
+libjpeg62-turbo=1:2.1.5-4
+libjson-c5=0.18+ds-1
+libkmlbase1t64=1.3.0-12+b2
+libkmldom1t64=1.3.0-12+b2
+libkmlengine1t64=1.3.0-12+b2
+liblapack3=3.12.1-6
+liblcms2-2=2.16-2+deb13u2
+liblerc4=4.0.0+ds-5
+libltdl7=2.5.4-4
+libmariadb3=1:11.8.6-0+deb13u1
+libminizip1t64=1:1.3.dfsg+really1.3.1-1+b1
+libmpfr6=4.2.2-1
+libnetcdf22=1:4.9.3-1
+libnghttp2-14=1.64.0-1.1+deb13u1
+libnghttp3-9=1.8.0-1
+libngtcp2-16=1.11.0-1+deb13u1
+libngtcp2-crypto-gnutls8=1.11.0-1+deb13u1
+libnspr4=2:4.36-1
+libnss3=2:3.110-1+deb13u4
+libodbc2=2.3.12-2+deb13u1
+libodbcinst2=2.3.12-2+deb13u1
+libogdi4.1=4.1.1+ds-5
+libopenjp2-7=2.5.3-2.1~deb13u2
+libpng16-16t64=1.6.48-1+deb13u5
+libpoppler147=25.03.0-5+deb13u4
+libproj25=9.8.1-1.pgdg13+1
+libprotobuf-c1=1.5.1-1
+libpsl5t64=0.21.2-1.1+b1
+libqhull-r8.0=2020.2-6+b2
+librav1e0.7=0.7.1-9+b2
+librtmp1=2.4+20151223.gitfa8646d.1-2+b5
+librttopo1=1.1.0-4
+libsfcgal2=2.0.0-1
+libsharpyuv0=1.5.0-0.1
+libsnappy1v5=1.2.2-1
+libspatialite8t64=5.1.0-3+b2
+libssh2-1t64=1.11.1-1+deb13u2
+libsvtav1enc2=2.3.0+dfsg-1
+libsz2=1.1.3-1+b1
+libtiff6=4.7.0-3+deb13u3
+libtirpc-common=1.3.6+ds-1
+libtirpc3t64=1.3.6+ds-1
+liburiparser1=0.9.8+dfsg-2
+libwebp7=1.5.0-0.1
+libxerces-c3.2t64=3.2.4+debian-1.3+b2
+libyuv0=0.0.1904.20250204-1
+mariadb-common=1:11.8.6-0+deb13u1
+mysql-common=5.8+1.1.1
+postgresql-16-postgis-3-scripts=3.5.3+dfsg-2.pgdg13+1
+postgresql-16-postgis-3=3.5.3+dfsg-2.pgdg13+1
+proj-data=9.8.1-1.pgdg13+1
+unixodbc-common=2.3.12-2+deb13u1

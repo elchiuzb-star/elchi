@@ -16,6 +16,7 @@ import threading
 import httpx
 
 from app.core.config import settings
+from app.services.review_accounts import is_review_account_phone
 
 logger = logging.getLogger("elchi.sms")
 
@@ -70,6 +71,10 @@ def _post_message(token: str, mobile_phone: str, message: str) -> httpx.Response
 
 def send_sms(phone: str, message: str) -> bool:
     """Send an SMS. Returns True on success, False otherwise (never raises)."""
+    # Store-review accounts never receive SMS (defense in depth; callers check too).
+    if is_review_account_phone(phone):
+        logger.info("SMS suppressed for store-review phone")
+        return False
     if not is_configured():
         return False
     mobile_phone = phone.lstrip("+")  # Eskiz expects 998XXXXXXXXX

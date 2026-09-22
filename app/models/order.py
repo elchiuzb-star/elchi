@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -48,10 +48,10 @@ class Order(TimestampMixin, Base):
     accepted_bid_id: Mapped[int | None] = mapped_column(
         ForeignKey("bids.id", use_alter=True, name="fk_orders_accepted_bid_id_bids"),
     )
-    published_at: Mapped[datetime | None] = mapped_column()
-    accepted_at: Mapped[datetime | None] = mapped_column()
-    picked_up_at: Mapped[datetime | None] = mapped_column()
-    in_transit_at: Mapped[datetime | None] = mapped_column()
-    delivered_at: Mapped[datetime | None] = mapped_column()
-    confirmed_at: Mapped[datetime | None] = mapped_column()
-    cancelled_at: Mapped[datetime | None] = mapped_column()
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    picked_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    in_transit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -23,6 +23,8 @@ from app.models import AuditLog, ClientProfile, DriverProfile, OtpCode, RefreshS
 from app.schemas.auth import AdminUserCreate
 from app.services import sms_service
 from app.services.audit_service import write_audit_log
+from app.services.driver_locks import lock_user_by_phone, lock_user_key_share, lock_user_share
+from app.services.review_accounts import is_review_account_phone
 from app.utils.api_response import error_response
 
 # Compared against when a username is not found, so a miss costs roughly the
@@ -215,7 +217,9 @@ def request_otp(db: Session, phone: str, role: str, ip_address: str | None = Non
         )
 
     now = utcnow()
-    user = db.scalar(select(User).where(User.phone == normalized_phone))
+    # users (by phone) FOR KEY SHARE before any otp_codes write: account deletion
+    # locks the user FOR UPDATE and then deletes otp_codes (driver_locks.py).
+    user = lock_user_by_phone(db, normalized_phone, "key_share")
     if user is not None and user.role != role:
         return error_response(
             status.HTTP_400_BAD_REQUEST,
@@ -299,7 +303,9 @@ def request_otp(db: Session, phone: str, role: str, ip_address: str | None = Non
     # not fail the request — the code is stored and the user can resend.
     # Reviewer accounts sign in with a fixed code, so sending an SMS would only
     # burn credit on a number nobody reads.
-    if settings.sms_enabled and not is_review_login_phone(normalized_phone):
+    # Isolation uses the phone allowlist alone (not the fixed code), so a review
+    # phone never receives an SMS even after ELCHI_REVIEW_LOGIN_OTP is cleared.
+    if settings.sms_enabled and not is_review_login_phone(normalized_phone) and not is_review_account_phone(normalized_phone):
         sms_service.send_sms(normalized_phone, otp_message(otp))
 
     data = {
@@ -367,6 +373,10 @@ def verify_otp(db: Session, phone: str, otp: str, role: str | None = None) -> Us
     otp_record = find_latest_otp(db, normalized_phone, resolved_role)
     if otp_record is None:
         return error_response(status.HTTP_400_BAD_REQUEST, "OTP_INVALID", "Invalid OTP code")
+    # users (by phone) FOR NO KEY UPDATE before the otp_codes write below: this
+    # transaction updates the user (last_login_at) and account deletion locks the
+    # user FOR UPDATE before deleting otp_codes (driver_locks.py).
+    lock_user_by_phone(db, normalized_phone, "no_key_update")
 
     now = utcnow()
     if otp_record.used_at is not None:
@@ -500,9 +510,26 @@ def create_refresh_session(db: Session, user: User, refresh_token: str, payload:
 
 def build_token_response(db: Session, user: User) -> dict[str, Any]:
     subject = str(user.id)
-    access_token = create_access_token(subject, extra_claims={"phone": user.phone, "role": user.role})
     refresh_token = create_refresh_token(subject)
     refresh_payload = verify_token(refresh_token)
+    # §17.6: bind the access token to this login session (`sid` = the refresh session's jti) so a revoked session
+    # can be closed on the real-time channel too, not only when the access token expires an hour later. The claim
+    # is additive: the token string stays opaque, v1 responses are unchanged, and a token without `sid`
+    # (issued before this release) keeps working until it expires.
+    session_claim = {"sid": refresh_payload["jti"]} if refresh_payload is not None else {}
+    # ADR-0021: a staff token is short-lived; the marketplace TTL is unchanged so the frozen Android client
+    # keeps its refresh rhythm. The token stays opaque either way, so no v1 response shape changes.
+    # The local STAFF_ROLES above is the v1 *login* set and deliberately excludes `finance`; the TTL question
+    # is about privilege, so it uses the contract set (which includes finance) without touching v1 login rules.
+    from app.contracts.enums import STAFF_ROLES as PRIVILEGED_ROLES
+
+    is_staff = user.role in {role.value for role in PRIVILEGED_ROLES}
+    access_minutes = settings.staff_access_token_expire_minutes if is_staff else settings.access_token_expire_minutes
+    access_token = create_access_token(
+        subject,
+        expires_delta=timedelta(minutes=access_minutes),
+        extra_claims={"phone": user.phone, "role": user.role, **session_claim},
+    )
     if refresh_payload is not None:
         create_refresh_session(db, user, refresh_token, refresh_payload)
         db.commit()
@@ -510,10 +537,37 @@ def build_token_response(db: Session, user: User) -> dict[str, Any]:
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": settings.access_token_expire_minutes * 60,
+        "expires_in": access_minutes * 60,
         "user": user_to_dict(user),
     }
     return {**data, "success": True, "data": data, "message": "Login successful"}
+
+
+def session_revoked(db: Session, payload: dict[str, Any] | None, *, include_rotated: bool = True) -> bool:
+    """§17.6: is the login session behind this access token gone (logout, rotation, admin revoke)?
+
+    ``True`` only when the token names a session (``sid``) that is revoked, expired or unknown. A token without
+    the claim - issued before this release - is not treated as revoked; it simply expires on its own.
+
+    ``include_rotated=False`` (the v1 path, user decision 17.09.2026) keeps the access token of a session that
+    a **refresh** replaced: a successor session exists, the user did not log out, and the frozen Android client
+    (AGENTS §2) must not get a 401 on a request that was already in flight when it rotated. Everything the
+    decision is actually about - logout and staff revocation - still fails immediately. A revoked row with no
+    reason predates 0072, so its reason is unknown and it counts as ended (fail closed).
+    """
+    if not payload:
+        return False
+    sid = payload.get("sid")
+    if not sid:
+        return False
+    session_row = db.scalar(select(RefreshSession).where(RefreshSession.jti == str(sid)))
+    if session_row is None:
+        return True
+    if session_row.is_revoked:
+        if not include_rotated and session_row.revoked_reason == "rotated":
+            return ensure_aware(session_row.expires_at) <= utcnow()
+        return True
+    return ensure_aware(session_row.expires_at) <= utcnow()
 
 
 def refresh_tokens(db: Session, refresh_token: str) -> dict[str, Any] | JSONResponse:
@@ -536,15 +590,28 @@ def refresh_tokens(db: Session, refresh_token: str) -> dict[str, Any] | JSONResp
     if ensure_aware(session.expires_at) < utcnow():
         return error_response(status.HTTP_401_UNAUTHORIZED, "TOKEN_EXPIRED", "Refresh token has expired")
 
-    user = db.get(User, int(subject))
+    # N-B: users FOR SHARE, then the session row FOR UPDATE (driver_locks.py).
+    # FOR SHARE conflicts with block_driver's FOR NO KEY UPDATE and deletion's FOR
+    # UPDATE, so a refresh serializes with them: a block that commits first is
+    # seen here (USER_BLOCKED), and a block that starts later waits and then
+    # revokes the session this refresh creates. The lock is taken before the
+    # session row, so it waits while holding nothing. The session row lock stops
+    # two concurrent refreshes with the same token from both succeeding.
+    user = lock_user_share(db, int(subject))
     if user is None:
         return error_response(status.HTTP_401_UNAUTHORIZED, "UNAUTHORIZED", "Authentication required")
     active_error = check_active_user(user)
     if active_error is not None:
         return active_error
+    session = db.scalar(
+        select(RefreshSession).where(RefreshSession.jti == jti).with_for_update().execution_options(populate_existing=True)
+    )
+    if session is None or session.is_revoked:
+        return error_response(status.HTTP_401_UNAUTHORIZED, "REFRESH_TOKEN_REVOKED", "Refresh token has been revoked")
 
     session.is_revoked = True
     session.revoked_at = utcnow()
+    session.revoked_reason = "rotated"  # a successor session follows; v1 lets in-flight access tokens finish
     db.add(session)
     write_audit_log(
         db,
@@ -565,10 +632,12 @@ def logout_refresh_session(db: Session, refresh_token: str | None) -> JSONRespon
         return error_response(status.HTTP_401_UNAUTHORIZED, "INVALID_TOKEN", "Invalid refresh token")
     session = db.scalar(select(RefreshSession).where(RefreshSession.jti == payload["jti"]))
     if session is not None and not session.is_revoked:
+        # users FOR KEY SHARE before the session write (same order as refresh_tokens).
+        user = lock_user_key_share(db, session.user_id)
         session.is_revoked = True
         session.revoked_at = utcnow()
+        session.revoked_reason = "logout"  # §17.6: the access token of this session stops working at once
         db.add(session)
-        user = db.get(User, session.user_id)
         write_audit_log(
             db,
             user,

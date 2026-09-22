@@ -1,0 +1,129 @@
+{
+  "_warning": "SYNTHETIC DEV/TEST FIXTURE ONLY. Approximate public town-centre coordinates; routes are straight lines between stops produced by the fake router. NOT verified geography. Never load into production (scripts/seed_geo_fixtures.py refuses).",
+  "regions": [
+    {
+      "key": "toshkent",
+      "code": "UZ-TK",
+      "requires_district": false,
+      "name_uz": "Toshkent shahri",
+      "name_ru": "город Ташкент"
+    },
+    {
+      "key": "samarqand",
+      "code": "UZ-SA",
+      "name_uz": "Samarqand viloyati",
+      "name_ru": "Самаркандская область"
+    },
+    {
+      "key": "qashqadaryo",
+      "code": "UZ-QA",
+      "name_uz": "Qashqadaryo viloyati",
+      "name_ru": "Кашкадарьинская область"
+    }
+  ],
+  "districts": [
+    {
+      "key": "toshkent",
+      "region": "toshkent",
+      "name_uz": "Toshkent shahri"
+    },
+    {
+      "key": "samarqand",
+      "region": "samarqand",
+      "name_uz": "Samarqand"
+    },
+    {
+      "key": "kattaqorgon",
+      "region": "samarqand",
+      "name_uz": "Kattaqo'rg'on"
+    },
+    {
+      "key": "chiroqchi",
+      "region": "qashqadaryo",
+      "name_uz": "Chiroqchi"
+    },
+    {
+      "key": "kitob",
+      "region": "qashqadaryo",
+      "name_uz": "Kitob"
+    },
+    {
+      "key": "qarshi",
+      "region": "qashqadaryo",
+      "name_uz": "Qarshi"
+    }
+  ],
+  "corridor": {
+    "name": "Toshkent - Qashqadaryo (fixture)",
+    "origin": "toshkent",
+    "destination": "qashqadaryo",
+    "rollout_state": "pilot",
+    "search_radius_m": 3000,
+    "default_max_detour_minutes": 15,
+    "default_max_detour_m": 5000
+  },
+  "stops": [
+    {
+      "key": "toshkent",
+      "district": "toshkent",
+      "name_uz": "Toshkent bekati (fixture)",
+      "lat": 41.2869,
+      "lng": 69.2025,
+      "sequence_hint": 0
+    },
+    {
+      "key": "samarqand",
+      "district": "samarqand",
+      "name_uz": "Samarqand bekati (fixture)",
+      "lat": 39.6542,
+      "lng": 66.9597,
+      "sequence_hint": 10
+    },
+    {
+      "key": "kattaqorgon",
+      "district": "kattaqorgon",
+      "name_uz": "Kattaqo'rg'on bekati (fixture)",
+      "lat": 39.8986,
+      "lng": 66.256,
+      "sequence_hint": 20
+    },
+    {
+      "key": "kitob",
+      "district": "kitob",
+      "name_uz": "Kitob bekati (fixture)",
+      "lat": 39.1167,
+      "lng": 66.8833,
+      "sequence_hint": 25
+    },
+    {
+      "key": "chiroqchi",
+      "district": "chiroqchi",
+      "name_uz": "Chiroqchi bekati (fixture)",
+      "lat": 39.0336,
+      "lng": 66.5722,
+      "sequence_hint": 30
+    },
+    {
+      "key": "qarshi",
+      "district": "qarshi",
+      "name_uz": "Qarshi bekati (fixture)",
+      "lat": 38.8606,
+      "lng": 65.7847,
+      "sequence_hint": 40
+    }
+  ],
+  "routes": {
+    "via_kattaqorgon": [
+      "toshkent",
+      "samarqand",
+      "kattaqorgon",
+      "qarshi"
+    ],
+    "via_chiroqchi": [
+      "toshkent",
+      "samarqand",
+      "chiroqchi",
+      "qarshi"
+    ]
+  }
+}

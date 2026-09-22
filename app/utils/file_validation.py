@@ -10,8 +10,17 @@ ALLOWED_UPLOAD_TYPES = {
     "license",
     "car_document",
     "car_photo",
+    # Stage 2 (Q27/Q47): corridor meeting-point photo; staff with ops.corridor_manage only (v1 files route).
+    "stop_photo",
+    # Stage 2 wave 3.1 (H0): private stage-2 images. `dispute_evidence` is attached to a v2 dispute (S6) by its
+    # uploader only; `chat_photo` is refused while communications.CHAT_ATTACHMENTS_ENABLED is False.
+    "dispute_evidence",
+    "chat_photo",
 }
-IMAGE_ONLY_TYPES = {"cargo_photo", "selfie", "car_photo"}
+STOP_PHOTO_UPLOAD_TYPE = "stop_photo"
+DISPUTE_EVIDENCE_UPLOAD_TYPE = "dispute_evidence"
+CHAT_PHOTO_UPLOAD_TYPE = "chat_photo"
+IMAGE_ONLY_TYPES = {"cargo_photo", "selfie", "car_photo", "stop_photo", "dispute_evidence", "chat_photo"}
 DOCUMENT_TYPES = {"passport", "license", "car_document"}
 
 ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
@@ -20,6 +29,20 @@ DANGEROUS_EXTENSIONS = {"exe", "bat", "cmd", "sh", "php", "js", "html", "svg", "
 
 ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_DOCUMENT_MIME_TYPES = ALLOWED_IMAGE_MIME_TYPES | {"application/pdf"}
+
+
+def detect_content_format(content: bytes) -> tuple[str, str] | None:
+    """(extension, mime) from header magic bytes, or None. Dependency-free."""
+    if content.startswith(b"\xff\xd8\xff"):
+        return "jpg", "image/jpeg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png", "image/png"
+    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "webp", "image/webp"
+    # PDF readers accept the header within the first 1024 bytes.
+    if b"%PDF-" in content[:1024]:
+        return "pdf", "application/pdf"
+    return None
 
 
 @dataclass(frozen=True)
@@ -97,10 +120,21 @@ def validate_upload_file(
     if size_bytes > max_bytes:
         raise FileValidationError("FILE_TOO_LARGE", "File size exceeds allowed limit")
 
+    detected = detect_content_format(content)
+    if detected is None:
+        raise FileValidationError("VALIDATION_ERROR", "File content does not match an allowed file type")
+    detected_extension, detected_mime = detected
+    # Image vs PDF must agree with the declared extension and the upload type.
+    # Within images a mislabelled format (a PNG named .jpg, which the Android
+    # picker fallback name can produce) is accepted and stored under its real
+    # format, so the served Content-Type is always the true one.
+    if (detected_extension == "pdf") != (extension == "pdf") or detected_extension not in allowed_extensions:
+        raise FileValidationError("VALIDATION_ERROR", "File content does not match the declared file type")
+
     return FileValidationResult(
         upload_type=upload_type,
-        extension=extension,
-        mime_type=mime_type,
+        extension=detected_extension,
+        mime_type=detected_mime,
         size_bytes=size_bytes,
         original_filename=original_filename,
         content=content,

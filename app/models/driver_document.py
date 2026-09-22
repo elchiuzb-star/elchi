@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -21,6 +21,6 @@ class DriverDocument(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     rejection_reason: Mapped[str | None] = mapped_column(Text)
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
-    reviewed_at: Mapped[datetime | None] = mapped_column()
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     driver: Mapped["DriverProfile"] = relationship(back_populates="documents")

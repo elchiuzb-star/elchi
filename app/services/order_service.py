@@ -16,9 +16,13 @@ from app.services.city_service import district_ref, pagination, validate_active_
 from app.services.geo_service import validate_order_location_or_error
 from app.services.matching_service import create_order_offers_for_published_order
 from app.services.notification_service import create_notification
+from app.services.driver_locks import lock_driver_user_and_profile, lock_order_bids, lock_order_row
+from app.services.review_accounts import is_review_user_id, review_pairing_allowed, user_phone_matches_review_side
 from app.services.system_settings_service import apply_order_commission
 from app.utils.api_response import error_response
+from app.utils.file_access import FileReferenceError, resolve_attachment, signed_file_url
 from app.utils.order_number import generate_order_number
+from app.utils.legacy_time import v1_naive
 
 CLIENT_CANCEL_ALLOWED_STATUSES = {"draft", "published", "bidding", "accepted"}
 CLIENT_CANCEL_AFTER_PICKUP_STATUSES = {"picked_up", "in_transit", "delivered", "confirmed"}
@@ -29,6 +33,15 @@ class PublishOrderResult:
     def __init__(self, order: Order, matched_drivers_count: int) -> None:
         self.order = order
         self.matched_drivers_count = matched_drivers_count
+
+
+def invalid_cargo_photo_response() -> JSONResponse:
+    return error_response(
+        status.HTTP_400_BAD_REQUEST,
+        "VALIDATION_ERROR",
+        "Invalid file reference",
+        {"field": "cargo_photo_url"},
+    )
 
 
 def city_summary(city: City) -> dict[str, Any]:
@@ -165,13 +178,16 @@ def list_order_bids(db: Session, user: User, order_id: int) -> list[dict[str, An
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Order not found")
     if order.client_id != user.id:
         return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "You can view bids only for your own order")
-    bids = list(
-        db.scalars(
-            select(Bid)
-            .where(Bid.order_id == order.id, Bid.status == "active")
-            .order_by(Bid.price.asc(), Bid.created_at.asc())
+    stmt = select(Bid).where(Bid.order_id == order.id, Bid.status == "active")
+    # Never show bids that cross the store-review / real-user split.
+    review_filter = user_phone_matches_review_side(User.phone, is_review_user_id(db, order.client_id))
+    if review_filter is not None:
+        stmt = (
+            stmt.join(DriverProfile, DriverProfile.id == Bid.driver_id)
+            .join(User, User.id == DriverProfile.user_id)
+            .where(review_filter)
         )
-    )
+    bids = list(db.scalars(stmt.order_by(Bid.price.asc(), Bid.created_at.asc())))
     return [bid_summary_to_dict(db, bid) for bid in bids]
 
 
@@ -199,7 +215,7 @@ def order_detail_to_dict(db: Session, order: Order) -> dict[str, Any]:
         "sender_phone": order.sender_phone,
         "receiver_phone": order.receiver_phone,
         "cargo_type": order.cargo_type,
-        "cargo_photo_url": order.cargo_photo_url,
+        "cargo_photo_url": signed_file_url(order.cargo_photo_url),
         "comment": order.comment,
         "suggested_price": order.suggested_price,
         "client_price": order.client_price,
@@ -209,7 +225,7 @@ def order_detail_to_dict(db: Session, order: Order) -> dict[str, Any]:
         "assigned_driver": assigned_driver_to_dict(db, order),
         "accepted_bid_id": order.accepted_bid_id,
         "bids_count": get_bids_count(db, order.id),
-        "published_at": order.published_at,
+        "published_at": v1_naive(order.published_at),
         "created_at": order.created_at,
         "updated_at": order.updated_at,
     }
@@ -275,6 +291,10 @@ def create_order_draft(db: Session, user: User, payload: ClientOrderCreate) -> O
     client_price_error = validate_client_price(payload.client_price, tariff)
     if client_price_error is not None:
         return client_price_error
+    try:
+        cargo_photo_url = resolve_attachment(payload.cargo_photo_url, user_id=user.id, expected_upload_type="cargo_photo")
+    except FileReferenceError:
+        return invalid_cargo_photo_response()
     order = Order(
         order_number=generate_order_number(),
         client_id=user.id,
@@ -291,7 +311,7 @@ def create_order_draft(db: Session, user: User, payload: ClientOrderCreate) -> O
         sender_phone=payload.sender_phone,
         receiver_phone=payload.receiver_phone,
         cargo_type=payload.cargo_type,
-        cargo_photo_url=payload.cargo_photo_url,
+        cargo_photo_url=cargo_photo_url,
         comment=payload.comment,
         suggested_price=tariff.suggested_price if tariff else None,
         client_price=payload.client_price,
@@ -316,7 +336,7 @@ def create_order_draft(db: Session, user: User, payload: ClientOrderCreate) -> O
 
 
 def update_order(db: Session, user: User, order_id: int, payload: ClientOrderCreate) -> Order | JSONResponse:
-    order = get_owned_order(db, user, order_id)
+    order = get_owned_order(db, user, order_id, lock=True)
     if isinstance(order, JSONResponse):
         return order
     if order.status not in CLIENT_EDIT_ALLOWED_STATUSES:
@@ -386,6 +406,15 @@ def update_order(db: Session, user: User, order_id: int, payload: ClientOrderCre
     client_price_error = validate_client_price(payload.client_price, tariff)
     if client_price_error is not None:
         return client_price_error
+    try:
+        cargo_photo_url = resolve_attachment(
+            payload.cargo_photo_url,
+            user_id=user.id,
+            expected_upload_type="cargo_photo",
+            current_stored=order.cargo_photo_url,
+        )
+    except FileReferenceError:
+        return invalid_cargo_photo_response()
     order.from_city_id = payload.from_city_id
     order.to_city_id = payload.to_city_id
     order.from_district_id = payload.from_district_id
@@ -399,7 +428,7 @@ def update_order(db: Session, user: User, order_id: int, payload: ClientOrderCre
     order.sender_phone = payload.sender_phone
     order.receiver_phone = payload.receiver_phone
     order.cargo_type = payload.cargo_type
-    order.cargo_photo_url = payload.cargo_photo_url
+    order.cargo_photo_url = cargo_photo_url
     order.comment = payload.comment
     order.suggested_price = tariff.suggested_price if tariff else None
     order.client_price = payload.client_price
@@ -435,8 +464,14 @@ def get_owned_order(
     user: User,
     order_id: int,
     forbidden_on_mismatch: bool = False,
+    lock: bool = False,
 ) -> Order | JSONResponse:
-    order = db.get(Order, order_id)
+    if lock:
+        # Row lock (SELECT ... FOR UPDATE); populate_existing refreshes a copy
+        # already in the identity map so status checks see committed state.
+        order = lock_order_row(db, order_id)
+    else:
+        order = db.get(Order, order_id)
     if order is None:
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Order not found")
     if order.client_id != user.id:
@@ -497,7 +532,7 @@ def validate_order_complete(db: Session, order: Order) -> JSONResponse | None:
 
 
 def publish_order(db: Session, user: User, order_id: int) -> PublishOrderResult | JSONResponse:
-    order = get_owned_order(db, user, order_id, forbidden_on_mismatch=True)
+    order = get_owned_order(db, user, order_id, forbidden_on_mismatch=True, lock=True)
     if isinstance(order, JSONResponse):
         return order
     if order.status != "draft":
@@ -565,8 +600,22 @@ def list_client_orders(
     }
 
 
+def close_active_bids_for_order(db: Session, order_id: int) -> list[int]:
+    """Close every active bid of an order. Caller must already hold the order lock.
+
+    Bids are locked in id order (lock order: order -> bids by id, spec §15).
+    """
+    bids = lock_order_bids(db, order_id, active_only=True)
+    for bid in bids:
+        bid.status = "closed"
+        db.add(bid)
+    return [bid.id for bid in bids]
+
+
 def cancel_order(db: Session, user: User, order_id: int, payload: ClientOrderCancel) -> Order | JSONResponse:
-    order = get_owned_order(db, user, order_id)
+    # Lock the order and re-check status inside the lock: a concurrent
+    # select-driver or bid must not interleave with the cancellation.
+    order = get_owned_order(db, user, order_id, lock=True)
     if isinstance(order, JSONResponse):
         return order
     if order.status in CLIENT_CANCEL_AFTER_PICKUP_STATUSES:
@@ -583,6 +632,8 @@ def cancel_order(db: Session, user: User, order_id: int, payload: ClientOrderCan
     order.cancel_reason = payload.reason
     order.cancelled_by = user.id
     order.cancelled_at = datetime.now(timezone.utc)
+    # Same transaction as the status change: a cancelled order keeps no active bid.
+    closed_bid_ids = close_active_bids_for_order(db, order.id)
     db.add(order)
     db.flush()
     write_status_history(db, order, old_status, "cancelled", user, reason=payload.reason)
@@ -593,7 +644,7 @@ def cancel_order(db: Session, user: User, order_id: int, payload: ClientOrderCan
         order.id,
         "order_cancelled",
         old_value={"status": old_status},
-        new_value={"status": order.status, "cancel_reason": order.cancel_reason},
+        new_value={"status": order.status, "cancel_reason": order.cancel_reason, "closed_bid_ids": closed_bid_ids},
         reason=payload.reason,
     )
     db.commit()
@@ -607,7 +658,7 @@ def select_driver_for_order(
     order_id: int,
     payload: SelectDriverRequest,
 ) -> dict[str, Any] | JSONResponse:
-    order = db.scalar(select(Order).where(Order.id == order_id).with_for_update())
+    order = lock_order_row(db, order_id)
     if order is None:
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Order not found")
     if order.client_id != user.id:
@@ -623,20 +674,27 @@ def select_driver_for_order(
             "Only bidding orders can accept a driver",
         )
 
-    bid = db.scalar(select(Bid).where(Bid.id == payload.bid_id).with_for_update())
+    # Lock order (app/services/driver_locks.py): order (above) -> all bids of the
+    # order by id -> driver's users row -> driver_profiles row. Eligibility is
+    # re-checked inside the locks, so a concurrent block_driver either commits
+    # first (and is seen here) or waits until this assignment commits.
+    order_bids = lock_order_bids(db, order.id)
+    bid = next((item for item in order_bids if item.id == payload.bid_id), None)
     if bid is None:
-        return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Bid not found")
-    if bid.order_id != order.id:
+        if db.get(Bid, payload.bid_id) is None:
+            return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Bid not found")
         return error_response(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "Bid does not belong to this order")
     if bid.status != "active":
         return error_response(status.HTTP_400_BAD_REQUEST, "BID_NOT_ACTIVE", "Only active bids can be selected")
 
-    driver = db.get(DriverProfile, bid.driver_id)
-    driver_user = db.get(User, driver.user_id) if driver is not None else None
+    driver, driver_user = lock_driver_user_and_profile(db, bid.driver_id)
     if driver is None or driver.verification_status != "approved":
         return error_response(status.HTTP_400_BAD_REQUEST, "DRIVER_NOT_APPROVED", "Selected driver is not approved")
     if driver_user is None or driver_user.status != "active":
         return error_response(status.HTTP_400_BAD_REQUEST, "DRIVER_BLOCKED", "Selected driver is not available")
+    if not review_pairing_allowed(db, order.client_id, driver_user.id):
+        # Store-review accounts never transact with real users.
+        return error_response(status.HTTP_400_BAD_REQUEST, "DRIVER_NOT_AVAILABLE", "Selected driver is not available")
 
     old_value = {
         "status": order.status,
@@ -656,7 +714,7 @@ def select_driver_for_order(
         order.status = "accepted"
         order.accepted_at = datetime.now(timezone.utc)
         bid.status = "accepted"
-        other_bids = list(db.scalars(select(Bid).where(Bid.order_id == order.id, Bid.id != bid.id).with_for_update()))
+        other_bids = [item for item in order_bids if item.id != bid.id]  # already locked above
         for other_bid in other_bids:
             other_bid.status = "closed"
             db.add(other_bid)
@@ -757,7 +815,7 @@ def confirm_delivered_order(db: Session, user: User, order_id: int) -> dict[str,
         "status": order.status,
         "payment_method": order.payment_method,
         "payment_status": order.payment_status,
-        "confirmed_at": order.confirmed_at,
+        "confirmed_at": v1_naive(order.confirmed_at),
     }
 
 

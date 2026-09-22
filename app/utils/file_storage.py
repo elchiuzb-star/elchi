@@ -6,9 +6,15 @@ from app.core.config import settings
 from app.utils.file_validation import FileValidationResult
 
 
-def store_upload_file(validated_file: FileValidationResult) -> str:
+def store_upload_file(validated_file: FileValidationResult, owner_id: int) -> str:
+    """Write the file privately and return its storage key.
+
+    The uploader id is part of the key (`.../u<id>/<uuid>.<ext>`) so later
+    attachment to a document or order can be restricted to the uploader.
+    """
     now = datetime.now()
-    target_dir = Path(settings.upload_dir) / validated_file.upload_type / f"{now:%Y}" / f"{now:%m}"
+    owner_segment = f"u{int(owner_id)}"
+    target_dir = Path(settings.upload_dir) / validated_file.upload_type / f"{now:%Y}" / f"{now:%m}" / owner_segment
     target_dir.mkdir(parents=True, exist_ok=True)
 
     while True:
@@ -21,12 +27,4 @@ def store_upload_file(validated_file: FileValidationResult) -> str:
         except FileExistsError:
             continue
 
-    return "/".join(
-        [
-            settings.public_upload_base_url.rstrip("/"),
-            validated_file.upload_type,
-            f"{now:%Y}",
-            f"{now:%m}",
-            filename,
-        ]
-    )
+    return "/".join([validated_file.upload_type, f"{now:%Y}", f"{now:%m}", owner_segment, filename])

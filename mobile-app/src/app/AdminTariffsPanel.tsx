@@ -11,7 +11,7 @@ import {
   Route,
   Search,
   X,
-} from "lucide-react";
+} from "./ui/icons";
 
 import {
   activateTariff,
@@ -69,16 +69,16 @@ function Button(props: {
   const tone = props.tone ?? "neutral";
   const className =
     tone === "primary"
-      ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+      ? "border-primary bg-primary text-primary-foreground hover:bg-primary"
       : tone === "danger"
-        ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
+        ? "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/25"
+        : "border-border bg-card text-secondary-foreground hover:bg-slate-50";
   return (
     <button
       type="button"
       disabled={props.disabled}
       onClick={props.onClick}
-      className={`inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`el-press inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {props.children}
     </button>
@@ -102,16 +102,16 @@ function Input(props: {
   error?: string | null;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <input
         value={props.value}
         type={props.type ?? "text"}
         placeholder={props.placeholder}
         onChange={(event) => props.onChange(event.target.value)}
-        className={`h-10 rounded-md border bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${props.error ? "border-rose-300" : "border-slate-200"}`}
+        className={`h-10 rounded-[10px] border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 ${props.error ? "border-destructive/40" : "border-border"}`}
       />
-      {props.error && <span className="text-xs font-medium text-rose-700">{props.error}</span>}
+      {props.error && <span className="text-xs font-medium text-destructive">{props.error}</span>}
     </label>
   );
 }
@@ -123,12 +123,12 @@ function Select(props: {
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <select
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       >
         {props.children}
       </select>
@@ -138,7 +138,7 @@ function Select(props: {
 
 function CheckField(props: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
+    <label className="flex h-10 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-sm font-semibold text-secondary-foreground">
       <input type="checkbox" checked={props.checked} onChange={(event) => props.onChange(event.target.checked)} />
       {props.label}
     </label>
@@ -159,20 +159,20 @@ function CitySelect(props: {
     return text.includes(search.trim().toLowerCase());
   });
   return (
-    <div className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <div className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       <span>{props.label}</span>
       <input
         value={search}
         disabled={props.disabled}
         onChange={(event) => setSearch(event.target.value)}
         placeholder="Hududni qidirish"
-        className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-9 rounded-[10px] border border-border bg-card px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       />
       <select
         value={props.value}
         disabled={props.disabled}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
       >
         <option value="">Hududni tanlang</option>
         {options.map((city) => (
@@ -187,11 +187,11 @@ function CitySelect(props: {
 
 function ModalShell(props: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
-      <section className="w-full max-w-xl rounded-lg border border-slate-200 bg-white shadow-xl">
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h3 className="text-base font-bold text-slate-950">{props.title}</h3>
-          <button onClick={props.onClose} className="rounded-md p-1 text-slate-500 hover:bg-slate-100" aria-label="Yopish">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-foreground/40 p-4">
+      <section className="w-full max-w-xl rounded-[12px] border border-border bg-card shadow-xl">
+        <header className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h3 className="text-base font-bold text-foreground">{props.title}</h3>
+          <button onClick={props.onClose} className="el-press rounded-[10px] p-1 text-muted-foreground hover:bg-muted" aria-label="Yopish">
             <X size={18} />
           </button>
         </header>
@@ -203,9 +203,9 @@ function ModalShell(props: { title: string; children: React.ReactNode; onClose: 
 
 function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <div className="mt-1 text-sm font-semibold text-slate-950">{children || "-"}</div>
+    <div className="rounded-[12px] border border-border bg-card p-3">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="mt-1 text-sm font-semibold text-foreground">{children || "-"}</div>
     </div>
   );
 }
@@ -251,8 +251,8 @@ function TariffModal(props: {
   return (
     <ModalShell title={props.title} onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        {props.duplicate && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">Active tariff already exists for this route.</p>}
-        <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">
+        {props.duplicate && <p className="rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">Active tariff already exists for this route.</p>}
+        <div className="rounded-[10px] border border-blue-100 bg-accent p-3 text-xs text-primary">
           Tariffs are direction-based. Reverse direction must be added separately. Existing orders keep their copied suggested price.
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -263,8 +263,8 @@ function TariffModal(props: {
           <Input label="Maksimal narx" type="number" value={props.form.max_price} onChange={(max_price) => props.onChange({ ...props.form, max_price })} />
           <div className="pt-6"><CheckField label="Faol" checked={props.form.is_active} onChange={(is_active) => props.onChange({ ...props.form, is_active })} /></div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          <p className="font-bold text-slate-950">Narx ko'rinishi</p>
+        <div className="rounded-[12px] border border-border bg-slate-50 p-3 text-sm text-secondary-foreground">
+          <p className="font-bold text-foreground">Narx ko'rinishi</p>
           <p>Tavsiya narx: {formatUZS(props.form.suggested_price)}</p>
           <p>Minimal: {props.form.min_price ? formatUZS(props.form.min_price) : "Minimal narx belgilanmagan"}</p>
           <p>Maksimal: {props.form.max_price ? formatUZS(props.form.max_price) : "Maksimal narx belgilanmagan"}</p>
@@ -290,7 +290,7 @@ function ConfirmModal(props: {
   return (
     <ModalShell title={props.title} onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">{props.message}</p>
+        <p className="rounded-[10px] border border-warning/28 bg-warning/14 p-3 text-sm font-medium text-warning">{props.message}</p>
         <div className="flex justify-end gap-2">
           <Button onClick={props.onClose}>Bekor qilish</Button>
           <Button tone={props.tone ?? "danger"} disabled={props.busy} onClick={props.onConfirm}>{props.submitLabel}</Button>
@@ -321,16 +321,19 @@ function TariffDrawer(props: {
   const reverseExists = Boolean(props.reverseTariff);
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={props.onClose} />
-      <aside className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-2xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl">
-        <header className="border-b border-slate-200 bg-white p-5">
+      {/* The scrim is decoration: it closes the drawer as a convenience, and the drawer itself carries the
+          dialog semantics and a real close button. Marking it presentational keeps a screen reader from
+          announcing a clickable region with no name. */}
+      <div className="fixed inset-0 z-50 bg-foreground/30" role="presentation" onClick={props.onClose} />
+      <aside className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-2xl flex-col border-l border-border bg-slate-50 shadow-2xl">
+        <header className="border-b border-border bg-card p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold text-slate-950">{formatTariffRoute(props.tariff)}</h2>
+                <h2 className="text-xl font-bold text-foreground">{formatTariffRoute(props.tariff)}</h2>
                 {activeBadge(props.tariff.is_active)}
               </div>
-              <p className="mt-1 text-sm text-slate-500">Yo'nalishga bog'liq tarif · teskari yo'nalish alohida</p>
+              <p className="mt-1 text-sm text-muted-foreground">Yo'nalishga bog'liq tarif · teskari yo'nalish alohida</p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button onClick={props.onRefresh}><RefreshCw size={15} /> Yangilash</Button>
@@ -358,13 +361,13 @@ function TariffDrawer(props: {
               <DetailItem label="Yaratilgan">{formatAdminDate(props.tariff.created_at)}</DetailItem>
               <DetailItem label="Yangilangan">{formatAdminDate(props.tariff.updated_at)}</DetailItem>
             </section>
-            <section className="rounded-lg border border-slate-200 bg-white p-4">
-              <p className="text-sm font-bold text-slate-950">Reverse route check</p>
-              <p className={`mt-2 text-sm font-semibold ${reverseExists ? "text-emerald-700" : "text-amber-700"}`}>{getReverseRouteLabel(reverseExists)}</p>
-              {props.reverseTariff && <p className="mt-1 text-sm text-slate-600">{formatTariffRoute(props.reverseTariff)} · {formatUZS(props.reverseTariff.suggested_price)}</p>}
-              <p className="mt-3 text-xs text-slate-500">This is informational only. Reverse route is not created automatically.</p>
+            <section className="rounded-[12px] border border-border bg-card p-4">
+              <p className="text-sm font-bold text-foreground">Reverse route check</p>
+              <p className={`mt-2 text-sm font-semibold ${reverseExists ? "text-success" : "text-warning"}`}>{getReverseRouteLabel(reverseExists)}</p>
+              {props.reverseTariff && <p className="mt-1 text-sm text-secondary-foreground">{formatTariffRoute(props.reverseTariff)} · {formatUZS(props.reverseTariff.suggested_price)}</p>}
+              <p className="mt-3 text-xs text-muted-foreground">This is informational only. Reverse route is not created automatically.</p>
             </section>
-            <section className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+            <section className="rounded-[12px] border border-border bg-card p-4 text-sm text-secondary-foreground">
               Audit yozuvlari Audit jurnali modulida mavjud. Bu tarif ishlatilgan so'nggi buyurtmalar backendda hali ochilmagan.
             </section>
           </div>
@@ -537,8 +540,8 @@ export function AdminTariffsPanel({ user }: Props) {
     <div className="grid min-w-0 gap-5">
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-950">Tariflar</h2>
-          <p className="mt-1 text-sm text-slate-500">Yangi buyurtmalar uchun hududdan hududga tavsiya narxlarini boshqaring.</p>
+          <h2 className="text-2xl font-bold text-foreground">Tariflar</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Yangi buyurtmalar uchun hududdan hududga tavsiya narxlarini boshqaring.</p>
         </div>
         <div className="flex gap-2">
           <Button disabled={busy} onClick={() => void loadTariffs()}><RefreshCw size={16} /> Yangilash</Button>
@@ -546,22 +549,22 @@ export function AdminTariffsPanel({ user }: Props) {
         </div>
       </section>
 
-      {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
-      {!canMutate && <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600">Tarif yaratish yoki tahrirlash uchun ruxsat yo'q.</div>}
+      {error && <div className="rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">{error}</div>}
+      {!canMutate && <div className="rounded-[12px] border border-border bg-card px-4 py-3 text-sm font-medium text-secondary-foreground">Tarif yaratish yoki tahrirlash uchun ruxsat yo'q.</div>}
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         {summary.map(([label, value, Icon]) => (
-          <div key={label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div key={label} className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
               <Icon size={16} className="text-slate-400" />
             </div>
-            <p className="mt-3 text-2xl font-bold text-slate-950">{value}</p>
+            <p className="mt-3 text-2xl font-bold text-foreground">{value}</p>
           </div>
         ))}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-4 xl:grid-cols-7">
           <Input label="Qidirish" value={draftFilters.search ?? ""} onChange={(search) => setDraftFilters({ ...draftFilters, search })} placeholder="Yo'nalish, hudud yoki ID" />
           <CitySelect label="Qayerdan" value={draftFilters.from_city_id ?? ""} cities={cities} allowInactive onChange={(from_city_id) => setDraftFilters({ ...draftFilters, from_city_id })} />
@@ -588,23 +591,23 @@ export function AdminTariffsPanel({ user }: Props) {
         </div>
       </section>
 
-      <section className="max-w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-border bg-card shadow-sm">
         <div className="min-w-0 overflow-x-auto">
           <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 {["ID", "Yo'nalish", "Qayerdan", "Qayerga", "Tavsiya narx", "Minimal narx", "Maksimal narx", "Valyuta", "Faol", "Yaratilgan", "Yangilangan", "Amallar"].map((label) => (
                   <th key={label} className="px-4 py-3 font-semibold">{label}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-muted">
               {busy && !tariffs.length ? Array.from({ length: 5 }).map((_, index) => (
-                <tr key={index}><td colSpan={12} className="px-4 py-3"><div className="h-8 animate-pulse rounded bg-slate-100" /></td></tr>
+                <tr key={index}><td colSpan={12} className="px-4 py-3"><div className="h-8 animate-pulse rounded bg-background" /></td></tr>
               )) : visibleTariffs.length ? visibleTariffs.map((tariff) => (
                 <tr key={tariff.id} className="cursor-pointer hover:bg-slate-50" onClick={() => void openTariff(tariff.id)}>
-                  <td className="px-4 py-3 font-semibold text-slate-700">#{tariff.id}</td>
-                  <td className="px-4 py-3 font-bold text-slate-950">{formatTariffRoute(tariff)}</td>
+                  <td className="px-4 py-3 font-semibold text-secondary-foreground">#{tariff.id}</td>
+                  <td className="px-4 py-3 font-bold text-foreground">{formatTariffRoute(tariff)}</td>
                   <td className="px-4 py-3">{tariff.from_city?.name_uz ?? "-"}</td>
                   <td className="px-4 py-3">{tariff.to_city?.name_uz ?? "-"}</td>
                   <td className="px-4 py-3">{formatUZS(tariff.suggested_price)}</td>
@@ -623,12 +626,12 @@ export function AdminTariffsPanel({ user }: Props) {
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={12} className="px-4 py-14 text-center text-slate-500">Tariflar topilmadi</td></tr>
+                <tr><td colSpan={12} className="px-4 py-14 text-center text-muted-foreground">Tariflar topilmadi</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600">
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-secondary-foreground">
           <span>Sahifa {filters.page ?? 1} / {totalPages || 1} · jami {total}</span>
           <div className="flex gap-2">
             <Button disabled={busy || (filters.page ?? 1) <= 1} onClick={() => setPage(Math.max(1, (filters.page ?? 1) - 1))}><ChevronLeft size={15} /> Oldingi</Button>

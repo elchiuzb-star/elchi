@@ -2,8 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  Archive,
+  BarChart3,
   Bell,
   Building2,
+  Inbox,
+  LifeBuoy,
+  Scale,
   ChevronsLeft,
   ChevronsRight,
   Check,
@@ -16,9 +21,10 @@ import {
   SlidersHorizontal,
   Truck,
   UserPlus,
+  ShieldCheck,
   UserRound,
   UsersRound,
-} from "lucide-react";
+} from "./ui/icons";
 
 import {
   getAdminMe,
@@ -51,8 +57,21 @@ import { AdminNotificationsPanel } from "./AdminNotificationsPanel";
 import { AdminProfilePanel } from "./AdminProfilePanel";
 import { AdminClientsPanel } from "./AdminClientsPanel";
 import { AdminAuditLogsPanel } from "./AdminAuditLogsPanel";
+import {
+  AdminDisputesV2Panel,
+  AdminLegacyOrdersPanel,
+  AdminMetricsPanel,
+  AdminOpsQueuesPanel,
+  AdminSupportPanel,
+} from "./AdminOpsPanel";
+import { AdminSecurityPanel } from "./AdminSecurityPanel";
+import { AdminPriceBandsPanel } from "./AdminPriceBandsPanel";
 
-type Section = "overview" | "orders" | "drivers" | "clients" | "cities" | "tariffs" | "disputes" | "users" | "notifications" | "audit" | "profile";
+type Section =
+  | "overview" | "orders" | "drivers" | "clients" | "cities" | "tariffs" | "disputes"
+  // Stage 2 (A9): the v2 marketplace sections. They read /api/v2 with this same staff session.
+  | "opsQueues" | "disputesV2" | "support" | "metrics" | "legacyOrders" | "priceBands"
+  | "users" | "security" | "notifications" | "audit" | "profile";
 
 const sectionLabels: Record<Section, string> = {
   overview: "Bosh sahifa",
@@ -61,8 +80,15 @@ const sectionLabels: Record<Section, string> = {
   clients: "Mijozlar",
   cities: "Hududlar",
   tariffs: "Tariflar",
-  disputes: "Nizolar",
+  disputes: "Nizolar (v1)",
+  opsQueues: "Operator navbatlari",
+  disputesV2: "Nizolar (v2)",
+  support: "Murojaat va ishonch",
+  metrics: "KPI / SLO",
+  priceBands: "Narx referensi",
+  legacyOrders: "Legacy (v1) arxiv",
   users: "Xodimlar",
+  security: "Xavfsizlik (MFA)",
   notifications: "Bildirishnomalar",
   audit: "Audit jurnali",
   profile: "Profil / Akkaunt",
@@ -76,7 +102,14 @@ const navItems: Array<{ id: Section; icon: typeof Activity }> = [
   { id: "cities", icon: Building2 },
   { id: "tariffs", icon: SlidersHorizontal },
   { id: "disputes", icon: AlertTriangle },
+  { id: "opsQueues", icon: Inbox },
+  { id: "disputesV2", icon: Scale },
+  { id: "support", icon: LifeBuoy },
+  { id: "metrics", icon: BarChart3 },
+  { id: "priceBands", icon: SlidersHorizontal },
+  { id: "legacyOrders", icon: Archive },
   { id: "users", icon: UserPlus },
+  { id: "security", icon: ShieldCheck },
   { id: "notifications", icon: Bell },
   { id: "audit", icon: FileClock },
   { id: "profile", icon: UserRound },
@@ -108,10 +141,10 @@ function formatMoney(value: unknown): string {
 }
 
 function statusTone(status: string): string {
-  if (["active", "approved", "confirmed", "delivered", "resolved"].includes(status)) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (["pending", "published", "bidding", "new", "in_transit", "picked_up"].includes(status)) return "bg-blue-50 text-blue-700 border-blue-200";
-  if (["rejected", "blocked", "cancelled", "disputed"].includes(status)) return "bg-rose-50 text-rose-700 border-rose-200";
-  return "bg-slate-50 text-slate-700 border-slate-200";
+  if (["active", "approved", "confirmed", "delivered", "resolved"].includes(status)) return "bg-success/12 text-success border-success/25";
+  if (["pending", "published", "bidding", "new", "in_transit", "picked_up"].includes(status)) return "bg-accent text-primary border-blue-200";
+  if (["rejected", "blocked", "cancelled", "disputed"].includes(status)) return "bg-destructive/10 text-destructive border-destructive/25";
+  return "bg-slate-50 text-secondary-foreground border-border";
 }
 
 function Pill({ value }: { value: unknown }) {
@@ -123,15 +156,15 @@ function Button(props: { children: React.ReactNode; onClick?: () => void; disabl
   const tone = props.tone ?? "primary";
   const className =
     tone === "danger"
-      ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+      ? "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/25"
       : tone === "neutral"
-        ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-        : "border-blue-600 bg-blue-600 text-white hover:bg-blue-700";
+        ? "border-border bg-card text-secondary-foreground hover:bg-slate-50"
+        : "border-primary bg-primary text-primary-foreground hover:bg-primary";
   return (
     <button
       onClick={props.onClick}
       disabled={props.disabled}
-      className={`inline-flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`el-press inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {props.children}
     </button>
@@ -140,14 +173,14 @@ function Button(props: { children: React.ReactNode; onClick?: () => void; disabl
 
 function Field(props: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <input
         value={props.value}
         type={props.type ?? "text"}
         placeholder={props.placeholder}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       />
     </label>
   );
@@ -155,12 +188,12 @@ function Field(props: { label: string; value: string; onChange: (value: string) 
 
 function SelectField<T extends string>(props: { label: string; value: T; onChange: (value: T) => void; options: Array<{ value: T; label: string }> }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <select
         value={props.value}
         onChange={(event) => props.onChange(event.target.value as T)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       >
         {props.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
@@ -171,33 +204,33 @@ function SelectField<T extends string>(props: { label: string; value: T; onChang
 function Card(props: { title: string; value: string | number; icon: typeof Activity; sub?: string }) {
   const Icon = props.icon;
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-slate-500">{props.title}</p>
+        <p className="text-sm font-medium text-muted-foreground">{props.title}</p>
         <Icon size={18} className="text-slate-400" />
       </div>
-      <p className="mt-3 text-2xl font-bold text-slate-950">{props.value}</p>
-      {props.sub && <p className="mt-1 text-xs text-slate-500">{props.sub}</p>}
+      <p className="mt-3 text-2xl font-bold text-foreground">{props.value}</p>
+      {props.sub && <p className="mt-1 text-xs text-muted-foreground">{props.sub}</p>}
     </div>
   );
 }
 
 function Table(props: { rows: AdminRecord[]; columns: Array<{ key: string; label: string; render?: (row: AdminRecord) => React.ReactNode }>; empty: string }) {
   return (
-    <div className="max-w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-border bg-card shadow-sm">
       <div className="min-w-0 overflow-x-auto">
         <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>{props.columns.map((column) => <th key={column.key} className="px-4 py-3 font-semibold">{column.label}</th>)}</tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-muted">
             {props.rows.length ? props.rows.map((row, index) => (
               <tr key={String(row.id ?? index)} className="hover:bg-slate-50">
-                {props.columns.map((column) => <td key={column.key} className="px-4 py-3 align-top text-slate-700">{column.render ? column.render(row) : valueOf(row, column.key)}</td>)}
+                {props.columns.map((column) => <td key={column.key} className="px-4 py-3 align-top text-secondary-foreground">{column.render ? column.render(row) : valueOf(row, column.key)}</td>)}
               </tr>
             )) : (
               <tr>
-                <td colSpan={props.columns.length} className="px-4 py-10 text-center text-slate-500">{props.empty}</td>
+                <td colSpan={props.columns.length} className="px-4 py-10 text-center text-muted-foreground">{props.empty}</td>
               </tr>
             )}
           </tbody>
@@ -265,23 +298,23 @@ function AdminLogin({ onLogin }: { onLogin: (user: AuthUser) => void }) {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-6 py-10 font-['Inter',sans-serif]">
-      <section className="grid w-full max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl md:grid-cols-[1fr_420px]">
-        <div className="bg-slate-950 p-10 text-white">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-blue-600"><Shield size={22} /></div>
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10 font-['Inter',sans-serif]">
+      <section className="grid w-full max-w-5xl overflow-hidden rounded-[16px] border border-border bg-card shadow-xl md:grid-cols-[1fr_420px]">
+        <div className="bg-foreground p-10 text-primary-foreground">
+          <div className="inline-flex h-11 w-11 items-center justify-center rounded-[12px] bg-primary"><Shield size={22} /></div>
           <h1 className="mt-8 text-3xl font-bold">Elchi Admin</h1>
           <p className="mt-3 max-w-lg text-sm leading-6 text-slate-300">
             Buyurtmalar, haydovchi tekshiruvi, tariflar, nizolar va audit jarayonlari uchun boshqaruv paneli.
           </p>
           <div className="mt-10 grid gap-3 text-sm text-slate-300">
-            <p className="flex items-center gap-2"><Check size={16} className="text-emerald-400" />Jonli backend ma'lumotlari</p>
-            <p className="flex items-center gap-2"><Check size={16} className="text-emerald-400" />Rolga mos xodim kirishi</p>
-            <p className="flex items-center gap-2"><Check size={16} className="text-emerald-400" />Haydovchini tekshirish amallari</p>
+            <p className="flex items-center gap-2"><Check size={16} className="text-success" />Jonli backend ma'lumotlari</p>
+            <p className="flex items-center gap-2"><Check size={16} className="text-success" />Rolga mos xodim kirishi</p>
+            <p className="flex items-center gap-2"><Check size={16} className="text-success" />Haydovchini tekshirish amallari</p>
           </div>
         </div>
         <div className="p-8">
-          <h2 className="text-xl font-bold text-slate-950">Xodim sifatida kirish</h2>
-          <p className="mt-1 text-sm text-slate-500">Mavjud operator, administrator yoki super administrator telefonidan foydalaning.</p>
+          <h2 className="text-xl font-bold text-foreground">Xodim sifatida kirish</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Mavjud operator, administrator yoki super administrator telefonidan foydalaning.</p>
           <div className="mt-6 grid gap-4">
             <Field label="Telefon" value={phone} onChange={setTelefon} />
             <SelectField
@@ -295,8 +328,8 @@ function AdminLogin({ onLogin }: { onLogin: (user: AuthUser) => void }) {
               ]}
             />
             <Field label="OTP" value={otp} onChange={setOtp} />
-            {devOtp && <p className="rounded-md bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">Dev OTP: {devOtp}</p>}
-            {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</p>}
+            {devOtp && <p className="rounded-[10px] bg-accent px-3 py-2 text-sm font-medium text-primary">Dev OTP: {devOtp}</p>}
+            {error && <p className="rounded-[10px] bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{error}</p>}
             <div className="grid grid-cols-2 gap-3">
               <Button tone="neutral" disabled={busy} onClick={() => void requestOtp()}>OTP so'rash</Button>
               <Button disabled={busy} onClick={() => void login()}>Kirish</Button>
@@ -321,6 +354,7 @@ export default function AdminApp() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [focusDisputeId, setFocusDisputeId] = useState<string | null>(null);
 
   async function loadAll() {
     if (!getAdminAccessToken()) return;
@@ -368,7 +402,15 @@ export default function AdminApp() {
       cities,
       tariffs,
       disputes,
+      opsQueues: [],
+      legacyOrders: [],  // the legacy archive filters server-side (O8), not through this client-side search
+      priceBands: [],  // the panel reads one corridor at a time; there is nothing for the toolbar to filter
+
+      disputesV2: [],
+      support: [],
+      metrics: [],
       users: [],
+      security: [],  // the MFA screen reads /api/v2/me/mfa itself; the toolbar search has nothing to filter
       notifications: [],
       audit: audits,
       profile: [],
@@ -403,12 +445,12 @@ export default function AdminApp() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 font-['Inter',sans-serif] text-slate-950">
+    <main className="min-h-screen bg-background font-['Inter',sans-serif] text-foreground">
       <div className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${sidebarCollapsed ? "grid-cols-[72px_minmax(0,1fr)]" : "grid-cols-[248px_minmax(0,1fr)]"}`}>
-        <aside className="min-w-0 border-r border-slate-200 bg-slate-950 px-3 py-5 text-white">
+        <aside className="min-w-0 border-r border-border bg-foreground px-3 py-5 text-primary-foreground">
           <div className={`flex items-center ${sidebarCollapsed ? "flex-col justify-center gap-2" : "justify-between gap-3 px-2"}`}>
             <div className={`flex min-w-0 items-center gap-3 ${sidebarCollapsed ? "justify-center" : ""}`}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600"><Shield size={20} /></div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-primary"><Shield size={20} /></div>
             {!sidebarCollapsed && <div className="min-w-0">
               <p className="font-bold">Elchi Admin</p>
               <p className="text-xs text-slate-400">{user.role}</p>
@@ -417,7 +459,7 @@ export default function AdminApp() {
             <button
               type="button"
               onClick={() => setSidebarCollapsed((value) => !value)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-300 hover:bg-slate-900 hover:text-white"
+              className="el-press inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-slate-300 hover:bg-foreground hover:text-primary-foreground"
               aria-label={sidebarCollapsed ? "Yon menyuni ochish" : "Yon menyuni yopish"}
               title={sidebarCollapsed ? "Yon menyuni ochish" : "Yon menyuni yopish"}
             >
@@ -431,9 +473,12 @@ export default function AdminApp() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setSection(item.id)}
+                  onClick={() => {
+                setFocusDisputeId(null);
+                setSection(item.id);
+              }}
                   title={sectionLabels[item.id]}
-                  className={`flex h-10 min-w-0 items-center rounded-md text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "bg-white text-slate-950" : "text-slate-300 hover:bg-slate-900 hover:text-white"}`}
+                  className={`el-press flex h-10 min-w-0 items-center rounded-[10px] text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "bg-card text-foreground" : "text-slate-300 hover:bg-foreground hover:text-primary-foreground"}`}
                 >
                   <Icon size={17} />
                   {!sidebarCollapsed && <span className="truncate">{sectionLabels[item.id]}</span>}
@@ -444,10 +489,10 @@ export default function AdminApp() {
         </aside>
 
         <section className="min-w-0 overflow-hidden">
-          <header className="flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
+          <header className="flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 lg:px-6">
             <div className="min-w-0">
               <h1 className="text-xl font-bold">{sectionLabels[section]}</h1>
-              <p className="text-xs text-slate-500">{user.full_name || user.phone}</p>
+              <p className="text-xs text-muted-foreground">{user.full_name || user.phone}</p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
               <Button tone="neutral" disabled={busy} onClick={() => void loadAll()}><RefreshCw size={16} /> Yangilash</Button>
@@ -455,8 +500,9 @@ export default function AdminApp() {
             </div>
           </header>
 
-          <div className="min-w-0 overflow-x-hidden p-4 lg:p-6">
-            {error && <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
+          {/* `key` restarts the entrance on every section change, so a panel arrives instead of snapping in. */}
+          <div key={section} className="el-enter min-w-0 overflow-x-hidden p-4 lg:p-6">
+            {error && <div className="el-fade mb-4 rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">{error}</div>}
 
             {section === "overview" && (
               <AdminOverviewPanel user={user} onNavigate={setSection} />
@@ -466,7 +512,7 @@ export default function AdminApp() {
               <div className="mb-4 flex items-center gap-3">
                 <div className="relative max-w-md flex-1">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={search} onChange={(event) => setQidirish(event.target.value)} placeholder="Joriy jadvaldan qidirish" className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                  <input value={search} onChange={(event) => setQidirish(event.target.value)} placeholder="Joriy jadvaldan qidirish" className="h-10 w-full rounded-[10px] border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-blue-100" />
                 </div>
               </div>
             )}
@@ -506,6 +552,31 @@ export default function AdminApp() {
               />
             )}
 
+            {section === "opsQueues" && (
+              <AdminOpsQueuesPanel
+                onOpenItem={(item) => {
+                  // The queue only points at an object; each kind is opened in the section that owns it.
+                  if (item.item_type === "dispute") {
+                    setFocusDisputeId(item.item_id);
+                    setSection("disputesV2");
+                  } else if (item.item_type === "support_ticket" || item.item_type === "trust_review") {
+                    setSection("support");
+                  } else {
+                    setQidirish(item.item_id);
+                    setSection("orders");
+                  }
+                }}
+              />
+            )}
+
+            {section === "disputesV2" && <AdminDisputesV2Panel focusId={focusDisputeId} />}
+
+            {section === "support" && <AdminSupportPanel />}
+
+            {section === "metrics" && <AdminMetricsPanel />}
+            {section === "priceBands" && <AdminPriceBandsPanel />}
+            {section === "legacyOrders" && <AdminLegacyOrdersPanel />}
+
             {section === "audit" && (
               <AdminAuditLogsPanel user={user} />
             )}
@@ -513,6 +584,8 @@ export default function AdminApp() {
             {section === "users" && (
               <AdminUsersPanel user={user} />
             )}
+
+            {section === "security" && <AdminSecurityPanel />}
 
             {section === "notifications" && (
               <AdminNotificationsPanel />

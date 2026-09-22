@@ -12,7 +12,7 @@ import {
   Search,
   ToggleLeft,
   X,
-} from "lucide-react";
+} from "./ui/icons";
 
 import {
   activateCity,
@@ -97,16 +97,16 @@ function Button(props: {
   const tone = props.tone ?? "neutral";
   const className =
     tone === "primary"
-      ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+      ? "border-primary bg-primary text-primary-foreground hover:bg-primary"
       : tone === "danger"
-        ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
+        ? "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/25"
+        : "border-border bg-card text-secondary-foreground hover:bg-slate-50";
   return (
     <button
       type="button"
       disabled={props.disabled}
       onClick={props.onClick}
-      className={`inline-flex h-10 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`el-press inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border px-3 text-sm font-semibold transition ${className} disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {props.children}
     </button>
@@ -118,15 +118,15 @@ function Badge({ children, className }: { children: React.ReactNode; className: 
 }
 
 function activeBadge(active?: boolean) {
-  return <Badge className={active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}>{getActiveStatusLabel(active)}</Badge>;
+  return <Badge className={active ? "border-success/25 bg-success/12 text-success" : "border-border bg-slate-50 text-secondary-foreground"}>{getActiveStatusLabel(active)}</Badge>;
 }
 
 function typeBadge(type?: string) {
-  return <Badge className="border-blue-200 bg-blue-50 text-blue-700">{getCityTypeLabel(type)}</Badge>;
+  return <Badge className="border-blue-200 bg-accent text-primary">{getCityTypeLabel(type)}</Badge>;
 }
 
 function requiredBadge(value?: boolean) {
-  return <Badge className={value ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600"}>{getRequiresDistrictLabel(value)}</Badge>;
+  return <Badge className={value ? "border-warning/28 bg-warning/14 text-warning" : "border-border bg-slate-50 text-secondary-foreground"}>{getRequiresDistrictLabel(value)}</Badge>;
 }
 
 function Input(props: {
@@ -137,14 +137,14 @@ function Input(props: {
   type?: string;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <input
         value={props.value}
         type={props.type ?? "text"}
         placeholder={props.placeholder}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       />
     </label>
   );
@@ -157,12 +157,12 @@ function Select(props: {
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+    <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
       {props.label}
       <select
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
       >
         {props.children}
       </select>
@@ -172,7 +172,7 @@ function Select(props: {
 
 function CheckField(props: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700">
+    <label className="flex h-10 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-sm font-semibold text-secondary-foreground">
       <input type="checkbox" checked={props.checked} onChange={(event) => props.onChange(event.target.checked)} />
       {props.label}
     </label>
@@ -181,11 +181,11 @@ function CheckField(props: { label: string; checked: boolean; onChange: (checked
 
 function ModalShell(props: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
-      <section className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl">
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h3 className="text-base font-bold text-slate-950">{props.title}</h3>
-          <button onClick={props.onClose} className="rounded-md p-1 text-slate-500 hover:bg-slate-100" aria-label="Yopish">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-foreground/40 p-4">
+      <section className="w-full max-w-lg rounded-[12px] border border-border bg-card shadow-xl">
+        <header className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h3 className="text-base font-bold text-foreground">{props.title}</h3>
+          <button onClick={props.onClose} className="el-press rounded-[10px] p-1 text-muted-foreground hover:bg-muted" aria-label="Yopish">
             <X size={18} />
           </button>
         </header>
@@ -197,9 +197,9 @@ function ModalShell(props: { title: string; children: React.ReactNode; onClose: 
 
 function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <div className="mt-1 text-sm font-semibold text-slate-950">{children || "-"}</div>
+    <div className="rounded-[12px] border border-border bg-card p-3">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="mt-1 text-sm font-semibold text-foreground">{children || "-"}</div>
     </div>
   );
 }
@@ -239,7 +239,7 @@ function CityModal(props: {
   return (
     <ModalShell title={props.title} onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        {props.duplicate && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">City already exists</p>}
+        {props.duplicate && <p className="rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">City already exists</p>}
         <div className="grid gap-3 md:grid-cols-2">
           <Input label="Nomi uz" value={props.form.name_uz} onChange={(name_uz) => props.onChange({ ...props.form, name_uz })} />
           <Input label="Nomi ru" value={props.form.name_ru} onChange={(name_ru) => props.onChange({ ...props.form, name_ru })} />
@@ -255,7 +255,7 @@ function CityModal(props: {
             <CheckField label="Faol" checked={props.form.is_active} onChange={(is_active) => props.onChange({ ...props.form, is_active })} />
           </div>
         </div>
-        <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700">Toshkent shahri odatda Shahar turi va tuman talab qilinmaydigan hudud sifatida sozlanadi.</div>
+        <div className="rounded-[10px] border border-blue-100 bg-accent p-3 text-xs text-primary">Toshkent shahri odatda Shahar turi va tuman talab qilinmaydigan hudud sifatida sozlanadi.</div>
         <div className="flex justify-end gap-2">
           <Button onClick={props.onClose}>Bekor qilish</Button>
           <Button tone="primary" disabled={props.busy || !valid} onClick={props.onSubmit}>Saqlash</Button>
@@ -279,7 +279,7 @@ function DistrictModal(props: {
   return (
     <ModalShell title={props.title} onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        {props.duplicate && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">Bu hududda tuman allaqachon mavjud</p>}
+        {props.duplicate && <p className="rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">Bu hududda tuman allaqachon mavjud</p>}
         <Select label="Hudud" value={props.form.city_id} onChange={(city_id) => props.onChange({ ...props.form, city_id })}>
           <option value="">Hududni tanlang</option>
           {props.cities.map((city) => <option key={city.id} value={city.id}>{formatCityDisplayName(city)}</option>)}
@@ -311,7 +311,7 @@ function ConfirmModal(props: {
   return (
     <ModalShell title={props.title} onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">{props.message}</p>
+        <p className="rounded-[10px] border border-warning/28 bg-warning/14 p-3 text-sm font-medium text-warning">{props.message}</p>
         <div className="flex justify-end gap-2">
           <Button onClick={props.onClose}>Bekor qilish</Button>
           <Button tone={props.tone ?? "danger"} disabled={props.busy} onClick={props.onConfirm}>{props.submitLabel}</Button>
@@ -342,25 +342,32 @@ function CityDrawer(props: {
   const city = props.city;
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-slate-950/30" onClick={props.onClose} />
-      <aside className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-3xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl">
-        <header className="border-b border-slate-200 bg-white p-5">
+      {/* The scrim is decoration: it closes the drawer as a convenience, and the drawer itself carries the
+          dialog semantics and a real close button. Marking it presentational keeps a screen reader from
+          announcing a clickable region with no name. */}
+      <div className="fixed inset-0 z-50 bg-foreground/30" role="presentation" onClick={props.onClose} />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-3xl flex-col border-l border-border bg-slate-50 shadow-2xl"
+      >
+        <header className="border-b border-border bg-card p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold text-slate-950">{formatCityDisplayName(city)}</h2>
+                <h2 className="text-xl font-bold text-foreground">{formatCityDisplayName(city)}</h2>
                 {typeBadge(city.type)}
                 {requiredBadge(city.requires_district)}
                 {activeBadge(city.is_active)}
               </div>
-              <p className="mt-1 text-sm text-slate-500">Yaratilgan {formatAdminDate(city.created_at)} · Yangilangan {formatAdminDate(city.updated_at)}</p>
+              <p className="mt-1 text-sm text-muted-foreground">Yaratilgan {formatAdminDate(city.created_at)} · Yangilangan {formatAdminDate(city.updated_at)}</p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button onClick={props.onRefresh}><RefreshCw size={15} /> Yangilash</Button>
               <Button onClick={props.onClose}><X size={15} /> Yopish</Button>
             </div>
           </div>
-          <div className="mt-4 flex gap-2 border-b border-slate-200">
+          <div className="mt-4 flex gap-2 border-b border-border">
             {[
               ["info", "Hudud ma'lumotlari"],
               ["districts", "Tumanlar"],
@@ -368,7 +375,7 @@ function CityDrawer(props: {
               ["orders", "So'nggi buyurtmalar"],
               ["audit", "Audit"],
             ].map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key as typeof tab)} className={`border-b-2 px-3 py-2 text-sm font-semibold ${tab === key ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-950"}`}>{label}</button>
+              <button key={key} onClick={() => setTab(key as typeof tab)} className={`el-press border-b-2 px-3 py-2 text-sm font-semibold ${tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{label}</button>
             ))}
           </div>
         </header>
@@ -376,7 +383,7 @@ function CityDrawer(props: {
           {tab === "info" && (
             <section className="grid gap-3 md:grid-cols-3">
               <DetailItem label="Nomi uz">{cleanLocationText(city.name_uz)}</DetailItem>
-              <DetailItem label="Nomi ru">{hasEncodingIssue(city.name_ru) ? <Badge className="border-amber-200 bg-amber-50 text-amber-700">Kodlash muammosi</Badge> : cleanLocationText(city.name_ru)}</DetailItem>
+              <DetailItem label="Nomi ru">{hasEncodingIssue(city.name_ru) ? <Badge className="border-warning/28 bg-warning/14 text-warning">Kodlash muammosi</Badge> : cleanLocationText(city.name_ru)}</DetailItem>
               <DetailItem label="Viloyat">{cleanLocationText(city.region)}</DetailItem>
               <DetailItem label="Tur">{typeBadge(city.type)}</DetailItem>
               <DetailItem label="Tuman talab qilinadi">{requiredBadge(city.requires_district)}</DetailItem>
@@ -388,31 +395,31 @@ function CityDrawer(props: {
           {tab === "districts" && (
             <section className="grid gap-4">
               {city.requires_district && !props.districts.length && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+                <div className="rounded-[12px] border border-warning/28 bg-warning/14 p-4 text-sm font-medium text-warning">
                   This city requires districts, but no districts are added yet.
                 </div>
               )}
               <div className="flex justify-between gap-3">
                 <div>
-                  <h3 className="font-bold text-slate-950">Districts</h3>
-                  <p className="text-sm text-slate-500">Districts are used for matching accuracy.</p>
+                  <h3 className="font-bold text-foreground">Districts</h3>
+                  <p className="text-sm text-muted-foreground">Districts are used for matching accuracy.</p>
                 </div>
                 <Button disabled={!props.canMutate} tone="primary" onClick={props.onAddDistrict}><Plus size={15} /> Add district</Button>
               </div>
-              {props.districtError && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{props.districtError}</p>}
-              <div className="max-w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+              {props.districtError && <p className="rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{props.districtError}</p>}
+              <div className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-border bg-card">
                 <div className="min-w-0 overflow-x-auto">
                 <table className="w-full min-w-[620px] text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       {["Nomi uz", "Nomi ru", "Faol", "Yaratilgan", "Amallar"].map((label) => <th key={label} className="px-4 py-3 font-semibold">{label}</th>)}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-muted">
                     {props.districts.length ? props.districts.map((district) => (
                       <tr key={district.id}>
-                        <td className="px-4 py-3 font-semibold text-slate-950">{formatDistrictDisplayName(district)}</td>
-                        <td className="px-4 py-3">{hasEncodingIssue(district.name_ru) ? <Badge className="border-amber-200 bg-amber-50 text-amber-700">Kodlash muammosi</Badge> : cleanLocationText(district.name_ru)}</td>
+                        <td className="px-4 py-3 font-semibold text-foreground">{formatDistrictDisplayName(district)}</td>
+                        <td className="px-4 py-3">{hasEncodingIssue(district.name_ru) ? <Badge className="border-warning/28 bg-warning/14 text-warning">Kodlash muammosi</Badge> : cleanLocationText(district.name_ru)}</td>
                         <td className="px-4 py-3">{activeBadge(district.is_active)}</td>
                         <td className="px-4 py-3">{formatShortAdminDate(district.created_at)}</td>
                         <td className="px-4 py-3">
@@ -423,7 +430,7 @@ function CityDrawer(props: {
                         </td>
                       </tr>
                     )) : (
-                      <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">Districts not found</td></tr>
+                      <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">Districts not found</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -431,9 +438,9 @@ function CityDrawer(props: {
               </div>
             </section>
           )}
-          {tab === "tariffs" && <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Bu hudud ishlatilgan yo'nalish tariflari Tariflar modulida mavjud.</div>}
-          {tab === "orders" && <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Bu hudud ishlatilgan so'nggi buyurtmalar Buyurtmalar modulida mavjud.</div>}
-          {tab === "audit" && <div className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Audit yozuvlari Audit jurnali modulida mavjud.</div>}
+          {tab === "tariffs" && <div className="rounded-[12px] border border-border bg-card p-5 text-sm text-secondary-foreground">Bu hudud ishlatilgan yo'nalish tariflari Tariflar modulida mavjud.</div>}
+          {tab === "orders" && <div className="rounded-[12px] border border-border bg-card p-5 text-sm text-secondary-foreground">Bu hudud ishlatilgan so'nggi buyurtmalar Buyurtmalar modulida mavjud.</div>}
+          {tab === "audit" && <div className="rounded-[12px] border border-border bg-card p-5 text-sm text-secondary-foreground">Audit yozuvlari Audit jurnali modulida mavjud.</div>}
         </div>
       </aside>
     </>
@@ -583,8 +590,8 @@ export function AdminCitiesPanel({ user }: Props) {
     <div className="grid min-w-0 gap-5">
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-950">Cities</h2>
-          <p className="mt-1 text-sm text-slate-500">Moslashtirish uchun shaharlar, viloyatlar, tumanlar va faollikni boshqaring.</p>
+          <h2 className="text-2xl font-bold text-foreground">Cities</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Moslashtirish uchun shaharlar, viloyatlar, tumanlar va faollikni boshqaring.</p>
         </div>
         <div className="flex gap-2">
           <Button disabled={busy} onClick={() => void loadCities()}><RefreshCw size={16} /> Yangilash</Button>
@@ -592,22 +599,22 @@ export function AdminCitiesPanel({ user }: Props) {
         </div>
       </section>
 
-      {error && <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div>}
-      {!canMutate && <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600">Hudud yoki tuman yaratish/tahrirlash uchun ruxsat yo'q.</div>}
+      {error && <div className="rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">{error}</div>}
+      {!canMutate && <div className="rounded-[12px] border border-border bg-card px-4 py-3 text-sm font-medium text-secondary-foreground">Hudud yoki tuman yaratish/tahrirlash uchun ruxsat yo'q.</div>}
 
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         {summary.map(([label, value, Icon]) => (
-          <div key={label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div key={label} className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
               <Icon size={16} className="text-slate-400" />
             </div>
-            <p className="mt-3 text-2xl font-bold text-slate-950">{value}</p>
+            <p className="mt-3 text-2xl font-bold text-foreground">{value}</p>
           </div>
         ))}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
         <div className="grid gap-3 lg:grid-cols-4 xl:grid-cols-6">
           <Input label="Qidirish" value={draftFilters.search ?? ""} onChange={(search) => setDraftFilters({ ...draftFilters, search })} placeholder="Nom, viloyat yoki tur" />
           <Select label="Tur" value={draftFilters.type ?? ""} onChange={(type) => setDraftFilters({ ...draftFilters, type })}>
@@ -641,30 +648,30 @@ export function AdminCitiesPanel({ user }: Props) {
         </div>
       </section>
 
-      <section className="max-w-full min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-border bg-card shadow-sm">
         <div className="min-w-0 overflow-x-auto">
           <table className="w-full min-w-[1020px] border-collapse text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 {["ID", "Nomi uz", "Nomi ru", "Viloyat", "Tur", "Tuman talab qilinadi", "Tumanlar", "Faol", "Yaratilgan", "Amallar"].map((label) => (
                   <th key={label} className="px-4 py-3 font-semibold">{label}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-muted">
               {busy && !cities.length ? Array.from({ length: 5 }).map((_, index) => (
-                <tr key={index}><td colSpan={10} className="px-4 py-3"><div className="h-8 animate-pulse rounded bg-slate-100" /></td></tr>
+                <tr key={index}><td colSpan={10} className="px-4 py-3"><div className="h-8 animate-pulse rounded bg-background" /></td></tr>
               )) : visibleCities.length ? visibleCities.map((city) => (
                 <tr key={city.id} className="cursor-pointer hover:bg-slate-50" onClick={() => void openCity(city.id)}>
-                  <td className="px-4 py-3 font-semibold text-slate-700">#{city.id}</td>
-                  <td className="px-4 py-3 font-bold text-slate-950">{cleanLocationText(city.name_uz)}</td>
-                  <td className="px-4 py-3">{hasEncodingIssue(city.name_ru) ? <Badge className="border-amber-200 bg-amber-50 text-amber-700">Kodlash muammosi</Badge> : cleanLocationText(city.name_ru)}</td>
+                  <td className="px-4 py-3 font-semibold text-secondary-foreground">#{city.id}</td>
+                  <td className="px-4 py-3 font-bold text-foreground">{cleanLocationText(city.name_uz)}</td>
+                  <td className="px-4 py-3">{hasEncodingIssue(city.name_ru) ? <Badge className="border-warning/28 bg-warning/14 text-warning">Kodlash muammosi</Badge> : cleanLocationText(city.name_ru)}</td>
                   <td className="px-4 py-3">{cleanLocationText(city.region)}</td>
                   <td className="px-4 py-3">{typeBadge(city.type)}</td>
                   <td className="px-4 py-3">{requiredBadge(city.requires_district)}</td>
                   <td className="px-4 py-3">
                     <p>{city.districts_count ?? 0} districts</p>
-                    {city.requires_district && !city.active_districts_count && <p className="text-xs font-semibold text-amber-700">Tumanlar yo'q</p>}
+                    {city.requires_district && !city.active_districts_count && <p className="text-xs font-semibold text-warning">Tumanlar yo'q</p>}
                   </td>
                   <td className="px-4 py-3">{activeBadge(city.is_active)}</td>
                   <td className="px-4 py-3">{formatShortAdminDate(city.created_at)}</td>
@@ -691,12 +698,12 @@ export function AdminCitiesPanel({ user }: Props) {
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={10} className="px-4 py-14 text-center text-slate-500">Cities not found</td></tr>
+                <tr><td colSpan={10} className="px-4 py-14 text-center text-muted-foreground">Cities not found</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600">
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-secondary-foreground">
           <span>Sahifa {filters.page ?? 1} / {totalPages || 1} · jami {total}</span>
           <div className="flex gap-2">
             <Button disabled={busy || (filters.page ?? 1) <= 1} onClick={() => setPage(Math.max(1, (filters.page ?? 1) - 1))}><ChevronLeft size={15} /> Oldingi</Button>

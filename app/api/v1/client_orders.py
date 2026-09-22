@@ -21,6 +21,7 @@ from app.services.order_service import (
     update_order,
 )
 from app.utils.api_response import error_response
+from app.utils.legacy_time import v1_naive
 
 router = APIRouter(prefix="/client/orders")
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -221,7 +222,7 @@ def cancel_order_endpoint(
             "order_number": order.order_number,
             "status": order.status,
             "cancel_reason": order.cancel_reason,
-            "cancelled_at": order.cancelled_at,
+            "cancelled_at": v1_naive(order.cancelled_at),
         },
         "message": "Order cancelled",
     }

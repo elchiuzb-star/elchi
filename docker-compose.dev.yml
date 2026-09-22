@@ -1,0 +1,99 @@
+# Persistent local development stack (PostgreSQL 16 + PostGIS, Redis).
+#
+# Why this file exists: stage 2 needs PostGIS (migration 0030 onwards), and a plain local PostgreSQL install
+# usually has no PostGIS - so the stage-2 schema simply cannot be created there. `docker-compose.test.yml`
+# does have PostGIS, but its data lives on tmpfs and disappears with the container, which makes it the wrong
+# place for accounts, catalogues and anything you want to see again tomorrow.
+#
+#   docker compose -f docker-compose.dev.yml up -d --wait      # start (data survives restarts)
+#   docker compose -f docker-compose.dev.yml stop              # stop, keep the data
+#   docker compose -f docker-compose.dev.yml down -v           # delete the data as well
+#
+# .env then points at it:
+#   ELCHI_DATABASE_URL=postgresql+psycopg://elchi:elchi_dev@127.0.0.1:45433/elchi
+#   ELCHI_REDIS_URL=redis://127.0.0.1:36380/0
+#
+# NOT production: the password is a local convenience and the ports are bound to 127.0.0.1 only.
+# Production topology stays in docker-compose.prod.yml (ADR-0013, decision 34/51).
+
+name: elchi-dev
+
+services:
+  postgis:
+    # Same image as the test stack and production (decision 34): one engine everywhere, so a migration that
+    # works here works there. Built locally from docker/postgis until the UZ registry digest exists (Q58).
+    image: ${ELCHI_POSTGIS_IMAGE:-elchi-postgis:16.15-3.5.3-trixie}
+    build:
+      context: docker/postgis
+    environment:
+      POSTGRES_USER: elchi
+      POSTGRES_PASSWORD: elchi_dev
+      POSTGRES_DB: elchi
+      # Same initdb settings as production (BR finding 14), so collation-dependent behaviour matches.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C.UTF-8 --data-checksums"
+      TZ: UTC
+    # Durability stays ON here, unlike the test stack: this database is meant to survive a crash and a reboot.
+    command:
+      - postgres
+      - -c
+      - timezone=UTC
+      - -c
+      - max_connections=200
+      - -c
+      - lock_timeout=30s
+    ports:
+      # 45433: next to the test stack's 45432, below the Windows dynamic/Hyper-V excluded range.
+      - "127.0.0.1:45433:5432"
+    volumes:
+      - elchi-dev-pgdata:/var/lib/postgresql/data
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elchi -d elchi -h 127.0.0.1"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  redis:
+    # Rate limits, worker locks and pub/sub. Non-durable by design (ADR-0012): losing it costs nothing.
+    image: redis:7.4.11@sha256:71da9275c5f3fcb97d0fa0c8c5b36cc995327265420f17a04bfd544f458059f7
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:36380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  osrm:
+    # Our own router, on an OpenStreetMap extract of Uzbekistan.
+    #
+    # It is what lets the map draw a real road instead of the straight lines the `fake` provider hands
+    # back, and it is the only routing option with no legal question attached: nothing leaves this
+    # machine, so there is no third party for Q24 to review. Start it only after the one-time
+    # preprocessing described in RUNNING.md - the container serves a prepared graph, it does not build one.
+    #
+    # `profiles` keeps it out of `up -d` until asked for, because the graph may not exist yet:
+    #   docker compose -f docker-compose.dev.yml --profile routing up -d osrm
+    image: osrm/osrm-backend:v5.25.0@sha256:bdfa60e64ae1376bff6ff5605991be50600132a27469a4a9e77c23afd3a6d555
+    profiles: ["routing"]
+    command: ["osrm-routed", "--algorithm", "mld", "/data/uzbekistan-latest.osrm"]
+    volumes:
+      - ./docker/osrm/data:/data
+    ports:
+      - "127.0.0.1:5000:5000"
+    healthcheck:
+      # osrm-routed binds the port only after the graph is loaded, so a successful connect means the
+      # router is actually able to answer - not merely that the process started. It is a connect and
+      # not an HTTP request because the image ships neither curl nor wget; perl is the only thing in
+      # it that can open a socket, and a healthcheck calling a missing binary reports "unhealthy"
+      # forever while the router works perfectly well.
+      test: ["CMD", "perl", "-MIO::Socket::INET", "-e", "exit(IO::Socket::INET->new(PeerAddr=>'127.0.0.1:5000',Timeout=>3) ? 0 : 1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  elchi-dev-pgdata:

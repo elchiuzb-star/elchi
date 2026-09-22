@@ -1,84 +1,188 @@
+/**
+ * Elchi design tokens.
+ *
+ * Ported from the frozen reference client (`frontend/src/styles/theme.css`), which is where the palette was
+ * actually designed. What this client carried before was the stock shadcn theme with a blue primary painted
+ * over it: the greys were generic oklch, and the dark theme was the shadcn default, whose "primary" is white.
+ * Nothing about it said Elchi, and dark mode was unusable.
+ *
+ * The system in one paragraph. A cool blue-biased porcelain ground, a considered royal blue primary, and
+ * azure (`--feruza`) as the one decorative brand highlight - routes, live signals, the origin node of the
+ * caravan thread. Green, amber and red are **reserved for status** and never used decoratively, so that when
+ * something turns red it means something. Elevation is light and purposeful: three shadow tokens, used
+ * sparingly.
+ *
+ * The neutral ramp is the part worth understanding. Large parts of this app were written against Tailwind's
+ * fixed `slate` / `gray` / `zinc` scales with no `dark:` variants, so they could not respond to a theme at
+ * all. Re-pointing those scales at foreground/background mixes makes every existing `*-slate-*` utility
+ * theme-correct and on-palette without touching the call sites - the ramp inverts on its own in dark mode.
+ * The same trick points the decorative `blue` scale at the brand primary, so a stray `bg-blue-50` reads as
+ * one blue rather than a second one.
+ */
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
   --font-size: 16px;
-  --background: #F7F8FA;
-  --foreground: #111827;
-  --card: #ffffff;
-  --card-foreground: #111827;
-  --popover: #ffffff;
-  --popover-foreground: #111827;
-  --primary: #1B4FD8;
-  --primary-foreground: #ffffff;
-  --secondary: #EEF2FF;
-  --secondary-foreground: #1B4FD8;
-  --muted: #F3F4F6;
-  --muted-foreground: #6B7280;
-  --accent: #EEF2FF;
-  --accent-foreground: #1B4FD8;
-  --destructive: #DC2626;
-  --destructive-foreground: #ffffff;
-  --border: #E5E7EB;
+
+  --background: #F4F6FB;        /* cool blue-tinted porcelain */
+  --foreground: #111726;        /* blue-ink near-black */
+  --card: #FFFFFF;
+  --card-foreground: #111726;
+  --popover: #FFFFFF;
+  --popover-foreground: #111726;
+  --primary: #2258E6;           /* refined royal blue */
+  --primary-foreground: #FFFFFF;
+  --secondary: #E9EEF9;         /* cool blue surface */
+  --secondary-foreground: #2A3346;
+  --muted: #EEF1F8;
+  --muted-foreground: #5B6577;
+  --accent: #E4EBFD;            /* pale blue wash */
+  --accent-foreground: #2258E6;
+  --feruza: #3B82F6;            /* azure - route/live highlight (brand, not status) */
+  --destructive: #D93B44;       /* status: danger */
+  --destructive-foreground: #FFFFFF;
+  --success: #1E9E5B;           /* status: success */
+  --warning: #C98A16;           /* status: waiting/pending */
+  --info: #2C7BD0;              /* status: informational */
+  --border: rgba(17, 23, 38, 0.09);
   --input: transparent;
-  --input-background: #ffffff;
-  --switch-background: #D1D5DB;
+  --input-background: #EEF1F8;
+  --switch-background: #C9D2E3;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #1B4FD8;
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #030213;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --ring: #2258E6;
+  --chart-1: #2258E6;
+  --chart-2: #3B82F6;
+  --chart-3: #C98A16;
+  --chart-4: #D93B44;
+  --chart-5: #2C7BD0;
+  --radius: 0.875rem;           /* 14px cards - within the 12-16px band */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #111726;
+  --sidebar-primary: #2258E6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #EEF1F8;
+  --sidebar-accent-foreground: #2A3346;
+  --sidebar-border: rgba(17, 23, 38, 0.09);
+  --sidebar-ring: #2258E6;
+  --shadow-card: 0 1px 2px rgba(17,23,38,.04), 0 4px 12px -6px rgba(17,23,38,.09);
+  --shadow-sheet: 0 -8px 30px -18px rgba(17,23,38,.20);
+  --shadow-pop: 0 8px 30px -12px rgba(34,88,230,.24);
+
+  /* The desk the phone sits on. Not app surface - it is outside the device frame - but it still has to
+     follow the theme, or a dark app floats on a bright page. */
+  --shell-canvas: #E8EDF5;
+  --shell-bezel: #C3CBDA;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  /* Midnight blue - deep blue-black ground, brightened royal blue + azure. */
+  --background: #0B1020;
+  --foreground: #E9EDF6;
+  --card: #141B2E;
+  --card-foreground: #E9EDF6;
+  --popover: #182034;
+  --popover-foreground: #E9EDF6;
+  --primary: #4A78F0;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1E2740;
+  --secondary-foreground: #C4CDE0;
+  --muted: #182034;
+  --muted-foreground: #8A93A8;
+  --accent: #16233F;
+  --accent-foreground: #6AA6FF;
+  --feruza: #6AA6FF;
+  --destructive: #EF5A63;
+  --destructive-foreground: #FFFFFF;
+  --success: #35BB78;
+  --warning: #E0A93A;
+  --info: #5AA6E0;
+  --border: rgba(233, 237, 246, 0.10);
+  --input: transparent;
+  --input-background: #1E2740;
+  --switch-background: #2E3A57;
+  --ring: #4A78F0;
+  --chart-1: #4A78F0;
+  --chart-2: #6AA6FF;
+  --chart-3: #E0A93A;
+  --chart-4: #EF5A63;
+  --chart-5: #5AA6E0;
+  --sidebar: #0B1020;
+  --sidebar-foreground: #E9EDF6;
+  --sidebar-primary: #4A78F0;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1E2740;
+  --sidebar-accent-foreground: #C4CDE0;
+  --sidebar-border: rgba(233, 237, 246, 0.10);
+  --sidebar-ring: #4A78F0;
+  --shadow-card: 0 1px 2px rgba(0,0,0,.3), 0 6px 16px -8px rgba(0,0,0,.5);
+  --shadow-sheet: 0 -8px 30px -16px rgba(0,0,0,.6);
+  --shadow-pop: 0 10px 34px -12px rgba(0,0,0,.6);
+  --shell-canvas: #060A0F;
+  --shell-bezel: #2C3347;
 }
 
 @theme inline {
+  /* One family, two roles, no mono. Inter carries body and headings (full Uzbek Latin + Cyrillic); headings
+     are Inter at heavier weights with tighter tracking (`.font-display`). `font-mono` no longer loads a mono
+     family - it now only means "line the digits up", so prices and codes stay aligned. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-feruza: var(--feruza);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  /* Theme-aware neutral ramp - see the file header. */
+  --color-slate-50:  color-mix(in srgb, var(--foreground) 4%,  var(--background));
+  --color-slate-100: color-mix(in srgb, var(--foreground) 7%,  var(--background));
+  --color-slate-200: color-mix(in srgb, var(--foreground) 12%, var(--background));
+  --color-slate-300: color-mix(in srgb, var(--foreground) 22%, var(--background));
+  --color-slate-400: color-mix(in srgb, var(--foreground) 42%, var(--background));
+  --color-slate-500: color-mix(in srgb, var(--foreground) 55%, var(--background));
+  --color-slate-600: color-mix(in srgb, var(--foreground) 68%, var(--background));
+  --color-slate-700: color-mix(in srgb, var(--foreground) 80%, var(--background));
+  --color-slate-800: color-mix(in srgb, var(--foreground) 90%, var(--background));
+  --color-slate-900: var(--foreground);
+  --color-slate-950: var(--foreground);
+  --color-gray-50:  color-mix(in srgb, var(--foreground) 4%,  var(--background));
+  --color-gray-100: color-mix(in srgb, var(--foreground) 7%,  var(--background));
+  --color-gray-200: color-mix(in srgb, var(--foreground) 12%, var(--background));
+  --color-gray-300: color-mix(in srgb, var(--foreground) 22%, var(--background));
+  --color-gray-400: color-mix(in srgb, var(--foreground) 42%, var(--background));
+  --color-gray-500: color-mix(in srgb, var(--foreground) 55%, var(--background));
+  --color-gray-600: color-mix(in srgb, var(--foreground) 68%, var(--background));
+  --color-gray-700: color-mix(in srgb, var(--foreground) 80%, var(--background));
+  --color-gray-800: color-mix(in srgb, var(--foreground) 90%, var(--background));
+  --color-gray-900: var(--foreground);
+  --color-gray-950: var(--foreground);
+  --color-zinc-50:  color-mix(in srgb, var(--foreground) 4%,  var(--background));
+  --color-zinc-100: color-mix(in srgb, var(--foreground) 7%,  var(--background));
+  --color-zinc-200: color-mix(in srgb, var(--foreground) 12%, var(--background));
+  --color-zinc-300: color-mix(in srgb, var(--foreground) 22%, var(--background));
+  --color-zinc-400: color-mix(in srgb, var(--foreground) 42%, var(--background));
+  --color-zinc-500: color-mix(in srgb, var(--foreground) 55%, var(--background));
+  --color-zinc-600: color-mix(in srgb, var(--foreground) 68%, var(--background));
+  --color-zinc-700: color-mix(in srgb, var(--foreground) 80%, var(--background));
+  --color-zinc-800: color-mix(in srgb, var(--foreground) 90%, var(--background));
+  --color-zinc-900: var(--foreground);
+  --color-zinc-950: var(--foreground);
+
+  /* Any leftover decorative blue reads as the one brand blue and follows the theme. */
+  --color-blue-50:  var(--accent);
+  --color-blue-100: color-mix(in srgb, var(--primary) 14%, var(--background));
+  --color-blue-200: color-mix(in srgb, var(--primary) 24%, var(--background));
+  --color-blue-300: color-mix(in srgb, var(--primary) 45%, var(--background));
+  --color-blue-400: color-mix(in srgb, var(--primary) 70%, var(--background));
+  --color-blue-500: var(--primary);
+  --color-blue-600: var(--primary);
+  --color-blue-700: var(--primary);
+  --color-blue-800: var(--primary);
+  --color-blue-900: var(--primary);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -119,6 +223,16 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+@layer utilities {
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -126,12 +240,13 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
   }
 
   /**
-  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
-  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
-  */
+   * Default typography for HTML elements. These live in @layer base, so Tailwind utilities (text-sm, text-lg)
+   * override them.
+   */
 
   html {
     font-size: var(--font-size);
@@ -177,5 +292,23 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+
+  /* The icon set no longer needs a stroke rule. Lucide drew open strokes and a call site could pass its own
+     `strokeWidth`, so one CSS property had to hold the line; Phosphor draws a closed shape at a named weight
+     and defaults to `regular` everywhere, which is what the reference client relies on. A call site that
+     wants the seal look passes `weight="fill"`. */
+
+  /* Headings are Inter at heavier weight with tighter tracking - that alone reads as "display" while staying
+     one family with the body. */
+  .font-display {
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  /* `font-mono` means "line the digits up": tabular figures for prices, codes and counts. */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
   }
 }

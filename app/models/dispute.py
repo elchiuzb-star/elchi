@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -19,4 +19,4 @@ class Dispute(TimestampMixin, Base):
     previous_order_status: Mapped[str | None] = mapped_column(String(32))
     resolution: Mapped[str | None] = mapped_column(Text)
     resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
-    resolved_at: Mapped[datetime | None] = mapped_column()
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

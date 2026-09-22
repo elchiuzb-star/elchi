@@ -9,9 +9,23 @@ from app.api.deps import require_operator_or_admin, require_roles
 from app.db.session import get_db
 from app.models import ClientProfile, Order, User
 from app.services.audit_service import write_audit_log
+from app.services.driver_locks import lock_user_row
+from app.services.review_accounts import is_review_account_phone
 from app.utils.api_response import error_response
 
 router = APIRouter(prefix="/admin/clients")
+
+
+def lock_client_for_status_change(db: Session, user_id: int) -> User | None:
+    """L1: lock the client's users row (FOR NO KEY UPDATE; status is not a unique
+    column) and re-read it, so a concurrent account deletion either commits first
+    (then the client is gone: 404) or waits until this block/unblock commits and
+    then tombstones the row. No orders are touched, so orders -> users is kept.
+    See app/services/driver_locks.py."""
+    user = lock_user_row(db, user_id)
+    if user is None or user.role != "client" or user.status == "deleted":
+        return None
+    return user
 
 
 def client_to_dict(db: Session, user: User) -> dict:
@@ -46,6 +60,8 @@ def client_to_dict(db: Session, user: User) -> dict:
         "last_login_at": user.last_login_at,
         "created_at": user.created_at,
         "updated_at": user.updated_at,
+        # Additive: store-review account (ELCHI_REVIEW_LOGIN_PHONES allowlist).
+        "is_review_account": is_review_account_phone(user.phone),
     }
 
 
@@ -106,8 +122,8 @@ def block_admin_client(
     current_user: User = Depends(require_roles("admin", "super_admin")),
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
-    user = db.get(User, user_id)
-    if user is None or user.role != "client":
+    user = lock_client_for_status_change(db, user_id)
+    if user is None:
         return error_response(status.HTTP_404_NOT_FOUND, "CLIENT_NOT_FOUND", "Client not found")
     old_status = user.status
     user.status = "blocked"
@@ -134,8 +150,8 @@ def unblock_admin_client(
     current_user: User = Depends(require_roles("admin", "super_admin")),
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
-    user = db.get(User, user_id)
-    if user is None or user.role != "client":
+    user = lock_client_for_status_change(db, user_id)
+    if user is None:
         return error_response(status.HTTP_404_NOT_FOUND, "CLIENT_NOT_FOUND", "Client not found")
     old_status = user.status
     user.status = "active"

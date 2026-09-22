@@ -287,7 +287,7 @@ def test_resolved_or_rejected_dispute_requires_resolution(disputes_client, targe
 
     response = client.patch(
         f"/api/v1/admin/disputes/{dispute_id}",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"status": target_status},
     )
 
@@ -303,7 +303,7 @@ def test_final_dispute_status_restores_order_and_writes_history(disputes_client,
 
     response = client.patch(
         f"/api/v1/admin/disputes/{dispute_id}",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"status": target_status, "resolution": "Muammo hal qilindi"},
     )
 
@@ -311,7 +311,7 @@ def test_final_dispute_status_restores_order_and_writes_history(disputes_client,
     data = response.json()["data"]
     assert data["dispute_status"] == target_status
     assert data["order_status"] == "in_transit"
-    assert data["resolved_by"] == ids["operator"]
+    assert data["resolved_by"] == ids["admin"]
     assert data["resolved_at"] is not None
 
     db = session_factory()
@@ -322,7 +322,7 @@ def test_final_dispute_status_restores_order_and_writes_history(disputes_client,
     notification_count = db.scalar(select(func.count(Notification.id)).where(Notification.entity_id == order_id, Notification.type == "disputed"))
     assert order.status == "in_transit"
     assert dispute.resolution == "Muammo hal qilindi"
-    assert dispute.resolved_by == ids["operator"]
+    assert dispute.resolved_by == ids["admin"]
     assert dispute.resolved_at is not None
     assert history is not None
     assert history.old_status == "disputed"
@@ -337,13 +337,13 @@ def test_final_dispute_cannot_be_reopened(disputes_client) -> None:
     dispute_id = open_dispute_request(client, tokens["client"], order_id).json()["data"]["dispute_id"]
     client.patch(
         f"/api/v1/admin/disputes/{dispute_id}",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"status": "resolved", "resolution": "Hal qilindi"},
     )
 
     response = client.patch(
         f"/api/v1/admin/disputes/{dispute_id}",
-        headers=headers(tokens["operator"]),
+        headers=headers(tokens["admin"]),
         json={"status": "open"},
     )
 
@@ -377,3 +377,114 @@ def test_stage_13_does_not_require_forbidden_fields(disputes_client) -> None:
     assert "cargo_type" in order_columns
     assert "weight" not in order_columns
     assert "size" not in order_columns
+
+
+@pytest.mark.parametrize("target_status", ["resolved", "rejected"])
+def test_operator_cannot_resolve_or_reject_dispute(disputes_client, target_status: str) -> None:
+    """Decision 13: closing a dispute changes the order status, so it is admin+ only."""
+    client, tokens, session_factory, ids = disputes_client
+    order_id = create_order(session_factory, ids, status="in_transit")
+    dispute_id = open_dispute_request(client, tokens["client"], order_id).json()["data"]["dispute_id"]
+
+    response = client.patch(
+        f"/api/v1/admin/disputes/{dispute_id}",
+        headers=headers(tokens["operator"]),
+        json={"status": target_status, "resolution": "Operator hal qildi"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"success": False, "error": {"code": "FORBIDDEN", "message": "Admin role required to resolve or reject a dispute"}}
+    db = session_factory()
+    dispute = db.get(Dispute, dispute_id)
+    assert dispute.status == "open"
+    assert dispute.resolved_by is None
+    assert dispute.resolution is None
+    assert db.get(Order, order_id).status == "disputed"
+    db.close()
+
+    # Operator still reads and moves it to under_review with a note.
+    assert client.get(f"/api/v1/admin/disputes/{dispute_id}", headers=headers(tokens["operator"])).status_code == 200
+    review = client.patch(
+        f"/api/v1/admin/disputes/{dispute_id}",
+        headers=headers(tokens["operator"]),
+        json={"status": "under_review", "resolution": "Mijoz bilan bog'lanildi"},
+    )
+    assert review.status_code == 200
+    assert review.json()["data"]["order_status"] == "disputed"
+
+
+@pytest.mark.parametrize("target_status", ["open"])
+def test_operator_cannot_move_dispute_to_any_status_but_under_review(disputes_client, target_status: str) -> None:
+    """Decision 38: an operator may only move a dispute to under_review (with a note)."""
+    client, tokens, session_factory, ids = disputes_client
+    order_id = create_order(session_factory, ids, status="in_transit")
+    dispute_id = open_dispute_request(client, tokens["client"], order_id).json()["data"]["dispute_id"]
+    to_review = client.patch(
+        f"/api/v1/admin/disputes/{dispute_id}",
+        headers=headers(tokens["operator"]),
+        json={"status": "under_review", "resolution": "Mijozga qo'ng'iroq qilindi"},
+    )
+    assert to_review.status_code == 200
+
+    response = client.patch(
+        f"/api/v1/admin/disputes/{dispute_id}",
+        headers=headers(tokens["operator"]),
+        json={"status": target_status, "resolution": "Qayta ochish"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"success": False, "error": {"code": "FORBIDDEN", "message": "Operators can only move a dispute to under_review"}}
+    db = session_factory()
+    dispute = db.get(Dispute, dispute_id)
+    assert dispute.status == "under_review"
+    assert dispute.resolution == "Mijozga qo'ng'iroq qilindi"
+    db.close()
+
+
+@pytest.mark.parametrize("note", [None, "", "   "])
+def test_operator_must_supply_a_note_for_under_review(disputes_client, note) -> None:
+    client, tokens, session_factory, ids = disputes_client
+    order_id = create_order(session_factory, ids, status="in_transit")
+    dispute_id = open_dispute_request(client, tokens["client"], order_id).json()["data"]["dispute_id"]
+    payload = {"status": "under_review"}
+    if note is not None:
+        payload["resolution"] = note
+
+    response = client.patch(f"/api/v1/admin/disputes/{dispute_id}", headers=headers(tokens["operator"]), json=payload)
+
+    assert response.status_code == 400
+    assert response.json() == {"success": False, "error": {"code": "VALIDATION_ERROR", "message": "A note is required to move a dispute to under_review"}}
+    db = session_factory()
+    assert db.get(Dispute, dispute_id).status == "open"
+    db.close()
+
+
+def test_admin_may_still_move_dispute_back_to_open_without_note(disputes_client) -> None:
+    client, tokens, session_factory, ids = disputes_client
+    order_id = create_order(session_factory, ids, status="in_transit")
+    dispute_id = open_dispute_request(client, tokens["client"], order_id).json()["data"]["dispute_id"]
+    client.patch(f"/api/v1/admin/disputes/{dispute_id}", headers=headers(tokens["operator"]), json={"status": "under_review", "resolution": "Ko'rilmoqda"})
+
+    response = client.patch(f"/api/v1/admin/disputes/{dispute_id}", headers=headers(tokens["admin"]), json={"status": "open"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["dispute_status"] == "open"
+
+
+@pytest.mark.parametrize(
+    ("role", "payload"),
+    [
+        ("operator", {"status": "resolved", "resolution": "x"}),
+        ("operator", {"status": "open"}),
+        ("operator", {"status": "not-a-status"}),
+        ("admin", {"status": "resolved"}),
+        ("admin", {"status": "not-a-status"}),
+    ],
+)
+def test_missing_dispute_is_404_before_validation_and_permission(disputes_client, role: str, payload: dict) -> None:
+    client, tokens, _session_factory, _ids = disputes_client
+
+    response = client.patch("/api/v1/admin/disputes/999999", headers=headers(tokens[role]), json=payload)
+
+    assert response.status_code == 404
+    assert response.json() == {"success": False, "error": {"code": "NOT_FOUND", "message": "Dispute not found"}}

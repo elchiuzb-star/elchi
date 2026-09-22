@@ -1,0 +1,5 @@
+# Tests and local development. NOT installed in the production image
+# (Dockerfile installs requirements.txt only; BR #17).
+#   python -m pip install -r requirements-dev.txt
+-r requirements.txt
+pytest==8.4.0

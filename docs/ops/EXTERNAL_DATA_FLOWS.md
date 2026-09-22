@@ -1,0 +1,45 @@
+# External data flows inventory
+
+Owner: A10a · 2026-09-13 · ADR-0011 §4 · spec §17.6–17.7 · for legal checkpoint L5 (UZ_HOSTING_RUNBOOK.md §2)
+
+This inventory lists what leaves Elchi's own servers and apps, based on the code as of 2026-09-13 (file references below). It is an input for legal review, not a statement that any flow is compliant. Re-verify when code changes. Every new integration adds a row here in the same PR.
+
+Legend: **PD** = personal data likely involved · **Server** = our backend calls the provider · **Client** = the user's device calls the provider directly.
+
+## 1. Active today
+
+| # | Service | Direction | What is sent | PD | Code / config | Minimisation and notes |
+|---|---|---|---|---|---|---|
+| E1 | **Eskiz.uz SMS** (`notify.eskiz.uz`) | Server → Eskiz | `mobile_phone` (998XXXXXXXXX), `message` (OTP template containing only the code), `from` sender id. Login with the account `email` + `password`, cached bearer token. | Yes (phone number + fact of login) | `app/services/sms_service.py:59-91`; `ELCHI_SMS_ENABLED`, `ELCHI_ESKIZ_*` | Only the OTP text; no name or order data. Review accounts never trigger an SMS (Q8). Confirm Eskiz's processing location and retention (L5). |
+| ~~E2~~ | ~~Google Geocoding API~~ | — | **Removed (18.09.2026, wave 15).** `app/api/v1/geo.py` has called Yandex (E3) for some time; `google_maps_service.py` was orphaned code and this row described a flow that no longer happened. Module, settings (`ELCHI_GOOGLE_MAPS_*`) and env entries deleted. | — | — | A data-flow register that lists a processor we do not use is as wrong as one that omits a processor we do. |
+| E3 | **Yandex Geocoder** (`geocode-maps.yandex.ru/1.x/`) | Server → Yandex | `geocode` = `lng,lat` or typed address, `lang`, API key. | Likely | `app/services/yandex_maps_service.py`; `ELCHI_YANDEX_GEOCODER_API_KEY` | Same as E2. Foreign processor. Also resolves a Geosuggest `uri` (E10) into a coordinate, and accepts an optional `ll`/`spn` bias (the chosen district's centre) so a search answers where the person is standing - the bias is a ranking preference, never a filter. |
+| E4 | **Yandex Maps JavaScript API** (`api-maps.yandex.ru`, map tiles and markers; **v2.1** by default, `v3` selectable) | Client (`mobile-app`) → Yandex | Browser IP, viewport/tiles requested, referrer, browser key. **Not** the picked place: geocoding goes through our own server (E3), so the coordinates a person marks are not sent from their device. | IP and viewport | `mobile-app/src/components/maps/yandex.ts`, `YandexMap.tsx`; `VITE_YANDEX_MAPS_API_KEY` | Wave 15 moved the client from Google to Yandex, matching what the server already used. Tiles cannot be proxied, so the browser talks to Yandex directly; the key must be domain-restricted. The version is `VITE_YANDEX_MAPS_VERSION`: this account's JS API key is issued for **v2.1**, and the `v3` loader rejects it with `403 Invalid api key`, so `2.1` is the default and `v3` is one env line away (one adapter per version in `yandex.ts`, same interface). Same host, same key, same data leaving the browser either way - the version does not change this flow's privacy profile. `frontend/` is frozen and still loads Google Maps. Consent/notice needed (L5). |
+| E5 | **Yandex Maps SDK** | Client (`android-app`) → Yandex | Device IP, map tiles/viewport, current location displayed on the map. | Likely | `android-app/src/components/maps/YandexMap.tsx`, `android-app/src/core/maps.ts` (frozen) | Same as E4. |
+| E6 | **Vercel** (web frontend hosting) | Client → Vercel | Browser IP and page requests for static assets. API calls go to the API domain, not Vercel. | IP only | `frontend/vercel.json`; CORS in `.env.production.example` | Static hosting outside UZ. Whether IP logs matter is an L5 question. |
+| E7 | **Let's Encrypt (ACME)** | Server → Let's Encrypt | Domain names, ACME account key; certificate transparency logs publish the domain. | No | Caddy (`Caddyfile`) | No user data. |
+| E8 | **Build-time registries**: Docker Hub, PyPI, Debian/apt.postgresql.org mirrors, GitHub; the private registry in Uzbekistan for the PostGIS image (Q51) | Server/CI → registry | Image/package names, server IP. | No | `Dockerfile`, `docker/postgis/Dockerfile`, `docker-compose.prod.yml`, `scripts/server_bootstrap.sh` | No user data. Images are pinned by digest; the db image is pulled by digest from the UZ registry and never built on the server. |
+| E9 | **Geoapify Routing API** (`api.geoapify.com/v1/routing`): **implemented, OFF in production (Q24/Q46)** | Server → Geoapify (only when `ELCHI_GEO_ROUTING_PROVIDER=geoapify`) | `waypoints=lat,lon|lat,lon…` (corridor stops, pickup/dropoff points), `mode=drive`, `apiKey`; server IP | Likely (a pickup/dropoff can be a home) | `app/modules/geo/routing/geoapify.py`, `app/modules/geo/config.py`; `ELCHI_GEO_ROUTING_PROVIDER=disabled` (default), `ELCHI_GEO_GEOAPIFY_*` | Code is shipped; the provider stays `disabled` in production until the legal and terms-of-use review (L5) confirms provider entity/country, retention, commercial terms and attribution. Provider geometry is stored permanently only if the terms allow it; otherwise stops, cumulative values and a request hash are stored (Q24). Called outside DB transactions; coordinates only, no user/booking ids; `httpx`/`httpcore` request logging silenced so `apiKey` never reaches logs. A self-hosted OSRM in UZ would remove this flow, and the adapter for it now exists (`app/modules/geo/routing/osrm.py`, `ELCHI_GEO_ROUTING_PROVIDER=osrm`): it talks to a container on the same host serving an OpenStreetMap extract, so it is **not an external flow** and has no row of its own in this table. Choosing it in production is still an ADR and a code change, not a setting - `build_routing_provider` refuses every provider under a production marker. |
+| E10 | **Yandex Geosuggest** (`suggest-maps.yandex.ru/v1/suggest`) | Server → Yandex | `text` the person typed into the place search, `lang`, `ll`/`spn` = the chosen district's centre and window, API key; server IP. **Not** the person's own position and no account, booking or listing id. | Typed text can name a place a person is going to | `app/services/yandex_maps_service.py` (`suggest_places`), `app/api/v1/geo.py` (`/geo/suggest`); `ELCHI_YANDEX_SUGGEST_API_KEY` | Added so the search answers *places* ("10-sonli maktab") and not only addresses - the geocoder cannot. Server-side key, so no third key ships in the browser bundle and the flow stays server → Yandex like E3. A suggestion carries no coordinate: only the one the person picks is resolved, through E3. Empty list when the key is missing or Yandex is unreachable, so the map and the draggable pin remain the fallback. Same foreign-processor question as E2/E3 (L5). |
+
+## 2. Planned (stage 2): design constraints before enabling
+
+| # | Service | What will be sent | PD | Owner | Constraints (binding) |
+|---|---|---|---|---|---|
+| F1 | **FCM** (Android push) | Device registration token; payload: `event_type`, `aggregate_id`, short text key (ADR-0012 §9) | Token = pseudonymous identifier | A7 | Payload allowlist (`app/contracts/events.py`); **no phone, passport, full address or names** (AGENTS §9, spec §15). |
+| F2 | **Web Push** (VAPID; browser vendor push services) | Push subscription endpoint, encrypted payload with the same allowlist as F1 | Pseudonymous | A7 | Same as F1. VAPID private key is a secret (SECRET_ROTATION.md). |
+| F3 | **Other routing providers** (MapTiler, self-hosted OSRM in UZ) | Waypoint coordinates | Likely | A2 | Geoapify is E9 (implemented, off). Any other provider needs its own row, legal review and a flag before enabling. |
+| F4 | **Map tiles for MapLibre** | Tile requests from clients (IP, viewport) | IP/viewport | A8/A9 | Attribution rules; quota counter (spec §10.8). |
+| F5 | **Uptime monitoring** | Health endpoint URLs only | No | ops | `/health/ready` response has no details by design. |
+| F6 | **Off-box backup storage** (UZ) | **Encrypted** backup files (gpg, key not on server) | Yes, but encrypted | ops | Must be in UZ (K3). BACKUP_RESTORE.md §2. |
+
+## 3. Explicitly not sent anywhere
+
+- GPS tracking points go from the driver phone to our API and PostgreSQL/Redis only (spec §10.3); they are not sent to map providers per point.
+- Passport, selfie and vehicle documents live in private storage on our volume. There is no public URL, and signed URLs are short-lived and never logged with `sig`/`exp`.
+- Money and ledger data: no external processor in stage 2 (card payments are out of scope).
+
+## 4. Open items for review
+
+1. E2–E5 transfer precise locations to Google/Yandex. Decide whether reverse geocoding can use coarser coordinates, or move to a UZ-hosted geocoder (L5).
+2. `app/api/v1/geo.py` exposes the geocode proxy. Check its rate limit and auth (spec §17.6: public geo proxy must be strictly limited). This is outside A10a's files; flag to its owner.
+3. Record each processor's legal entity, country, DPA/terms link and retention in this file once counsel confirms (L5).

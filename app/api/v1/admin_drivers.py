@@ -43,6 +43,27 @@ def authenticated_user(
     return user
 
 
+def staff_roles_of(db: Session, user: User) -> set[str]:
+    """U5 (wave 3.1): the caller's effective staff roles - legacy ``users.role`` plus the rows of ``user_roles``
+    that are active right now (``identity.service.get_capabilities``).
+
+    Scope is this module only (BR wave 2.1 follow-up a): the other v1 routes and every marketplace role check keep
+    reading ``users.role``. Status codes, messages and response shapes are unchanged, so v1 clients see no
+    difference; a staff member whose role lives only in ``user_roles`` is no longer refused here.
+    """
+    roles = {user.role} if user.role else set()
+    try:
+        from app.contracts.errors import DomainError
+        from app.modules.identity import service as identity_service
+
+        roles |= {role.value for role in identity_service.get_capabilities(db, user.id).roles}
+    except (ImportError, AttributeError):  # pragma: no cover - v2 module always present in this app
+        return roles & ADMIN_DRIVER_VIEW_ROLES
+    except DomainError:
+        return roles & ADMIN_DRIVER_VIEW_ROLES
+    return roles & ADMIN_DRIVER_VIEW_ROLES
+
+
 def get_current_admin_driver_view_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
@@ -52,7 +73,7 @@ def get_current_admin_driver_view_user(
         return user
     if user.status != "active":
         return error_response(403, "FORBIDDEN", "User account is not active")
-    if user.role not in ADMIN_DRIVER_VIEW_ROLES:
+    if not staff_roles_of(db, user):
         return error_response(403, "FORBIDDEN", "Admin access required")
     return user
 
@@ -66,9 +87,10 @@ def get_current_admin_driver_mutation_user(
         return user
     if user.status != "active":
         return error_response(403, "FORBIDDEN", "User account is not active")
-    if user.role == "operator":
-        return error_response(403, "FORBIDDEN", "Only admin or super_admin can perform driver verification actions")
-    if user.role not in ADMIN_DRIVER_MUTATION_ROLES:
+    roles = staff_roles_of(db, user)
+    if not roles & ADMIN_DRIVER_MUTATION_ROLES:
+        if "operator" in roles:
+            return error_response(403, "FORBIDDEN", "Only admin or super_admin can perform driver verification actions")
         return error_response(403, "FORBIDDEN", "Admin access required")
     return user
 
@@ -83,7 +105,7 @@ def get_current_admin_driver_vehicle_editor(
         return user
     if user.status != "active":
         return error_response(403, "FORBIDDEN", "User account is not active")
-    if user.role not in ADMIN_DRIVER_VIEW_ROLES:
+    if not staff_roles_of(db, user):
         return error_response(403, "FORBIDDEN", "Admin or operator access required")
     return user
 

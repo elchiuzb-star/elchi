@@ -1,7 +1,5 @@
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
-
-import { AdvancedMapMarker } from "./AdvancedMapMarker";
-import { googleMapsLibraries, googleMapsMapId } from "./googleMapsConfig";
+import { MapMarker, YandexMap } from "./YandexMap";
+import { TASHKENT, readPoint } from "./yandex";
 
 type ReadOnlyOrderMapProps = {
   pickupLat?: number | string | null;
@@ -10,53 +8,32 @@ type ReadOnlyOrderMapProps = {
   dropoffLng?: number | string | null;
 };
 
-const defaultCenter = { lat: 41.2995, lng: 69.2401 };
-function toPoint(lat?: number | string | null, lng?: number | string | null) {
-  if (lat === null || lat === undefined || lng === null || lng === undefined) return null;
-  const parsedLat = Number(lat);
-  const parsedLng = Number(lng);
-  if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) return null;
-  return { lat: parsedLat, lng: parsedLng };
-}
-
+/** The two ends of an order, shown on a detail screen. Not interactive: it is a picture of what was agreed. */
 export function ReadOnlyOrderMap({ pickupLat, pickupLng, dropoffLat, dropoffLng }: ReadOnlyOrderMapProps) {
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
-  const pickup = toPoint(pickupLat, pickupLng);
-  const dropoff = toPoint(dropoffLat, dropoffLng);
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: "elchi-google-maps",
-    googleMapsApiKey: apiKey ?? "",
-    libraries: googleMapsLibraries,
-  });
-
+  const pickup = readPoint(pickupLat, pickupLng);
+  const dropoff = readPoint(dropoffLat, dropoffLng);
   if (!pickup && !dropoff) return null;
-  if (!apiKey) {
-    return <p className="text-[13px] text-[#6B7280]">Google Maps API kaliti topilmadi</p>;
-  }
-  if (loadError) {
-    return <p className="text-[13px] text-[#DC2626]">Xarita yuklanmadi</p>;
-  }
-  if (!isLoaded) {
-    return <p className="text-[13px] text-[#6B7280]">Xarita yuklanmoqda...</p>;
-  }
 
   return (
-    <div className="h-[180px] overflow-hidden rounded-[14px] border border-[#E5E7EB]">
-      <GoogleMap
-        mapContainerStyle={{ width: "100%", height: "100%" }}
-        center={pickup ?? dropoff ?? defaultCenter}
+    <div className="h-[180px] overflow-hidden rounded-[14px] border border-border">
+      <YandexMap
+        center={pickup ?? dropoff ?? TASHKENT}
         zoom={12}
-        options={{
-          clickableIcons: false,
-          fullscreenControl: false,
-          mapTypeControl: false,
-          mapId: googleMapsMapId,
-          streetViewControl: false,
-        }}
+        interactive={false}
+        style={{ width: "100%", height: "100%" }}
+        fallback={(status) => (
+          <div className="flex h-full items-center justify-center px-4 text-center text-[13px] text-muted-foreground">
+            {status === "missing-key"
+              ? "Xarita kaliti kiritilmagan"
+              : status === "loading"
+                ? "Xarita yuklanmoqda..."
+                : "Xarita yuklanmadi"}
+          </div>
+        )}
       >
-        {pickup && <AdvancedMapMarker position={pickup} label="A" title="Olib ketish joyi" />}
-        {dropoff && <AdvancedMapMarker position={dropoff} label="B" title="Yetkazish joyi" />}
-      </GoogleMap>
+        {pickup && <MapMarker point={pickup} label="A" title="Olib ketish joyi" />}
+        {dropoff && <MapMarker point={dropoff} label="B" title="Yetkazish joyi" />}
+      </YandexMap>
     </div>
   );
 }

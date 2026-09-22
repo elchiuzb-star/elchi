@@ -1,3 +1,4 @@
+import { getStoredAdminUser } from "../auth/adminTokenStorage";
 import { listAdminAuditLogs, listAdminDisputes, type AdminRecord } from "./admin.api";
 import { getAdminCities } from "./admin-cities.api";
 import { getAdminDistricts } from "./admin-districts.api";
@@ -105,6 +106,12 @@ function isToday(value?: string | null): boolean {
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
 }
 
+/** Audit logs are admin+ only; asking for them as an operator is a guaranteed 403, so the overview skips them. */
+function canReadAuditLogs(): boolean {
+  const role = getStoredAdminUser()?.role;
+  return role === "admin" || role === "super_admin";
+}
+
 export async function getAdminOverview(): Promise<AdminOverviewData> {
   const warnings: string[] = [];
   const [ordersData, driversData, citiesData, districtsData, tariffsData, disputesData, auditsData] = await Promise.all([
@@ -114,7 +121,9 @@ export async function getAdminOverview(): Promise<AdminOverviewData> {
     guarded("Districts", () => collectPages<District>((page, limit) => getAdminDistricts({ page, limit })), warnings, { items: [] }),
     guarded("Tariffs", () => collectPages<RouteTariff>((page, limit) => getAdminTariffs({ page, limit })), warnings, { items: [] }),
     guarded("Disputes", () => collectPages<AdminRecord>((page, limit) => listAdminDisputes({ page, limit })), warnings, { items: [] }),
-    guarded("Audit logs", () => listAdminAuditLogs({ limit: 20 }), warnings, { items: [] }),
+    canReadAuditLogs()
+      ? guarded("Audit logs", () => listAdminAuditLogs({ limit: 20 }), warnings, { items: [] })
+      : Promise.resolve({ items: [] as AdminRecord[] }),
   ]);
 
   const orders = ordersData.items ?? [];
