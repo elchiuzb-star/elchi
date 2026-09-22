@@ -20,7 +20,16 @@ from app.api.v2.web import (
     run_command,
     run_versioned,
 )
-from app.contracts.dto import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, ChatMessageCreate, ChatMessageDTO, Envelope, EventDTO, PageMeta
+from app.contracts.dto import (
+    DEFAULT_PAGE_LIMIT,
+    MAX_PAGE_LIMIT,
+    ChatMessageCreate,
+    ChatMessageDTO,
+    ChatThreadDTO,
+    Envelope,
+    EventDTO,
+    PageMeta,
+)
 from app.contracts.enums import ActorSide, ChatModerationStatus, ChatThreadKind, ClientPlatform, QuickReplyCode
 from app.modules.communications import service
 from app.modules.communications.models import ChatMessage, DeviceToken, NotificationDelivery
@@ -271,6 +280,24 @@ def list_booking_messages(
     user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
 ) -> Envelope[list[ChatMessageDTO]]:
     return _list_chat(session, ChatThreadKind.BOOKING, booking_id, user_id, cursor, limit)
+
+
+@router.get("/bookings/{booking_id}/chat", response_model=Envelope[ChatThreadDTO], responses=ERROR_RESPONSES)
+def get_booking_chat_state(
+    booking_id: str, user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> Envelope[ChatThreadDTO]:
+    """N6: what the chat screen opens with, so a closed conversation is drawn as closed.
+
+    The messages themselves come from the list route; this one answers only "may I still write, and until
+    when" - the question the client previously had to guess by sending and reading the refusal.
+    """
+    state = service.chat_state(session, ChatThreadKind.BOOKING, booking_id, user_id)
+    return Envelope[ChatThreadDTO](
+        data=ChatThreadDTO(
+            kind=state.kind, writable=state.writable, writable_until=state.writable_until,
+            message_count=state.message_count,
+        )
+    )
 
 
 @router.post("/proposals/{thread_id}/messages", response_model=Envelope[ChatMessageDTO], status_code=201, responses=ERROR_RESPONSES)

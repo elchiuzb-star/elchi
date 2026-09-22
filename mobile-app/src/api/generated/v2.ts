@@ -1261,6 +1261,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/bookings/{booking_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Booking Chat State
+         * @description N6: what the chat screen opens with, so a closed conversation is drawn as closed.
+         *
+         *     The messages themselves come from the list route; this one answers only "may I still write, and until
+         *     when" - the question the client previously had to guess by sending and reading the refusal.
+         */
+        get: operations["get_booking_chat_state_api_v2_bookings__booking_id__chat_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/bookings/{booking_id}/codes": {
         parameters: {
             query?: never;
@@ -3524,6 +3547,37 @@ export interface components {
          * @enum {string}
          */
         ChatModerationStatus: "visible" | "hidden_by_staff";
+        /**
+         * ChatThreadDTO
+         * @description N6. What the chat screen needs *before* it draws a composer.
+         *
+         *     Without this the client cannot tell "you may write" from "this conversation is over": it shows an input,
+         *     the person types, and the send comes back 409 CHAT_CLOSED - which reads as a bug in the app rather than
+         *     the rule that a finished trip stops being a place to negotiate.
+         *
+         *     ``writable_until`` is null while the booking is still running (nothing is counting down yet) and also
+         *     once it has passed; ``writable`` is the answer either way, computed by ``communications.chat_writable``.
+         */
+        ChatThreadDTO: {
+            kind: components["schemas"]["ChatThreadKind"];
+            /**
+             * Message Count
+             * @default 0
+             */
+            message_count: number;
+            /** Writable */
+            writable: boolean;
+            /**
+             * Writable Until
+             * @description When a terminal booking's chat stops accepting messages; null when nothing is counting.
+             */
+            writable_until?: string | null;
+        };
+        /**
+         * ChatThreadKind
+         * @enum {string}
+         */
+        ChatThreadKind: "proposal" | "booking";
         /** CityCreate */
         CityCreate: {
             /**
@@ -4363,6 +4417,21 @@ export interface components {
         /** Envelope[ChatMessageDTO] */
         Envelope_ChatMessageDTO_: {
             data: components["schemas"]["ChatMessageDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[ChatThreadDTO] */
+        Envelope_ChatThreadDTO_: {
+            data: components["schemas"]["ChatThreadDTO"];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -15404,6 +15473,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_CashReceiptDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_booking_chat_state_api_v2_bookings__booking_id__chat_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ChatThreadDTO_"];
                 };
             };
             /** @description Bad Request */

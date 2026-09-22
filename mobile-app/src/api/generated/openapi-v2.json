@@ -2516,6 +2516,51 @@
         "title": "ChatModerationStatus",
         "type": "string"
       },
+      "ChatThreadDTO": {
+        "additionalProperties": false,
+        "description": "N6. What the chat screen needs *before* it draws a composer.\n\nWithout this the client cannot tell \"you may write\" from \"this conversation is over\": it shows an input,\nthe person types, and the send comes back 409 CHAT_CLOSED - which reads as a bug in the app rather than\nthe rule that a finished trip stops being a place to negotiate.\n\n``writable_until`` is null while the booking is still running (nothing is counting down yet) and also\nonce it has passed; ``writable`` is the answer either way, computed by ``communications.chat_writable``.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ChatThreadKind"
+          },
+          "message_count": {
+            "default": 0,
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "writable": {
+            "title": "Writable",
+            "type": "boolean"
+          },
+          "writable_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a terminal booking's chat stops accepting messages; null when nothing is counting.",
+            "title": "Writable Until"
+          }
+        },
+        "required": [
+          "kind",
+          "writable"
+        ],
+        "title": "ChatThreadDTO",
+        "type": "object"
+      },
+      "ChatThreadKind": {
+        "enum": [
+          "proposal",
+          "booking"
+        ],
+        "title": "ChatThreadKind",
+        "type": "string"
+      },
       "CityCreate": {
         "properties": {
           "display_order": {
@@ -5204,6 +5249,60 @@
           "data"
         ],
         "title": "Envelope[ChatMessageDTO]",
+        "type": "object"
+      },
+      "Envelope_ChatThreadDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ChatThreadDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[ChatThreadDTO]",
         "type": "object"
       },
       "Envelope_CommissionPolicyDTO_": {
@@ -30325,6 +30424,117 @@
         "summary": "Contest Cash Receipt",
         "tags": [
           "v2 Bookings"
+        ]
+      }
+    },
+    "/api/v2/bookings/{booking_id}/chat": {
+      "get": {
+        "description": "N6: what the chat screen opens with, so a closed conversation is drawn as closed.\n\nThe messages themselves come from the list route; this one answers only \"may I still write, and until\nwhen\" - the question the client previously had to guess by sending and reading the refusal.",
+        "operationId": "get_booking_chat_state_api_v2_bookings__booking_id__chat_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "title": "Booking Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_ChatThreadDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Booking Chat State",
+        "tags": [
+          "v2 Communications"
         ]
       }
     },

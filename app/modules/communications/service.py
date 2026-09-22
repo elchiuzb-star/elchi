@@ -28,6 +28,7 @@ from app.contracts.communications import (
     CHAT_ATTACHMENTS_ENABLED,
     CHAT_MASK_PROOF_CODES,
     CHAT_MAX_MESSAGES_PER_MINUTE,
+    CHAT_WRITABLE_AFTER_TERMINAL,
     NOTIFICATION_DEDUP_WINDOW,
     NOTIFICATION_DELIVERY_LEASE,
     OUTBOX_BATCH_LIMIT,
@@ -306,6 +307,46 @@ def post_message(
         aggregate_id=thread.id,
     )
     return PostedMessage(message, thread, side)
+
+
+@dataclass(frozen=True, slots=True)
+class ChatState:
+    """Whether this participant may still write, and until when."""
+
+    kind: ChatThreadKind
+    writable: bool
+    writable_until: datetime | None
+    message_count: int
+
+
+def chat_state(
+    session: Session, kind: ChatThreadKind | str, parent_public_id: str, user_id: int, *,
+    now: datetime | None = None,
+) -> ChatState:
+    """N6: the state the chat screen opens with. A non-participant gets 404, like the message list.
+
+    Read-only on purpose - asking whether you may write must never be the thing that creates the thread.
+    """
+    now = _now(now)
+    parent, _side = _party_parent(session, kind, parent_public_id, user_id)
+    thread = _find_thread(session, parent)
+    writable = chat_writable(
+        kind=parent.kind, now=now, proposal_thread_open=parent.proposal_thread_open,
+        booking_terminal_at=parent.booking_terminal_at,
+    )
+    # Only a terminal booking has a deadline; while the trip runs there is nothing to count down, and once
+    # the deadline has passed `writable` already says so and a date in the past would only confuse.
+    deadline = (
+        parent.booking_terminal_at + CHAT_WRITABLE_AFTER_TERMINAL
+        if parent.kind is ChatThreadKind.BOOKING and parent.booking_terminal_at is not None
+        else None
+    )
+    return ChatState(
+        kind=parent.kind,
+        writable=writable,
+        writable_until=deadline if writable else None,
+        message_count=thread.message_count if thread is not None else 0,
+    )
 
 
 def _messages_page(session: Session, thread: ChatThread | None, *, before_id: int | None, limit: int) -> list[ChatMessage]:

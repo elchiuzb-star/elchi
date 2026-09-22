@@ -233,6 +233,21 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   `mobile-app/src/app/tripOffers.ts` (indeks predikati bilan bir xil: `cancelled`/`expired` xizmatni
   bo'shatadi).
 
+**Wave 17 qarori (22.09.2026) — chat oqimi:**
+- **Q100 (foydalanuvchi qarori; Q44 ni klientda mustahkamlaydi)** Narx muzokarasi va suhbat **ikki alohida
+  mexanizm**. Klient **faqat bron chatini** ochadi: `POST/GET /proposals/{id}/messages` mavjud (xodim va
+  kelajakdagi qaror uchun), lekin ilova unga **murojaat qilmaydi** — aks holda narx erkin matnda kelishiladi
+  va muzlatilgan `proposal_versions` tarixi to'liq yozuv bo'lishdan to'xtaydi.
+  - **Chat qabul qilish bilan ochiladi:** ikkala accept yo'li ham (mijoz haydovchini tanlaganda va haydovchi
+    mijoz narxini qabul qilganda) bronni yuklab, to'g'ridan-to'g'ri chat ekraniga o'tadi.
+  - **Safar tugagach read-only:** `chat_writable` bo'yicha bron chati terminal holatdan keyin 24 soat yoziladi
+    (`CHAT_WRITABLE_AFTER_TERMINAL`), keyin yopiladi. Yangi `GET /api/v2/bookings/{id}/chat` →
+    `ChatThreadDTO {writable, writable_until, message_count}` klientga kompozitorni chizishdan **oldin**
+    holatni aytadi; yopilgan chatda yozish maydoni o'rniga tushuntirish, yozishmalar o'qish uchun qoladi.
+  - **Tezkor javoblar** (§16) klientda: haydovchida `arriving_in_5_min`, `at_stop`, `clarify_stop`; mijozda
+    `at_stop`, `clarify_stop`. `price_agreed` bron chatida **taklif qilinmaydi** — narx allaqachon kelishilgan,
+    uni qayta tasdiqlash tugmasi savdolashishga taklif bo'lardi (va §16 bo'yicha shartni o'zgartirmaydi ham).
+
 **Wave 3.1 dan keyin ham ochiq:** U6 `rating_bucket` chegaralari (hozir `null` — sun’iy reyting yo‘q), ADR-0021 staff MFA (**Proposed**), dalil fayllarini imzolangan havola bilan ko‘rsatish.
 
 ## 4. Kod tuzilishi

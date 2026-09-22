@@ -297,6 +297,22 @@ export const messages = {
   "listing.viewsSuffix": { uz: "ta ko'rish", ru: "просмотров" },
   "listing.viewsNone": { uz: "Hali hech kim ko'rmagan", ru: "Пока никто не смотрел" },
 
+  // --- chat (§16, ADR-0020) ----------------------------------------------------------------------------------
+  // A quick reply is a sentence, not a command: it never changes what was agreed (§16). `price_agreed` is
+  // deliberately absent from the booking chat - by then the price is settled, and offering it back would
+  // invite exactly the haggling the negotiation flow exists to keep out of here.
+  "quickReply.clarify_stop": { uz: "Bekatni aniqlashtiraylik", ru: "Уточним место" },
+  "quickReply.arriving_in_5_min": { uz: "5 daqiqada yetaman", ru: "Буду через 5 минут" },
+  "quickReply.at_stop": { uz: "Bekatdaman", ru: "Я на месте" },
+  "quickReply.price_agreed": { uz: "Narxga roziman", ru: "Согласен с ценой" },
+
+  "chat.closedTitle": { uz: "Suhbat yopildi", ru: "Чат закрыт" },
+  "chat.closedBody": {
+    uz: "Safar yakunlangani uchun yangi xabar yuborib bo'lmaydi. Yozishmalar o'qish uchun ochiq qoladi.",
+    ru: "Поездка завершена, новые сообщения отправить нельзя. Переписка остаётся доступной для чтения.",
+  },
+  "chat.closesSoon": { uz: "Suhbat shu vaqtgacha ochiq:", ru: "Чат открыт до:" },
+
   // --- driver documents (§17.1) ------------------------------------------------------------------------------
   "docType.passport": { uz: "Pasport", ru: "Паспорт" },
   "docType.selfie": { uz: "Selfi", ru: "Селфи" },

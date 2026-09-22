@@ -159,6 +159,7 @@ import {
   type AmendmentDTO,
   getBookingCodes,
   getBookingTracking,
+  getChatState,
   listMessages,
   listMyBookings,
   reportCashReceipt,
@@ -166,7 +167,9 @@ import {
   type BookingCodesDTO,
   type BookingTrackingDTO,
   type CashReceiptDTO,
+  type ChatMessageCreate,
   type ChatMessageDTO,
+  type ChatThreadDTO,
 } from "../api/v2/bookings.api";
 import { ReadOnlyOrderMap } from "../components/maps/ReadOnlyOrderMap";
 import { useAuth } from "../auth/AuthContext";
@@ -553,6 +556,27 @@ function listingStatusLabel(value: string): string {
 
 function docTypeLabel(value: string): string {
   return translateDynamic(`docType.${value}`) ?? value;
+}
+
+/** The codes the contract accepts; taken from the generated schema so a renamed code fails the build. */
+type QuickReply = NonNullable<ChatMessageCreate["quick_reply_code"]>;
+
+/** §16: a quick reply is a fixed sentence both sides can read; the code is what travels, not the text. */
+function quickReplyLabel(code: string): string {
+  return translateDynamic(`quickReply.${code}`) ?? code;
+}
+
+/**
+ * The quick replies worth offering in a *booking* chat, per side.
+ *
+ * `price_agreed` is left out on purpose. The booking exists because a price was already accepted, so a
+ * button that re-agrees to it only invites the haggling the proposal flow is there to hold - and a quick
+ * reply can never change agreed terms anyway (§16), so it would be a button that means nothing.
+ */
+function quickRepliesFor(side: "client" | "driver"): QuickReply[] {
+  return side === "driver"
+    ? ["arriving_in_5_min", "at_stop", "clarify_stop"]
+    : ["at_stop", "clarify_stop"];
 }
 
 /** What has to be in the frame for this slot, so "Pasport" is not the only thing the driver has to go on. */
@@ -1622,6 +1646,8 @@ export function ConnectedApp() {
   const [chatFailed, setChatFailed] = useState<string | null>(null);
   const [chatWarnings, setChatWarnings] = useState<string[]>([]);
   const [chatHasMore, setChatHasMore] = useState(false);
+  /** N6: whether this conversation still takes messages. Null until the screen has asked the server. */
+  const [chatState, setChatState] = useState<ChatThreadDTO | null>(null);
   const [tracking, setTracking] = useState<BookingTrackingDTO | null>(null);
   const [trackingError, setTrackingError] = useState("");
   const [cashAmount, setCashAmount] = useState("");
@@ -2226,7 +2252,11 @@ export function ConnectedApp() {
     setChatDraft("");
     setChatFailed(null);
     setChatWarnings([]);
-    await loadChat(bookingId);
+    setChatState(null);
+    // State and messages together: the composer must not be drawn before it is known whether writing is
+    // still allowed, or the screen invites a message the server will refuse.
+    const [state] = await Promise.all([getChatState(bookingId), loadChat(bookingId)]);
+    setChatState(state);
     go("booking-chat");
   }
 
@@ -4188,7 +4218,7 @@ export function ConnectedApp() {
                           disabled={busy}
                           onClick={() => void run(async () => {
                             const listing = await getListing(thread.listing_id);
-                            await acceptProposal(
+                            const booking = await acceptProposal(
                               thread.id,
                               { proposal_version_id: version.id, expected_listing_terms_version: listing.terms_version },
                               newIdempotencyKey(),
@@ -4196,6 +4226,12 @@ export function ConnectedApp() {
                             await loadMyProposals();
                             if (mySide === "client") await loadMyListings();
                             else await loadDriverBookings();
+                            // The price is settled, so the conversation opens here and not before: from this
+                            // point the two of them have a booking to arrange, not a number to argue about.
+                            // The booking is loaded first so the chat's back button has a screen to return to.
+                            if (mySide === "client") await openClientBooking(booking.data.id);
+                            else await openDriverBooking(booking.data.id);
+                            await openChat(booking.data.id, mySide);
                           }, "Kelishuv tuzildi")}
                         >
                           {mySide === "client" ? "Haydovchi narxini qabul qilish" : "Mijoz narxini qabul qilish"}
@@ -4801,7 +4837,12 @@ export function ConnectedApp() {
                 )}
               >
                 <p className="whitespace-pre-wrap text-[14px] leading-5">
-                  {message.moderation_status === "hidden_by_staff" ? "Xabar operator tomonidan yashirildi" : message.text}
+                  {message.moderation_status === "hidden_by_staff"
+                    ? "Xabar operator tomonidan yashirildi"
+                    : message.quick_reply_code
+                      // A quick reply carries a code, not text: it is rendered in the reader's language.
+                      ? quickReplyLabel(message.quick_reply_code)
+                      : message.text}
                 </p>
                 <p className={cls("mt-1 text-[11px]", message.is_mine ? "text-primary-foreground/70" : "text-slate-400")}>
                   {formatDateTime(message.created_at)}
@@ -4809,7 +4850,43 @@ export function ConnectedApp() {
               </div>
             ))}
           </section>
+          {/* The trip is over and the grace period has run out: the conversation stays readable and stops
+              taking messages (Q44 / CHAT_WRITABLE_AFTER_TERMINAL). Drawing the composer anyway would make
+              the refusal look like a failure to send. */}
+          {chatState && !chatState.writable ? (
+            <div className="shrink-0 border-t border-border bg-card px-5 py-4">
+              <p className="text-[14px] font-semibold text-foreground">{translate("chat.closedTitle")}</p>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("chat.closedBody")}</p>
+            </div>
+          ) : (
           <div className="shrink-0 border-t border-border bg-card px-5 py-3">
+            {/* Counting down only once the booking is terminal; while the trip runs there is no deadline. */}
+            {chatState?.writable_until && (
+              <p className="mb-2 text-[11px] leading-4 text-muted-foreground">
+                {translate("chat.closesSoon")} {formatDateTime(chatState.writable_until)}
+              </p>
+            )}
+            <div className="mb-2 flex flex-wrap gap-2">
+              {quickRepliesFor(thread.side).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  disabled={chatSending}
+                  onClick={() => {
+                    if (chatSending) return;
+                    setChatSending(true);
+                    setChatFailed(null);
+                    void sendMessage(thread.id, { quick_reply_code: code }, newIdempotencyKey())
+                      .then(() => loadChat(thread.id, Math.max(chatMessages.length + 1, CHAT_PAGE)))
+                      .catch(() => setChatFailed(quickReplyLabel(code)))
+                      .finally(() => setChatSending(false));
+                  }}
+                  className="el-press rounded-full border border-border bg-background px-3 py-1.5 text-[12px] font-medium text-foreground disabled:opacity-60"
+                >
+                  {quickReplyLabel(code)}
+                </button>
+              ))}
+            </div>
             {chatWarnings.length > 0 && (
               <p className="mb-2 text-[12px] leading-5 text-warning">
                 Aloqa ma'lumotlari yashirildi: {chatWarnings.join(", ")}
@@ -4862,6 +4939,7 @@ export function ConnectedApp() {
               Telefon raqam va havolalar avtomatik yashiriladi.
             </p>
           </div>
+          )}
         </main>
       );
     }
@@ -5092,8 +5170,12 @@ export function ConnectedApp() {
                               { proposal_version_id: version.id, expected_listing_terms_version: listing.terms_version },
                               newIdempotencyKey(),
                             );
-                            void accepted;
                             await openListing(listing.id);
+                            // "Driver chosen" is the moment the two of them need to talk, so the chat is
+                            // where this lands rather than back on a list - with the booking behind it, so
+                            // back goes to the booking rather than to an empty screen.
+                            await openClientBooking(accepted.data.id);
+                            await openChat(accepted.data.id, "client");
                           }, "Haydovchi tanlandi")
                         }
                       >

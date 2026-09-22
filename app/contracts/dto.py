@@ -15,6 +15,7 @@ from app.contracts.communications import CHAT_TEXT_MAX_LENGTH
 from app.contracts.enums import (
     ActorSide,
     ChatModerationStatus,
+    ChatThreadKind,
     ClientPlatform,
     Currency,
     KpiMetric,
@@ -241,6 +242,26 @@ class ChatMessageDTO(ContractModel):
     quick_reply_code: QuickReplyCode | None = None
     moderation_status: ChatModerationStatus = ChatModerationStatus.VISIBLE
     created_at: UtcDateTime
+
+
+class ChatThreadDTO(ContractModel):
+    """N6. What the chat screen needs *before* it draws a composer.
+
+    Without this the client cannot tell "you may write" from "this conversation is over": it shows an input,
+    the person types, and the send comes back 409 CHAT_CLOSED - which reads as a bug in the app rather than
+    the rule that a finished trip stops being a place to negotiate.
+
+    ``writable_until`` is null while the booking is still running (nothing is counting down yet) and also
+    once it has passed; ``writable`` is the answer either way, computed by ``communications.chat_writable``.
+    """
+
+    kind: ChatThreadKind
+    writable: bool
+    writable_until: UtcDateTime | None = Field(
+        default=None,
+        description="When a terminal booking's chat stops accepting messages; null when nothing is counting.",
+    )
+    message_count: int = 0
 
 
 class EventDTO(ContractModel):

@@ -85,6 +85,18 @@ export function decideAmendment(amendmentId: string, decision: "reject" | "withd
     : v2Request<AmendmentDTO>(`/amendments/${amendmentId}/withdraw`, options);
 }
 
+export type ChatThreadDTO = Schemas["ChatThreadDTO"];
+
+/**
+ * N6: whether this conversation still takes messages, and until when.
+ *
+ * Asked before the composer is drawn. The alternative - showing an input and letting the send fail with
+ * `CHAT_CLOSED` - teaches the person that the app is broken rather than that the trip is over.
+ */
+export function getChatState(bookingId: string) {
+  return v2Request<ChatThreadDTO>(`/bookings/${bookingId}/chat`);
+}
+
 export function listMessages(bookingId: string, params: { limit?: number; cursor?: string } = {}) {
   return v2Request<ChatMessageDTO[]>(`/bookings/${bookingId}/messages`, { query: params });
 }

@@ -96,6 +96,56 @@ def test_proposal_chat_closes_on_accept_and_booking_chat_24h_after_terminal(bw) 
     assert late.code is ErrorCode.CHAT_CLOSED
 
 
+def test_chat_state_answers_may_i_write_before_the_composer_is_drawn(bw) -> None:  # noqa: ANN001
+    """N6: the client asks this to decide whether to draw an input at all.
+
+    Reading the state must never be what creates the thread, and it must give the same answer the post path
+    enforces - otherwise the screen says "write here" and the server says CHAT_CLOSED, which a person reads
+    as a broken app rather than as a finished trip.
+    """
+    deal = accepted_deal(bw)
+    with bw.db.session() as s:
+        fresh = comms.chat_state(s, "booking", deal.booking_public_id, bw.w.client_id)
+        assert (fresh.writable, fresh.message_count, fresh.writable_until) == (True, 0, None)
+    assert scalar(bw.db, "SELECT count(*) FROM chat_threads WHERE booking_id = :b", b=deal.booking_id) == 0
+
+    post(bw.db, "booking", deal.booking_public_id, bw.w.client_id, text="Salom")
+    with bw.db.session() as s:
+        assert comms.chat_state(s, "booking", deal.booking_public_id, bw.w.driver_id).message_count == 1
+
+    with bw.db.session() as s:
+        current = s.get(Booking, deal.booking_id)
+        bookings_service.cancel_booking(
+            s, booking_public_id_value=deal.booking_public_id, actor_user_id=bw.w.client_id,
+            expected_version=current.version, reason_code="plans_changed",
+        )
+        s.commit()
+    terminal_at = scalar(
+        bw.db, "SELECT coalesce(service_terminal_at, updated_at) FROM bookings WHERE id = :b", b=deal.booking_id
+    )
+
+    with bw.db.session() as s:
+        # Inside the grace period the deadline is shown, so the screen can say when it runs out.
+        during = comms.chat_state(s, "booking", deal.booking_public_id, bw.w.client_id,
+                                  now=terminal_at + timedelta(hours=1))
+        assert during.writable is True
+        assert during.writable_until == terminal_at + timedelta(hours=24)
+
+        # After it, read-only - and no deadline, because a date in the past explains nothing.
+        after = comms.chat_state(s, "booking", deal.booking_public_id, bw.w.client_id,
+                                 now=terminal_at + timedelta(hours=24, seconds=1))
+        assert (after.writable, after.writable_until) == (False, None)
+        assert after.message_count == 1, "a closed chat stays readable"
+
+
+def test_chat_state_hides_the_conversation_from_everyone_else(bw) -> None:  # noqa: ANN001
+    """Same 404 as the message list: a stranger must not learn that the chat exists (Q43)."""
+    deal = accepted_deal(bw)
+    with bw.db.session() as s:
+        error = domain_error(lambda: comms.chat_state(s, "booking", deal.booking_public_id, bw.w.client2_id))
+    assert error.code is ErrorCode.NOT_FOUND
+
+
 def test_only_parties_read_and_write_staff_reads_with_audit_and_hides(bw) -> None:  # noqa: ANN001
     deal = accepted_deal(bw)
     posted, _ = post(bw.db, "booking", deal.booking_public_id, bw.w.driver_id, text="5 daqiqada yetaman")
