@@ -17,7 +17,16 @@ from sqlalchemy.exc import DBAPIError
 
 from app.api.v2.web import current_user_id, db_error_handler, domain_error_handler, get_session
 from app.contracts.communications import DispatchedEvent
-from app.contracts.enums import EventType, FeedSide, FeedSort, MatchGroup, MatchType, ReputationLabel, ServiceType
+from app.contracts.enums import (
+    EventType,
+    FeedSide,
+    FeedSort,
+    MatchGroup,
+    MatchReason,
+    MatchType,
+    ReputationLabel,
+    ServiceType,
+)
 from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.feed import RANKING_VERSION, SAVED_SEARCH_MAX_PER_USER
 from app.contracts.ids import PublicIdPrefix, format_public_id
@@ -50,6 +59,20 @@ def publish_offer(world: World, driver_id: int, plate: str, *, unit_price: int =
     with world.db.session() as s:
         listing = marketplace_service.create_listing(
             s, owner_user_id=driver_id, data=passenger_offer(world, trip_public_id, start=world.base_time, unit_price_minor=unit_price)
+        )
+        public_id = marketplace_service.listing_public_id(listing)
+        marketplace_service.publish_listing(s, listing_public_id=public_id, actor_user_id=driver_id, expected_version=1)
+        s.commit()
+    return public_id
+
+
+def publish_offer_at(world: World, driver_id: int, plate: str, *, start) -> str:  # noqa: ANN001 - datetime
+    """Like ``publish_offer`` but with the trip at a chosen hour, so a near miss can be built."""
+    vehicle = make_vehicle(world, driver_id, plate)
+    _, trip_public_id = make_trip(world, driver_id, vehicle, start=start)
+    with world.db.session() as s:
+        listing = marketplace_service.create_listing(
+            s, owner_user_id=driver_id, data=passenger_offer(world, trip_public_id, start=start)
         )
         public_id = marketplace_service.listing_public_id(listing)
         marketplace_service.publish_listing(s, listing_public_id=public_id, actor_user_id=driver_id, expected_version=1)
@@ -285,6 +308,52 @@ def test_m2_matches_for_owner_only(world: World) -> None:
         with pytest.raises(DomainError) as info:
             feed_service.listing_matches(s, listing_public_id=request, viewer_user_id=world.client2_id)
         assert info.value.code is ErrorCode.NOT_FOUND
+
+
+# --- the alternative group (§6.4, §8.2) ------------------------------------------------------------------------------------
+
+
+def test_a_trip_two_hours_late_is_invisible_until_alternatives_are_asked_for(world: World) -> None:
+    """The near miss is opt-in, and it is a *separate* answer.
+
+    A driver leaving two hours after the client asked is not a match - offering it as one would put someone at
+    a kerb at the wrong time. But it is the only thing on that road that day, so hiding it entirely is how a
+    thin pilot market looks empty. The server therefore returns it only when asked, marked `alternative` and
+    ranked below every real match, and this is what proves both halves of that.
+    """
+    late = world.base_time + timedelta(hours=2)
+    offer = publish_offer_at(world, world.driver_id, "01A520AA", start=late)
+    request = publish_request(world, world.client_id, passenger_request(world, start=world.base_time, seats=2))
+
+    with world.db.session() as s:
+        strict = feed_service.listing_matches(s, listing_public_id=request, viewer_user_id=world.client_id)
+        assert [marketplace_service.listing_public_id(i.listing) for i in strict.items] == []
+
+        widened = feed_service.listing_matches(
+            s, listing_public_id=request, viewer_user_id=world.client_id, include_alternatives=True
+        )
+        assert [marketplace_service.listing_public_id(i.listing) for i in widened.items] == [offer]
+        item = widened.items[0]
+        assert item.group is MatchGroup.ALTERNATIVE
+        assert item.match_type is MatchType.ALTERNATIVE
+        # The reason is what the client renders as "Vaqti boshqa"; without it the badge says nothing.
+        assert MatchReason.TIME_DIFFERS in item.reasons
+
+
+def test_alternatives_never_push_a_real_match_down(world: World) -> None:
+    """Asking for suggestions must not cost the driver the results. The primary group always comes first."""
+    on_time = publish_offer(world, world.driver_id, "01A521AA")
+    late = publish_offer_at(world, third_driver(world), "01A522AA", start=world.base_time + timedelta(hours=2))
+    request = publish_request(world, world.client_id, passenger_request(world, start=world.base_time, seats=2))
+
+    with world.db.session() as s:
+        page = feed_service.listing_matches(
+            s, listing_public_id=request, viewer_user_id=world.client_id, include_alternatives=True
+        )
+        ids = [marketplace_service.listing_public_id(i.listing) for i in page.items]
+        assert ids == [on_time, late], "the alternative must rank after every primary match"
+        assert page.items[0].group is MatchGroup.PRIMARY
+        assert page.items[1].group is MatchGroup.ALTERNATIVE
 
 
 # --- M3-M5 ----------------------------------------------------------------------------------------------------------------

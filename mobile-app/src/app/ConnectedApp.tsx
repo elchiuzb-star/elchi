@@ -111,6 +111,7 @@ import {
 import { newIdempotencyKey } from "../api/v2/http";
 import { translate, translateDynamic } from "../i18n";
 import { negotiationActions, turnLabel, type ActorSide } from "./auction";
+import { alternativeReason, splitFeedGroups } from "./feedGroups";
 import {
   createTrip,
   createVehicle,
@@ -489,6 +490,13 @@ function matchLabel(value: string): string {
 
 function confirmedStopsNote(): string {
   return translate("match.confirmedStopsNote");
+}
+
+/** Why a suggestion is only a suggestion: the clock or the map. Null when the server gave no reason we
+    can put into words - the card then carries the plain "Muqobil" badge and nothing invented. */
+function alternativeReasonLabel(reasons: readonly string[]): string | null {
+  const reason = alternativeReason(reasons);
+  return reason ? translateDynamic(`match.reason.${reason}`) ?? reason : null;
 }
 
 function vehicleStatusLabel(value: string): string {
@@ -3205,6 +3213,64 @@ export function ConnectedApp() {
     }
 
     if (screen === "client-offers") {
+      const offerSections = splitFeedGroups(offerFeed);
+      const offerCard = (item: FeedItemDTO, isAlternative = false) => {
+        const reason = isAlternative ? alternativeReasonLabel(item.match.reasons) : null;
+        return (
+          <div
+            key={item.listing.id}
+            className={cls(
+              "rounded-[16px] border bg-card p-4",
+              isAlternative ? "border-dashed border-muted-foreground/40" : "border-border",
+            )}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                <MapPin size={14} color="var(--primary)" />
+                {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+              </span>
+              <span
+                className={cls(
+                  "shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold",
+                  isAlternative ? "bg-warning/14 text-warning" : "bg-accent text-primary",
+                )}
+              >
+                {reason ?? matchLabel(item.match.match_type)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+              <span>{shortDate(item.listing.departure_window_start)}</span>
+              <span className="font-semibold text-foreground">
+                {formatUzs(item.listing.unit_price_minor / 100)}
+                {item.listing.price_basis === "per_seat" ? " / o'rin" : ""}
+              </span>
+            </div>
+            {/* Section 8.2 / AC36: no invented 4.5 for a driver nobody has rated - the label is the server's. */}
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              Haydovchi narxi · {item.reputation.completed_bookings} ta bajarilgan safar
+              {item.reputation.average_rating !== null ? ` · ${item.reputation.average_rating}` : " · hali baholanmagan"}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedOffer(item);
+                setOfferBid({
+                  ...offerBid,
+                  price: String(Math.round(item.listing.unit_price_minor / 100)),
+                  seats: 1,
+                });
+                go("client-offer-bid");
+              }}
+              className={cls(
+                "el-press mt-3 h-10 w-full rounded-[10px] text-[14px] font-semibold",
+                isAlternative ? "border border-primary text-primary" : "bg-primary text-primary-foreground",
+              )}
+            >
+              Narxingizni taklif qiling
+            </button>
+          </div>
+        );
+      };
       return (
         <main className="flex flex-1 flex-col bg-background">
           <TopBar title="Haydovchi e'lonlari" back={() => go("client-home")} />
@@ -3219,46 +3285,20 @@ export function ConnectedApp() {
                 {confirmedStopsNote()}
               </p>
             )}
-            {busy && !offerFeed.length ? <ListSkeleton /> : offerFeed.length ? offerFeed.map((item) => (
-              <div key={item.listing.id} className="rounded-[16px] border border-border bg-card p-4">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
-                    <MapPin size={14} color="var(--primary)" />
-                    {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
-                  </span>
-                  <span className="rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-primary">
-                    {matchLabel(item.match.match_type)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-                  <span>{shortDate(item.listing.departure_window_start)}</span>
-                  <span className="font-semibold text-foreground">
-                    {formatUzs(item.listing.unit_price_minor / 100)}
-                    {item.listing.price_basis === "per_seat" ? " / o'rin" : ""}
-                  </span>
-                </div>
-                {/* Section 8.2 / AC36: no invented 4.5 for a driver nobody has rated - the label is the server's. */}
-                <p className="mt-1 text-[12px] text-muted-foreground">
-                  Haydovchi narxi · {item.reputation.completed_bookings} ta bajarilgan safar
-                  {item.reputation.average_rating !== null ? ` · ${item.reputation.average_rating}` : " · hali baholanmagan"}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedOffer(item);
-                    setOfferBid({
-                      ...offerBid,
-                      price: String(Math.round(item.listing.unit_price_minor / 100)),
-                      seats: 1,
-                    });
-                    go("client-offer-bid");
-                  }}
-                  className="el-press mt-3 h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
-                >
-                  Narxingizni taklif qiling
-                </button>
-              </div>
-            )) : (
+            {busy && !offerFeed.length ? <ListSkeleton /> : offerFeed.length ? (
+              <>
+                {offerSections.primary.map((item) => offerCard(item))}
+                {offerSections.alternative.length > 0 && (
+                  <div className="pt-2">
+                    <h2 className="text-[16px] font-bold text-foreground">{translate("match.alternativesTitle")}</h2>
+                    <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                      {translate("match.alternativesNote")}
+                    </p>
+                  </div>
+                )}
+                {offerSections.alternative.map((item) => offerCard(item, true))}
+              </>
+            ) : (
               <EmptyState
                 icon={Truck}
                 title="Bu yo'nalishda e'lon yo'q"
@@ -4588,6 +4628,77 @@ export function ConnectedApp() {
       // ranking, and in both directions the person picks - nothing here accepts anything on their behalf.
       const isRequest = matchesFor.kind === "request";
       const back = () => go(isRequest ? "client-listing-detail" : "driver-routes");
+      // Same two answers as the feed: what matches the published listing, and what is only near it.
+      const matchSections = splitFeedGroups(matches);
+      const matchCard = (item: MatchDTO, isAlternative = false) => {
+        const reason = isAlternative ? alternativeReasonLabel(item.match.reasons) : null;
+        return (
+          <div
+            key={item.listing.id}
+            className={cls(
+              "rounded-[16px] border bg-card p-4",
+              isAlternative ? "border-dashed border-muted-foreground/40" : "border-border",
+            )}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="min-w-0 flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                <MapPin size={14} color="var(--primary)" />
+                <span className="truncate">
+                  {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"}{" "}
+                  {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+                </span>
+              </span>
+              <span
+                className={cls(
+                  "shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold",
+                  isAlternative ? "bg-warning/14 text-warning" : "bg-accent text-primary",
+                )}
+              >
+                {reason ?? matchLabel(item.match.match_type)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+              <span>{shortDate(item.listing.departure_window_start)}</span>
+              <span className="font-semibold text-foreground">
+                {formatUzs((item.comparable_total_minor ?? item.listing.total_minor) / 100)}
+              </span>
+            </div>
+            {item.reputation.completed_bookings > 0 && (
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                {item.reputation.completed_bookings} ta bajarilgan buyurtma
+                {/* U6: no invented rating for a new account (§8.2) - the label says which case this is. */}
+                {item.reputation.average_rating !== null && item.reputation.average_rating !== undefined
+                  ? ` · reyting ${item.reputation.average_rating.toFixed(1)}`
+                  : " · hali baholanmagan"}
+              </p>
+            )}
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isRequest) {
+                    setSelectedOffer(item as unknown as FeedItemDTO);
+                    setOfferBid({ ...offerBid, price: String(Math.round(item.listing.unit_price_minor / 100)), seats: 1 });
+                    go("client-offer-bid");
+                  } else {
+                    setSelectedRequest(item as unknown as FeedItemDTO);
+                    setBidPrice(String(Math.round(item.listing.total_minor / 100)));
+                    setProposalTripId(trips[0]?.id ?? "");
+                    void loadRivalOffers(item.listing.id);
+                    go("driver-bid");
+                  }
+                }}
+                className={cls(
+                  "el-press h-10 w-full rounded-[10px] text-[14px] font-semibold",
+                  isAlternative ? "border border-primary text-primary" : "bg-primary text-primary-foreground",
+                )}
+              >
+                Narx taklif qilish
+              </button>
+            </div>
+          </div>
+        );
+      };
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
           <TopBar title={isRequest ? "Mos safarlar" : "Mos so'rovlar"} back={back} />
@@ -4602,58 +4713,20 @@ export function ConnectedApp() {
                 {confirmedStopsNote()}
               </p>
             )}
-            {busy && !matches.length ? <ListSkeleton /> : matches.length ? matches.map((item) => (
-              <div key={item.listing.id} className="rounded-[16px] border border-border bg-card p-4">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="min-w-0 flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
-                    <MapPin size={14} color="var(--primary)" />
-                    <span className="truncate">
-                      {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"}{" "}
-                      {endLabel(item.listing.destination_stop, item.listing.destination_point)}
-                    </span>
-                  </span>
-                  <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-primary">
-                    {matchLabel(item.match.match_type)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-                  <span>{shortDate(item.listing.departure_window_start)}</span>
-                  <span className="font-semibold text-foreground">
-                    {formatUzs((item.comparable_total_minor ?? item.listing.total_minor) / 100)}
-                  </span>
-                </div>
-                {item.reputation.completed_bookings > 0 && (
-                  <p className="mt-1 text-[12px] text-muted-foreground">
-                    {item.reputation.completed_bookings} ta bajarilgan buyurtma
-                    {/* U6: no invented rating for a new account (§8.2) - the label says which case this is. */}
-                    {item.reputation.average_rating !== null && item.reputation.average_rating !== undefined
-                      ? ` · reyting ${item.reputation.average_rating.toFixed(1)}`
-                      : " · hali baholanmagan"}
-                  </p>
+            {busy && !matches.length ? <ListSkeleton /> : matches.length ? (
+              <>
+                {matchSections.primary.map((item) => matchCard(item))}
+                {matchSections.alternative.length > 0 && (
+                  <div className="pt-2">
+                    <h2 className="text-[16px] font-bold text-foreground">{translate("match.alternativesTitle")}</h2>
+                    <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                      {translate("match.alternativesNote")}
+                    </p>
+                  </div>
                 )}
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isRequest) {
-                        setSelectedOffer(item as unknown as FeedItemDTO);
-                        setOfferBid({ ...offerBid, price: String(Math.round(item.listing.unit_price_minor / 100)), seats: 1 });
-                        go("client-offer-bid");
-                      } else {
-                        setSelectedRequest(item as unknown as FeedItemDTO);
-                        setBidPrice(String(Math.round(item.listing.total_minor / 100)));
-                        setProposalTripId(trips[0]?.id ?? "");
-                        void loadRivalOffers(item.listing.id);
-                        go("driver-bid");
-                      }
-                    }}
-                    className="el-press h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
-                  >
-                    Narx taklif qilish
-                  </button>
-                </div>
-              </div>
-            )) : (
+                {matchSections.alternative.map((item) => matchCard(item, true))}
+              </>
+            ) : (
               <EmptyState
                 icon={Truck}
                 title={isRequest ? "Hozircha mos safar yo'q" : "Hozircha mos so'rov yo'q"}
@@ -5894,6 +5967,59 @@ export function ConnectedApp() {
           </main>
         );
       }
+      // One ordered page, two answers. The server ranks alternatives last, so the split preserves its order.
+      const feedSections = splitFeedGroups(requestFeed);
+      const requestCard = (item: FeedItemDTO, isAlternative = false) => {
+        const reason = isAlternative ? alternativeReasonLabel(item.match.reasons) : null;
+        return (
+          <div
+            key={item.listing.id}
+            className={cls(
+              "rounded-[16px] border bg-card p-4",
+              // A suggestion is drawn as one: dashed edge, muted badge, same actions.
+              isAlternative ? "border-dashed border-muted-foreground/40" : "border-border",
+            )}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                <MapPin size={14} color="var(--primary)" />
+                {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+              </span>
+              <span
+                className={cls(
+                  "shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold",
+                  isAlternative ? "bg-warning/14 text-warning" : "bg-accent text-primary",
+                )}
+              >
+                {reason ?? matchLabel(item.match.match_type)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+              <span>{shortDate(item.listing.departure_window_start)}</span>
+              <span className="font-semibold text-foreground">{formatUzs(item.listing.total_minor / 100)}</span>
+            </div>
+            <div className="mt-3">
+              <button
+                onClick={() => {
+                  setSelectedRequest(item);
+                  setBidPrice(String(Math.round(item.listing.total_minor / 100)));
+                  setProposalTripId(trips[0]?.id ?? "");
+                  void loadRivalOffers(item.listing.id);
+                  go("driver-bid");
+                }}
+                className={cls(
+                  "el-press h-10 w-full rounded-[10px] text-[14px] font-semibold",
+                  isAlternative
+                    ? "border border-primary text-primary"
+                    : "bg-primary text-primary-foreground",
+                )}
+              >
+                Taklif yuborish
+              </button>
+            </div>
+          </div>
+        );
+      };
       return (
         <main className="flex flex-1 flex-col bg-background">
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
@@ -5942,37 +6068,22 @@ export function ConnectedApp() {
                 {confirmedStopsNote()}
               </p>
             )}
-            {busy && !requestFeed.length ? <ListSkeleton /> : requestFeed.length ? requestFeed.map((item) => (
-              <div key={item.listing.id} className="rounded-[16px] border border-border bg-card p-4">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
-                    <MapPin size={14} color="var(--primary)" />
-                    {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
-                  </span>
-                  <span className="rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-primary">
-                    {matchLabel(item.match.match_type)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-                  <span>{shortDate(item.listing.departure_window_start)}</span>
-                  <span className="font-semibold text-foreground">{formatUzs(item.listing.total_minor / 100)}</span>
-                </div>
-                <div className="mt-3">
-                  <button
-                    onClick={() => {
-                      setSelectedRequest(item);
-                      setBidPrice(String(Math.round(item.listing.total_minor / 100)));
-                      setProposalTripId(trips[0]?.id ?? "");
-                      void loadRivalOffers(item.listing.id);
-                      go("driver-bid");
-                    }}
-                    className="el-press h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
-                  >
-                    Taklif yuborish
-                  </button>
-                </div>
-              </div>
-            )) : (
+            {busy && !requestFeed.length ? <ListSkeleton /> : requestFeed.length ? (
+              <>
+                {feedSections.primary.map((item) => requestCard(item))}
+                {/* §6.4: the near misses are a second answer, not more of the first one. Their own heading and
+                    their own sentence are what stop a driver reading a 09:00 trip as the 06:00 they asked for. */}
+                {feedSections.alternative.length > 0 && (
+                  <div className="pt-2">
+                    <h2 className="text-[16px] font-bold text-foreground">{translate("match.alternativesTitle")}</h2>
+                    <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                      {translate("match.alternativesNote")}
+                    </p>
+                  </div>
+                )}
+                {feedSections.alternative.map((item) => requestCard(item, true))}
+              </>
+            ) : (
               <EmptyState
                 icon={Package}
                 title="Hozircha mos buyurtmalar yo'q"

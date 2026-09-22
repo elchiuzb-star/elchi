@@ -202,6 +202,15 @@ export const messages = {
   "match.on_route": { uz: "Yo'l yo'nalishida", ru: "По направлению маршрута" },
   "match.detour": { uz: "Chetga chiqish", ru: "С заездом" },
   "match.alternative": { uz: "Muqobil", ru: "Альтернатива" },
+  // The alternative group gets its own heading and its own sentence: "Muqobil" alone does not tell a driver
+  // whether to look at the clock or at the map (§6.4).
+  "match.alternativesTitle": { uz: "Tavsiya etilgan e'lonlar", ru: "Рекомендованные объявления" },
+  "match.alternativesNote": {
+    uz: "Bular aniq so'rovingizga to'liq mos emas, lekin yaqin. Taklif yuborishdan oldin vaqt va joyni tekshiring.",
+    ru: "Это не полное совпадение с вашим запросом, но близкие варианты. Проверьте время и место перед предложением.",
+  },
+  "match.reason.time_differs": { uz: "Vaqti boshqa", ru: "Другое время" },
+  "match.reason.nearby_stop": { uz: "Yaqin bekat", ru: "Ближайшая остановка" },
   "match.confirmedStopsNote": {
     uz:
       "Mosliklar tasdiqlangan bekatlar bo'yicha hisoblangan. Haydovchining yo'ldan chetga chiqishi hisoblanmagan — " +

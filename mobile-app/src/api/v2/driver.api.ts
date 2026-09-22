@@ -101,6 +101,8 @@ export function requestsFeed(params: {
   date_from?: string;
   date_to?: string;
   limit?: number;
+  /** §6.4/§8.2: also return the near misses, as their own `alternative` group, ranked below every result. */
+  include_alternatives?: boolean;
 }) {
   // The feed is always a concrete question: one service, one route, one date range - the server refuses anything
   // vaguer (§6.6: no country-wide mixed list, exactly one end per side).
@@ -117,6 +119,10 @@ export function requestsFeed(params: {
       origin_district_id: params.origin_district_id,
       destination_district_id: params.destination_district_id,
       limit: params.limit,
+      // Asked for by default. A driver whose own route is empty is exactly the one who needs somewhere to
+      // look, and the alternatives cost nothing when there are none: the server sorts them last, so they can
+      // only ever appear after the real matches.
+      include_alternatives: params.include_alternatives ?? true,
     },
   });
 }

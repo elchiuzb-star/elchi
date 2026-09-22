@@ -199,6 +199,8 @@ export function offersFeed(params: {
   date_to?: string;
   seats?: number;
   limit?: number;
+  /** The near misses, as their own `alternative` group - the client's half of the same widening. */
+  include_alternatives?: boolean;
 }) {
   const from = params.date_from ?? new Date().toISOString();
   const to = params.date_to ?? new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
@@ -214,6 +216,7 @@ export function offersFeed(params: {
       destination_district_id: params.destination_district_id,
       seats: params.seats,
       limit: params.limit,
+      include_alternatives: params.include_alternatives ?? true,
     },
   });
 }
@@ -231,8 +234,14 @@ export type MatchDTO = Schemas["MatchDTO"];
  * Q88: a listing whose ends are places on the map is answered here too. It used to return an empty page,
  * because the absent stop ids were passed straight to the matcher.
  */
-export function listingMatches(listingId: string, params: { sort?: string; limit?: number; cursor?: string } = {}) {
-  return v2RequestFull<MatchDTO[]>(`/listings/${listingId}/matches`, { query: params });
+export function listingMatches(
+  listingId: string,
+  params: { sort?: string; limit?: number; cursor?: string; include_alternatives?: boolean } = {},
+) {
+  // Same reasoning as the feed: the near misses come back as their own group, after everything that really
+  // matches, so a published offer with no takers still shows its owner where to look.
+  const query = { ...params, include_alternatives: params.include_alternatives ?? true };
+  return v2RequestFull<MatchDTO[]>(`/listings/${listingId}/matches`, { query });
 }
 
 export function feed(params: {

@@ -203,6 +203,18 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   qo'llab-quvvatlashga yo'naltiradi. Server allaqachon `DRIVER_NOT_ELIGIBLE` bilan rad etadi — bu qo'shimcha
   qatlam, almashtirish emas.
 
+**Wave 17 qarori (22.09.2026) — tavsiya etilgan (muqobil) e'lonlar:**
+- **Q97 (foydalanuvchi qarori)** Klient endi uchala topish yo'lida ham `include_alternatives=true` yuboradi:
+  haydovchi lentasi (`side=requests`), mijoz lentasi (`side=offers`) va `GET /listings/{id}/matches`.
+  Sabab: mexanizm serverda bor edi, lekin hech bir klient chaqiruvi flagni yoqmagani uchun aniq yo'nalishida
+  e'lon topmagan haydovchi bo'sh ekran ko'rardi. Server standarti `false` bo'lib **qoladi** — bu klient
+  qarori, kontrakt o'zgarishi emas.
+  - Muqobil natijalar hech qachon asosiy natijalar bilan aralashtirilmaydi: alohida «Tavsiya etilgan e'lonlar»
+    sarlavhasi ostida, punktir ramka va sababi bilan (`time_differs` → «Vaqti boshqa», `nearby_stop` →
+    «Yaqin bekat»). Ajratish `mobile-app/src/app/feedGroups.ts` da — sof modul, `auction.ts` kabi.
+  - Q46 saqlanadi: kengaytirish o'lchangan detourni anglatmaydi; `confirmed_stops` ogohlantirishi o'z
+    o'rnida qoladi.
+
 **Wave 3.1 dan keyin ham ochiq:** U6 `rating_bucket` chegaralari (hozir `null` — sun’iy reyting yo‘q), ADR-0021 staff MFA (**Proposed**), dalil fayllarini imzolangan havola bilan ko‘rsatish.
 
 ## 4. Kod tuzilishi
