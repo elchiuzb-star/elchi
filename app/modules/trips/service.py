@@ -137,7 +137,15 @@ def _duplicate_plate() -> DomainError:
 def create_vehicle(
     session: Session, *, driver_user_id: int, data: VehicleCreate, now: datetime | None = None
 ) -> Vehicle:
-    """T1: a driver (even before approval) registers a vehicle; it starts ``pending``."""
+    """T1: a driver (even before approval) registers a vehicle; it starts ``pending``.
+
+    Q94 ("the car is entered once") is not enforced by refusing a second row here. A registered vehicle is
+    already immutable - there is no update path, only ``verify_vehicle`` - and a *new* row starts ``pending``,
+    which ``_check_vehicle_capacity`` and ``assert_vehicle_eligible_for_new_booking`` both refuse. So staff
+    already stand between any new car and a client, which is what the decision asks for, while a driver who
+    genuinely runs two cars is not locked out. The single entry is enforced where the driver actually types
+    it: the profile form registers one car, and v1 locks those fields after the first save.
+    """
     caps = identity_service.get_capabilities(session, driver_user_id, now=now)
     if Role.DRIVER not in caps.roles or not caps.account_active:
         raise DomainError(ErrorCode.CAPABILITY_REQUIRED, details={"role": Role.DRIVER.value})

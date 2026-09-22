@@ -37,6 +37,21 @@ export async function getAdminDriverOrders(_driverId: number) {
   return [];
 }
 
+/**
+ * Q94: the other end of the driver-side lock. The car is entered once by the driver and can only be changed
+ * here, by an operator or an admin, which is what "murojaat qiling" on the driver screen actually points at.
+ * Without this call that sentence is a dead end.
+ */
+export function updateDriverVehicle(
+  driverId: number,
+  payload: { full_name?: string; car_model?: string; plate_number?: string; car_color?: string },
+) {
+  return adminApiRequest<AdminDriver>(`/admin/drivers/${driverId}/vehicle`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export function approveDriver(driverId: number, payload: { comment?: string | null } = {}) {
   return adminApiRequest<AdminDriver>(`/admin/drivers/${driverId}/approve`, {
     method: "POST",

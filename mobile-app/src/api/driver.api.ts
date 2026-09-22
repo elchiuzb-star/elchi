@@ -2,6 +2,7 @@ import { apiRequest } from "./http";
 import type { Paginated } from "../types/api";
 import type { Bid, BidPayload } from "../types/bid";
 import type {
+  DriverDocument,
   DriverDocumentPayload,
   DriverDocumentType,
   DriverFeedOrder,
@@ -31,6 +32,11 @@ export async function uploadDriverDocument(documentType: DriverDocumentType, fil
     size_bytes: uploaded.size_bytes || file.size,
   };
   return apiRequest<unknown>("/driver/documents", { method: "POST", body: payload });
+}
+
+/** §17.1: what the driver has already sent, so each slot can say where its review stands. */
+export function listDriverDocuments() {
+  return apiRequest<DriverDocument[]>("/driver/documents");
 }
 
 export function submitDriverDocument(payload: DriverDocumentPayload) {

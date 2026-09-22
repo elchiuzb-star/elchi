@@ -182,6 +182,27 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   tartibi, segment sig'imi, ETA/detour va rollout uchun. Foydalanuvchi oqimi «koridor tanlang → tizim narx
   beradi → bron» emas, balki «A nuqta + B nuqta → mos e'lonlar → taklif/qarshi taklif → qabul → bron».
 
+**Wave 16 qarori (22.09.2026) — haydovchi oqimi:**
+- **Q94 (v1 xulqini ataylab o'zgartiradi; §2 dagi «v1 xulq o'zgarishi faqat tasdiqlangan qaror bilan» bandi
+  asosida)** Haydovchi avtomobil ma'lumotlarini (model, rang, davlat raqami, o'rin va yuk sig'imi) **bir
+  marta** kiritadi. Birinchi saqlashdan keyin maydon qulflanadi — **tasdiqlashni kutmasdan**, chunki
+  «pending» holatda almashtirilgan mashina ham mijozga ko'rinmay qoladi. O'zgartirish faqat operator yoki
+  admin orqali: `PATCH /api/v1/admin/drivers/{driver_id}/vehicle` (audit qatori bilan).
+  - v1: `DRIVER_VEHICLE_LOCKED` endi `approved` emas, **qiymat mavjud** bo'lganda qaytadi. Ma'lum ta'sir:
+    muzlatilgan `android-app/` haydovchisi ham tasdiqdan oldin xatosini o'zi tuzata olmaydi — operatorga
+    murojaat qiladi.
+  - v2: ro'yxatdan o'tgan avtomobil qatori o'zgarmas (update endpointi yo'q). Ikkinchi avtomobil qo'shish
+    taqiqlanmaydi, chunki u `pending` holatda tug'iladi va xodim tasdiqlamaguncha na safar, na bron uchun
+    ishlatiladi — ya'ni yangi mashina baribir operator/admin orqali o'tadi. Klientda profil formasi faqat
+    bitta avtomobil yaratadi.
+- **Q95 (Q40 ni klientda amalga oshirish)** Raqobat takliflari taxtasi haydovchining taklif berish ekranida
+  ko'rsatiladi (`ListingOfferDTO`, anonim). Auksionda taklif beruvchi kitobni ko'rmasa narx shakllanmaydi
+  (Q90). Endpoint yopiq bo'lsa (flag/koridor → 404) taxta ko'rsatilmaydi, lekin taklif berish bloklanmaydi.
+- **Q96 (D16 ning klient tomoni)** Tasdiqlanmagan haydovchiga `driver-feed`, `driver-bid`, `driver-routes`
+  va `driver-offer-create` ekranlari sababni va keyingi qadamni aytadi; `rejected`/`blocked` holatda
+  qo'llab-quvvatlashga yo'naltiradi. Server allaqachon `DRIVER_NOT_ELIGIBLE` bilan rad etadi — bu qo'shimcha
+  qatlam, almashtirish emas.
+
 **Wave 3.1 dan keyin ham ochiq:** U6 `rating_bucket` chegaralari (hozir `null` — sun’iy reyting yo‘q), ADR-0021 staff MFA (**Proposed**), dalil fayllarini imzolangan havola bilan ko‘rsatish.
 
 ## 4. Kod tuzilishi

@@ -80,6 +80,7 @@ import {
   listCorridorRoutes,
   listCorridorStops,
   listCorridors,
+  listListingOffers,
   listListingProposals,
   offersFeed,
   previewDirection,
@@ -97,6 +98,7 @@ import {
   type BookingDTO,
   type FeedItemDTO,
   type ListingDTO,
+  type ListingOfferDTO,
   type MapPointDTO,
   type MatchDTO,
   type MediaRefDTO,
@@ -182,6 +184,7 @@ import {
 import { getClientProfile, updateClientProfile } from "../api/client-profile.api";
 import {
   getDriverProfile,
+  listDriverDocuments,
   setDriverAvailability,
   submitDriverDocument,
   updateDriverProfile,
@@ -190,7 +193,7 @@ import { getNotifications, markNotificationRead } from "../api/notifications.api
 import type { City, District } from "../types/city";
 import type { Bid } from "../types/bid";
 import type { ClientOrder, CreateOrderPayload, OrderStatus } from "../types/order";
-import type { DriverDocumentType, DriverFeedOrder, DriverProfile, DriverRoute } from "../types/driver";
+import type { DriverDocument, DriverDocumentType, DriverFeedOrder, DriverProfile, DriverRoute } from "../types/driver";
 import type { NotificationItem } from "../types/notification";
 import type { MobileRole } from "../types/auth";
 import { formatUzs } from "../utils/money";
@@ -535,6 +538,22 @@ function listingStatusLabel(value: string): string {
 
 function docTypeLabel(value: string): string {
   return translateDynamic(`docType.${value}`) ?? value;
+}
+
+/** What has to be in the frame for this slot, so "Pasport" is not the only thing the driver has to go on. */
+function docTypeHint(value: string): string {
+  return translateDynamic(`docHint.${value}`) ?? "";
+}
+
+/** U6: the trust *group* behind a competing offer. Never rendered without its count - "Yangi haydovchi" with
+    zero ratings is the truth about a new driver, an invented 4.5 is not (§8.2). */
+function ratingBucketLabel(value: string | null | undefined): string | null {
+  return value ? translateDynamic(`ratingBucket.${value}`) ?? value : null;
+}
+
+/** The coarse class the server derives from the seat count; never the make or model (Q43). */
+function vehicleClassLabel(value: string): string {
+  return translateDynamic(`vehicleClass.${value}`) ?? value;
 }
 
 /** T9: the driver's next trip command, and the words for it. */
@@ -1268,6 +1287,126 @@ function endRowLabel(stop: StopRefDTO | null | undefined, stopWord: string, poin
   return stop ? stopWord : pointWord;
 }
 
+/**
+ * The one place that says why a driver cannot take work yet, and what to do about it (D16, §17.1).
+ *
+ * `rejected` and `blocked` are not "keep waiting" - nothing the driver uploads changes them, so those two
+ * send the person to support instead of back to the upload screen.
+ */
+function DriverVerificationGate({
+  status,
+  onProfile,
+  onDocuments,
+  onSupport,
+}: {
+  status: string | undefined;
+  onProfile: () => void;
+  onDocuments: () => void;
+  onSupport: () => void;
+}) {
+  const decided = status === "rejected" || status === "blocked";
+  return (
+    <div className="rounded-[16px] border border-warning/40 bg-warning/10 p-4">
+      <p className="text-[15px] font-semibold text-foreground">Tasdiqlanmaguncha buyurtma qabul qila olmaysiz</p>
+      <p className="mt-1 text-[13px] text-muted-foreground">
+        Holat: {driverVerificationLabels[status ?? "new"] ?? status ?? "Yangi"}
+      </p>
+      <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
+        {decided
+          ? "Hisobingiz bo'yicha qaror qabul qilingan. Sababi va keyingi qadamlar uchun qo'llab-quvvatlash xizmatiga yozing."
+          : "Profilni to'ldiring va barcha hujjatlarni yuklang — operator tekshirgandan so'ng taklif yubora olasiz."}
+      </p>
+      <div className="mt-3 space-y-2">
+        {decided ? (
+          <PrimaryButton onClick={onSupport}>Qo'llab-quvvatlashga yozish</PrimaryButton>
+        ) : (
+          <>
+            <PrimaryButton onClick={onDocuments}>Hujjatlarni yuklash</PrimaryButton>
+            <SecondaryButton onClick={onProfile}>Profilni to'ldirish</SecondaryButton>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Q40 / ADR-0019: the open board of what the other drivers are currently asking for this request.
+ *
+ * ELCHI is a two-sided auction (Q90), and an auction only finds a price when the bidders can see the book.
+ * Without this panel every driver bids into the dark: the cheap offer nobody can undercut and the expensive
+ * one nobody can beat both look the same from the inside. So the board is shown on the bid screen itself,
+ * next to the field where the number is typed.
+ *
+ * Everything here is what the server already anonymised: a label that is stable inside this listing but is
+ * not derived from any id, the price, the pickup window, the coarse vehicle class, the seat count and the
+ * trust bucket with its count. No name, photo, plate, phone or make/model ever reaches this component - the
+ * DTO has no field to carry them (R2, Q43).
+ */
+function RivalOfferBoard({ offers, unavailable }: { offers: ListingOfferDTO[]; unavailable: boolean }) {
+  if (unavailable) return null;
+  const rivals = offers.filter((offer) => !offer.is_mine);
+  const mine = offers.find((offer) => offer.is_mine);
+  // Cheapest first: that is the number a new bid actually has to answer.
+  const sorted = [...rivals].sort((a, b) => a.total_minor - b.total_minor);
+  return (
+    <div className="rounded-[14px] border border-border bg-background p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[14px] font-semibold text-foreground">Boshqa haydovchilar takliflari</p>
+        <span className="text-[12px] text-muted-foreground">{rivals.length} ta</span>
+      </div>
+      {sorted.length === 0 ? (
+        <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+          Hozircha boshqa taklif yo'q — birinchi bo'lib narx taklif qilishingiz mumkin.
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+            Eng arzon taklif: <span className="font-semibold text-foreground">{formatUzs(sorted[0].total_minor / 100)}</span>
+          </p>
+          <ul className="mt-3 space-y-2">
+            {sorted.map((offer) => {
+              const bucket = ratingBucketLabel(offer.rating_bucket);
+              return (
+                <li key={`${offer.label}-${offer.revision}`} className="rounded-[12px] bg-card p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-semibold text-foreground">{offer.label}</p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        {vehicleClassLabel(offer.vehicle_class)} · {offer.seat_capacity} o'rin
+                      </p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        {shortDate(offer.pickup_window_start)} - {shortDate(offer.pickup_window_end)}
+                      </p>
+                      {bucket && (
+                        // U6: the group and the count are one sentence; the count alone says how much it is worth.
+                        <p className="mt-0.5 text-[12px] text-muted-foreground">
+                          {bucket} · {offer.rating_count} ta baho
+                        </p>
+                      )}
+                      {offer.response_pending && (
+                        <p className="mt-0.5 text-[12px] text-warning">Mijoz qarshi taklif yubordi</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-[15px] font-bold text-primary">
+                      {formatUzs(offer.total_minor / 100)}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+      {mine && (
+        <p className="mt-3 rounded-[12px] bg-accent px-3 py-2 text-[12px] leading-5 text-primary">
+          Sizning joriy taklifingiz: {formatUzs(mine.total_minor / 100)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ListingCard({ listing, onClick }: { listing: ListingDTO; onClick?: () => void }) {
   return (
     <button onClick={onClick} className="el-press w-full rounded-[16px] border border-border bg-card p-4 text-left">
@@ -1406,6 +1545,13 @@ export function ConnectedApp() {
   const [matchScope, setMatchScope] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<FeedItemDTO | null>(null);
   const [proposalTripId, setProposalTripId] = useState("");
+  /** §17.1: what the driver has already sent per slot, so each row can say where its review stands. */
+  const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>([]);
+  /** Q40/ADR-0019: the anonymous board of the other drivers' current offers on the request being bid on.
+      An auction the bidders cannot see is a sealed envelope, so this is what makes the price move. */
+  const [rivalOffers, setRivalOffers] = useState<ListingOfferDTO[]>([]);
+  /** The board is a side panel, not the bid itself: a 404 (flag off, corridor closed) must not block bidding. */
+  const [rivalOffersError, setRivalOffersError] = useState(false);
   // Q92: the driver is an author too, not only an answerer. These hold the trip offer being published and the
   // offers already on the market, so a trip card can show what it is advertised as.
   const [driverServiceMode, setDriverServiceMode] = useState<"parcel" | "passenger">("parcel");
@@ -2275,6 +2421,32 @@ export function ConnectedApp() {
     setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
   }
 
+  /** The documents screen reads its own list: the profile carries a verdict, not which slot is missing. */
+  async function loadDriverDocuments() {
+    setDriverDocuments(await listDriverDocuments());
+  }
+
+  /**
+   * Q40 / ADR-0019: the other drivers' current offers on this client request, anonymised by the server.
+   *
+   * This is the open half of the auction. A bidder who cannot see that the request already sits at 280 000
+   * either underbids blind or names a price nobody will take, so the board is loaded before the bid screen is
+   * drawn. What comes back never carries a name, phone, plate or make - only the stable "Haydovchi #N" label,
+   * the price, the window, the vehicle class and the trust bucket.
+   *
+   * It fails soft on purpose: the endpoint 404s when the service flag is off or the corridor is not open, and
+   * that must cost the driver the board, not the ability to bid.
+   */
+  async function loadRivalOffers(listingId: string) {
+    try {
+      setRivalOffers(await listListingOffers(listingId));
+      setRivalOffersError(false);
+    } catch {
+      setRivalOffers([]);
+      setRivalOffersError(true);
+    }
+  }
+
   /**
    * Q92, the other half of the same market: the driver trip offers that serve where this client is going.
    *
@@ -2420,6 +2592,7 @@ export function ConnectedApp() {
         setCorridors(await listCorridors());
       });
     }
+    if (screen === "driver-documents") void run(loadDriverDocuments);
     if (screen === "driver-feed") void run(loadRequestFeed);
     if (screen === "driver-offer-create") void run(loadDriverTrips);
     if (screen === "client-offers") void run(loadOfferFeed);
@@ -2434,6 +2607,16 @@ export function ConnectedApp() {
   }, [screen, auth.isAuthenticated]);
 
   const unreadNotifications = notifications.filter((item) => !item.is_read).length;
+
+  /**
+   * D16 / §17.1: an unverified driver takes no new business at all - no bid, no trip, no trip offer.
+   *
+   * The server is the authority and already refuses with `DRIVER_NOT_ELIGIBLE`, but a screen that lets the
+   * driver fill in a price and then fails on send teaches nothing: the driver retries, and the real reason
+   * (a document still missing) is never read. So the driver-side screens that start new business refuse
+   * first, in words, with the way out on the same screen.
+   */
+  const driverApproved = driverProfile?.verification_status === "approved";
 
   const content = (() => {
     if (auth.isLoading) {
@@ -4460,6 +4643,7 @@ export function ConnectedApp() {
                         setSelectedRequest(item as unknown as FeedItemDTO);
                         setBidPrice(String(Math.round(item.listing.total_minor / 100)));
                         setProposalTripId(trips[0]?.id ?? "");
+                        void loadRivalOffers(item.listing.id);
                         go("driver-bid");
                       }
                     }}
@@ -5108,23 +5292,73 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-profile-form") {
+      // Q94: the car is entered once and then belongs to the record, not to the form. v1 refuses a change
+      // (`DRIVER_VEHICLE_LOCKED`), so leaving the inputs open would only invite the driver to type a new
+      // plate and be told no on save. The lock follows the saved profile, not the approval: a car swapped
+      // while "pending" is just as invisible to the client.
+      const vehicleLocked = Boolean(driverProfile?.plate_number);
+      const lockHint = vehicleLocked ? "O'zgartirish uchun operator yoki adminga murojaat qiling" : undefined;
       return (
         <main className="flex flex-1 flex-col bg-card">
           <TopBar title="Haydovchi profili" back={() => go("driver-home")} />
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
             <Field label="Ism familiya" value={driverForm.full_name} onChange={(v) => setDriverForm({ ...driverForm, full_name: v })} />
-            <Field label="Avtomobil modeli" value={driverForm.car_model} placeholder="Masalan: Cobalt" onChange={(v) => setDriverForm({ ...driverForm, car_model: v })} />
-            <Field label="Avtomobil rangi" value={driverForm.car_color} placeholder="Masalan: Oq" onChange={(v) => setDriverForm({ ...driverForm, car_color: v })} />
-            <Field label="Davlat raqami" value={driverForm.plate_number} placeholder="Masalan: 01 A 123 AA" onChange={(v) => setDriverForm({ ...driverForm, plate_number: v })} />
+            {vehicleLocked && (
+              <div className="rounded-[14px] border border-border bg-background p-4">
+                <p className="text-[13px] font-semibold text-foreground">Avtomobil ma'lumotlari qulflangan</p>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                  Avtomobil ma'lumotlari faqat bir marta kiritiladi. Model, rang yoki davlat raqamini
+                  o'zgartirish kerak bo'lsa, operator yoki adminga murojaat qiling.
+                </p>
+              </div>
+            )}
+            <Field
+              label="Avtomobil modeli"
+              value={driverForm.car_model}
+              placeholder="Masalan: Cobalt"
+              disabled={vehicleLocked}
+              hint={lockHint}
+              onChange={(v) => setDriverForm({ ...driverForm, car_model: v })}
+            />
+            <Field
+              label="Avtomobil rangi"
+              value={driverForm.car_color}
+              placeholder="Masalan: Oq"
+              disabled={vehicleLocked}
+              hint={lockHint}
+              onChange={(v) => setDriverForm({ ...driverForm, car_color: v })}
+            />
+            <Field
+              label="Davlat raqami"
+              value={driverForm.plate_number}
+              placeholder="Masalan: 01 A 123 AA"
+              disabled={vehicleLocked}
+              hint={lockHint}
+              onChange={(v) => setDriverForm({ ...driverForm, plate_number: v })}
+            />
             <Field
               label="Yo'lovchi o'rinlari"
               type="number"
               value={String(driverSeats)}
+              disabled={vehicleLocked}
+              hint={lockHint}
               onChange={(v) => setDriverSeats(Math.max(1, Number(v) || 1))}
             />
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Yuk uchun joy (kg)" type="number" value={driverCargoKg} onChange={setDriverCargoKg} />
-              <Field label="Yuk hajmi (litr)" type="number" value={driverCargoLitres} onChange={setDriverCargoLitres} />
+              <Field
+                label="Yuk uchun joy (kg)"
+                type="number"
+                value={driverCargoKg}
+                disabled={vehicleLocked}
+                onChange={setDriverCargoKg}
+              />
+              <Field
+                label="Yuk hajmi (litr)"
+                type="number"
+                value={driverCargoLitres}
+                disabled={vehicleLocked}
+                onChange={setDriverCargoLitres}
+              />
             </div>
             {vehicles.map((vehicle) => (
               <div key={vehicle.id} className="rounded-[14px] border border-border bg-card p-4">
@@ -5139,11 +5373,15 @@ export function ConnectedApp() {
             </p>
             <PrimaryButton
               onClick={() => run(async () => {
-                await updateDriverProfile(driverForm);
+                // A locked profile sends the name only: the vehicle keys would be refused, and sending them
+                // unchanged would still make every save depend on the server's idea of "unchanged".
+                await updateDriverProfile(vehicleLocked ? { full_name: driverForm.full_name } : driverForm);
                 const plate = driverForm.plate_number.replace(/\s/g, "").toUpperCase();
                 const known = vehicles.some((vehicle) => (vehicle.plate_number ?? "").replace(/\s/g, "").toUpperCase() === plate);
-                // The same car the v1 profile carries, registered once on the stage-2 side so a trip can use it.
-                if (plate && driverForm.car_model.trim() && driverForm.car_color.trim() && !known) {
+                // The same car the v1 profile carries, registered once on the stage-2 side so a trip can use
+                // it. `vehicles.length` is where Q94's "once" is enforced for this screen: a second car has
+                // to go through staff, who approve it before any trip can use it.
+                if (!vehicles.length && plate && driverForm.car_model.trim() && driverForm.car_color.trim() && !known) {
                   await createVehicle({
                     plate_number: plate,
                     make_model: driverForm.car_model.trim(),
@@ -5167,37 +5405,96 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-documents") {
+      // §17.1: five named slots, and the screen has to say which one it is *before* the camera opens and
+      // which one it was afterwards. A row of identical "Yuklash" buttons is how a passport ends up in the
+      // licence slot, and the driver then waits on a rejection that reads as if the document itself is wrong.
+      const latestFor = (type: DriverDocumentType) =>
+        [...driverDocuments].reverse().find((document) => document.document_type === type);
+      const submitted = DRIVER_DOCUMENT_TYPES.filter((type) => latestFor(type)).length;
       return (
         <main className="flex flex-1 flex-col bg-background">
           <TopBar title="Hujjatlar" back={() => go("driver-home")} />
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            {DRIVER_DOCUMENT_TYPES.map((type) => (
-              <label key={type} className="flex cursor-pointer items-center gap-3 rounded-[14px] border border-border bg-card p-4">
-                <Camera size={24} color="var(--primary)" />
-                <span className="flex-1 text-[15px] font-semibold text-foreground">{docTypeLabel(type)}</span>
-                <span className="text-[13px] text-primary">Yuklash</span>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    void run(async () => {
-                      const uploaded = await uploadFile(file, type);
-                      await submitDriverDocument({ document_type: type, file_url: uploaded.file_url, mime_type: uploaded.mime_type ?? file.type, size_bytes: uploaded.size_bytes ?? file.size });
-                      await loadDriverProfile();
-                    }, "Hujjat ko'rib chiqishga yuborildi");
-                  }}
-                />
-              </label>
-            ))}
+            <div className="rounded-[14px] border border-border bg-card p-4">
+              <p className="text-[14px] font-semibold text-foreground">
+                {submitted} / {DRIVER_DOCUMENT_TYPES.length} hujjat yuborilgan
+              </p>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                Har bir bandni alohida yuklang — quyidagi nom qaysi hujjat kerakligini bildiradi.
+              </p>
+            </div>
+            {DRIVER_DOCUMENT_TYPES.map((type) => {
+              const document = latestFor(type);
+              const state = document?.status ?? "missing";
+              const tone =
+                state === "approved" ? "bg-success/10 text-success"
+                : state === "rejected" ? "bg-destructive/10 text-destructive"
+                : state === "pending" ? "bg-warning/14 text-warning"
+                : "bg-accent text-muted-foreground";
+              return (
+                <label key={type} className="flex cursor-pointer items-start gap-3 rounded-[14px] border border-border bg-card p-4">
+                  <Camera size={24} color="var(--primary)" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-[15px] font-semibold text-foreground">{docTypeLabel(type)}</span>
+                      <span className={cls("rounded-full px-2 py-0.5 text-[11px] font-semibold", tone)}>
+                        {translateDynamic(`docState.${state}`) ?? state}
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-[12px] leading-5 text-muted-foreground">{docTypeHint(type)}</span>
+                    {/* A rejection without its reason sends the same photo back a second time. */}
+                    {state === "rejected" && document?.rejection_reason && (
+                      <span className="mt-1 block text-[12px] leading-5 text-destructive">
+                        Sabab: {document.rejection_reason}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-[13px] font-semibold text-primary">
+                    {document ? "Qayta yuklash" : "Yuklash"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      void run(async () => {
+                        const uploaded = await uploadFile(file, type);
+                        await submitDriverDocument({ document_type: type, file_url: uploaded.file_url, mime_type: uploaded.mime_type ?? file.type, size_bytes: uploaded.size_bytes ?? file.size });
+                        await loadDriverDocuments();
+                        await loadDriverProfile();
+                        // The toast names the slot: after five uploads "Hujjat yuborildi" says nothing.
+                      }, `${docTypeLabel(type)} ko'rib chiqishga yuborildi`);
+                    }}
+                  />
+                </label>
+              );
+            })}
           </section>
         </main>
       );
     }
 
     if (screen === "driver-routes") {
+      // A trip is new business too (`trip.create`), and a trip is what every offer hangs on - so the same
+      // refusal covers it, rather than letting the driver plan a route they cannot sell.
+      if (!driverApproved) {
+        return (
+          <main className="flex flex-1 flex-col bg-background">
+            <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
+              <h1 className="text-[24px] font-bold text-foreground">Yo'nalishlarim</h1>
+              <DriverVerificationGate
+                status={driverProfile?.verification_status}
+                onProfile={() => go("driver-profile-form")}
+                onDocuments={() => go("driver-documents")}
+                onSupport={() => go("support")}
+              />
+            </section>
+            <BottomNav role="driver" active={screen} go={go} />
+          </main>
+        );
+      }
       return (
         <main className="flex flex-1 flex-col bg-background">
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
@@ -5441,6 +5738,21 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-offer-create") {
+      if (!driverApproved) {
+        return (
+          <main className="flex flex-1 flex-col bg-card">
+            <TopBar title="Safar e'loni" back={() => go("driver-routes")} />
+            <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
+              <DriverVerificationGate
+                status={driverProfile?.verification_status}
+                onProfile={() => go("driver-profile-form")}
+                onDocuments={() => go("driver-documents")}
+                onSupport={() => go("support")}
+              />
+            </section>
+          </main>
+        );
+      }
       const trip = trips.find((item) => item.id === offerForm.tripId);
       const stopOptions = (trip?.stops ?? []).map((stop) => [stop.stop.id, stop.stop.name_uz] as [string, string]);
       const window = offerWindowForTrip(trip, offerForm.originStopId);
@@ -5564,6 +5876,24 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-feed") {
+      // The tab is reachable from the bottom bar at any time, so the refusal lives here rather than in the
+      // navigation: hiding the tab would leave an unverified driver wondering where the work is.
+      if (!driverApproved) {
+        return (
+          <main className="flex flex-1 flex-col bg-background">
+            <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
+              <h1 className="text-[24px] font-bold text-foreground">Mos buyurtmalar</h1>
+              <DriverVerificationGate
+                status={driverProfile?.verification_status}
+                onProfile={() => go("driver-profile-form")}
+                onDocuments={() => go("driver-documents")}
+                onSupport={() => go("support")}
+              />
+            </section>
+            <BottomNav role="driver" active={screen} go={go} />
+          </main>
+        );
+      }
       return (
         <main className="flex flex-1 flex-col bg-background">
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
@@ -5633,6 +5963,7 @@ export function ConnectedApp() {
                       setSelectedRequest(item);
                       setBidPrice(String(Math.round(item.listing.total_minor / 100)));
                       setProposalTripId(trips[0]?.id ?? "");
+                      void loadRivalOffers(item.listing.id);
                       go("driver-bid");
                     }}
                     className="el-press h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
@@ -5690,6 +6021,23 @@ export function ConnectedApp() {
 
     if (screen === "driver-bid" && selectedRequest) {
       const request = selectedRequest;
+      // Same rule one screen deeper: a stale feed, a back button or a revoked approval can all land an
+      // ineligible driver here, and the price field must not be the thing that tells them.
+      if (!driverApproved) {
+        return (
+          <main className="flex flex-1 flex-col bg-card">
+            <TopBar title="Narx taklif qiling" back={() => go("driver-feed")} />
+            <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
+              <DriverVerificationGate
+                status={driverProfile?.verification_status}
+                onProfile={() => go("driver-profile-form")}
+                onDocuments={() => go("driver-documents")}
+                onSupport={() => go("support")}
+              />
+            </section>
+          </main>
+        );
+      }
       const plannedTrips = trips.filter((trip) => trip.status === "planned");
       // The offered pickup window is when this trip is actually at that stop, clipped to what the client asked
       // for. The server refuses a window the trip cannot keep, so the screen says so before sending.
@@ -5709,6 +6057,7 @@ export function ConnectedApp() {
                 Jo'nash: {shortDate(request.listing.departure_window_start)} - {shortDate(request.listing.departure_window_end)}
               </p>
             </div>
+            <RivalOfferBoard offers={rivalOffers} unavailable={rivalOffersError} />
             <PickSelect
               label="Safar"
               placeholder={plannedTrips.length ? "Safarni tanlang" : "Rejalashtirilgan safar yo'q"}

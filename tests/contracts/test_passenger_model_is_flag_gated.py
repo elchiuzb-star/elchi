@@ -58,5 +58,7 @@ def test_the_passenger_entry_point_is_behind_its_flag() -> None:
 def test_navigation_is_screen_state_so_a_closed_flag_cannot_be_walked_around() -> None:
     main = (CLIENT / "main.tsx").read_text(encoding="utf-8")
     routed = set(re.findall(r'path\.startsWith\("([^"]+)"\)', main))
-    assert routed == {"/admin", "/e/"}, f"the URL surface changed: {sorted(routed)}"
+    # `/privacy` is a static page the store listing links to, with no session and no screen stack behind it,
+    # so it cannot reach a flagged mode; the guard is about paths that enter the app.
+    assert routed == {"/admin", "/e/", "/privacy"}, f"the URL surface changed: {sorted(routed)}"
     assert main.count("window.location.pathname") == 1

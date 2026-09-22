@@ -78,6 +78,16 @@ export type DriverFeedOrder = {
   created_at?: string;
 };
 
+/** One uploaded slot as `GET /driver/documents` returns it: which item it is and where the review stands. */
+export type DriverDocument = {
+  document_id: number;
+  driver_id: number;
+  document_type: DriverDocumentType;
+  file_url: string;
+  status: "pending" | "approved" | "rejected";
+  rejection_reason?: string | null;
+};
+
 export type DriverDocumentPayload = {
   document_type: DriverDocumentType;
   file_url: string;

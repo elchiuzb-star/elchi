@@ -86,6 +86,11 @@ export const messages = {
     ru: "Аккаунт не может брать новые заказы — проверьте профиль и документы",
   },
   "error.VEHICLE_NOT_ELIGIBLE": { uz: "Avtomobil tasdiqlanmagan yoki sig'imi yetmaydi", ru: "Автомобиль не подтверждён или не хватает вместимости" },
+  // Q94: the car is entered once. Both refusals mean the same thing to a driver, so both name the way out.
+  "error.DRIVER_VEHICLE_LOCKED": {
+    uz: "Avtomobil ma'lumotlari bir marta kiritiladi — o'zgartirish uchun operator yoki adminga murojaat qiling",
+    ru: "Данные автомобиля вводятся один раз — для изменения обратитесь к оператору или администратору",
+  },
 
   "error.CITY_INACTIVE": { uz: "Tanlangan shahar faol emas", ru: "Выбранный город неактивен" },
   "error.DISTRICT_REQUIRED": { uz: "Tumanni tanlang", ru: "Выберите район" },
@@ -284,6 +289,29 @@ export const messages = {
   "docType.license": { uz: "Haydovchilik guvohnomasi", ru: "Водительское удостоверение" },
   "docType.car_document": { uz: "Avtomobil hujjati", ru: "Документ на автомобиль" },
   "docType.car_photo": { uz: "Avtomobil rasmi", ru: "Фото автомобиля" },
+
+  // What exactly has to be in the frame, so the slot name is not the only thing a driver has to go on.
+  "docHint.passport": { uz: "Pasport yoki ID karta ma'lumot sahifasi", ru: "Страница с данными паспорта или ID-карты" },
+  "docHint.selfie": { uz: "Pasportingizni ushlab turgan selfi", ru: "Селфи с паспортом в руке" },
+  "docHint.license": { uz: "Haydovchilik guvohnomasining old tomoni", ru: "Лицевая сторона водительского удостоверения" },
+  "docHint.car_document": { uz: "Texnik pasport (avtomobil guvohnomasi)", ru: "Техпаспорт (свидетельство о регистрации)" },
+  "docHint.car_photo": { uz: "Avtomobil davlat raqami ko'rinadigan rasm", ru: "Фото автомобиля, где виден госномер" },
+
+  // Per-slot upload state, so the driver can see which item is still missing (§17.1).
+  "docState.missing": { uz: "Yuklanmagan", ru: "Не загружено" },
+  "docState.pending": { uz: "Tekshiruvda", ru: "На проверке" },
+  "docState.approved": { uz: "Tasdiqlangan", ru: "Подтверждено" },
+  "docState.rejected": { uz: "Rad etilgan", ru: "Отклонено" },
+
+  // --- U6: the trust group on a competing offer; never a number, always read with the count ------------------
+  "ratingBucket.new_verified": { uz: "Yangi haydovchi", ru: "Новый водитель" },
+  "ratingBucket.good": { uz: "Yaxshi baholangan", ru: "Хорошие оценки" },
+  "ratingBucket.mixed": { uz: "Aralash baholar", ru: "Смешанные оценки" },
+  "ratingBucket.low": { uz: "Past baholar", ru: "Низкие оценки" },
+
+  "vehicleClass.car": { uz: "Yengil avtomobil", ru: "Легковой автомобиль" },
+  "vehicleClass.minivan": { uz: "Miniven", ru: "Минивэн" },
+  "vehicleClass.minibus": { uz: "Mikroavtobus", ru: "Микроавтобус" },
 
   // --- the language switch itself ---------------------------------------------------------------------------
   "settings.language": { uz: "Til", ru: "Язык" },

@@ -158,6 +158,96 @@ def test_driver_can_update_own_profile_but_not_protected_fields(driver_client) -
     assert "rating" not in data
 
 
+def test_the_vehicle_locks_on_the_first_save_not_on_approval(driver_client) -> None:
+    """Q94: entered once. The lock cannot wait for approval.
+
+    A driver sitting at `new` for a day could otherwise register one car, be approved on the strength of its
+    documents, and swap the plate in between - and the client waiting at the kerb is looking for the first
+    one. So the second write is refused while the profile is still unapproved, and only staff can change it.
+    """
+    client, tokens, _ = driver_client
+
+    first = client.patch(
+        "/api/v1/driver/profile",
+        headers=headers(tokens["driver"]),
+        json={"full_name": "Ali Valiyev", "car_model": "Cobalt", "plate_number": "01 a 123 bc", "car_color": "Oq"},
+    )
+    assert first.status_code == 200
+    assert first.json()["data"]["verification_status"] == "new"
+
+    for field, value in [("car_model", "Malibu"), ("car_color", "Qora"), ("plate_number", "02 b 456 cd")]:
+        blocked = client.patch("/api/v1/driver/profile", headers=headers(tokens["driver"]), json={field: value})
+        assert blocked.status_code == 403, field
+        assert blocked.json()["error"]["code"] == "DRIVER_VEHICLE_LOCKED"
+        assert blocked.json()["error"]["details"]["locked_fields"] == [field]
+
+    # Resending the same value is not a change, so it is not a refusal either - a form that posts every field
+    # would otherwise be unable to save the name.
+    same = client.patch(
+        "/api/v1/driver/profile",
+        headers=headers(tokens["driver"]),
+        json={"full_name": "Ali Karimov", "car_model": "Cobalt", "plate_number": "01 a 123 bc", "car_color": "Oq"},
+    )
+    assert same.status_code == 200
+    assert same.json()["data"]["full_name"] == "Ali Karimov"
+
+
+def test_a_field_left_empty_at_first_save_can_still_be_filled_in(driver_client) -> None:
+    """The lock is per field: "entered once" must not mean "half a car forever"."""
+    client, tokens, _ = driver_client
+
+    partial = client.patch(
+        "/api/v1/driver/profile",
+        headers=headers(tokens["driver"]),
+        json={"full_name": "Ali Valiyev", "car_model": "Cobalt"},
+    )
+    assert partial.status_code == 200
+
+    filled = client.patch(
+        "/api/v1/driver/profile",
+        headers=headers(tokens["driver"]),
+        json={"car_color": "Oq", "plate_number": "01 a 123 bc"},
+    )
+    assert filled.status_code == 200
+    assert filled.json()["data"]["car_color"] == "Oq"
+
+    # ...and now they are locked like the rest.
+    blocked = client.patch(
+        "/api/v1/driver/profile", headers=headers(tokens["driver"]), json={"car_color": "Qora"}
+    )
+    assert blocked.status_code == 403
+    assert blocked.json()["error"]["code"] == "DRIVER_VEHICLE_LOCKED"
+
+
+def test_an_operator_can_change_a_locked_vehicle(driver_client) -> None:
+    """Q94's way out: the driver is told to ask staff, so staff must actually be able to do it."""
+    client, tokens, session_factory = driver_client
+
+    assert client.patch(
+        "/api/v1/driver/profile",
+        headers=headers(tokens["driver"]),
+        json={"full_name": "Ali Valiyev", "car_model": "Cobalt", "plate_number": "01 a 123 bc", "car_color": "Oq"},
+    ).status_code == 200
+
+    session = session_factory()
+    driver_user = session.scalar(select(User).where(User.phone == "+998910000001"))
+    profile = session.scalar(select(DriverProfile).where(DriverProfile.user_id == driver_user.id))
+    driver_id = profile.id
+    operator = User(phone="+998910000009", role="operator", status="active", is_phone_verified=True)
+    session.add(operator)
+    session.commit()
+    operator_token = create_access_token(str(operator.id))
+    session.close()
+
+    changed = client.patch(
+        f"/api/v1/admin/drivers/{driver_id}/vehicle",
+        headers=headers(operator_token),
+        json={"car_model": "Malibu", "plate_number": "02 b 456 cd"},
+    )
+    assert changed.status_code == 200
+    assert changed.json()["data"]["car_model"] == "Malibu"
+
+
 def test_approved_driver_cannot_change_vehicle_but_can_change_name(driver_client) -> None:
     client, tokens, session_factory = driver_client
 

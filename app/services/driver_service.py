@@ -144,23 +144,36 @@ def update_driver_profile(
     if lock_error is not None:
         return lock_error
 
-    # Approved drivers may only edit their name. Vehicle details are locked and
-    # can be changed by an admin/operator on request.
-    if profile.verification_status == "approved":
-        locked_fields = []
-        if "car_model" in update_data and (update_data.get("car_model") or None) != (profile.car_model or None):
-            locked_fields.append("car_model")
-        if "car_color" in update_data and (update_data.get("car_color") or None) != (profile.car_color or None):
-            locked_fields.append("car_color")
-        if "plate_number" in update_data and normalize_plate_number_key(update_data.get("plate_number")) != profile.plate_number_normalized:
-            locked_fields.append("plate_number")
-        if locked_fields:
-            return error_response(
-                status.HTTP_403_FORBIDDEN,
-                "DRIVER_VEHICLE_LOCKED",
-                "Vehicle details are locked after approval. Contact an admin or operator to change them.",
-                {"locked_fields": locked_fields},
-            )
+    # Q94: vehicle details are entered **once**. Each field locks as soon as it holds a value - not only after
+    # approval - because the car on the road is what the client is told to look for, and a self-service edit
+    # between approval runs lets a driver swap it without anyone seeing. The name stays editable, and staff
+    # change a locked field through PATCH /api/v1/admin/drivers/{driver_id}/vehicle.
+    locked_fields = []
+    if (
+        "car_model" in update_data
+        and profile.car_model
+        and (update_data.get("car_model") or None) != (profile.car_model or None)
+    ):
+        locked_fields.append("car_model")
+    if (
+        "car_color" in update_data
+        and profile.car_color
+        and (update_data.get("car_color") or None) != (profile.car_color or None)
+    ):
+        locked_fields.append("car_color")
+    if (
+        "plate_number" in update_data
+        and profile.plate_number_normalized
+        and normalize_plate_number_key(update_data.get("plate_number")) != profile.plate_number_normalized
+    ):
+        locked_fields.append("plate_number")
+    if locked_fields:
+        return error_response(
+            status.HTTP_403_FORBIDDEN,
+            "DRIVER_VEHICLE_LOCKED",
+            "Vehicle details are entered once. Contact an admin or operator to change them.",
+            {"locked_fields": locked_fields},
+        )
 
     if "plate_number" in update_data and update_data["plate_number"] is not None:
         update_data["plate_number"] = normalize_plate_number(update_data["plate_number"])

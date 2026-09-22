@@ -23,6 +23,7 @@ import {
   getAdminDriverDetail,
   getAdminDrivers,
   rejectDriver,
+  updateDriverVehicle,
 } from "../api/admin-drivers.api";
 import { getCities } from "../api/cities.api";
 import { getDistricts } from "../api/districts.api";
@@ -334,6 +335,56 @@ function DocumentCard({ document, onPreview }: { document: AdminDriverDocument; 
   );
 }
 
+/**
+ * Q94: the driver enters the car once, so this is the only place it can change afterwards.
+ *
+ * Every field is pre-filled with what is on record and sent only when it was actually edited - a PATCH that
+ * repeats the current plate would still take the plate-uniqueness path on the server for no reason, and an
+ * audit row that says "plate changed" when it did not is worse than no row.
+ */
+function VehicleModal(props: {
+  driver: AdminDriver;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (payload: { full_name?: string; car_model?: string; plate_number?: string; car_color?: string }) => void;
+}) {
+  const [fullName, setFullName] = useState(props.driver.full_name ?? "");
+  const [carModel, setCarModel] = useState(props.driver.car_model ?? "");
+  const [carColor, setCarColor] = useState(props.driver.car_color ?? "");
+  const [plate, setPlate] = useState(props.driver.plate_number ?? "");
+  const changed = {
+    ...(fullName.trim() && fullName.trim() !== (props.driver.full_name ?? "") ? { full_name: fullName.trim() } : {}),
+    ...(carModel.trim() !== (props.driver.car_model ?? "") ? { car_model: carModel.trim() } : {}),
+    ...(carColor.trim() !== (props.driver.car_color ?? "") ? { car_color: carColor.trim() } : {}),
+    ...(plate.trim() !== (props.driver.plate_number ?? "") ? { plate_number: plate.trim() } : {}),
+  };
+  const nothingToSend = Object.keys(changed).length === 0;
+  return (
+    <ModalShell title="Avtomobil ma'lumotlarini o'zgartirish" onClose={props.onClose}>
+      <div className="grid gap-4 p-5">
+        <div className="rounded-[10px] border border-border bg-slate-50 p-3 text-sm">
+          <p className="font-bold text-foreground">{driverName(props.driver)}</p>
+          <p className="text-muted-foreground">{driverPhone(props.driver)}</p>
+        </div>
+        <p className="rounded-[10px] border border-warning/28 bg-warning/14 p-3 text-sm text-warning">
+          Haydovchi bu maydonlarni o'zgartira olmaydi. O'zgartirish audit jurnaliga yoziladi — haydovchining
+          murojaatini tekshirib ko'ring.
+        </p>
+        <Input label="To'liq ism" value={fullName} onChange={setFullName} />
+        <Input label="Avtomobil modeli" value={carModel} onChange={setCarModel} placeholder="Masalan: Cobalt" />
+        <Input label="Avtomobil rangi" value={carColor} onChange={setCarColor} placeholder="Masalan: Oq" />
+        <Input label="Davlat raqami" value={plate} onChange={setPlate} placeholder="Masalan: 01 A 123 AA" />
+        <div className="flex justify-end gap-2">
+          <Button onClick={props.onClose}>Bekor qilish</Button>
+          <Button tone="primary" disabled={props.busy || nothingToSend} onClick={() => props.onSubmit(changed)}>
+            Saqlash
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 function DriverDrawer(props: {
   driver: AdminDriver;
   user: AuthUser;
@@ -343,9 +394,10 @@ function DriverDrawer(props: {
   onApprove: (comment: string) => void;
   onReject: (reason: string) => void;
   onBlock: (reason: string) => void;
+  onVehicle: (payload: { full_name?: string; car_model?: string; plate_number?: string; car_color?: string }) => void;
 }) {
   const [tab, setTab] = useState<"overview" | "documents" | "routes" | "orders" | "audit">("overview");
-  const [modal, setModal] = useState<"approve" | "reject" | "block" | null>(null);
+  const [modal, setModal] = useState<"approve" | "reject" | "block" | "vehicle" | null>(null);
   const [previewDocument, setPreviewDocument] = useState<AdminDriverDocument | null>(null);
   const driver = props.driver;
   const yuklanganDocuments = new Map((driver.documents ?? []).map((document) => [document.document_type, document]));
@@ -380,6 +432,9 @@ function DriverDrawer(props: {
             {canApproveDriver(driver, props.user) && <Button tone="primary" disabled={props.busy} onClick={() => setModal("approve")}><BadgeCheck size={15} /> Tasdiqlash</Button>}
             {canRejectDriver(driver, props.user) && <Button disabled={props.busy} onClick={() => setModal("reject")}><X size={15} /> Rad etish</Button>}
             {canBlockDriver(driver, props.user) && <Button tone="danger" disabled={props.busy} onClick={() => setModal("block")}><Ban size={15} /> Bloklash</Button>}
+            {/* Operators may edit the vehicle as well as admins - that is what the server allows, and they
+                are the ones the driver reaches first. */}
+            <Button disabled={props.busy} onClick={() => setModal("vehicle")}><Car size={15} /> Avtomobilni o'zgartirish</Button>
             {!["admin", "super_admin"].includes(props.user.role) && <span className="rounded-[10px] bg-background px-3 py-2 text-sm font-semibold text-muted-foreground">Amallar uchun ruxsat yo'q</span>}
           </div>
           <div className="mt-4 flex gap-2 border-b border-border">
@@ -459,6 +514,7 @@ function DriverDrawer(props: {
 
       {modal === "approve" && <ApproveModal driver={driver} busy={props.busy} onClose={() => setModal(null)} onSubmit={(comment) => { setModal(null); props.onApprove(comment); }} />}
       {modal === "reject" && <ReasonModal title="Haydovchini rad etish" suggestions={rejectReasons} busy={props.busy} submitLabel="Rad etish" onClose={() => setModal(null)} onSubmit={(reason) => { setModal(null); props.onReject(reason); }} />}
+      {modal === "vehicle" && <VehicleModal driver={driver} busy={props.busy} onClose={() => setModal(null)} onSubmit={(payload) => { setModal(null); props.onVehicle(payload); }} />}
       {modal === "block" && <ReasonModal title="Haydovchini bloklash" warning="Haydovchini bloklash mavjudlik va yo'nalishlarni o'chiradi. Faol buyurtmalar qo'lda hal qilinishi kerak bo'lishi mumkin." busy={props.busy} submitLabel="Haydovchini bloklash" onClose={() => setModal(null)} onSubmit={(reason) => { setModal(null); props.onBlock(reason); }} />}
       {previewDocument && <DocumentPreviewModal document={previewDocument} onClose={() => setPreviewDocument(null)} />}
     </>
@@ -750,6 +806,7 @@ export function AdminDriversPanel({ user }: DriversPanelProps) {
           onApprove={(comment) => void mutate(() => approveDriver(selectedDriver.id, { comment }))}
           onReject={(reason) => void mutate(() => rejectDriver(selectedDriver.id, { reason }))}
           onBlock={(reason) => void mutate(() => blockDriver(selectedDriver.id, { reason }))}
+          onVehicle={(payload) => void mutate(() => updateDriverVehicle(selectedDriver.id, payload))}
         />
       )}
     </div>
