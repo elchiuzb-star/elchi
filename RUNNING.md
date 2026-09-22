@@ -179,6 +179,43 @@ The environment marker is what makes the catalogue scripts run at all (they fail
 the last line the direction picker shows regions and districts but no stops, and the feed stays empty: offers
 are matched on verified stops and confirmed routes, never on district names (spec §6.1).
 
+### A cast you can log in as
+
+The catalogue makes the map work; it does not give you anybody to *be*. The QA probes and the v1 seeders
+leave hundreds of accounts behind, but every phone number is random, so the first screen of the app has no
+answer to "which number do I type?". `seed_demo_v2.py` seeds five fixed accounts and puts the stage-2 world
+around them into a known state:
+
+```bash
+.venv/Scripts/python.exe scripts/seed_demo_v2.py            # --dry-run builds it all, then rolls back
+```
+
+| Phone | Role | What it is for |
+|---|---|---|
+| `+998900001001` | client | Two published requests (parcel + passenger), two live negotiations, an inbox |
+| `+998900001002` | client | Answers the driver's trip offer, so the other direction has a thread too |
+| `+998900001010` | driver | Approved, one vehicle, one planned trip advertised **twice** - taxi and parcel |
+| `+998900001011` | driver | Approved, bids against driver 1 on the same request (the Q40 board needs two) |
+| `+998900001012` | driver | Unapproved on purpose: this is what the verification gate looks like |
+
+The OTP is the dev mock (`ELCHI_DEV_MOCK_OTP`, `12345` by default) and works for any phone while
+`ELCHI_ENVIRONMENT` is a development one. Both approved drivers get one approved top-up (50 000 so'm) and
+one still pending (20 000 so'm), so the wallet screen is not a row of zeros; the listings carry real view
+counts because the script opens them as the other accounts.
+
+Everything is written through the **domain services**, never into tables, so the seeded world is one a real
+user could have reached: the unapproved driver really cannot publish, a proposal really carries its frozen
+fee quote. If the script cannot build a state it prints the refusal and carries on - that refusal is the
+product saying no for a reason, and it is worth reading rather than working around.
+
+Idempotent: accounts match on phone and the rows it owns carry `[demo-v2]` in their comment, so a second run
+tops the world up instead of doubling it. It refuses to run against a production marker.
+
+Two things that look like bugs and are not: `request-otp` has a 60-second resend cooldown
+(`OTP_RESEND_TOO_SOON`) so logging the same phone in twice in a row makes you wait, and notifications only
+exist once the outbox has been dispatched - the seeder does that at the end, and the worker does it on a
+timer otherwise.
+
 ### Tests
 
 ```bash
