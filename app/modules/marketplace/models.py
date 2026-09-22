@@ -162,7 +162,16 @@ class Listing(Base):
     # Q98: distinct people who opened this listing, denormalised from listing_views. Bumped only by the insert
     # that created a row there, and deliberately *not* part of `version` - looking at a listing is not an edit,
     # and a counter that moved the aggregate version would expire every open proposal on it (Q54).
-    view_count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    view_count: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        server_default=text("0"),
+        # Kept byte-identical to migration 0083's COMMENT: the schema-drift gate compares them.
+        comment=(
+            "Q98: distinct people who opened this listing. Denormalised from listing_views and bumped only by "
+            "the insert that created a row, so it cannot drift above the number of rows."
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -176,7 +185,15 @@ class ListingView(Base):
     """
 
     __tablename__ = "listing_views"
-    __table_args__ = (Index("ix_listing_views_viewer", "viewer_user_id"),)
+    __table_args__ = (
+        Index("ix_listing_views_viewer", "viewer_user_id"),
+        {
+            "comment": (
+                "Q98: one row per (listing, person) - the primary key is what makes the view count a count of "
+                "people. Never written for the owner, for staff or for an anonymous reader."
+            )
+        },
+    )
 
     listing_id: Mapped[int] = mapped_column(
         BigInteger,
