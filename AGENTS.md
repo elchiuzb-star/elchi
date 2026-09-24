@@ -440,7 +440,12 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   takliflarni qayta ochmaydi — «qayta qidirish» aniq amal. Talab yaratish referral attribution, “yangi mijoz” yoki birinchi bron
   tarixiga tegmaydi. Avtomatik ommaviy taklif, yangi kampaniya yoki to‘lov usuli qo‘shilmaydi; production flag’lari o‘zgarmaydi.
 
-**Wave 3.1 dan keyin ham ochiq:** U6 `rating_bucket` chegaralari (hozir `null` — sun’iy reyting yo‘q), ADR-0021 staff MFA (**Proposed**), dalil fayllarini imzolangan havola bilan ko‘rsatish.
+**OTP yakuniy qarori (24.09.2026):**
+- **Q137 (Q8 ni yakunlaydi)** OTP kodi **4 xona**. Backend standarti (`Settings.otp_length = 4`), `mobile-app` zaxira qiymati
+  (`VITE_OTP_LENGTH || 4`) va `.env.example` fayllari bir xil; kontrakt testi kod standartlarini solishtiradi, lokal `.env` ni emas.
+  Muhitda `ELCHI_OTP_LENGTH` va `VITE_OTP_LENGTH` o‘rnatilsa, ikkalasi 4 bo‘lishi shart.
+
+**Wave 3.1 dan keyin ochiq qolgan uch band yopilgan (24.09.2026 audit):** U6 `rating_bucket` — A-variant; ADR-0021 staff MFA — **Accepted** (faqat xodim faktorlarini ulash va `enforce_privileged` rejimi — go-live bandi); dalil fayllari — imzolangan havola bilan.
 
 ## 4. Kod tuzilishi
 - Yangi domen: `app/modules/<name>/` (`identity`, `marketplace`, `trips`, `bookings`, `geo`, `wallet`, `tracking`, `communications`, `trust_support`, `operations`, `platform`, `promotions` — Q102). Ichida: `models.py`, `service.py` (tashqi domen API), `schemas.py`, `api.py` (v2 router), `repository.py` (ixtiyoriy).

@@ -6,6 +6,7 @@ import { CentrePin, YandexMap, useYandexMapsStatus } from "../maps/YandexMap";
 import { TASHKENT, type LatLng } from "../maps/yandex";
 import { resolvePlace, reverseGeocode, suggestPlaces, type PlaceSuggestion } from "../../api/geo.api";
 import type { StopOption } from "./stops";
+import { translate } from "../../i18n";
 
 /**
  * "Joyni belgilang" - the client marks a place on the map instead of picking a verified stop (Q88).
@@ -221,8 +222,8 @@ export function MapPointPicker({
 
   const radiusHint =
     maxOffsetM == null
-      ? "Joy ELCHI yo'nalishidagi yo'ldan uzoq bo'lmasligi kerak."
-      : `Joy haydovchi yuradigan yo'ldan ${Math.round(maxOffsetM / 1000)} km dan uzoq bo'lmasligi kerak — haydovchi yo'lidan chiqmasdan sizni ola bilishi uchun.`;
+      ? translate("location.radiusHintGeneric")
+      : translate("location.radiusHintKm", { km: Math.round(maxOffsetM / 1000) });
 
   return (
     <main className="flex min-h-0 flex-1 flex-col bg-card">
@@ -230,7 +231,7 @@ export function MapPointPicker({
         <button
           type="button"
           onClick={onBack}
-          aria-label="Orqaga"
+          aria-label={translate("common.back")}
           className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-muted"
         >
           <ArrowLeft size={18} />
@@ -252,15 +253,15 @@ export function MapPointPicker({
               <MapPin size={30} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
               <p className="text-[14px] leading-6 text-muted-foreground">
                 {state === "loading"
-                  ? "Xarita yuklanmoqda..."
+                  ? translate("location.mapLoading")
                   : state === "missing-key"
                     ? // Only offered when the camera really is on the chosen district. It used to be said
                       // unconditionally, which is how a pin standing in the provincial capital was offered as
                       // "the centre of Kasbi".
                       standingIn
-                      ? "Xarita kaliti sozlanmagan va bu tumanning markazi katalogda yo'q — joyni belgilay olmaysiz."
-                      : "Xarita kaliti sozlanmagan — joyni tuman markazidan tasdiqlashingiz mumkin."
-                    : "Xarita yuklanmadi — internetni tekshirib qayta urinib ko'ring."}
+                      ? translate("location.mapKeyMissingNoCentre")
+                      : translate("location.mapKeyMissingUseCentre")
+                    : translate("location.mapLoadFailed")}
               </p>
             </div>
           )}
@@ -281,7 +282,7 @@ export function MapPointPicker({
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && suggestions.length > 0) void pickSuggestion(suggestions[0]);
                   }}
-                  placeholder="Manzil yoki joy nomi"
+                  placeholder={translate("location.searchPlaceholder")}
                   className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none"
                 />
               </label>
@@ -311,8 +312,8 @@ export function MapPointPicker({
                           {item.distance_m != null && (
                             <span className={cls("shrink-0 text-[11px] font-medium", here ? "text-primary" : "text-slate-400")}>
                               {item.distance_m < 1000
-                                ? `${item.distance_m} m`
-                                : `${Math.round(item.distance_m / 1000)} km`}
+                                ? translate("location.distanceM", { m: item.distance_m })
+                                : translate("location.distanceKm", { km: Math.round(item.distance_m / 1000) })}
                             </span>
                           )}
                         </button>
@@ -323,14 +324,14 @@ export function MapPointPicker({
               )}
               {searchMiss && suggestions.length === 0 && (
                 <p className="mt-2 rounded-[10px] bg-card/95 px-3 py-2 text-[12px] leading-5 text-muted-foreground shadow-sm">
-                  Bu nom bo'yicha joy topilmadi — xaritani qo'lda suring.
+                  {translate("location.searchMiss")}
                 </p>
               )}
             </div>
             <button
               type="button"
               onClick={() => setTarget({ ...settled })}
-              aria-label="Markazga qaytish"
+              aria-label={translate("location.recentre")}
               className="el-press absolute bottom-4 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-card text-primary shadow-lg"
             >
               <Crosshair size={20} />
@@ -358,7 +359,7 @@ export function MapPointPicker({
           </div>
         )}
         <div className="rounded-[14px] border border-border bg-slate-50 p-4">
-          <p className="text-[12px] text-muted-foreground">{placed ? "Tanlangan joy" : "Joy belgilanmagan"}</p>
+          <p className="text-[12px] text-muted-foreground">{placed ? translate("location.chosenPlace") : translate("location.placeNotMarked")}</p>
           <p
             className={cls(
               "mt-1 text-[15px] leading-6",
@@ -366,9 +367,9 @@ export function MapPointPicker({
             )}
           >
             {!placed
-              ? `${districtName || "Tuman"} xaritada ochilmadi — joyni o'zingiz belgilang`
+              ? translate("location.districtNotOnMap", { district: districtName || translate("location.districtFallback") })
               : looking
-                ? "Manzil aniqlanmoqda..."
+                ? translate("location.addressResolving")
                 : address || coordinateLabel(settled.lat, settled.lng)}
           </p>
           {placed && !looking && address && (
@@ -382,8 +383,7 @@ export function MapPointPicker({
           /* Said plainly, because the camera is somewhere else than the name above it: this district has no
              coordinate in the catalogue yet, so the map opened on the province. */
           <p className="rounded-[12px] bg-warning/14 px-4 py-3 text-[13px] leading-5 text-warning">
-            Bu tumanning markazi katalogda hali yo'q, shuning uchun xarita viloyat bo'yicha ochildi. Xaritani
-            surib yoki qidiruvdan foydalanib o'z joyingizni belgilang.
+            {translate("location.noDistrictCentre")}
           </p>
         ) : (
           <p className="text-[12px] leading-5 text-muted-foreground">{radiusHint}</p>
@@ -395,7 +395,7 @@ export function MapPointPicker({
           onClick={() => onConfirm({ lat: settled.lat, lng: settled.lng, address })}
           className="el-press flex h-[52px] w-full items-center justify-center rounded-[14px] bg-primary px-4 text-[16px] font-semibold text-primary-foreground disabled:bg-slate-400"
         >
-          {busy ? "Tekshirilmoqda..." : "Shu joyni tanlash"}
+          {busy ? translate("common.checking") : translate("location.pickThisPlace")}
         </button>
       </section>
     </main>

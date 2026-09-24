@@ -4,6 +4,14 @@
 `mobile-app/src/api/generated/openapi-v2.json` yo'llari solishtirildi; har bir bo'shliq `app/modules/*/api.py`
 da o'qib tekshirildi.
 
+**24.09.2026 holati (o'lchov skripti bilan):** `py scripts/client_coverage.py` — v2 da **207** operatsiya; ekran chaqiradigan
+(`UI`) **192** (92.8%), wrapper bor lekin ishlatilmaydi — 2, wrapper yo'q — 1 (`PATCH /trips/{id}`), ataylab chaqirilmaydi —
+12 (Q100, Q82, Q24/Q46, GPS Android'da, ADR-0006 identity v1). Qamrov doirasidagi operatsiyalarning **98.5%** i ekranga ulangan.
+Oldingi commit (`4298293`) da xuddi shu skript: 114/205 (55.6%). Ulanganlar: admin panellari «Avtomobillar tasdig'i», «Moliya»,
+«Platforma sozlamalari», «Ishonch va operatsiyalar»; mijoz/haydovchi: bronni bekor qilish, haydovchi bahosi va nizosi, e'lon
+pauza/davom/tahrir, taklifni rad etish, kodni qayta chiqarish, komissiya taxmini, v2 xabarlar, nizo tafsiloti, bloklash va
+shikoyat, kuzatuv va ulashish havolalari, reputatsiya, pochta siyosati, safar tafsiloti. Quyidagi 19.09.2026 jadvali tarix.
+
 **Holat:** v2 da **152** yo'l, klient **82** tasini chaqiradi, **70** tasi qolgan (43 admin, 27 boshqa).
 Wave 11 dagi o'lchov 68/150 edi; farq — wave 15/16 da ulangan M2 matches, amendment, saqlangan qidiruv, nizo
 dalili va admin narx referensi.

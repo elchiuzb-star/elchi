@@ -1,6 +1,23 @@
-import { adminApiRequest, query } from "./admin.api";
+import { adminApiRequest, query, type AdminRecord } from "./admin.api";
 import type { Paginated } from "../types/api";
 import type { AdminDriver, AdminDriverDocument, AdminDriverFilters, AdminDriverRoute } from "../types/admin-driver";
+import type { AdminOrder } from "../types/admin-order";
+
+/** Result of POST /admin/drivers/{driver_id}/unblock. */
+export type AdminDriverUnblockResult = {
+  driver_id: number;
+  verification_status: AdminDriver["verification_status"];
+  user_status: string;
+  is_available: boolean;
+  reason: string;
+  emergency: boolean;
+  /** The v2 eligibility block is lifted separately (v2 admin eligibility command); true while it still applies. */
+  v2_eligibility_blocked: boolean;
+  warning: string | null;
+};
+
+/** The per-driver lists are small; one page of the maximum size covers them. */
+const DRIVER_LIST_PAGE = { page: 1, limit: 100 };
 
 function cleanFilters(params: AdminDriverFilters): Record<string, string | number | boolean | undefined> {
   return {
@@ -21,20 +38,18 @@ export function getAdminDriverDetail(driverId: number) {
 }
 
 export async function getAdminDriverDocuments(driverId: number) {
-  // TODO: Replace this detail fallback when backend adds GET /admin/drivers/{driver_id}/documents.
-  const driver = await getAdminDriverDetail(driverId);
-  return driver.documents ?? [];
+  const page = await adminApiRequest<Paginated<AdminDriverDocument>>(`/admin/drivers/${driverId}/documents${query(DRIVER_LIST_PAGE)}`);
+  return page.items ?? [];
 }
 
 export async function getAdminDriverRoutes(driverId: number) {
-  // TODO: Replace this detail fallback when backend adds GET /admin/drivers/{driver_id}/routes.
-  const driver = await getAdminDriverDetail(driverId);
-  return driver.routes ?? [];
+  const page = await adminApiRequest<Paginated<AdminDriverRoute>>(`/admin/drivers/${driverId}/routes${query(DRIVER_LIST_PAGE)}`);
+  return page.items ?? [];
 }
 
-export async function getAdminDriverOrders(_driverId: number) {
-  // TODO: Wire to GET /admin/drivers/{driver_id}/orders when backend adds it.
-  return [];
+export async function getAdminDriverOrders(driverId: number) {
+  const page = await adminApiRequest<Paginated<AdminOrder>>(`/admin/drivers/${driverId}/orders${query(DRIVER_LIST_PAGE)}`);
+  return page.items ?? [];
 }
 
 /**
@@ -73,14 +88,17 @@ export function blockDriver(driverId: number, payload: { reason: string }) {
   });
 }
 
-export async function unblockDriver(_driverId: number, _payload: { reason: string }) {
-  // TODO: Backend does not expose POST /admin/drivers/{driver_id}/unblock yet.
-  throw new Error("Unblock is not supported by backend yet");
+export function unblockDriver(driverId: number, payload: { reason: string }) {
+  return adminApiRequest<AdminDriverUnblockResult>(`/admin/drivers/${driverId}/unblock`, {
+    method: "POST",
+    body: payload,
+  });
 }
 
-export async function getDriverAuditLogs(_driverId: number) {
-  // TODO: Wire to GET /admin/drivers/{driver_id}/audit-logs when backend adds it.
-  return [];
+/** Admin/super_admin only (like /admin/audit-logs); operators get 403. */
+export async function getDriverAuditLogs(driverId: number) {
+  const page = await adminApiRequest<Paginated<AdminRecord>>(`/admin/drivers/${driverId}/audit-logs${query(DRIVER_LIST_PAGE)}`);
+  return page.items ?? [];
 }
 
 export type { AdminDriver, AdminDriverDocument, AdminDriverRoute };

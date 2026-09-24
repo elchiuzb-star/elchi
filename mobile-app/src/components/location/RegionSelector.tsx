@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronRight, MapPin, Search } from "../../app/ui/icons";
 
 import { listRegions } from "../../api/v2/marketplace.api";
+import { translate } from "../../i18n";
 import type { RegionDTO } from "../../api/v2/marketplace.api";
 
 /**
@@ -36,7 +37,7 @@ export function RegionSelector({ title, onSelectRegion, onBack }: RegionSelector
         if (isActive) setRegions(items);
       })
       .catch(() => {
-        if (isActive) setError("Hududlarni yuklab bo'lmadi");
+        if (isActive) setError(translate("location.regionsLoadFailed"));
       })
       .finally(() => {
         if (isActive) setIsLoading(false);
@@ -57,7 +58,7 @@ export function RegionSelector({ title, onSelectRegion, onBack }: RegionSelector
         <button
           type="button"
           onClick={onBack}
-          aria-label="Orqaga"
+          aria-label={translate("common.back")}
           className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-muted"
         >
           <ArrowLeft size={18} />
@@ -70,17 +71,17 @@ export function RegionSelector({ title, onSelectRegion, onBack }: RegionSelector
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Qidirish"
+            placeholder={translate("location.search")}
             className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none"
           />
         </label>
         <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-          Avval hududni tanlang, keyin tuman va bekatni belgilaysiz.
+          {translate("location.pickRegionThenDistrict")}
         </p>
       </section>
       <section className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Hududlar yuklanmoqda...</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">{translate("location.regionsLoading")}</div>
         ) : error ? (
           <div className="px-5 py-8 text-center text-[14px] text-destructive">{error}</div>
         ) : visible.length ? (
@@ -97,14 +98,14 @@ export function RegionSelector({ title, onSelectRegion, onBack }: RegionSelector
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[16px] font-semibold text-foreground">{region.name_uz}</span>
                 <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
-                  {region.requires_district ? "Tuman tanlanadi" : "Tumansiz"}
+                  {region.requires_district ? translate("location.districtRequired") : translate("location.noDistrict")}
                 </span>
               </span>
               <ChevronRight size={19} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
             </button>
           ))
         ) : (
-          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Hudud topilmadi</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">{translate("location.regionNotFound")}</div>
         )}
       </section>
     </main>

@@ -270,7 +270,7 @@ Migratsiya `20260923_0089_promotions_t4`. Faqat sintetik qiymatlar; hech bir mar
 - Handoff: `docs/referral/INFRA_HANDOFF.md`, `docs/referral/APP_LINKS_HANDOFF.md`.
 
 **Ochiq:** havola domeni/DNS/TLS/deploy/App Links va qurilmada tekshiruv (handoff’lar tayyor, bajarilmagan); rate-limit va
-marketing qiymatlarining production tasdig‘i; HMAC saqlash muddati (Q108); ADR-0021 (staff MFA) hali Proposed.
+marketing qiymatlarining production tasdig‘i; HMAC saqlash muddati (Q108); ADR-0021 (staff MFA) Accepted (17.09.2026); ochiq qismi — xodimlarning faol TOTP faktorlari va `enforce_privileged` rejimi.
 
 ### 20. 6-bosqich: simulyator (24.09.2026) — **sintetik ssenariylar**
 **Maqsad:** tasdiqlangan mexanizmning xarajati, budjet majburiyati, marjasi va foydalanuvchiga amaliy foydasini turli

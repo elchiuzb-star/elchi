@@ -1,5 +1,6 @@
 import { MapMarker, YandexMap } from "./YandexMap";
 import { TASHKENT, readPoint } from "./yandex";
+import { translate } from "../../i18n";
 
 type ReadOnlyOrderMapProps = {
   pickupLat?: number | string | null;
@@ -24,15 +25,15 @@ export function ReadOnlyOrderMap({ pickupLat, pickupLng, dropoffLat, dropoffLng 
         fallback={(status) => (
           <div className="flex h-full items-center justify-center px-4 text-center text-[13px] text-muted-foreground">
             {status === "missing-key"
-              ? "Xarita kaliti kiritilmagan"
+              ? translate("maps.keyMissing")
               : status === "loading"
-                ? "Xarita yuklanmoqda..."
-                : "Xarita yuklanmadi"}
+                ? translate("maps.loading")
+                : translate("maps.loadFailed")}
           </div>
         )}
       >
-        {pickup && <MapMarker point={pickup} label="A" title="Olib ketish joyi" />}
-        {dropoff && <MapMarker point={dropoff} label="B" title="Yetkazish joyi" />}
+        {pickup && <MapMarker point={pickup} label="A" title={translate("maps.pickupPlace")} />}
+        {dropoff && <MapMarker point={dropoff} label="B" title={translate("maps.dropoffPlace")} />}
       </YandexMap>
     </div>
   );

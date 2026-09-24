@@ -30,6 +30,24 @@ export function getBookingCodes(bookingId: string) {
   return v2Request<BookingCodesDTO>(`/bookings/${bookingId}/codes`);
 }
 
+export type ProofKind = Schemas["ProofKind"];
+
+/**
+ * B5a: the code owner asks for a new code; the old one stops working at once.
+ *
+ * Self-service is limited (Q75: 2 minutes apart, 3 per 24 hours); a refusal is `429 PROOF_REISSUE_LIMITED` with
+ * `details.retry_after_s` / `reissues_left`, which the screen shows as it came. The answer carries only the new
+ * code. Both kinds are written out in the path so the contract guard sees the route.
+ */
+export function reissueBookingCode(bookingId: string, kind: ProofKind, reason?: string) {
+  const body: Schemas["ProofReissueRequest"] = { reason: reason ?? null };
+  return v2RequestFull<BookingCodesDTO>(`/bookings/${bookingId}/codes/${kind}/reissue`, {
+    method: "POST",
+    body,
+    idempotencyKey: newIdempotencyKey(),
+  });
+}
+
 /** K4: the live-location window of this booking. `last_point` is null when there is no trusted point (AC27). */
 export function getBookingTracking(bookingId: string) {
   return v2Request<BookingTrackingDTO>(`/bookings/${bookingId}/tracking`);
@@ -179,7 +197,7 @@ export function createSupportTicket(body: SupportTicketCreate, idempotencyKey: s
 }
 
 export function listNotifications(params: { limit?: number; unread_only?: boolean } = {}) {
-  return v2Request<NotificationDTO[]>("/notifications", { query: params });
+  return v2Request<NotificationDTO[]>("/notifications", { query: { limit: params.limit, unread: params.unread_only || undefined } });
 }
 
 /** O3: the public page of a shared listing. No token in the app's storage, no auth header. */

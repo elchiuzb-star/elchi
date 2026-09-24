@@ -1,11 +1,14 @@
 """The stage-2 client asks for as many OTP digits as the backend issues (Q8, wave 13).
 
-`auth_service` accepts a code only when `len(otp) == settings.otp_length` (5 in this repo's `.env`). A client
+`auth_service` accepts a code only when `len(otp) == settings.otp_length` (Q137: 4 digits). A client
 that disagrees is not a cosmetic bug: `mobile-app` labelled the field "5 xonali kod" but enabled the submit
 button only at six characters, so a real code could never be sent and login was impossible.
 
 The fix was to derive the label, the placeholder, the input clipping and the gate from one number read from
 the environment. These tests hold that shape: one source of truth, matching the backend's length.
+
+The comparison is between the **code defaults** (`Settings.otp_length` and the client's fallback), not with a
+developer's local `.env`, so the result does not depend on whose machine runs it (Q137: both are 4).
 
 `frontend/` is frozen (AGENTS §2) and is not asserted here; its own default is noted in the wave card.
 """
@@ -17,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.config import settings
+from app.core.config import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "mobile-app" / "src" / "app" / "ConnectedApp.tsx"
@@ -33,8 +36,9 @@ def source() -> str:
 def test_the_client_default_matches_the_backend() -> None:
     found = DEFAULT.findall(source())
     assert found, "the client should read VITE_OTP_LENGTH with a default, not hard-code the digit count"
-    assert {int(value) for value in found} == {settings.otp_length}, (
-        f"the client defaults to {found}, the backend issues {settings.otp_length} digits"
+    backend_default = Settings.model_fields["otp_length"].default
+    assert {int(value) for value in found} == {backend_default} == {4}, (
+        f"the client defaults to {found}, the backend default is {backend_default}; Q137 decided 4"
     )
 
 

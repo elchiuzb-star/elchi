@@ -69,6 +69,7 @@ __all__ = [
     "get_vehicle",
     "list_driver_trips",
     "list_driver_vehicles",
+    "list_vehicles_for_review",
     "list_occurrences",
     "lock_trip",
     "occurrence_seqs_for_stops",
@@ -196,6 +197,35 @@ def list_driver_vehicles(session: Session, driver_user_id: int) -> list[Vehicle]
             select(Vehicle).where(Vehicle.driver_user_id == driver_user_id).order_by(Vehicle.created_at, Vehicle.id)
         ).scalars()
     )
+
+
+def list_vehicles_for_review(
+    session: Session,
+    *,
+    actor_user_id: int,
+    statuses: Sequence[str] | None = None,
+    after: tuple[datetime, int] | None = None,
+    limit: int = 20,
+    now: datetime | None = None,
+) -> list[Vehicle]:
+    """T3a: the staff verification queue, oldest first (``created_at``, ``id`` keyset).
+
+    Gated with the same capability as ``verify_vehicle``: whoever may decide may see what waits for a decision.
+    Read only - no lock, no audit row (reading the queue is not an action on a vehicle).
+    """
+    identity_service.require_capability(
+        identity_service.get_capabilities(session, actor_user_id, now=_now(now)),
+        Capability.OPS_DRIVER_ELIGIBILITY_MANAGE,
+    )
+    stmt = select(Vehicle)
+    if statuses:
+        stmt = stmt.where(Vehicle.verification_status.in_(list(statuses)))
+    if after is not None:
+        created, vehicle_id = after
+        stmt = stmt.where(
+            (Vehicle.created_at > created) | ((Vehicle.created_at == created) & (Vehicle.id > vehicle_id))
+        )
+    return list(session.execute(stmt.order_by(Vehicle.created_at, Vehicle.id).limit(limit)).scalars())
 
 
 def verify_vehicle(

@@ -1,4 +1,4 @@
-import { adminApiRequest, listAdminDrivers, query, type AdminRecord } from "./admin.api";
+import { adminApiRequest, query, type AdminRecord } from "./admin.api";
 import type { Paginated } from "../types/api";
 import type {
   AdminAssignDriverPayload,
@@ -62,14 +62,11 @@ export function cancelAdminOrder(orderId: number, payload: AdminCancelOrderPaylo
   });
 }
 
-export async function getEligibleDriversForOrder(_orderId: number, params: { search?: string } = {}) {
-  // TODO: Replace this fallback when backend adds GET /admin/orders/{order_id}/eligible-drivers.
-  const drivers = await listAdminDrivers({
-    verification_status: "approved",
-    is_available: true,
-    search: params.search,
-    limit: 100,
-  });
+/** Drivers the manual assignment would accept (approved, active, available route, review pairing). */
+export async function getEligibleDriversForOrder(orderId: number, params: { search?: string } = {}) {
+  const drivers = await adminApiRequest<Paginated<AdminRecord> & { assignable?: boolean }>(
+    `/admin/orders/${orderId}/eligible-drivers${query({ search: params.search, page: 1, limit: 100 })}`,
+  );
   return (drivers.items ?? []) as AdminRecord[];
 }
 

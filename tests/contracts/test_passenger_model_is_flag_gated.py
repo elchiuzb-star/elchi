@@ -59,6 +59,7 @@ def test_navigation_is_screen_state_so_a_closed_flag_cannot_be_walked_around() -
     main = (CLIENT / "main.tsx").read_text(encoding="utf-8")
     routed = set(re.findall(r'path\.startsWith\("([^"]+)"\)', main))
     # `/privacy` is a static page the store listing links to, with no session and no screen stack behind it,
-    # so it cannot reach a flagged mode; the guard is about paths that enter the app.
-    assert routed == {"/admin", "/e/", "/privacy"}, f"the URL surface changed: {sorted(routed)}"
+    # so it cannot reach a flagged mode; the guard is about paths that enter the app. `/t/` is the public tracking
+    # page of a booking's tracking grant (read-only, token-scoped, no session) - the same kind of page as `/e/`.
+    assert routed == {"/admin", "/e/", "/privacy", "/t/"}, f"the URL surface changed: {sorted(routed)}"
     assert main.count("window.location.pathname") == 1

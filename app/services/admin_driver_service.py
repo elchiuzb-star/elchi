@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import status
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models import AuditLog, City, DriverDocument, DriverProfile, DriverRoute, Order, RefreshSession, User
@@ -12,6 +12,7 @@ from app.schemas.admin_driver import (
     AdminDriverApprove,
     AdminDriverBlock,
     AdminDriverReject,
+    AdminDriverUnblock,
     AdminDriverVehicleUpdate,
 )
 from app.services.audit_service import write_audit_log
@@ -579,4 +580,261 @@ def block_driver(db: Session, actor: User, driver_id: int, payload: AdminDriverB
         "v2_eligibility_blocked": v2_eligibility_blocked,
         "v2_active_trip_count": v2_trip_count,
         "v2_active_booking_count": v2_booking_count,
+    }
+
+
+# --- Additive read endpoints (mobile-app admin panel TODOs) -----------------------------------------------------
+
+
+def _paginated(items: list[dict[str, Any]], total: int, page: int, safe_limit: int) -> dict[str, Any]:
+    return {
+        "items": items,
+        "pagination": {
+            "page": page,
+            "limit": safe_limit,
+            "total": total,
+            "total_pages": ceil(total / safe_limit) if total else 0,
+        },
+    }
+
+
+def _driver_or_404(db: Session, driver_id: int) -> DriverProfile | JSONResponse:
+    driver = db.get(DriverProfile, driver_id)
+    if driver is None:
+        return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Driver not found")
+    return driver
+
+
+def list_admin_driver_documents(db: Session, driver_id: int, page: int, limit: int) -> dict[str, Any] | JSONResponse:
+    """Same document dicts (signed file URLs) as the detail endpoint, newest first, paginated."""
+    driver = _driver_or_404(db, driver_id)
+    if isinstance(driver, JSONResponse):
+        return driver
+    offset, safe_limit = pagination(page, limit)
+    total = db.scalar(select(func.count(DriverDocument.id)).where(DriverDocument.driver_id == driver.id)) or 0
+    documents = db.scalars(
+        select(DriverDocument)
+        .where(DriverDocument.driver_id == driver.id)
+        .order_by(DriverDocument.created_at.desc(), DriverDocument.id.desc())
+        .offset(offset)
+        .limit(safe_limit)
+    )
+    return _paginated([document_to_dict(document) for document in documents], total, page, safe_limit)
+
+
+def list_admin_driver_routes(db: Session, driver_id: int, page: int, limit: int) -> dict[str, Any] | JSONResponse:
+    """Same route dicts as the detail endpoint, newest first, paginated."""
+    driver = _driver_or_404(db, driver_id)
+    if isinstance(driver, JSONResponse):
+        return driver
+    offset, safe_limit = pagination(page, limit)
+    total = db.scalar(select(func.count(DriverRoute.id)).where(DriverRoute.driver_id == driver.id)) or 0
+    routes = db.scalars(
+        select(DriverRoute)
+        .where(DriverRoute.driver_id == driver.id)
+        .order_by(DriverRoute.created_at.desc(), DriverRoute.id.desc())
+        .offset(offset)
+        .limit(safe_limit)
+    )
+    return _paginated([route_to_dict(route, db) for route in routes], total, page, safe_limit)
+
+
+def list_admin_driver_orders(
+    db: Session, driver_id: int, order_status: str | None, page: int, limit: int
+) -> dict[str, Any] | JSONResponse:
+    """v1 orders assigned to the driver, in the admin order list item shape (``order_summary_to_dict``)."""
+    from app.services.admin_order_service import ORDER_STATUSES, order_summary_to_dict
+    from app.services.review_accounts import review_order_ids
+
+    driver = _driver_or_404(db, driver_id)
+    if isinstance(driver, JSONResponse):
+        return driver
+    if order_status is not None and order_status not in ORDER_STATUSES:
+        return error_response(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "Invalid order status")
+    filters = [Order.assigned_driver_id == driver.id]
+    if order_status is not None:
+        filters.append(Order.status == order_status)
+    offset, safe_limit = pagination(page, limit)
+    total = db.scalar(select(func.count(Order.id)).where(*filters)) or 0
+    orders = list(
+        db.scalars(
+            select(Order).where(*filters).order_by(Order.created_at.desc(), Order.id.desc()).offset(offset).limit(safe_limit)
+        )
+    )
+    review_ids = review_order_ids(db, orders)
+    return _paginated(
+        [order_summary_to_dict(db, order, is_review=order.id in review_ids) for order in orders], total, page, safe_limit
+    )
+
+
+def list_admin_driver_audit_logs(db: Session, driver_id: int, page: int, limit: int) -> dict[str, Any] | JSONResponse:
+    """Audit rows about this driver, in the ``/admin/audit-logs`` item shape, newest first.
+
+    Covered: ``drivers`` / ``driver_profiles`` rows (entity id = profile id), the driver's current documents and
+    routes (entity id = document/route id), the block-time ``driver_routes_disabled_after_block`` row (entity id =
+    profile id) and v2 ``driver_eligibility`` rows (entity id = user id). Rows of routes/documents deleted since are
+    no longer attributable to the driver and are not listed here (``/admin/audit-logs`` still has them).
+    """
+    from app.services.admin_audit_log_service import audit_log_to_dict
+    from app.services.audit_service import NOISY_AUDIT_ACTIONS
+
+    driver = _driver_or_404(db, driver_id)
+    if isinstance(driver, JSONResponse):
+        return driver
+    document_ids = select(DriverDocument.id).where(DriverDocument.driver_id == driver.id)
+    route_ids = select(DriverRoute.id).where(DriverRoute.driver_id == driver.id)
+    scope = or_(
+        and_(AuditLog.entity_type.in_(["drivers", "driver_profiles"]), AuditLog.entity_id == driver.id),
+        and_(AuditLog.entity_type == "driver_documents", AuditLog.entity_id.in_(document_ids)),
+        and_(
+            AuditLog.entity_type == "driver_routes",
+            or_(
+                AuditLog.entity_id.in_(route_ids),
+                and_(AuditLog.action == "driver_routes_disabled_after_block", AuditLog.entity_id == driver.id),
+            ),
+        ),
+        and_(AuditLog.entity_type == "driver_eligibility", AuditLog.entity_id == driver.user_id),
+    )
+    filters = [scope, AuditLog.action.not_in(NOISY_AUDIT_ACTIONS)]
+    offset, safe_limit = pagination(page, limit)
+    total = db.scalar(select(func.count(AuditLog.id)).where(*filters)) or 0
+    rows = db.execute(
+        select(AuditLog, User)
+        .outerjoin(User, User.id == AuditLog.actor_id)
+        .where(*filters)
+        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+        .offset(offset)
+        .limit(safe_limit)
+    )
+    return _paginated([audit_log_to_dict(log, actor) for log, actor in rows], total, page, safe_limit)
+
+
+# --- Unblock (mirror of block_driver, Q15) ---------------------------------------------------------------------
+
+UNBLOCK_RESTORABLE_STATUSES = {"new", "pending", "approved", "rejected"}
+
+
+def _current_block_cycle(db: Session, driver_id: int) -> list[AuditLog]:
+    """``driver_blocked`` audit rows of the block now in force, newest first.
+
+    Only rows after the last ``driver_unblocked`` row count. The cycle ends at the first row whose old
+    ``verification_status`` was not ``blocked`` (an emergency escalation of a new-business-only block writes a
+    second row whose old status is already ``blocked``).
+    """
+    last_unblock_id = db.scalar(
+        select(func.max(AuditLog.id)).where(
+            AuditLog.entity_type == "drivers", AuditLog.entity_id == driver_id, AuditLog.action == "driver_unblocked"
+        )
+    )
+    stmt = select(AuditLog).where(
+        AuditLog.entity_type == "drivers", AuditLog.entity_id == driver_id, AuditLog.action == "driver_blocked"
+    )
+    if last_unblock_id is not None:
+        stmt = stmt.where(AuditLog.id > last_unblock_id)
+    cycle: list[AuditLog] = []
+    for row in db.scalars(stmt.order_by(AuditLog.id.desc())):
+        cycle.append(row)
+        old_status = ((row.details or {}).get("old_value") or {}).get("verification_status")
+        if old_status != "blocked":
+            break
+    return cycle
+
+
+def _v2_eligibility_block_active(db: Session, driver_user_id: int) -> bool:
+    """True while a v2 eligibility block (D16) is in force. Read through the identity service; False when the v2
+    tables are absent (legacy SQLite suite)."""
+    from app.modules.platform import service as platform_service
+
+    if not (
+        platform_service.table_exists(db, "driver_eligibility_blocks") and platform_service.table_exists(db, "user_roles")
+    ):
+        return False
+    from app.modules.identity import service as identity_service
+
+    capabilities = identity_service.get_capabilities(db, driver_user_id)
+    return bool(capabilities.driver and capabilities.driver.active_block_reason is not None)
+
+
+def unblock_driver(db: Session, actor: User, driver_id: int, payload: AdminDriverUnblock) -> dict[str, Any] | JSONResponse:
+    """Lift a v1 driver block (additive endpoint; mirror of ``block_driver``).
+
+    - Reason required; admin/super_admin only (router). A super_admin emergency full block (Q15) - or a full block
+      of a driver with active v2 business, which only an emergency block can produce - is lifted by a super_admin
+      only.
+    - ``verification_status`` goes back to its value before the block (from the block's audit row; ``pending``
+      if unknown, so the driver is reviewed again). ``users.status`` goes back to ``active`` if the block
+      suspended the account.
+    - Not re-enabled: ``is_available`` stays ``false`` and routes stay ``unavailable`` (the driver turns them on
+      again through the approval-checked driver endpoints); revoked sessions stay revoked.
+    - The v2 eligibility block (D16) is NOT lifted here: it is a separate versioned, capability-checked command
+      (``POST /api/v2/admin/drivers/{user_id}/eligibility``). The response says whether it is still in force.
+    """
+    reason = require_reason(payload.reason)
+    if isinstance(reason, JSONResponse):
+        return reason
+    # Same lock order as block_driver (ADR-0017 §13): users -> driver_profiles, then read-only lookups.
+    driver = get_driver_for_update(db, driver_id)
+    if isinstance(driver, JSONResponse):
+        return driver
+    if driver.verification_status != "blocked":
+        return error_response(status.HTTP_400_BAD_REQUEST, "DRIVER_INVALID_STATUS", "Driver is not blocked")
+
+    cycle = _current_block_cycle(db, driver.id)
+    emergency = any(bool(((row.details or {}).get("new_value") or {}).get("emergency")) for row in cycle)
+    if not emergency and driver.user.status == "blocked":
+        v2_trip_count, v2_booking_count = _driver_v2_obligations(db, driver.user_id)
+        emergency = bool(v2_trip_count or v2_booking_count)
+    if emergency and not _actor_is_super_admin(db, actor):
+        return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Only super_admin can lift an emergency full block")
+
+    restored_status = "pending"
+    if cycle:
+        previous = ((cycle[-1].details or {}).get("old_value") or {}).get("verification_status")
+        if previous in UNBLOCK_RESTORABLE_STATUSES:
+            restored_status = previous
+
+    old_status = driver.verification_status
+    old_user_status = driver.user.status
+    old_available = driver.is_available
+    driver.verification_status = restored_status
+    driver.is_available = False
+    if driver.user.status == "blocked":
+        driver.user.status = "active"
+    db.add_all([driver, driver.user])
+    v2_eligibility_blocked = _v2_eligibility_block_active(db, driver.user_id)
+    db.flush()
+    write_audit_log(
+        db,
+        actor,
+        "drivers",
+        driver.id,
+        "driver_unblocked",
+        old_value={"verification_status": old_status, "user_status": old_user_status, "is_available": old_available},
+        new_value={
+            "verification_status": driver.verification_status,
+            "user_status": driver.user.status,
+            "is_available": driver.is_available,
+            "emergency": emergency,
+            "v2_eligibility_blocked": v2_eligibility_blocked,
+        },
+        reason=reason,
+    )
+    # No in-app notification: "driver_unblocked" is not in notification_service.ALLOWED_NOTIFICATION_TYPES, and
+    # adding a new type would put an unknown ``type`` into the v1 /notifications feed read by the frozen Android
+    # client. Left for a decision; the audit row above is the record.
+    db.commit()
+    db.refresh(driver)
+    return {
+        "driver_id": driver.id,
+        "verification_status": driver.verification_status,
+        "user_status": driver.user.status,
+        "is_available": driver.is_available,
+        "reason": reason,
+        "emergency": emergency,
+        "v2_eligibility_blocked": v2_eligibility_blocked,
+        "warning": (
+            "The v2 eligibility block is still in force; lift it via POST /api/v2/admin/drivers/{user_id}/eligibility"
+            if v2_eligibility_blocked
+            else None
+        ),
     }

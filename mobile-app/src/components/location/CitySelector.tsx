@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronRight, MapPin, Search } from "../../app/ui/icons";
 
 import { getCities } from "../../api/cities.api";
+import { translate } from "../../i18n";
 import type { City } from "../../types/city";
 
 type CitySelectorProps = {
@@ -43,7 +44,7 @@ export function CitySelector({ title, onSelectCity, onBack }: CitySelectorProps)
         if (isActive) setCities(items);
       })
       .catch(() => {
-        if (isActive) setError("Shaharlarni yuklab bo'lmadi");
+        if (isActive) setError(translate("location.citiesLoadFailed"));
       })
       .finally(() => {
         if (isActive) setIsLoading(false);
@@ -61,7 +62,7 @@ export function CitySelector({ title, onSelectCity, onBack }: CitySelectorProps)
         <button
           type="button"
           onClick={onBack}
-          aria-label="Orqaga"
+          aria-label={translate("common.back")}
           className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-muted"
         >
           <ArrowLeft size={18} />
@@ -70,12 +71,12 @@ export function CitySelector({ title, onSelectCity, onBack }: CitySelectorProps)
         <button
           type="button"
           onClick={() => {
-            setNotice("Avval shaharni tanlang");
+            setNotice(translate("location.pickCityFirst"));
             window.setTimeout(() => setNotice(""), 2200);
           }}
           className="rounded-full bg-accent px-4 py-2 text-[14px] font-semibold text-primary"
         >
-          Xarita
+          {translate("location.map")}
         </button>
       </header>
       <section className="border-b border-border px-5 py-4">
@@ -84,18 +85,18 @@ export function CitySelector({ title, onSelectCity, onBack }: CitySelectorProps)
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Qidirish"
+            placeholder={translate("location.search")}
             className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none"
           />
         </label>
         <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-          Avval shaharni tanlang, keyin xaritada aniq manzilni belgilang.
+          {translate("location.pickCityThenMap")}
         </p>
         {notice && <p className="mt-2 text-[12px] font-semibold text-destructive">{notice}</p>}
       </section>
       <section className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Shaharlar yuklanmoqda...</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">{translate("location.citiesLoading")}</div>
         ) : error ? (
           <div className="px-5 py-8 text-center text-[14px] text-destructive">{error}</div>
         ) : visibleCities.length ? (
@@ -117,7 +118,7 @@ export function CitySelector({ title, onSelectCity, onBack }: CitySelectorProps)
             </button>
           ))
         ) : (
-          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Shahar topilmadi</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">{translate("location.cityNotFound")}</div>
         )}
       </section>
     </main>

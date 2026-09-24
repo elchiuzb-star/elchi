@@ -237,7 +237,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Admin List Corridor Stops
+         * @description Every stop of a corridor for staff - inactive ones and draft corridors included, with the ``version`` a
+         *     ``PATCH /admin/stops/{id}`` needs and the Q27 evidence. The public list shows only active stops of open corridors.
+         */
+        get: operations["admin_list_corridor_stops_api_v2_admin_corridors__corridor_id__stops_get"];
         put?: never;
         /** Admin Create Stop */
         post: operations["admin_create_stop_api_v2_admin_corridors__corridor_id__stops_post"];
@@ -1402,6 +1407,26 @@ export interface paths {
         };
         /** Admin User Strikes */
         get: operations["admin_user_strikes_api_v2_admin_trust_users__user_id__strikes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Vehicles For Review
+         * @description T3a: vehicles awaiting (or past) a staff decision, oldest first. Same capability as T3 verify.
+         */
+        get: operations["list_vehicles_for_review_api_v2_admin_vehicles_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3528,6 +3553,14 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /**
+         * AdminDriverUnblock
+         * @description Body of ``POST /api/v1/admin/drivers/{driver_id}/unblock`` (additive endpoint).
+         */
+        AdminDriverUnblock: {
+            /** Reason */
+            reason?: string | null;
+        };
         /** AdminDriverVehicleUpdate */
         AdminDriverVehicleUpdate: {
             /** Car Color */
@@ -3584,6 +3617,102 @@ export interface components {
             phone: string;
             /** Role */
             role: string;
+        };
+        /**
+         * AdminVehicleDTO
+         * @description T3a: one row of the staff vehicle-verification queue (``ops.driver_eligibility_manage``).
+         */
+        AdminVehicleDTO: {
+            /** Baggage Capacity Ml */
+            baggage_capacity_ml: number | null;
+            /** Cargo Max Volume Ml */
+            cargo_max_volume_ml: number | null;
+            /** Cargo Max Weight G */
+            cargo_max_weight_g: number | null;
+            /** Color */
+            color: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Document File Ids */
+            document_file_ids: string[];
+            /** Id */
+            id: string;
+            /** Make Model */
+            make_model: string;
+            owner: components["schemas"]["AdminVehicleOwnerDTO"];
+            /** Plate Masked */
+            plate_masked: string;
+            /** Plate Number */
+            plate_number: string;
+            /** Seat Capacity */
+            seat_capacity: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Verification Reason
+             * @description Reason recorded with the last approve/reject decision.
+             */
+            verification_reason: string | null;
+            /** Verification Status */
+            verification_status: string;
+            /** Verified At */
+            verified_at: string | null;
+            /** Version */
+            version: number;
+        };
+        /**
+         * AdminVehicleOwnerDTO
+         * @description The owner as the verify screen needs it: who to act on and why they may still be ineligible.
+         *
+         *     No phone and no name: the staff queue decides about the car and the driver's eligibility block, and neither
+         *     needs contact data (the v1 driver card already shows it to the roles that need it).
+         */
+        AdminVehicleOwnerDTO: {
+            /** Account Active */
+            account_active: boolean;
+            /** Active Trip Count */
+            active_trip_count: number;
+            /**
+             * Blocked Reason
+             * @description Reason text of the active admin eligibility block, if any.
+             */
+            blocked_reason: string | null;
+            /**
+             * Driver Verification Status
+             * @description v1 driver profile status; null: no profile row.
+             */
+            driver_verification_status: string | null;
+            /**
+             * Eligibility Version
+             * @description expected_version for the eligibility command; null when the owner is not a driver.
+             */
+            eligibility_version: number | null;
+            /**
+             * Eligible
+             * @description Driver may take new business right now (D16), computed on this read.
+             */
+            eligible: boolean;
+            /**
+             * Is Driver
+             * @description False when the account no longer has the driver role (no eligibility then).
+             */
+            is_driver: boolean;
+            /**
+             * Reasons
+             * @description Why not eligible (not_verified, eligibility_blocked, document_expired...).
+             */
+            reasons: string[];
+            /**
+             * User Id
+             * @description Opaque user id (usr_...); the target of /admin/drivers/{user_id}/eligibility.
+             */
+            user_id: string;
         };
         /** AmendmentAccept */
         AmendmentAccept: {
@@ -6695,6 +6824,38 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[AdminStopDTO]] */
+        Envelope_list_AdminStopDTO__: {
+            /** Data */
+            data: components["schemas"]["AdminStopDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[AdminVehicleDTO]] */
+        Envelope_list_AdminVehicleDTO__: {
+            /** Data */
+            data: components["schemas"]["AdminVehicleDTO"][];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -13153,6 +13314,91 @@ export interface operations {
             };
         };
     };
+    admin_list_corridor_stops_api_v2_admin_corridors__corridor_id__stops_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                corridor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_AdminStopDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     admin_create_stop_api_v2_admin_corridors__corridor_id__stops_post: {
         parameters: {
             query?: never;
@@ -18432,6 +18678,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_UserStrikesDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_vehicles_for_review_api_v2_admin_vehicles_get: {
+        parameters: {
+            query?: {
+                /** @description Omit for every status. */
+                status?: ("pending" | "approved" | "rejected" | "blocked") | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_AdminVehicleDTO__"];
                 };
             };
             /** @description Bad Request */

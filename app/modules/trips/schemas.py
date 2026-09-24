@@ -57,6 +57,38 @@ class VehicleVerifyRequest(VersionedCommand):
         return self
 
 
+AdminVehicleStatus = Literal["pending", "approved", "rejected", "blocked"]
+
+
+class AdminVehicleOwnerDTO(ContractModel):
+    """The owner as the verify screen needs it: who to act on and why they may still be ineligible.
+
+    No phone and no name: the staff queue decides about the car and the driver's eligibility block, and neither
+    needs contact data (the v1 driver card already shows it to the roles that need it).
+    """
+
+    user_id: str = Field(description="Opaque user id (usr_...); the target of /admin/drivers/{user_id}/eligibility.")
+    is_driver: bool = Field(description="False when the account no longer has the driver role (no eligibility then).")
+    account_active: bool
+    driver_verification_status: str | None = Field(description="v1 driver profile status; null: no profile row.")
+    eligible: bool = Field(description="Driver may take new business right now (D16), computed on this read.")
+    reasons: list[str] = Field(description="Why not eligible (not_verified, eligibility_blocked, document_expired...).")
+    blocked_reason: str | None = Field(description="Reason text of the active admin eligibility block, if any.")
+    eligibility_version: int | None = Field(
+        description="expected_version for the eligibility command; null when the owner is not a driver."
+    )
+    active_trip_count: int
+
+
+class AdminVehicleDTO(VehicleDTO):
+    """T3a: one row of the staff vehicle-verification queue (``ops.driver_eligibility_manage``)."""
+
+    verification_reason: str | None = Field(description="Reason recorded with the last approve/reject decision.")
+    verified_at: UtcDateTime | None
+    updated_at: UtcDateTime
+    owner: AdminVehicleOwnerDTO
+
+
 # --- trips ----------------------------------------------------------------------------------
 
 

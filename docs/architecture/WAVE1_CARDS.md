@@ -2108,7 +2108,9 @@ tuzatishi mumkin bo'lgan rad javoblari endi rus tilida ham bo'lishi shart.
 **Qolgan — *ekran matni*:** `ConnectedApp.tsx` va admin panellaridagi sarlavha, tugma va izoh matnlari hamon
 o'zbekcha literal (~210 + ~280 satr).
 
-**Til almashtirgich UI'ga ataylab qo'yilmadi.** Hozir qo'yilsa, ekranning bir qismi ruscha (holatlar, xatolar),
+**24.09.2026 yangilanishi:** mijoz/haydovchi ekran matni lug'atga ko'chirildi — `py scripts/i18n_coverage.py`: 1431 dan 1420 (99.2%); qolgan 11 tasi server qiymatlari, brend va matn bo'lmagan satrlar. Shart bajarilgani uchun UZ/RU almashtirgich Sozlamalar ekranida ochildi. Admin panellari o'zbekcha qoladi.
+
+**Til almashtirgich UI'ga ataylab qo'yilmadi.** *(24.09.2026 gacha)* Hozir qo'yilsa, ekranning bir qismi ruscha (holatlar, xatolar),
 qolgani o'zbekcha bo'lib chiqadi — bu bitta halol tildan yomonroq. Almashtirgich ekran matni ko'chirilgandan
 keyin qo'yiladi; shu vaqtgacha tilni devtools orqali qo'yib tarjimalarni ko'rib chiqish mumkin.
 

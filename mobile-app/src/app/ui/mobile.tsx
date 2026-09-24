@@ -20,7 +20,7 @@ import { useState } from "react";
 import type { CSSProperties, ElementType, ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronRight, Loader2, Monitor, Moon, Send, Sun } from "./icons";
 
-import { translateDynamic } from "../../i18n";
+import { translate, translateDynamic } from "../../i18n";
 import { useThemeMode, type ThemeMode } from "./theme";
 
 // --- tokens -------------------------------------------------------------------------------------------------
@@ -289,7 +289,7 @@ export function PhoneField(props: {
           inputMode="numeric"
           // The label prop is optional (the sign-in screen shows its own heading instead), and without it the
           // wrapping <label> has no text - so the field falls back to naming itself.
-          aria-label={props.label ?? "Telefon raqami"}
+          aria-label={props.label ?? translate("ui.phoneNumber")}
           placeholder="__ ___ __ __"
           value={props.value}
           onChange={(event) => props.onChange(event.target.value.replace(/\D/g, "").slice(0, max))}
@@ -389,7 +389,7 @@ export function TopBar(props: { title: string; back?: () => void; right?: ReactN
         <button
           type="button"
           onClick={props.back}
-          aria-label="Orqaga"
+          aria-label={translate("common.back")}
           className="el-press flex h-9 w-9 items-center justify-center rounded-full bg-muted"
         >
           <ArrowLeft size={18} color={COLORS.text} />
@@ -627,7 +627,7 @@ export function EmptyState(props: {
   );
 }
 
-export function Loading({ label = "Yuklanmoqda..." }: { label?: string }) {
+export function Loading({ label = translate("common.loading") }: { label?: string }) {
   return (
     <div className="flex items-center justify-center gap-2 py-6 text-[13px] text-muted-foreground">
       <Loader2 size={16} className="animate-spin" />
@@ -655,7 +655,7 @@ export function ErrorNote({ message, onRetry }: { message: string | null; onRetr
       <p className="text-[13px] font-medium text-destructive">{message}</p>
       {onRetry ? (
         <button type="button" onClick={onRetry} className="self-start text-[13px] font-semibold text-primary">
-          Qayta urinish
+          {translate("common.retry")}
         </button>
       ) : null}
     </div>
@@ -808,7 +808,7 @@ export function ConfirmSheet(props: {
             onClick={props.onCancel}
             className="el-press h-[52px] rounded-[14px] bg-muted text-[15px] font-semibold text-muted-foreground"
           >
-            {props.cancelText ?? "Bekor qilish"}
+            {props.cancelText ?? translate("common.cancel")}
           </button>
           <button
             type="button"
@@ -959,7 +959,7 @@ export function RouteThread(props: {
   onFrom: () => void;
   onTo: () => void;
 }) {
-  const placeholder = props.placeholder ?? "Tanlang";
+  const placeholder = props.placeholder ?? translate("ui.choose");
   const end = (label: string, value: ReactNode | null, onClick: () => void) => (
     <button type="button" onClick={onClick} className="el-press flex items-center justify-between text-left py-2.5">
       <span className="min-w-0">
@@ -975,9 +975,9 @@ export function RouteThread(props: {
     <div className="flex gap-3">
       <ThreadSpine />
       <div className="flex-1 flex flex-col">
-        {end(props.fromLabel ?? "Qayerdan", props.from, props.onFrom)}
+        {end(props.fromLabel ?? translate("ui.from"), props.from, props.onFrom)}
         <div className="h-px bg-border" />
-        {end(props.toLabel ?? "Qayerga", props.to, props.onTo)}
+        {end(props.toLabel ?? translate("ui.to"), props.to, props.onTo)}
       </div>
     </div>
   );
@@ -1090,9 +1090,9 @@ export function ElchiLogo({ size = 40 }: { size?: number }) {
 export function AppearancePicker() {
   const { mode, setMode } = useThemeMode();
   const options: { id: ThemeMode; icon: ElementType; label: string; desc: string }[] = [
-    { id: "light", icon: Sun, label: "Yorug'", desc: "Doim yorug'" },
-    { id: "dark", icon: Moon, label: "Qorong'i", desc: "Doim qorong'i" },
-    { id: "system", icon: Monitor, label: "Tizim", desc: "Qurilmaga mos" },
+    { id: "light", icon: Sun, label: translate("ui.theme.light"), desc: translate("ui.theme.lightHint") },
+    { id: "dark", icon: Moon, label: translate("ui.theme.dark"), desc: translate("ui.theme.darkHint") },
+    { id: "system", icon: Monitor, label: translate("ui.theme.system"), desc: translate("ui.theme.systemHint") },
   ];
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -1168,7 +1168,7 @@ export function BarChart(props: {
   if (!props.data.length || peak <= 0) {
     return (
       <div className="flex items-center justify-center text-xs text-muted-foreground" style={{ height }}>
-        {props.empty ?? "Hali ma'lumot yo'q"}
+        {props.empty ?? translate("ui.emptyDefault")}
       </div>
     );
   }

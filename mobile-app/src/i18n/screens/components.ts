@@ -1,0 +1,157 @@
+/** Shared components: location pickers, maps, the client sidebar, the seat picker and mobile UI defaults. Merged into `messages` by `../messages.ts`. */
+import type { Message } from "../messages";
+
+export const componentsMessages = {
+  // --- location: city / region / district selectors ---
+  "location.citiesLoadFailed": { uz: "Shaharlarni yuklab bo'lmadi", ru: "Не удалось загрузить города" },
+  "location.pickCityFirst": { uz: "Avval shaharni tanlang", ru: "Сначала выберите город" },
+  "location.map": { uz: "Xarita", ru: "Карта" },
+  "location.search": { uz: "Qidirish", ru: "Поиск" },
+  "location.pickCityThenMap": {
+    uz: "Avval shaharni tanlang, keyin xaritada aniq manzilni belgilang.",
+    ru: "Сначала выберите город, затем отметьте точный адрес на карте.",
+  },
+  "location.citiesLoading": { uz: "Shaharlar yuklanmoqda...", ru: "Загрузка городов..." },
+  "location.cityNotFound": { uz: "Shahar topilmadi", ru: "Город не найден" },
+  "location.districtsLoadFailed": { uz: "Tumanlarni yuklab bo'lmadi", ru: "Не удалось загрузить районы" },
+  "location.pickDistrict": { uz: "Tumanni tanlang", ru: "Выберите район" },
+  "location.searchDistrict": { uz: "Tuman qidirish", ru: "Поиск района" },
+  "location.thenMarkOnMap": { uz: "Keyin xaritada aniq manzilni belgilang.", ru: "Затем отметьте точный адрес на карте." },
+  "location.districtsLoading": { uz: "Tumanlar yuklanmoqda...", ru: "Загрузка районов..." },
+  "location.districtNotFound": { uz: "Tuman topilmadi", ru: "Район не найден" },
+  "location.regionsLoadFailed": { uz: "Hududlarni yuklab bo'lmadi", ru: "Не удалось загрузить регионы" },
+  "location.pickRegionThenDistrict": {
+    uz: "Avval hududni tanlang, keyin tuman va bekatni belgilaysiz.",
+    ru: "Сначала выберите регион, затем укажете район и остановку.",
+  },
+  "location.regionsLoading": { uz: "Hududlar yuklanmoqda...", ru: "Загрузка регионов..." },
+  "location.districtRequired": { uz: "Tuman tanlanadi", ru: "Нужно выбрать район" },
+  "location.noDistrict": { uz: "Tumansiz", ru: "Без района" },
+  "location.regionNotFound": { uz: "Hudud topilmadi", ru: "Регион не найден" },
+
+  // --- location: map point picker ---
+  "location.radiusHintGeneric": {
+    uz: "Joy ELCHI yo'nalishidagi yo'ldan uzoq bo'lmasligi kerak.",
+    ru: "Место должно быть недалеко от дороги, по которой проходит направление ELCHI.",
+  },
+  "location.radiusHintKm": {
+    uz: "Joy haydovchi yuradigan yo'ldan {km} km dan uzoq bo'lmasligi kerak — haydovchi yo'lidan chiqmasdan sizni ola bilishi uchun.",
+    ru: "Место должно быть не дальше {km} км от дороги, по которой едет водитель, — чтобы он мог забрать вас, не сворачивая с пути.",
+  },
+  "location.mapLoading": { uz: "Xarita yuklanmoqda...", ru: "Загрузка карты..." },
+  "location.mapKeyMissingNoCentre": {
+    uz: "Xarita kaliti sozlanmagan va bu tumanning markazi katalogda yo'q — joyni belgilay olmaysiz.",
+    ru: "Ключ карты не настроен, а центра этого района нет в каталоге — отметить место не получится.",
+  },
+  "location.mapKeyMissingUseCentre": {
+    uz: "Xarita kaliti sozlanmagan — joyni tuman markazidan tasdiqlashingiz mumkin.",
+    ru: "Ключ карты не настроен — можно подтвердить место по центру района.",
+  },
+  "location.mapLoadFailed": {
+    uz: "Xarita yuklanmadi — internetni tekshirib qayta urinib ko'ring.",
+    ru: "Карта не загрузилась — проверьте интернет и попробуйте ещё раз.",
+  },
+  "location.searchPlaceholder": { uz: "Manzil yoki joy nomi", ru: "Адрес или название места" },
+  "location.distanceM": { uz: "{m} m", ru: "{m} м" },
+  "location.distanceKm": { uz: "{km} km", ru: "{km} км" },
+  "location.searchMiss": {
+    uz: "Bu nom bo'yicha joy topilmadi — xaritani qo'lda suring.",
+    ru: "По этому названию ничего не найдено — передвиньте карту вручную.",
+  },
+  "location.recentre": { uz: "Markazga qaytish", ru: "Вернуться к центру" },
+  "location.chosenPlace": { uz: "Tanlangan joy", ru: "Выбранное место" },
+  "location.placeNotMarked": { uz: "Joy belgilanmagan", ru: "Место не отмечено" },
+  "location.districtNotOnMap": {
+    uz: "{district} xaritada ochilmadi — joyni o'zingiz belgilang",
+    ru: "{district}: не удалось открыть на карте — отметьте место сами",
+  },
+  "location.districtFallback": { uz: "Tuman", ru: "Район" },
+  "location.addressResolving": { uz: "Manzil aniqlanmoqda...", ru: "Определяем адрес..." },
+  "location.noDistrictCentre": {
+    uz: "Bu tumanning markazi katalogda hali yo'q, shuning uchun xarita viloyat bo'yicha ochildi. Xaritani surib yoki qidiruvdan foydalanib o'z joyingizni belgilang.",
+    ru: "Центра этого района пока нет в каталоге, поэтому карта открылась по области. Передвиньте карту или воспользуйтесь поиском, чтобы отметить своё место.",
+  },
+  "location.pickThisPlace": { uz: "Shu joyni tanlash", ru: "Выбрать это место" },
+
+  // --- maps ---
+  "maps.keyMissing": { uz: "Xarita kaliti kiritilmagan", ru: "Ключ карты не указан" },
+  "maps.loadFailed": { uz: "Xarita yuklanmadi", ru: "Карта не загрузилась" },
+  "maps.loading": { uz: "Xarita yuklanmoqda...", ru: "Загрузка карты..." },
+  "maps.manualFallbackHint": {
+    uz: "Hudud va tumanni tanlab, manzilni qo'lda kiritib ham davom etish mumkin.",
+    ru: "Можно продолжить и без карты: выберите регион и район и введите адрес вручную.",
+  },
+  "maps.pickupPlace": { uz: "Olib ketish joyi", ru: "Место отправления" },
+  "maps.dropoffPlace": { uz: "Yetkazish joyi", ru: "Место доставки" },
+  "maps.chosenPoint": { uz: "Tanlangan nuqta: {lat}, {lng}", ru: "Выбранная точка: {lat}, {lng}" },
+  "maps.markPickup": { uz: "Olib ketish joyini belgilang", ru: "Отметьте место отправления" },
+  "maps.markDropoff": { uz: "Yetkazish joyini belgilang", ru: "Отметьте место доставки" },
+  "maps.noDefaultCoordinate": {
+    uz: "Bu tuman uchun default koordinata topilmadi",
+    ru: "Для этого района нет координат по умолчанию",
+  },
+  "maps.markerOutsideArea": {
+    uz: "Marker tanlangan viloyat/tumanga mos emas",
+    ru: "Метка не относится к выбранной области/району",
+  },
+  "maps.enterAddressManually": { uz: "Manzilni qo'lda kiriting", ru: "Введите адрес вручную" },
+  "maps.address": { uz: "Manzil", ru: "Адрес" },
+  "maps.from": { uz: "Qayerdan", ru: "Откуда" },
+  "maps.to": { uz: "Qayerga", ru: "Куда" },
+  "maps.city.tashkent": { uz: "Toshkent", ru: "Ташкент" },
+  "maps.city.samarkand": { uz: "Samarqand", ru: "Самарканд" },
+  "maps.city.bukhara": { uz: "Buxoro", ru: "Бухара" },
+  "maps.city.andijan": { uz: "Andijon", ru: "Андижан" },
+  "maps.city.namangan": { uz: "Namangan", ru: "Наманган" },
+  "maps.city.fergana": { uz: "Farg'ona", ru: "Фергана" },
+  "maps.city.kashkadarya": { uz: "Qashqadaryo", ru: "Кашкадарья" },
+  "maps.city.surkhandarya": { uz: "Surxondaryo", ru: "Сурхандарья" },
+  "maps.city.navoi": { uz: "Navoiy", ru: "Навои" },
+  "maps.city.jizzakh": { uz: "Jizzax", ru: "Джизак" },
+  "maps.city.syrdarya": { uz: "Sirdaryo", ru: "Сырдарья" },
+  "maps.city.khorezm": { uz: "Xorazm", ru: "Хорезм" },
+  "maps.city.karakalpakstan": { uz: "Qoraqalpog'iston", ru: "Каракалпакстан" },
+
+  // --- nav: client sidebar ---
+  "nav.home": { uz: "Bosh sahifa", ru: "Главная" },
+  "nav.homeHint": { uz: "Yangi buyurtma", ru: "Новый заказ" },
+  "nav.driverOffers": { uz: "Haydovchi e'lonlari", ru: "Объявления водителей" },
+  "nav.driverOffersHint": { uz: "Safarga chiqqan haydovchilar", ru: "Водители, которые уже в пути" },
+  "nav.orders": { uz: "Buyurtmalar", ru: "Заказы" },
+  "nav.ordersHint": { uz: "E'lonlar va bronlar", ru: "Объявления и брони" },
+  "nav.messages": { uz: "Xabarlar", ru: "Сообщения" },
+  "nav.messagesHint": { uz: "Bildirishnomalar", ru: "Уведомления" },
+  "nav.profile": { uz: "Profil", ru: "Профиль" },
+  "nav.profileHint": { uz: "Sozlamalar va hisob", ru: "Настройки и аккаунт" },
+  "nav.closeMenu": { uz: "Menyuni yopish", ru: "Закрыть меню" },
+  "nav.logout": { uz: "Chiqish", ru: "Выйти" },
+  "nav.menu": { uz: "Menyu", ru: "Меню" },
+
+  // --- seat picker ---
+  "seatPicker.front": { uz: "Oldinda", ru: "Спереди" },
+  "seatPicker.rearLeft": { uz: "Orqada, chap", ru: "Сзади, слева" },
+  "seatPicker.rearMiddle": { uz: "Orqada, o'rta", ru: "Сзади, посередине" },
+  "seatPicker.rearRight": { uz: "Orqada, o'ng", ru: "Сзади, справа" },
+  "seatPicker.howMany": { uz: "Necha kishi", ru: "Сколько человек" },
+  "seatPicker.peopleCount": { uz: "{count} kishi", ru: "Человек: {count}" },
+  "seatPicker.driver": { uz: "Haydovchi", ru: "Водитель" },
+  "seatPicker.bookedIs": { uz: "Bron qilinadigan narsa —", ru: "Бронируется —" },
+  "seatPicker.seatCount": { uz: "o'rinlar soni", ru: "количество мест" },
+  "seatPicker.seatNotReserved": {
+    uz: ". Qaysi o'rinda o'tirishni haydovchi bilan kelishasiz, ilova uni band qilmaydi.",
+    ru: ". Где именно сесть, вы договариваетесь с водителем — приложение конкретное место не резервирует.",
+  },
+
+  // --- ui: shared mobile component defaults ---
+  "ui.phoneNumber": { uz: "Telefon raqami", ru: "Номер телефона" },
+  "ui.choose": { uz: "Tanlang", ru: "Выберите" },
+  "ui.from": { uz: "Qayerdan", ru: "Откуда" },
+  "ui.to": { uz: "Qayerga", ru: "Куда" },
+  "ui.theme.light": { uz: "Yorug'", ru: "Светлая" },
+  "ui.theme.lightHint": { uz: "Doim yorug'", ru: "Всегда светлая" },
+  "ui.theme.dark": { uz: "Qorong'i", ru: "Тёмная" },
+  "ui.theme.darkHint": { uz: "Doim qorong'i", ru: "Всегда тёмная" },
+  "ui.theme.system": { uz: "Tizim", ru: "Системная" },
+  "ui.theme.systemHint": { uz: "Qurilmaga mos", ru: "Как на устройстве" },
+  "ui.emptyDefault": { uz: "Hali ma'lumot yo'q", ru: "Пока нет данных" },
+} as const satisfies Record<string, Message>;

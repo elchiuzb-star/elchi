@@ -10,7 +10,7 @@
 | F-02 | P2 | ✅ Yopildi | Haydovchi hamyonida kiritilgan (posted) balans ko'rsatilmasdi |
 | F-03 | P1 | ✅ Yopildi | Qarshi taklif klientda yo'q edi — ikki tomonlama kelishuvning yarmi |
 | F-04 | P2 | ✅ Yopildi | Yo'nalish tanlashda viloyat/tuman koridor ortida qulflangan edi (wave 10 davomida) |
-| F-05 | P3 | 📋 Ochiq (hujjatlangan) | v2 klient 150 yo'ldan 68 tasini chaqiradi; qolganining tasnifi |
+| F-05 | P3 | ✅ Asosan yopildi (24.09.2026) | `scripts/client_coverage.py`: 207 operatsiyadan 192 tasi ekranga ulangan (92.8%; doiradagilarning 98.5%); qolgani 1 NONE + 2 wrapper, 12 ataylab |
 | F-06 | P1 | ✅ Yopildi | Dev muhiti: backend tmpfs test bazasida ishlayotgan edi; `.env` v1 revizyali bazaga ko'rsatardi |
 
 ---

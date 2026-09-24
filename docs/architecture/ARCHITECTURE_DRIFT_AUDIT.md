@@ -348,7 +348,7 @@ py -m pytest tests/modules tests/contracts -q
 | B-2 | **D-02/D-03** — hujjat va testlar kod bilan zid; shu holatda wave yopilmaydi (§8 DoD) | A0a |
 | B-3 | Docker ochilmaguncha PG invariantlari isbotlanmaydi (§7: «test mavjud» ≠ «test o'tdi») | foydalanuvchi |
 | B-4 | `enforced` yo'lisiz Q90 ning abuse/safety chegarasi yo'q — pilot uchun qabul qilinadi, lekin launch checklistiga kiradi | A2 |
-| B-5 | Avvalgi qarzlar: `bookings/bridges.py` (Q59), U6 `rating_bucket` chegaralari, ADR-0021 staff MFA (Proposed) | avvalgi wave'lardan |
+| B-5 | Avvalgi qarzlar: `bookings/bridges.py` (Q59), U6 `rating_bucket` chegaralari, ADR-0021 staff MFA (Proposed) | avvalgi wave'lardan — **24.09.2026 holati: uchalasi yopilgan** (Q59 ko'prik o'chirilgan, U6 A-variant, ADR-0021 Accepted) |
 
 ---
 

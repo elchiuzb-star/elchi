@@ -4,8 +4,8 @@ from typing import Any
 
 from fastapi import status
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import AuditLog, Bid, City, Dispute, DriverProfile, DriverRoute, Order, StatusHistory, User
 from app.utils.file_access import signed_file_url
@@ -23,6 +23,7 @@ from app.utils.legacy_time import v1_naive
 ADMIN_ORDER_ROLES = {"operator", "admin", "super_admin"}
 ORDER_STATUSES = {"draft", "published", "bidding", "accepted", "picked_up", "in_transit", "delivered", "confirmed", "cancelled", "disputed"}
 MANUAL_TARGET_STATUSES = ORDER_STATUSES - {"draft"}
+ASSIGNABLE_ORDER_STATUSES = {"published", "bidding"}
 NORMAL_TRANSITIONS = {
     "draft": "published",
     "published": "bidding",
@@ -383,7 +384,7 @@ def assign_driver_manually(db: Session, user: User, order_id: int, payload: Admi
     order = db.scalar(select(Order).where(Order.id == order_id).with_for_update())
     if order is None:
         return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Order not found")
-    if order.status not in {"published", "bidding"}:
+    if order.status not in ASSIGNABLE_ORDER_STATUSES:
         return error_response(status.HTTP_400_BAD_REQUEST, "ORDER_INVALID_STATUS", "This status transition is not allowed")
     # Lock order (app/services/driver_locks.py): order -> active bids by id ->
     # driver user -> driver profile; eligibility is re-checked inside the locks.
@@ -447,6 +448,82 @@ def assign_driver_manually(db: Session, user: User, order_id: int, payload: Admi
         "system_fee": order.system_fee,
         "driver_income": order.driver_income,
         "accepted_bid_id": order.accepted_bid_id,
+    }
+
+
+def list_eligible_drivers_for_order(
+    db: Session, order_id: int, search: str | None, page: int, limit: int
+) -> dict[str, Any] | JSONResponse:
+    """Drivers that ``assign_driver_manually`` would accept for this order, read-only (no locks).
+
+    Same filters as the assignment checks: ``verification_status == approved``, ``users.status == active``, an
+    ``available`` route on the order's city pair and the review-account pairing rule. ``is_available`` is not
+    required by the assignment either, so it is only used to sort (available drivers first). The assignment
+    re-checks everything under locks, so this list is advisory. ``assignable`` says whether the order's status
+    still allows a manual assignment.
+    """
+    from app.services.admin_driver_service import driver_list_item_to_dict
+    from app.services.review_accounts import is_review_user_id, user_phone_matches_review_side
+
+    order = db.get(Order, order_id)
+    if order is None:
+        return error_response(status.HTTP_404_NOT_FOUND, "NOT_FOUND", "Order not found")
+    route_match = (
+        select(DriverRoute.id)
+        .where(
+            DriverRoute.driver_id == DriverProfile.id,
+            DriverRoute.from_city_id == order.from_city_id,
+            DriverRoute.to_city_id == order.to_city_id,
+            DriverRoute.status == "available",
+        )
+        .exists()
+    )
+    filters = [DriverProfile.verification_status == "approved", User.status == "active", route_match]
+    review_side = user_phone_matches_review_side(User.phone, is_review_user_id(db, order.client_id))
+    if review_side is not None:
+        filters.append(review_side)
+    if search is not None and search.strip():
+        pattern = f"%{search.strip()}%"
+        filters.append(
+            or_(
+                User.full_name.ilike(pattern),
+                User.phone.ilike(pattern),
+                DriverProfile.full_name.ilike(pattern),
+                DriverProfile.plate_number.ilike(pattern),
+                DriverProfile.car_model.ilike(pattern),
+            )
+        )
+    base = select(DriverProfile).join(User, User.id == DriverProfile.user_id).where(*filters)
+    count_stmt = select(func.count(DriverProfile.id)).join(User, User.id == DriverProfile.user_id).where(*filters)
+    offset, safe_limit = pagination(page, limit)
+    total = db.scalar(count_stmt) or 0
+    drivers = list(
+        db.scalars(
+            base.options(joinedload(DriverProfile.user))
+            .order_by(DriverProfile.is_available.desc(), DriverProfile.id.asc())
+            .offset(offset)
+            .limit(safe_limit)
+        )
+    )
+    active_bid_driver_ids = set(
+        db.scalars(select(Bid.driver_id).where(Bid.order_id == order.id, Bid.status == "active"))
+    )
+    items = []
+    for driver in drivers:
+        item = driver_list_item_to_dict(driver)
+        item["has_active_bid"] = driver.id in active_bid_driver_ids
+        items.append(item)
+    return {
+        "order_id": order.id,
+        "order_status": order.status,
+        "assignable": order.status in ASSIGNABLE_ORDER_STATUSES,
+        "items": items,
+        "pagination": {
+            "page": page,
+            "limit": safe_limit,
+            "total": total,
+            "total_pages": ceil(total / safe_limit) if total else 0,
+        },
     }
 
 

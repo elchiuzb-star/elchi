@@ -36,3 +36,11 @@ class AdminDriverBlock(BaseModel):
     # only for new business (v2 eligibility block); ``emergency=true`` also suspends the
     # account (stops trip operation, tracking, sessions) and is super_admin only.
     emergency: bool = False
+
+
+class AdminDriverUnblock(BaseModel):
+    """Body of ``POST /api/v1/admin/drivers/{driver_id}/unblock`` (additive endpoint)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = None

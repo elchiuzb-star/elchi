@@ -10,6 +10,7 @@ from app.schemas.admin_driver import (
     AdminDriverApprove,
     AdminDriverBlock,
     AdminDriverReject,
+    AdminDriverUnblock,
     AdminDriverVehicleUpdate,
 )
 from app.services.admin_driver_service import (
@@ -18,8 +19,13 @@ from app.services.admin_driver_service import (
     approve_driver,
     block_driver,
     get_admin_driver_detail,
+    list_admin_driver_audit_logs,
+    list_admin_driver_documents,
+    list_admin_driver_orders,
+    list_admin_driver_routes,
     list_admin_drivers,
     reject_driver,
+    unblock_driver,
     update_driver_vehicle,
 )
 from app.utils.api_response import error_response
@@ -107,6 +113,21 @@ def get_current_admin_driver_vehicle_editor(
         return error_response(403, "FORBIDDEN", "User account is not active")
     if not staff_roles_of(db, user):
         return error_response(403, "FORBIDDEN", "Admin or operator access required")
+    return user
+
+
+def get_current_admin_driver_audit_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | JSONResponse:
+    """Driver audit trail: admin/super_admin (effective roles, U5), like ``GET /admin/audit-logs``."""
+    user = authenticated_user(credentials, db)
+    if isinstance(user, JSONResponse):
+        return user
+    if user.status != "active":
+        return error_response(403, "FORBIDDEN", "User account is not active")
+    if not staff_roles_of(db, user) & ADMIN_DRIVER_MUTATION_ROLES:
+        return error_response(403, "FORBIDDEN", "Admin or super admin role required")
     return user
 
 
@@ -202,3 +223,86 @@ def post_admin_driver_block(
     if isinstance(result, JSONResponse):
         return result
     return {"success": True, "data": result, "message": "Driver blocked"}
+
+
+# --- Additive endpoints (mobile-app admin panel). Existing routes above are unchanged. -------------------------
+
+
+@router.get("/{driver_id}/documents", response_model=None)
+def get_admin_driver_documents(
+    driver_id: int,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User | JSONResponse = Depends(get_current_admin_driver_view_user),
+    db: Session = Depends(get_db),
+) -> dict | JSONResponse:
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    result = list_admin_driver_documents(db, driver_id, page, limit)
+    if isinstance(result, JSONResponse):
+        return result
+    return {"success": True, "data": result, "message": "OK"}
+
+
+@router.get("/{driver_id}/routes", response_model=None)
+def get_admin_driver_routes(
+    driver_id: int,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User | JSONResponse = Depends(get_current_admin_driver_view_user),
+    db: Session = Depends(get_db),
+) -> dict | JSONResponse:
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    result = list_admin_driver_routes(db, driver_id, page, limit)
+    if isinstance(result, JSONResponse):
+        return result
+    return {"success": True, "data": result, "message": "OK"}
+
+
+@router.get("/{driver_id}/orders", response_model=None)
+def get_admin_driver_orders(
+    driver_id: int,
+    status: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User | JSONResponse = Depends(get_current_admin_driver_view_user),
+    db: Session = Depends(get_db),
+) -> dict | JSONResponse:
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    result = list_admin_driver_orders(db, driver_id, status, page, limit)
+    if isinstance(result, JSONResponse):
+        return result
+    return {"success": True, "data": result, "message": "OK"}
+
+
+@router.get("/{driver_id}/audit-logs", response_model=None)
+def get_admin_driver_audit_logs(
+    driver_id: int,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User | JSONResponse = Depends(get_current_admin_driver_audit_user),
+    db: Session = Depends(get_db),
+) -> dict | JSONResponse:
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    result = list_admin_driver_audit_logs(db, driver_id, page, limit)
+    if isinstance(result, JSONResponse):
+        return result
+    return {"success": True, "data": result, "message": "OK"}
+
+
+@router.post("/{driver_id}/unblock", response_model=None)
+def post_admin_driver_unblock(
+    driver_id: int,
+    payload: AdminDriverUnblock,
+    current_user: User | JSONResponse = Depends(get_current_admin_driver_mutation_user),
+    db: Session = Depends(get_db),
+) -> dict | JSONResponse:
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    result = unblock_driver(db, current_user, driver_id, payload)
+    if isinstance(result, JSONResponse):
+        return result
+    return {"success": True, "data": result, "message": "Driver unblocked"}

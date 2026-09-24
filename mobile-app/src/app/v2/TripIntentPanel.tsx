@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import type { TripIntentDTO, TripIntentFitDTO } from "../../api/v2/tripIntents.api";
 import { Field, PrimaryButton, SecondaryButton, cls } from "../ui/mobile";
+import { translate, type MessageKey } from "../../i18n";
 import {
   fitNotes,
   intentSummary,
@@ -15,13 +16,13 @@ import {
   type ParcelFields,
 } from "../tripIntent";
 
-const PARCEL_TYPES: Array<[string, string]> = [
-  ["documents", "Hujjat"],
-  ["box", "Quti"],
-  ["bag", "Sumka"],
-  ["electronics", "Elektronika"],
-  ["clothing", "Kiyim"],
-  ["other", "Boshqa"],
+const PARCEL_TYPES: Array<[string, MessageKey]> = [
+  ["documents", "tripIntent.parcelType.documents"],
+  ["box", "tripIntent.parcelType.box"],
+  ["bag", "tripIntent.parcelType.bag"],
+  ["electronics", "tripIntent.parcelType.electronics"],
+  ["clothing", "tripIntent.parcelType.clothing"],
+  ["other", "tripIntent.parcelType.other"],
 ];
 
 export function TripIntentSummary(props: {
@@ -48,9 +49,9 @@ export function TripIntentSummary(props: {
   if (props.error && !intent) {
     return (
       <div className="rounded-[16px] border border-destructive/30 bg-destructive/5 p-4">
-        <p className="text-[13px] leading-5 text-destructive">Saqlangan talabni yuklab bo'lmadi: {props.error}</p>
+        <p className="text-[13px] leading-5 text-destructive">{translate("tripIntent.loadFailed", { error: props.error })}</p>
         <button type="button" onClick={props.onRetry} className="el-press mt-2 text-[13px] font-semibold text-primary">
-          Qayta urinish
+          {translate("common.retry")}
         </button>
       </div>
     );
@@ -58,13 +59,12 @@ export function TripIntentSummary(props: {
   if (!intent) {
     return (
       <div className="rounded-[16px] border border-dashed border-border bg-card p-4">
-        <p className="text-[14px] font-semibold text-foreground">Saqlangan talab yo'q</p>
+        <p className="text-[14px] font-semibold text-foreground">{translate("tripIntent.emptyTitle")}</p>
         <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-          Yo'nalish, vaqt va odamlar sonini bir marta kiriting - har bir haydovchiga taklif shu ma'lumot bilan
-          to'ldiriladi. Talab boshqalarga ko'rinmaydi va o'zi hech kimga yuborilmaydi.
+          {translate("tripIntent.emptyHint")}
         </p>
         <button type="button" onClick={props.onNew} className="el-press mt-3 h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground">
-          Yangi safar/jo'natma
+          {translate("tripIntent.new")}
         </button>
       </div>
     );
@@ -76,50 +76,50 @@ export function TripIntentSummary(props: {
   return (
     <div className={cls("rounded-[16px] border bg-card p-4", expired ? "border-warning/50" : "border-primary/30")}>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-        {intent.service_type === "passenger" ? "Safar talabingiz" : "Jo'natma talabingiz"}
+        {intent.service_type === "passenger" ? translate("tripIntent.passengerTitle") : translate("tripIntent.parcelTitle")}
       </p>
       <p className="mt-1 text-[15px] font-semibold leading-6 text-foreground" data-testid="intent-summary">
         {intentSummary(intent)}
       </p>
       {v.price_basis && v.unit_price_minor ? (
         <p className="mt-0.5 text-[12px] text-muted-foreground">
-          Siz o'ylagan narx: {priceLine(v.price_basis, v.unit_price_minor, v.quantity)}
+          {translate("tripIntent.yourPrice", { price: priceLine(v.price_basis, v.unit_price_minor, v.quantity) })}
         </p>
       ) : null}
       {intent.open_offers > 0 && !booked && (
-        <p className="mt-0.5 text-[12px] text-muted-foreground">Ochiq takliflaringiz: {intent.open_offers} ta</p>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">{translate("tripIntent.openOffers", { count: intent.open_offers })}</p>
       )}
       {expired && !booked && (
         <p className="mt-2 rounded-[10px] bg-warning/14 px-3 py-2 text-[12px] leading-5 text-warning">
-          Vaqt o'tib ketgan. Sana avtomatik o'zgartirilmaydi - yangi vaqtni tanlang.
+          {translate("tripIntent.expiredHint")}
         </p>
       )}
       {booked && (
         <p className="mt-2 rounded-[10px] bg-accent px-3 py-2 text-[12px] leading-5 text-primary">
           {props.intent?.can_reopen
-            ? "Shu talabdan qilingan bron bekor qilindi. Eski takliflar qayta ochilmaydi - xohlasangiz qidiruvni qaytadan boshlang."
-            : "Shu talab bo'yicha bron qilindi. Boshqa haydovchilarga yuborilgan takliflar yopildi."}
+            ? translate("tripIntent.bookingCancelledHint")
+            : translate("tripIntent.bookedHint")}
         </p>
       )}
       <div className="mt-3 flex gap-2">
         {booked ? (
           props.intent?.can_reopen ? (
             <button type="button" disabled={props.busy} onClick={props.onReopen} className="el-press min-h-10 flex-1 rounded-[10px] px-2 py-2 leading-tight bg-primary text-[13px] font-semibold text-primary-foreground disabled:opacity-60">
-              Qayta qidirish
+              {translate("bookingCancel.searchAgain")}
             </button>
           ) : null
         ) : (
           <button type="button" disabled={props.busy} onClick={props.onEdit} className={cls("el-press min-h-10 flex-1 rounded-[10px] px-2 py-2 leading-tight text-[13px] font-semibold disabled:opacity-60", expired ? "bg-primary text-primary-foreground" : "border border-primary text-primary")}>
-            {expired ? "Vaqtni yangilash" : "Tahrirlash"}
+            {expired ? translate("tripIntent.updateTime") : translate("listingOwner.edit")}
           </button>
         )}
         <button type="button" disabled={props.busy} onClick={props.onNew} className="el-press min-h-10 flex-1 rounded-[10px] px-2 py-2 leading-tight border border-border text-[13px] font-semibold text-foreground disabled:opacity-60">
-          Yangi safar/jo'natma
+          {translate("tripIntent.new")}
         </button>
       </div>
       {others.length > 0 && (
         <div className="mt-3 border-t border-border pt-3">
-          <p className="text-[11px] font-semibold text-muted-foreground">Boshqa talablaringiz</p>
+          <p className="text-[11px] font-semibold text-muted-foreground">{translate("tripIntent.others")}</p>
           <div className="mt-1.5 flex flex-col gap-1.5">
             {others.map((item) => (
               <button
@@ -146,7 +146,7 @@ export function TripIntentFitNotes({ fit, loading }: { fit: TripIntentFitDTO | n
   if (!notes.length) {
     return (
       <p className="rounded-[12px] bg-accent px-3 py-2.5 text-[12px] leading-5 text-primary">
-        Talabingiz shu e'longa mos: vaqt, joy va o'rinlar to'g'ri keladi.
+        {translate("tripIntent.fits")}
       </p>
     );
   }
@@ -196,10 +196,10 @@ export function editProblems(form: IntentEditForm, now: Date = new Date()): stri
   const problems: string[] = [];
   const start = new Date(form.windowStart);
   const end = new Date(form.windowEnd);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) problems.push("Vaqt oralig'ini to'liq kiriting.");
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) problems.push(translate("tripIntent.problem.windowIncomplete"));
   else {
-    if (end <= start) problems.push("Tugash vaqti boshlanish vaqtidan keyin bo'lishi kerak.");
-    if (end <= now) problems.push("Vaqt o'tib ketgan - kelajakdagi vaqtni tanlang.");
+    if (end <= start) problems.push(translate("tripIntent.problem.endBeforeStart"));
+    if (end <= now) problems.push(translate("tripIntent.problem.past"));
   }
   return problems;
 }
@@ -219,24 +219,24 @@ export function TripIntentEditor(props: {
   return (
     <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
       <div className="rounded-[14px] bg-background p-4">
-        <p className="text-[12px] font-semibold text-muted-foreground">Yo'nalish</p>
+        <p className="text-[12px] font-semibold text-muted-foreground">{translate("tripIntent.route")}</p>
         <p className="mt-1 text-[15px] font-semibold text-foreground">{intentSummary(props.intent).split(" · ")[0]}</p>
         <button type="button" onClick={props.onChangeRoute} className="el-press mt-2 text-[13px] font-semibold text-primary">
-          Yo'nalishni o'zgartirish
+          {translate("tripIntent.changeRoute")}
         </button>
       </div>
-      <Field label="Jo'nash oynasi boshlanishi" type="datetime-local" value={form.windowStart} onChange={(v) => set({ windowStart: v })} />
-      <Field label="Jo'nash oynasi tugashi" type="datetime-local" min={form.windowStart} value={form.windowEnd} onChange={(v) => set({ windowEnd: v })} />
+      <Field label={translate("tripIntent.windowStart")} type="datetime-local" value={form.windowStart} onChange={(v) => set({ windowStart: v })} />
+      <Field label={translate("tripIntent.windowEnd")} type="datetime-local" min={form.windowStart} value={form.windowEnd} onChange={(v) => set({ windowEnd: v })} />
       {passenger && (
         <Field
-          label="Necha kishi"
+          label={translate("tripIntent.people")}
           type="number"
           value={String(form.quantity)}
           onChange={(v) => set({ quantity: Math.max(1, Math.min(8, Number(v) || 1)) })}
         />
       )}
       <Field
-        label={passenger ? "Bir kishi uchun narx (so'm, ixtiyoriy)" : "Narx (so'm, ixtiyoriy)"}
+        label={passenger ? translate("tripIntent.pricePerPerson") : translate("tripIntent.priceTotal")}
         type="number"
         value={form.price}
         onChange={(v) => set({ price: v })}
@@ -250,34 +250,33 @@ export function TripIntentEditor(props: {
       {!passenger && (
         <>
           <label className="flex flex-col gap-1.5">
-            <span className="text-[14px] font-medium text-secondary-foreground">Jo'natma turi</span>
+            <span className="text-[14px] font-medium text-secondary-foreground">{translate("tripIntent.parcelTypeLabel")}</span>
             <select
               value={form.parcelType}
               onChange={(event) => set({ parcelType: event.target.value })}
               className="h-12 rounded-[12px] border border-border bg-card px-4 text-[15px] text-foreground"
             >
               {PARCEL_TYPES.map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+                <option key={value} value={value}>{translate(label)}</option>
               ))}
             </select>
           </label>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Og'irlik (kg)" type="number" value={form.weightKg} onChange={(v) => set({ weightKg: v })} />
-            <Field label="Uzunlik (sm)" type="number" value={form.lengthCm} onChange={(v) => set({ lengthCm: v })} />
-            <Field label="Eni (sm)" type="number" value={form.widthCm} onChange={(v) => set({ widthCm: v })} />
-            <Field label="Balandligi (sm)" type="number" value={form.heightCm} onChange={(v) => set({ heightCm: v })} />
+            <Field label={translate("tripIntent.weight")} type="number" value={form.weightKg} onChange={(v) => set({ weightKg: v })} />
+            <Field label={translate("tripIntent.length")} type="number" value={form.lengthCm} onChange={(v) => set({ lengthCm: v })} />
+            <Field label={translate("tripIntent.width")} type="number" value={form.widthCm} onChange={(v) => set({ widthCm: v })} />
+            <Field label={translate("tripIntent.height")} type="number" value={form.heightCm} onChange={(v) => set({ heightCm: v })} />
           </div>
-          <Field label="Qabul qiluvchi ismi" value={form.receiverName} onChange={(v) => set({ receiverName: v })} />
-          <Field label="Qabul qiluvchi telefoni" value={form.receiverPhone} onChange={(v) => set({ receiverPhone: v })} placeholder="+998..." />
+          <Field label={translate("tripIntent.receiverName")} value={form.receiverName} onChange={(v) => set({ receiverName: v })} />
+          <Field label={translate("tripIntent.receiverPhone")} value={form.receiverPhone} onChange={(v) => set({ receiverPhone: v })} placeholder="+998..." />
           <p className="-mt-2 text-[12px] leading-5 text-muted-foreground">
-            Qabul qiluvchi ma'lumoti faqat sizga ko'rinadi; haydovchi uni jo'natmani olgandan keyin ko'radi.
+            {translate("tripIntent.receiverHint")}
           </p>
         </>
       )}
       {props.intent.open_offers > 0 && (
         <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
-          Sizda {props.intent.open_offers} ta ochiq taklif bor. Yo'nalish, vaqt, odamlar soni yoki jo'natma
-          o'zgarsa, ular yopiladi - saqlashdan oldin so'raymiz. Faqat narxni o'zgartirish ularga tegmaydi.
+          {translate("tripIntent.openOffersWarning", { count: props.intent.open_offers })}
         </p>
       )}
       {problems.length > 0 && (
@@ -289,10 +288,10 @@ export function TripIntentEditor(props: {
       )}
       <div className="mt-auto space-y-2">
         <PrimaryButton disabled={props.busy || problems.length > 0} onClick={() => props.onSave(form)}>
-          Saqlash
+          {translate("common.save")}
         </PrimaryButton>
         <SecondaryButton danger disabled={props.busy} onClick={props.onClose}>
-          Talabni yopish
+          {translate("tripIntent.close")}
         </SecondaryButton>
       </div>
     </section>

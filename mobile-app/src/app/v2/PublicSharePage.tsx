@@ -10,6 +10,7 @@ import { formatMinor, formatWindow, priceBasisLabel } from "../../utils/v2Format
 import { Badge, COLORS, Card, ErrorNote, Loading, PrimaryButton, Row, ScreenBody } from "../ui/mobile";
 import { v2ErrorMessage } from "../../utils/v2Errors";
 import { useAsync } from "./useAsync";
+import { translate } from "../../i18n";
 
 export function PublicSharePage({ token, onOpenApp }: { token: string; onOpenApp: () => void }) {
   const page = useAsync<PublicListingPageDTO>(() => publicListingPage(token), [token]);
@@ -26,7 +27,7 @@ export function PublicSharePage({ token, onOpenApp }: { token: string; onOpenApp
       <ScreenBody>
         <ErrorNote message={page.error ? v2ErrorMessage(page.error) : null} onRetry={page.reload} />
         <span style={{ fontSize: 14, color: COLORS.muted }}>
-          Havola eskirgan bo'lishi mumkin. E'lon egasidan yangi havola so'rang.
+          {translate("publicShare.linkStale")}
         </span>
       </ScreenBody>
     );
@@ -40,26 +41,26 @@ export function PublicSharePage({ token, onOpenApp }: { token: string; onOpenApp
           <strong>
             {item.origin_stop_name} → {item.destination_stop_name}
           </strong>
-          <Badge text={item.status_open ? "Ochiq" : "Yopiq"} tone={item.status_open ? "ok" : "neutral"} />
+          <Badge text={item.status_open ? translate("publicShare.open") : translate("publicShare.closed")} tone={item.status_open ? "ok" : "neutral"} />
         </div>
-        <Row label="Xizmat" value={item.service_type === "passenger" ? "Yo'lovchi" : "Pochta"} />
-        <Row label="Sana" value={item.departure_date} />
-        <Row label="Vaqt oynasi" value={formatWindow(item.departure_window_start, item.departure_window_end)} />
-        <Row label="Narx birligi" value={priceBasisLabel(item.price_basis)} />
-        <Row label="Jami" value={formatMinor(item.total_minor, item.currency)} strong />
+        <Row label={translate("publicShare.service")} value={item.service_type === "passenger" ? translate("publicShare.passenger") : translate("publicShare.parcel")} />
+        <Row label={translate("publicShare.date")} value={item.departure_date} />
+        <Row label={translate("publicShare.window")} value={formatWindow(item.departure_window_start, item.departure_window_end)} />
+        <Row label={translate("publicShare.priceBasis")} value={priceBasisLabel(item.price_basis)} />
+        <Row label={translate("common.total")} value={formatMinor(item.total_minor, item.currency)} strong />
       </Card>
 
       <Card>
         <span style={{ fontSize: 14, color: COLORS.muted }}>
           {item.status_open
-            ? "Taklif berish uchun ilovaga kiring: telefon raqamingiz SMS kod bilan tasdiqlanadi. Bron ilova ichida saqlanadi."
-            : "Bu e'lon hozir yangi taklif qabul qilmayapti."}
+            ? translate("publicShare.openHint")
+            : translate("publicShare.closedHint")}
         </span>
-        <PrimaryButton onClick={onOpenApp} disabled={!item.status_open}>Ilovani ochish</PrimaryButton>
+        <PrimaryButton onClick={onOpenApp} disabled={!item.status_open}>{translate("publicShare.openApp")}</PrimaryButton>
       </Card>
 
       <span style={{ fontSize: 12, color: COLORS.muted }}>
-        Bu sahifada e'lon egasining ismi va telefoni ko'rsatilmaydi.
+        {translate("publicShare.privacy")}
       </span>
     </ScreenBody>
   );

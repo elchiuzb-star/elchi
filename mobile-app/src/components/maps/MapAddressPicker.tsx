@@ -5,6 +5,7 @@ import { CentrePin, YandexMap, useYandexMapsStatus } from "./YandexMap";
 import { TASHKENT, type LatLng } from "./yandex";
 import { geocodeAddress, reverseGeocode, validateGeoLocation } from "../../api/geo.api";
 import type { City, District } from "../../types/city";
+import { translate } from "../../i18n";
 
 /**
  * The v1 order form's address picker: a place inside a chosen region/district.
@@ -40,7 +41,7 @@ function readCoordinate(value: number | string | null | undefined): number | nul
 }
 
 function coordinateLabel(point: LatLng): string {
-  return `Tanlangan nuqta: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
+  return translate("maps.chosenPoint", { lat: point.lat.toFixed(6), lng: point.lng.toFixed(6) });
 }
 
 export function MapAddressPicker({
@@ -54,7 +55,7 @@ export function MapAddressPicker({
   onBack,
 }: MapAddressPickerProps) {
   const status = useYandexMapsStatus();
-  const title = mode === "pickup" ? "Olib ketish joyini belgilang" : "Yetkazish joyini belgilang";
+  const title = mode === "pickup" ? translate("maps.markPickup") : translate("maps.markDropoff");
   const districtLabel = [district?.name_uz, city.name_uz, city.region].filter(Boolean).join(", ");
 
   const start = useMemo<LatLng>(() => {
@@ -71,7 +72,7 @@ export function MapAddressPicker({
   const [searchMiss, setSearchMiss] = useState(false);
   const [locationWarning, setLocationWarning] = useState(
     district && (readCoordinate(district.center_lat) === null || readCoordinate(district.center_lng) === null)
-      ? "Bu tuman uchun default koordinata topilmadi"
+      ? translate("maps.noDefaultCoordinate")
       : "",
   );
   const [validating, setValidating] = useState(false);
@@ -104,10 +105,10 @@ export function MapAddressPicker({
     setValidating(true);
     validateGeoLocation({ lat: settled.lat, lng: settled.lng, region_id: city.id, district_id: district.id })
       .then((result) => {
-        if (active) setLocationWarning(result.valid ? "" : result.message || "Marker tanlangan viloyat/tumanga mos emas");
+        if (active) setLocationWarning(result.valid ? "" : result.message || translate("maps.markerOutsideArea"));
       })
       .catch(() => {
-        if (active) setLocationWarning("Marker tanlangan viloyat/tumanga mos emas");
+        if (active) setLocationWarning(translate("maps.markerOutsideArea"));
       })
       .finally(() => {
         if (active) setValidating(false);
@@ -142,32 +143,32 @@ export function MapAddressPicker({
     return (
       <div className="absolute inset-0 z-50 flex flex-col bg-card">
         <div className="flex h-14 items-center gap-3 border-b border-border px-5">
-          <button type="button" aria-label="Orqaga" onClick={onBack} className="el-press flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+          <button type="button" aria-label={translate("common.back")} onClick={onBack} className="el-press flex h-9 w-9 items-center justify-center rounded-full bg-muted">
             <ArrowLeft size={18} />
           </button>
           <h2 className="text-[17px] font-semibold text-foreground">{title}</h2>
         </div>
         <div className="flex flex-1 flex-col justify-center px-6 text-center">
           <p className="text-[18px] font-semibold text-foreground">
-            {status === "missing-key" ? "Xarita kaliti kiritilmagan" : "Xarita yuklanmadi"}
+            {status === "missing-key" ? translate("maps.keyMissing") : translate("maps.loadFailed")}
           </p>
-          <p className="mt-2 text-[14px] leading-6 text-muted-foreground">Manzilni qo'lda kiriting</p>
+          <p className="mt-2 text-[14px] leading-6 text-muted-foreground">{translate("maps.enterAddressManually")}</p>
           <input
             value={manualAddress}
             onChange={(event) => setManualAddress(event.target.value)}
-            placeholder="Manzil"
+            placeholder={translate("maps.address")}
             className="el-focus mt-5 h-[52px] rounded-[12px] border-[1.5px] border-border px-4 text-[15px] outline-none"
           />
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button onClick={onBack} className="el-press h-[52px] rounded-[14px] bg-muted text-[15px] font-semibold text-muted-foreground">
-              Bekor qilish
+              {translate("common.cancel")}
             </button>
             <button
               disabled={!manualAddress.trim()}
               onClick={() => onConfirm({ lat: null, lng: null, address: manualAddress.trim() })}
               className="el-press h-[52px] rounded-[14px] bg-primary text-[15px] font-semibold text-primary-foreground disabled:bg-slate-400"
             >
-              Saqlash
+              {translate("common.save")}
             </button>
           </div>
         </div>
@@ -178,7 +179,7 @@ export function MapAddressPicker({
   return (
     <div className="absolute inset-0 z-50 flex flex-col bg-card">
       <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-5">
-        <button type="button" aria-label="Orqaga" onClick={onBack} className="el-press flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+        <button type="button" aria-label={translate("common.back")} onClick={onBack} className="el-press flex h-9 w-9 items-center justify-center rounded-full bg-muted">
           <ArrowLeft size={18} />
         </button>
         <h2 className="min-w-0 flex-1 truncate text-[17px] font-semibold text-foreground">{title}</h2>
@@ -192,7 +193,7 @@ export function MapAddressPicker({
           style={{ width: "100%", height: "100%" }}
           fallback={() => (
             <div className="flex h-full items-center justify-center bg-muted text-[14px] text-muted-foreground">
-              Xarita yuklanmoqda...
+              {translate("maps.loading")}
             </div>
           )}
         />
@@ -210,13 +211,13 @@ export function MapAddressPicker({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") void runSearch();
                 }}
-                placeholder="Manzil yoki joy nomi"
+                placeholder={translate("location.searchPlaceholder")}
                 className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none"
               />
             </label>
             {searchMiss && (
               <p className="mt-2 rounded-[10px] bg-card/95 px-3 py-2 text-[12px] text-muted-foreground shadow-sm">
-                Bu nom bo'yicha joy topilmadi — xaritani qo'lda suring.
+                {translate("location.searchMiss")}
               </p>
             )}
           </div>
@@ -226,7 +227,7 @@ export function MapAddressPicker({
       <div className="shrink-0 space-y-3 border-t border-border bg-card px-5 py-4">
         <div className="rounded-[14px] border border-border bg-slate-50 p-4">
           <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            <MapPin size={13} color="var(--primary)" /> Tanlangan joy
+            <MapPin size={13} color="var(--primary)" /> {translate("location.chosenPlace")}
           </p>
           <p className="mt-1 text-[15px] font-semibold leading-6 text-foreground">
             {address || coordinateLabel(settled)}
@@ -240,7 +241,7 @@ export function MapAddressPicker({
           onClick={() => onConfirm({ lat: settled.lat, lng: settled.lng, address: address || coordinateLabel(settled) })}
           className="el-press flex h-[52px] w-full items-center justify-center rounded-[14px] bg-primary text-[16px] font-semibold text-primary-foreground disabled:bg-slate-400"
         >
-          {validating ? "Tekshirilmoqda..." : "Shu joyni tanlash"}
+          {validating ? translate("common.checking") : translate("location.pickThisPlace")}
         </button>
       </div>
     </div>

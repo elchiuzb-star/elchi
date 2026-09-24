@@ -276,8 +276,8 @@ class EventDTO(ContractModel):
     payload: dict[str, Any]
 
 
-# --- wave 3 integration: A7 communications DTOs (copied unchanged from app/modules/communications/schemas.py; the
-# module switches to these imports as a follow-up, tests/contracts/test_wave3_integration.py keeps both identical) ---
+# --- wave 3 integration: A7 communications DTOs. Single definition: app/modules/communications/schemas.py re-exports
+# these classes (wave 3.1) and defines no copies; tests/contracts/test_wave3_integration.py checks the identity. ---
 
 PUSH_TOKEN_MAX_LENGTH = 4096
 REASON_MAX_LENGTH = 500

@@ -549,6 +549,22 @@ def admin_patch_corridor(
     return Envelope[CorridorAdminDTO](data=run_versioned(db, handler))
 
 
+@router.get(
+    "/admin/corridors/{corridor_id}/stops", response_model=Envelope[list[AdminStopDTO]], responses=ERROR_RESPONSES, tags=[GEO_TAG]
+)
+def admin_list_corridor_stops(
+    corridor_id: str = Path(max_length=64),
+    _actor: Actor = Depends(require_capability(Capability.OPS_VIEW)),
+    db: Session = Depends(get_db),
+) -> Envelope[list[AdminStopDTO]]:
+    """Every stop of a corridor for staff - inactive ones and draft corridors included, with the ``version`` a
+    ``PATCH /admin/stops/{id}`` needs and the Q27 evidence. The public list shows only active stops of open corridors."""
+    corridor = service.get_corridor_by_api_id(db, corridor_id)
+    return Envelope[list[AdminStopDTO]](
+        data=[_admin_stop_dto(stop) for stop in service.list_corridor_stops(db, corridor, active_only=False)]
+    )
+
+
 @router.post(
     "/admin/corridors/{corridor_id}/stops",
     response_model=Envelope[AdminStopDTO],

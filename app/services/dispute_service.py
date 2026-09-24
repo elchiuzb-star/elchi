@@ -191,6 +191,12 @@ def add_dispute_notifications(db: Session, order: Order, opened_by: User) -> Non
         if driver is not None:
             create_notification(db, driver.user_id, "disputed", "Muammo ochildi", "Buyurtma bo'yicha muammo ochildi", order_id=order.id)
     # TODO: add operator/admin group notifications when staff notification targets exist.
+    # Checked 24.09.2026: none exists yet. v1 ``notifications`` rows are per-user only (no group/role target), and a
+    # fan-out to every staff user would invent one. The v2 outbox does not deliver staff events per user either
+    # (``app/modules/communications/recipients.py``: "Staff-only events are not delivered per user"), and the v2 O4
+    # dispute queue (``operations.service.ops_queue``) lists v2 ``trust_support`` disputes, not these v1 rows.
+    # Staff find new v1 disputes through ``GET /api/v1/admin/disputes`` (status=open). Needs a decision on a staff
+    # target (group inbox or queue) before this can be wired.
 
 
 def open_dispute(db: Session, user: User, order_id: int, payload: DisputeCreate) -> Dispute | JSONResponse:

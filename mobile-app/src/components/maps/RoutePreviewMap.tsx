@@ -1,5 +1,6 @@
 import { MapLine, MapMarker, YandexMap } from "./YandexMap";
 import { TASHKENT, type LatLng } from "./yandex";
+import { translate } from "../../i18n";
 
 type RoutePreviewMapProps = {
   fromCity: unknown;
@@ -16,19 +17,21 @@ type CityPoint = {
 const fallbackCenter = TASHKENT;
 
 const cityPoints: CityPoint[] = [
-  { name: "Toshkent", lat: 41.2995, lng: 69.2401, terms: ["toshkent", "tashkent"] },
-  { name: "Samarqand", lat: 39.6542, lng: 66.9597, terms: ["samarqand", "samarkand"] },
-  { name: "Buxoro", lat: 39.7747, lng: 64.4286, terms: ["buxoro", "bukhara"] },
-  { name: "Andijon", lat: 40.7821, lng: 72.3442, terms: ["andijon", "andijan"] },
-  { name: "Namangan", lat: 41.0011, lng: 71.6683, terms: ["namangan"] },
-  { name: "Farg'ona", lat: 40.3894, lng: 71.7843, terms: ["fargona", "farg'ona", "fergana"] },
-  { name: "Qashqadaryo", lat: 38.8610, lng: 65.7847, terms: ["qashqadaryo", "qarshi", "kashkadarya"] },
-  { name: "Surxondaryo", lat: 37.2242, lng: 67.2783, terms: ["surxondaryo", "termiz", "surkhandarya"] },
-  { name: "Navoiy", lat: 40.1039, lng: 65.3688, terms: ["navoiy", "navoi"] },
-  { name: "Jizzax", lat: 40.1158, lng: 67.8422, terms: ["jizzax", "jizzakh"] },
-  { name: "Sirdaryo", lat: 40.4897, lng: 68.7842, terms: ["sirdaryo", "guliston", "syrdarya"] },
-  { name: "Xorazm", lat: 41.5500, lng: 60.6333, terms: ["xorazm", "urganch", "khorezm"] },
-  { name: "Qoraqalpog'iston", lat: 42.4619, lng: 59.6166, terms: ["qoraqalpogiston", "qoraqalpog'iston", "nukus", "karakalpakstan"] },
+  { get name() { return translate("maps.city.tashkent"); }, lat: 41.2995, lng: 69.2401, terms: ["toshkent", "tashkent"] },
+  { get name() { return translate("maps.city.samarkand"); }, lat: 39.6542, lng: 66.9597, terms: ["samarqand", "samarkand"] },
+  { get name() { return translate("maps.city.bukhara"); }, lat: 39.7747, lng: 64.4286, terms: ["buxoro", "bukhara"] },
+  { get name() { return translate("maps.city.andijan"); }, lat: 40.7821, lng: 72.3442, terms: ["andijon", "andijan"] },
+  { get name() { return translate("maps.city.namangan"); }, lat: 41.0011, lng: 71.6683, terms: ["namangan"] },
+  // i18n-ignore: search aliases, not display text
+  { get name() { return translate("maps.city.fergana"); }, lat: 40.3894, lng: 71.7843, terms: ["fargona", "farg'ona", "fergana"] },
+  { get name() { return translate("maps.city.kashkadarya"); }, lat: 38.8610, lng: 65.7847, terms: ["qashqadaryo", "qarshi", "kashkadarya"] },
+  { get name() { return translate("maps.city.surkhandarya"); }, lat: 37.2242, lng: 67.2783, terms: ["surxondaryo", "termiz", "surkhandarya"] },
+  { get name() { return translate("maps.city.navoi"); }, lat: 40.1039, lng: 65.3688, terms: ["navoiy", "navoi"] },
+  { get name() { return translate("maps.city.jizzakh"); }, lat: 40.1158, lng: 67.8422, terms: ["jizzax", "jizzakh"] },
+  { get name() { return translate("maps.city.syrdarya"); }, lat: 40.4897, lng: 68.7842, terms: ["sirdaryo", "guliston", "syrdarya"] },
+  { get name() { return translate("maps.city.khorezm"); }, lat: 41.5500, lng: 60.6333, terms: ["xorazm", "urganch", "khorezm"] },
+  // i18n-ignore: search aliases, not display text
+  { get name() { return translate("maps.city.karakalpakstan"); }, lat: 42.4619, lng: 59.6166, terms: ["qoraqalpogiston", "qoraqalpog'iston", "nukus", "karakalpakstan"] },
 ];
 
 function normalize(value: string) {
@@ -88,13 +91,13 @@ export function RoutePreviewMap({ fromCity, toCity }: RoutePreviewMapProps) {
           <div className="h-[148px] animate-pulse bg-accent" />
         ) : (
           <div className="flex h-[148px] items-center justify-center bg-accent px-4 text-center text-[13px] font-medium text-primary">
-            {status === "missing-key" ? "Xarita kaliti kiritilmagan" : "Xarita yuklanmadi"}
+            {status === "missing-key" ? translate("maps.keyMissing") : translate("maps.loadFailed")}
           </div>
         )
       }
     >
-      {fromPosition && <MapMarker point={fromPosition} label="A" title={from?.name ?? "Qayerdan"} />}
-      {toPosition && <MapMarker point={toPosition} label="B" title={to?.name ?? "Qayerga"} />}
+      {fromPosition && <MapMarker point={fromPosition} label="A" title={from?.name ?? translate("maps.from")} />}
+      {toPosition && <MapMarker point={toPosition} label="B" title={to?.name ?? translate("maps.to")} />}
       {/*
         A straight line between two city centres is a *direction indicator*, not a road - which is why it is
         only drawn on this v1 preview and never on the v2 route map, where the server's confirmed geometry is

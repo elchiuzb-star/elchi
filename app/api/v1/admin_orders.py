@@ -14,6 +14,7 @@ from app.services.admin_order_service import (
     cancel_order_manually,
     get_admin_order_detail,
     list_admin_orders,
+    list_eligible_drivers_for_order,
     update_admin_order_status,
 )
 from app.utils.api_response import error_response
@@ -103,6 +104,24 @@ def get_admin_order(
     if isinstance(current_user, JSONResponse):
         return current_user
     data = get_admin_order_detail(db, order_id)
+    if isinstance(data, JSONResponse):
+        return data
+    return {"success": True, "data": data, "message": "OK"}
+
+
+@router.get("/{order_id}/eligible-drivers", response_model=None)
+def get_admin_order_eligible_drivers(
+    order_id: int,
+    search: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User | JSONResponse = Depends(get_current_admin_order_user),
+    db: Session = Depends(get_db),
+) -> dict | JSONResponse:
+    """Additive, read-only: drivers the manual assignment would accept (operator read access, like detail)."""
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    data = list_eligible_drivers_for_order(db, order_id, search, page, limit)
     if isinstance(data, JSONResponse):
         return data
     return {"success": True, "data": data, "message": "OK"}

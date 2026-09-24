@@ -132,6 +132,19 @@ export function submitProposal(listingId: string, body: ProposalCreate, idempote
   return v2RequestFull<ProposalThreadDTO>(`/listings/${listingId}/proposals`, { method: "POST", body, idempotencyKey });
 }
 
+export type CommissionQuoteDTO = Schemas["app__modules__wallet__schemas__FeeQuoteDTO"];
+
+/**
+ * W11: what the commission would be on this total under today's policy - for the DRIVER only (Q16: the client
+ * never sees commission). An estimate: nothing is held until a booking is accepted, and the booking snapshots the
+ * policy of that moment (AC43). It is not money the driver received (§9).
+ */
+export function commissionQuote(params: { service_type: string; total_minor: number; corridor_id?: string | null }) {
+  return v2Request<CommissionQuoteDTO>("/commission/quote", {
+    query: { service_type: params.service_type, total_minor: params.total_minor, corridor_id: params.corridor_id ?? undefined },
+  });
+}
+
 export function wallet() {
   return v2Request<WalletDTO>("/wallet");
 }

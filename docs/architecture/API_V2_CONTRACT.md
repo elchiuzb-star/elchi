@@ -47,6 +47,7 @@ DTO:
 | G9 | `PATCH /admin/corridors/{corridor_id}` | `ops.corridor_manage` | `CorridorPatch` | `CorridorAdminDTO` | — | Y | `VERSION_CONFLICT` | §14, AC38 |
 | G10 | `POST /admin/corridors/{corridor_id}/stops` | `ops.corridor_manage` | `StopCreate` | `StopDTO` | Y | — | `VALIDATION_ERROR` | §6.2 |
 | G11 | `PATCH /admin/stops/{stop_id}` | `ops.corridor_manage` | `StopPatch` | `StopDTO` | — | Y | `VERSION_CONFLICT` | — |
+| G12 | `GET /admin/corridors/{corridor_id}/stops` (24.09.2026) | `ops.view` | — | `list[AdminStopDTO]` (nofaol bekatlar va qoralama koridor ham; `version`, Q27 dalil) | — | — | `NOT_FOUND` | §6.2, Q27/Q47 |
 | G12 | `GET /admin/corridors/{corridor_id}/price-bands` (**wave 1.6**) | `ops.view` | — | `list[PriceBandDTO]` | — | — | `NOT_FOUND` | Q42 |
 | G13 | `PUT /admin/corridors/{corridor_id}/price-bands/{service_type}` (**wave 1.6**) | `ops.corridor_manage` — admin+ (**Q52**; operatorga kerak bo‘lsa keyin alohida `ops.price_band_manage`) | `PriceBandUpsert` | `PriceBandDTO` | Y | Y (`expected_version`; yangi band’da yo‘q) | `VALIDATION_ERROR`, `VERSION_CONFLICT`, `NOT_FOUND`, `CAPABILITY_REQUIRED` | Q42 |
 | G14 | `GET /admin/corridors/{corridor_id}/price-bands/history` (**wave 1.6**) | `ops.view` | `?cursor&limit` | `list[PriceBandChangeDTO]` | — | — | `INVALID_CURSOR`, `NOT_FOUND` | Q42 |
@@ -102,6 +103,7 @@ DTO: `EffectiveFlagsDTO {corridor_id, flags {passenger_enabled, parcel_enabled, 
 | T1 | `POST /vehicles` | driver roli | `VehicleCreate` | `VehicleDTO` (`pending`) | Y | — | `VALIDATION_ERROR` (dublikat plate: `details.field="plate_number"`) | §13 |
 | T2 | `GET /me/vehicles` | driver roli | — | `list[VehicleDTO]` | — | — | — | — |
 | T3 | `POST /admin/vehicles/{vehicle_id}/verify` | `ops.driver_eligibility_manage` | `VehicleVerifyRequest` | `VehicleDTO` | Y | Y | `VERSION_CONFLICT` | §17.1 |
+| T3a | `GET /admin/vehicles?status&cursor&limit` (24.09.2026) | `ops.driver_eligibility_manage` | — | `list[AdminVehicleDTO]` (egasi: user id, profil holati, yangi biznes huquqi va `eligibility_version`; telefon/ism yo'q) | — | — | `VALIDATION_ERROR`, `INVALID_CURSOR` | §17.1, Q61 |
 | T4 | `POST /trips` | `trip.create` | `TripCreate` | `TripDTO` | Y | — | `SCHEDULE_CONFLICT`, `VEHICLE_NOT_ELIGIBLE`, `DRIVER_NOT_ELIGIBLE`, `ROUTE_CHANGED` | AC13 |
 | T5 | `GET /trips/{trip_id}` | Driver egasi, O → `TripDTO`; bron ishtirokchisi → `TripPublicDTO` | — | union | — | — | — | §10.6 |
 | T6 | `GET /me/trips` | `trip.operate` | `?status&cursor` | `list[TripDTO]` | — | — | `INVALID_CURSOR` | — |

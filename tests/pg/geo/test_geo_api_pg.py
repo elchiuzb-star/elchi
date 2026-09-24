@@ -113,8 +113,9 @@ def test_openapi_every_geo_route_has_a_response_model(h: Harness) -> None:
             schema = op["responses"][success[0]]["content"]["application/json"]["schema"]
             assert "$ref" in schema and "Envelope" in schema["$ref"], (method, path)
             count += 1
-    # wave 10: G16 /districts, G17 /corridors/{id}/districts; wave 11: G18 /corridors/{id}/routes
-    assert count == 22
+    # wave 10: G16 /districts, G17 /corridors/{id}/districts; wave 11: G18 /corridors/{id}/routes;
+    # 24.09.2026: G12 GET /admin/corridors/{id}/stops (staff list of every stop)
+    assert count == 23
     assert "attribution" in spec["components"]["schemas"]["RouteVersionDTO"]["properties"]
 
 
@@ -244,6 +245,13 @@ def test_admin_corridors_and_stops_g7_to_g11(h: Harness) -> None:
     assert patched["version"] == 2 and patched["meeting_note"] == "Darvoza oldida" and patched["point"] == {"lat": 39.66, "lng": 66.97}
     err(h.call("PATCH", f"/admin/stops/{stop['id']}", as_="admin", json={"expected_version": 1, "name_uz": "x"}), 409, "VERSION_CONFLICT")
     err(h.call("PATCH", f"/admin/stops/{stop['id']}", as_="admin", json={"expected_version": 2, "point": None}), 400, "VALIDATION_ERROR")
+
+    # Staff see every stop of a non-public corridor with the version a PATCH needs; the public list still hides it.
+    ok(h.call("PATCH", f"/admin/stops/{stop['id']}", as_="admin", json={"expected_version": 2, "is_active": False}))
+    listed = ok(h.call("GET", f"/admin/corridors/{corridor['id']}/stops", as_="operator"))
+    assert [(s["id"], s["version"], s["is_active"]) for s in listed] == [(stop["id"], 3, False)]
+    err(h.call("GET", f"/admin/corridors/{corridor['id']}/stops", as_="client"), 403, "FORBIDDEN")
+    err(h.call("GET", "/admin/corridors/crd_unknown/stops", as_="operator"), 404, "NOT_FOUND")
 
 
 def test_feature_flags_f1_to_f4(h: Harness, monkeypatch: pytest.MonkeyPatch) -> None:

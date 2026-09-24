@@ -24,6 +24,8 @@ from app.modules.identity.web import (
 from app.modules.marketplace import service as marketplace_service
 from app.modules.trips import service as trips_service
 from app.modules.trips.schemas import (
+    AdminVehicleDTO,
+    AdminVehicleStatus,
     TripAvailabilityDTO,
     TripCreate,
     TripDTO,
@@ -33,7 +35,7 @@ from app.modules.trips.schemas import (
     VehicleDTO,
     VehicleVerifyRequest,
 )
-from app.modules.trips.views import availability_dto, trip_dto, trip_public_dto, vehicle_dto
+from app.modules.trips.views import admin_vehicle_dtos, availability_dto, trip_dto, trip_public_dto, vehicle_dto
 
 router = APIRouter(tags=["v2 Trips"])
 
@@ -65,6 +67,30 @@ def list_my_vehicles(
     if Role.DRIVER not in identity_service.get_capabilities(session, user_id).roles:
         raise DomainError(ErrorCode.CAPABILITY_REQUIRED, details={"role": Role.DRIVER.value})
     return Envelope[list[VehicleDTO]](data=[vehicle_dto(v) for v in trips_service.list_driver_vehicles(session, user_id)])
+
+
+@router.get("/admin/vehicles", response_model=Envelope[list[AdminVehicleDTO]], responses=ERROR_RESPONSES)
+def list_vehicles_for_review(
+    status: AdminVehicleStatus | None = Query(default=None, description="Omit for every status."),
+    cursor: str | None = Query(default=None, max_length=512),
+    limit: int = Query(default=20, ge=1, le=MAX_PAGE_LIMIT),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[list[AdminVehicleDTO]]:
+    """T3a: vehicles awaiting (or past) a staff decision, oldest first. Same capability as T3 verify."""
+    scope = page_scope("GET /admin/vehicles", status=status)
+    rows = trips_service.list_vehicles_for_review(
+        session,
+        actor_user_id=user_id,
+        statuses=[status] if status else None,
+        after=decode_time_id_cursor(cursor, scope),
+        limit=limit + 1,
+    )
+    page, more = rows[:limit], len(rows) > limit
+    next_cursor = encode_page_cursor([page[-1].created_at, page[-1].id], scope) if more else None
+    return Envelope[list[AdminVehicleDTO]](
+        data=admin_vehicle_dtos(session, page), meta=PageMeta(next_cursor=next_cursor, limit=limit)
+    )
 
 
 @router.post("/admin/vehicles/{vehicle_id}/verify", response_model=Envelope[VehicleDTO], responses=ERROR_RESPONSES)

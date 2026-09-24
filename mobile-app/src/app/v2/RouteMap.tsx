@@ -18,6 +18,7 @@ import type { StopDTO } from "../../api/v2/marketplace.api";
 import { boundsOf, decodePolyline, type LatLng } from "../../utils/polyline";
 import { MapLine, MapMarker, useYandexMapsStatus, YandexMap } from "../../components/maps/YandexMap";
 import { COLORS } from "../ui/mobile";
+import { translate } from "../../i18n";
 
 export type RouteMapStop = { stop_id: string; seq: number };
 
@@ -98,10 +99,10 @@ export function RouteMap({
       <div>
         {listOnly(
           status === "loading"
-            ? "Xarita yuklanmoqda..."
+            ? translate("routeMap.loading")
             : status === "missing-key"
-              ? "Xarita kaliti kiritilmagan — yo'nalish bekatlar ro'yxati bilan ko'rsatilmoqda."
-              : "Xarita yuklanmadi — yo'nalish bekatlar ro'yxati bilan ko'rsatilmoqda.",
+              ? translate("routeMap.missingKey")
+              : translate("routeMap.failedList"),
         )}
         {note ? <p style={{ fontSize: 12, color: COLORS.muted, margin: "6px 0 0" }}>{note}</p> : null}
       </div>
@@ -110,7 +111,7 @@ export function RouteMap({
 
   return (
     <div>
-      <YandexMap center={center} zoom={7} style={CONTAINER} fallback={(state) => listOnly(state === "loading" ? "Xarita yuklanmoqda..." : "Xarita yuklanmadi.")}>
+      <YandexMap center={center} zoom={7} style={CONTAINER} fallback={(state) => listOnly(state === "loading" ? translate("routeMap.loading") : translate("routeMap.failed"))}>
         {path.length > 1 ? <MapLine points={path} color={COLORS.primary} /> : null}
         {ordered.map((entry) => (
           <MapMarker

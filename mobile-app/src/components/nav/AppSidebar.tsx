@@ -13,6 +13,7 @@ import { useEffect, type ComponentType } from "react";
 
 import { Bell, Home, LogOut, Package, Truck, User, X } from "../../app/ui/icons";
 import { cls } from "../../app/ui/mobile";
+import { translate } from "../../i18n";
 
 export type SidebarItem = {
   id: string;
@@ -25,11 +26,11 @@ export type SidebarItem = {
 
 export function clientSidebarItems(unread: number): SidebarItem[] {
   return [
-    { id: "client-home", label: "Bosh sahifa", description: "Yangi buyurtma", icon: Home },
-    { id: "client-offers", label: "Haydovchi e'lonlari", description: "Safarga chiqqan haydovchilar", icon: Truck },
-    { id: "client-orders", label: "Buyurtmalar", description: "E'lonlar va bronlar", icon: Package },
-    { id: "client-notifications", label: "Xabarlar", description: "Bildirishnomalar", icon: Bell, badge: unread },
-    { id: "client-profile", label: "Profil", description: "Sozlamalar va hisob", icon: User },
+    { id: "client-home", label: translate("nav.home"), description: translate("nav.homeHint"), icon: Home },
+    { id: "client-offers", label: translate("nav.driverOffers"), description: translate("nav.driverOffersHint"), icon: Truck },
+    { id: "client-orders", label: translate("nav.orders"), description: translate("nav.ordersHint"), icon: Package },
+    { id: "client-notifications", label: translate("nav.messages"), description: translate("nav.messagesHint"), icon: Bell, badge: unread },
+    { id: "client-profile", label: translate("nav.profile"), description: translate("nav.profileHint"), icon: User },
   ];
 }
 
@@ -68,7 +69,7 @@ export function AppSidebar({
       <button
         type="button"
         tabIndex={open ? 0 : -1}
-        aria-label="Menyuni yopish"
+        aria-label={translate("nav.closeMenu")}
         onClick={onClose}
         className={cls(
           "absolute inset-0 bg-slate-900/45 transition-opacity duration-200",
@@ -90,7 +91,7 @@ export function AppSidebar({
             type="button"
             tabIndex={open ? 0 : -1}
             onClick={onClose}
-            aria-label="Yopish"
+            aria-label={translate("common.close")}
             className="el-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted"
           >
             <X size={17} />
@@ -141,7 +142,7 @@ export function AppSidebar({
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-destructive/10">
                 <LogOut size={18} color="var(--destructive)" />
               </span>
-              <span className="text-[15px] font-semibold text-destructive">Chiqish</span>
+              <span className="text-[15px] font-semibold text-destructive">{translate("nav.logout")}</span>
             </button>
           </div>
         )}
@@ -156,7 +157,7 @@ export function SidebarButton({ onClick, className }: { onClick: () => void; cla
     <button
       type="button"
       onClick={onClick}
-      aria-label="Menyu"
+      aria-label={translate("nav.menu")}
       className={cls("el-press flex h-11 w-11 items-center justify-center rounded-full bg-card shadow-lg", className)}
     >
       <span className="flex h-[15px] w-[18px] flex-col justify-between">

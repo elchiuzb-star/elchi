@@ -17,8 +17,11 @@ export type SupportContactsDTO = Schemas["SupportContactsDTO"];
 export type SupportTicketDTO = Schemas["SupportTicketDTO"];
 export type SupportTicketCreate = Schemas["SupportTicketCreate"];
 
+/** N4. The server's filter is `unread` (communications/api.py); `unread_only` is kept as this wrapper's name. */
 export function notifications(params: { limit?: number; unread_only?: boolean } = {}) {
-  return v2Request<NotificationDTO[]>("/notifications", { query: params });
+  return v2Request<NotificationDTO[]>("/notifications", {
+    query: { limit: params.limit, unread: params.unread_only || undefined },
+  });
 }
 
 export function markNotificationRead(notificationId: string) {
@@ -52,6 +55,11 @@ export function myDisputes(params: { limit?: number } = {}) {
 
 export function openDispute(bookingId: string, body: DisputeCreate, idempotencyKey: string): Promise<V2Result<DisputeDTO>> {
   return v2RequestFull<DisputeDTO>(`/bookings/${bookingId}/disputes`, { method: "POST", body, idempotencyKey });
+}
+
+/** S5: one dispute as its participant sees it - the evidence both sides added and the decision, if any. */
+export function getDispute(disputeId: string) {
+  return v2Request<DisputeDTO>(`/disputes/${disputeId}`);
 }
 
 export function addDisputeEvidence(disputeId: string, body: DisputeEvidenceCreate, idempotencyKey: string) {

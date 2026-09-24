@@ -6,14 +6,17 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.contracts.enums import ListingKind, ListingStatus, ServiceType, TripStatus
+from app.contracts.enums import ListingKind, ListingStatus, Role, ServiceType, TripStatus
 from app.contracts.ids import PublicIdPrefix, format_public_id
 from app.contracts.timeutil import ensure_aware_utc, utc_now
+from app.modules.identity import service as identity_service
 from app.modules.trips import service as trips_service
 from app.modules.trips.models import Trip, Vehicle
 from app.modules.trips.ports import StopRef, get_geo_port
 from app.modules.trips.rules import Resource, mask_plate, vehicle_class
 from app.modules.trips.schemas import (
+    AdminVehicleDTO,
+    AdminVehicleOwnerDTO,
     SegmentAvailabilityDTO,
     StopRefDTO,
     TripAvailabilityDTO,
@@ -50,6 +53,43 @@ def vehicle_dto(vehicle: Vehicle) -> VehicleDTO:
         version=vehicle.version,
         created_at=ensure_aware_utc(vehicle.created_at),
     )
+
+
+def admin_vehicle_owner_dto(session: Session, driver_user_id: int) -> AdminVehicleOwnerDTO:
+    """Eligibility of the vehicle's owner, recomputed on this read (no cache: a block applies at once)."""
+    caps = identity_service.get_capabilities(session, driver_user_id)
+    is_driver = Role.DRIVER in caps.roles
+    return AdminVehicleOwnerDTO(
+        user_id=identity_service.user_public_id(session, driver_user_id),
+        is_driver=is_driver,
+        account_active=caps.account_active,
+        driver_verification_status=caps.driver.verification_status if caps.driver else None,
+        eligible=caps.driver_eligible,
+        reasons=list(caps.driver_reasons) if is_driver else [],
+        blocked_reason=caps.driver.active_block_reason if caps.driver else None,
+        eligibility_version=identity_service.eligibility_version(session, driver_user_id) if is_driver else None,
+        active_trip_count=caps.driver.active_trip_count if caps.driver else 0,
+    )
+
+
+def admin_vehicle_dtos(session: Session, vehicles: list[Vehicle]) -> list[AdminVehicleDTO]:
+    """Staff queue rows; one eligibility read per distinct owner on the page."""
+    owners: dict[int, AdminVehicleOwnerDTO] = {}
+    rows: list[AdminVehicleDTO] = []
+    for vehicle in vehicles:
+        owner = owners.get(vehicle.driver_user_id)
+        if owner is None:
+            owner = owners[vehicle.driver_user_id] = admin_vehicle_owner_dto(session, vehicle.driver_user_id)
+        rows.append(
+            AdminVehicleDTO(
+                **vehicle_dto(vehicle).model_dump(),
+                verification_reason=vehicle.verification_reason,
+                verified_at=ensure_aware_utc(vehicle.verified_at) if vehicle.verified_at else None,
+                updated_at=ensure_aware_utc(vehicle.updated_at),
+                owner=owner,
+            )
+        )
+    return rows
 
 
 def _stops(session: Session, trip: Trip) -> tuple[list, dict[int, StopRef]]:

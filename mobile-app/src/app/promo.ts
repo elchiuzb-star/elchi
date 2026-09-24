@@ -2,13 +2,14 @@
  * Referral and bonus rules the screens need, in one pure module (referral stage 5, ADR-0023 §19).
  *
  * The server decides every amount. This module only picks which server number to show, builds the consent body
- * from what the person *explicitly* chose, and turns stable codes into Uzbek sentences - so the rules can be tested
+ * from what the person *explicitly* chose, and turns stable codes into sentences in the person's language - so the rules can be tested
  * directly instead of through a rendered screen (the same reason `auction.ts` exists).
  *
  * Nothing here computes a discount. A bonus is a *discount right*, never money: the words "balans", "pul",
  * "yechib olish" are not used for it.
  */
 import type { Schemas } from "../api/v2/http";
+import { translate } from "../i18n";
 
 export type ProposalPromoClientDTO = Schemas["ProposalPromoClientDTO"];
 export type ProposalPromoDriverDTO = Schemas["ProposalPromoDriverDTO"];
@@ -47,22 +48,26 @@ export interface MoneyLine {
  * `agreed` = a booking; otherwise an offer that nobody has accepted yet. */
 export function clientMoneyLines(promo: BookingPromoClientDTO | ProposalPromoClientDTO, agreed = true): MoneyLine[] {
   return [
-    { label: agreed ? "Kelishilgan narx" : "Taklif narxi", minor: promo.fare_minor },
-    { label: "Bonus chegirmasi", minor: promo.passenger_discount_minor, negative: true },
-    { label: "Haydovchiga naqd to'lanadi", minor: promo.cash_due_minor, emphasis: true },
+    { label: agreed ? translate("promo.line.agreedPrice") : translate("promo.line.offerPrice"), minor: promo.fare_minor },
+    { label: translate("promo.line.bonusDiscount"), minor: promo.passenger_discount_minor, negative: true },
+    { label: translate("promo.line.cashToDriver"), minor: promo.cash_due_minor, emphasis: true },
   ];
 }
 
 /** Driver lines: cash to collect, what the platform covers, credit used, what is charged, what stays. */
 export function driverMoneyLines(promo: BookingPromoDriverDTO | ProposalPromoDriverDTO, agreed = true): MoneyLine[] {
   return [
-    { label: agreed ? "Kelishilgan narx" : "Taklif narxi", minor: promo.fare_minor },
-    { label: "Mijozdan naqd olasiz", minor: promo.cash_to_collect_minor, emphasis: true },
-    { label: "Mijoz chegirmasini ELCHI qoplaydi", minor: promo.passenger_discount_covered_minor },
-    { label: "Komissiya", minor: promo.base_commission_minor },
-    { label: agreed ? "Ishlatilgan kredit" : "Ishlatiladigan kredit", minor: promo.driver_credit_minor, negative: true },
-    { label: "Balansingizdan yechiladi", minor: promo.commission_charged_minor },
-    { label: "Sizda qoladi", minor: promo.driver_keeps_minor, emphasis: true },
+    { label: agreed ? translate("promo.line.agreedPrice") : translate("promo.line.offerPrice"), minor: promo.fare_minor },
+    { label: translate("promo.line.cashFromClient"), minor: promo.cash_to_collect_minor, emphasis: true },
+    { label: translate("promo.line.discountCovered"), minor: promo.passenger_discount_covered_minor },
+    { label: translate("disputeType.commission"), minor: promo.base_commission_minor },
+    {
+      label: agreed ? translate("promo.line.creditUsed") : translate("promo.line.creditToUse"),
+      minor: promo.driver_credit_minor,
+      negative: true,
+    },
+    { label: translate("promo.line.chargedFromBalance"), minor: promo.commission_charged_minor },
+    { label: translate("promo.line.youKeep"), minor: promo.driver_keeps_minor, emphasis: true },
   ];
 }
 
@@ -123,15 +128,16 @@ export function driverAckRequested(error: DetailedError): { cash_to_collect_mino
 
 // --- why there is no discount (stage 5) ----------------------------------------------------------------------------
 
-/** Plain categories from the server (never a rate, a limit, a formula or a risk rule - Q103). */
+/** Plain categories from the server (never a rate, a limit, a formula or a risk rule - Q103).
+ * Getters: each sentence is looked up when read, so it follows a language switch. */
 export const NO_DISCOUNT_TEXT: Record<string, string> = {
-  service_not_eligible: "Bu xizmatga bonusingiz ishlamaydi (bonus boshqa xizmat turi uchun yoki jo'natmani qabul qiluvchi to'laydi).",
-  bonus_expired: "Bonusingizning muddati tugagan.",
-  bonus_reserved: "Bonusingiz boshqa bronga band qilingan.",
-  bonus_on_hold: "Bonusingiz hozir tekshiruvda — tekshiruv tugaguncha ishlatib bo'lmaydi.",
-  no_campaign: "Hozir sizda ishlatsa bo'ladigan bonus yoki faol kampaniya yo'q.",
-  client_update_required: "Bonusni ishlatish uchun ilovani yangilang.",
-  trip_terms: "Bu safar shartlarida bonus chegirmasi qo'llanmaydi.",
+  get service_not_eligible() { return translate("promo.noDiscount.serviceNotEligible"); },
+  get bonus_expired() { return translate("promo.noDiscount.bonusExpired"); },
+  get bonus_reserved() { return translate("promo.noDiscount.bonusReserved"); },
+  get bonus_on_hold() { return translate("promo.noDiscount.bonusOnHold"); },
+  get no_campaign() { return translate("promo.noDiscount.noCampaign"); },
+  get client_update_required() { return translate("promo.noDiscount.clientUpdateRequired"); },
+  get trip_terms() { return translate("promo.noDiscount.tripTerms"); },
 };
 
 export function noDiscountText(reason: string | null | undefined): string | null {
@@ -151,32 +157,43 @@ export function amendmentCashNote(
   if (after.cash_due_minor === before.cash_due_minor) return null;
   const smallerDiscount = after.passenger_discount_minor < before.passenger_discount_minor;
   if (after.fare_minor < before.fare_minor && after.cash_due_minor > before.cash_due_minor) {
-    return "Diqqat: narx kamaygan bo'lsa ham, naqd to'lovingiz oshadi — bonus chegirmasi narxga bog'liq bo'lib, u ham kamaydi.";
+    return translate("promo.amendment.cashRisesDespiteLowerFare");
   }
   if (after.fare_minor < before.fare_minor && smallerDiscount) {
-    return "Narx kamaydi, lekin bonus chegirmasi ham kamaydi — shuning uchun naqd summa narxdan kamroq kamayadi.";
+    return translate("promo.amendment.discountAlsoSmaller");
   }
   if (after.fare_minor > before.fare_minor) {
-    return "Narx oshdi. Bonus chegirmasi oshmaydi: o'zgarishda yangi bonus ishlatilmaydi.";
+    return translate("promo.amendment.fareRose");
   }
-  return "Naqd to'lanadigan summa o'zgaradi — tasdiqlashdan oldin tekshiring.";
+  return translate("promo.amendment.cashChanges");
 }
 
 // --- referral progress (stage 5 milestone view) ------------------------------------------------------------------------
 
 export type ProgressDTO = Schemas["ProgressDTO"];
 
+/** Which progress row this is - a stable discriminator, since `label` follows the language. */
+export type ProgressRowKind = "done" | "in_review" | "remaining";
+
 /** Done, being checked, left - a service that is still being checked is never shown as done. */
-export function progressRows(progress: ProgressDTO): { label: string; value: string; hint?: string }[] {
-  const unit = progress.unit === "distinct_trip" ? "safar" : "xizmat";
+export function progressRows(progress: ProgressDTO): { kind: ProgressRowKind; label: string; value: string; hint?: string }[] {
+  const trips = progress.unit === "distinct_trip";
+  const count = (n: number) =>
+    trips ? translate("promo.progress.countTrips", { count: n }) : translate("promo.progress.countServices", { count: n });
+  const doneValues = { done: progress.done, required: progress.required };
   return [
-    { label: "Bajarilgan", value: `${progress.done} / ${progress.required} ${unit}` },
     {
-      label: "Tekshiruvda",
-      value: `${progress.in_review} ${unit}`,
-      hint: "Naqd tasdig'i, komissiya yoki 48 soatlik tekshiruv kutilmoqda — hali bajarilgan hisoblanmaydi",
+      kind: "done",
+      label: translate("driverProfile.completed"),
+      value: trips ? translate("promo.progress.doneTrips", doneValues) : translate("promo.progress.doneServices", doneValues),
     },
-    { label: "Qolgan", value: `${progress.remaining} ${unit}` },
+    {
+      kind: "in_review",
+      label: translate("docState.pending"),
+      value: count(progress.in_review),
+      hint: translate("promo.progress.inReviewHint"),
+    },
+    { kind: "remaining", label: translate("promo.progress.remaining"), value: count(progress.remaining) },
   ];
 }
 
@@ -190,76 +207,82 @@ function days(seconds: unknown): string {
   const value = Number(seconds);
   if (!Number.isFinite(value) || value <= 0) return "";
   const d = Math.round(value / 86400);
-  if (d >= 1) return `${d} kun`;
-  return `${Math.round(value / 3600)} soat`;
+  if (d >= 1) return translate("promo.duration.days", { count: d });
+  return translate("promo.duration.hours", { count: Math.round(value / 3600) });
 }
 
-const SERVICE: Record<string, string> = { passenger: "yo'lovchi safari", parcel: "pochta jo'natmasi" };
+const SERVICE: Record<string, string> = {
+  get passenger() { return translate("promo.service.passenger"); },
+  get parcel() { return translate("promo.service.parcel"); },
+};
 
 /** Stable disclosure codes (Q112) as sentences. Shown before joining; never a promise that joining pays. */
 export function disclosureText(item: DisclosureDTO): string | null {
   switch (item.code) {
     case "not_cash":
-      return "Bonus pul emas: u faqat keyingi xizmatdagi chegirma. Naqdga aylantirilmaydi va boshqaga o'tkazilmaydi.";
+      return translate("promo.disclosure.notCash");
     case "next_eligible_service":
-      return "Mukofot ro'yxatdan o'tganingiz uchun emas — shartlarga mos xizmatdan keyin beriladi.";
+      return translate("promo.disclosure.nextEligibleService");
     case "referrer_service_excluded":
-      return "Sizni taklif qilgan haydovchining o'zi bajargan xizmat hisoblanmaydi.";
+      return translate("promo.disclosure.referrerServiceExcluded");
     case "another_driver_qualifies":
-      return "Muddat ichida boshqa haydovchi bilan bajarilgan xizmat hisoblanadi.";
+      return translate("promo.disclosure.anotherDriverQualifies");
     case "qualification_deadline":
-      return `Shartni bajarish muddati: ${days(item.value)}.`;
+      return translate("promo.disclosure.qualificationDeadline", { duration: days(item.value) });
     case "required_services": {
       const value = item.value;
-      if (Array.isArray(value)) return `Bosqichlar: ${value.join(", ")} ta alohida safar.`;
-      return `Kerakli xizmatlar soni: ${value}.`;
+      if (Array.isArray(value)) return translate("promo.disclosure.milestones", { steps: value.join(", ") });
+      return translate("promo.disclosure.requiredServices", { count: String(value) });
     }
     case "service_type_only":
-      return `Bonus faqat ${SERVICE[String(item.value)] ?? String(item.value)} uchun ishlatiladi.`;
+      return translate("promo.disclosure.serviceTypeOnly", { service: SERVICE[String(item.value)] ?? String(item.value) });
     case "reward_validity":
-      return `Bonusni ishlatish muddati: ${days(item.value)}.`;
+      return translate("promo.disclosure.rewardValidity", { duration: days(item.value) });
     case "risk_check":
-      return `Xizmatdan keyin ${days(item.value)} tekshiruv: bonus shundan keyin ochiladi.`;
+      return translate("promo.disclosure.riskCheck", { duration: days(item.value) });
     case "enrollment_limit":
-      return "Kampaniyada ishtirokchilar soni cheklangan.";
+      return translate("promo.disclosure.enrollmentLimit");
     case "milestone_unit":
-      return "Har bosqich — alohida safar (bir safardagi bir nechta buyurtma bitta bosqich).";
+      return translate("promo.disclosure.milestoneUnit");
     default:
       return null;
   }
 }
 
-export const PARCEL_PAYER_RULE =
-  "Pochtada bonus faqat jo'natuvchi o'zi to'laydigan jo'natmada ishlatiladi; qabul qiluvchi to'lasa — ishlatilmaydi.";
+/** A function, not a constant: the sentence follows the language the person picked. */
+export function parcelPayerRule(): string {
+  return translate("promo.parcelPayerRule");
+}
 
+// Getters: each label is looked up when read, so it follows a language switch.
 export const QUALIFICATION_LABELS: Record<string, string> = {
-  waiting: "Xizmat bajarildi — tekshiruv kutilmoqda",
-  review: "Xodim tekshirmoqda",
-  qualified: "Shart bajarildi",
-  granted: "Bonus berildi",
-  rejected: "Rad etildi",
+  get waiting() { return translate("promo.qualification.waiting"); },
+  get review() { return translate("promo.qualification.review"); },
+  get qualified() { return translate("promo.qualification.qualified"); },
+  get granted() { return translate("notification.promo.reward_granted.title"); },
+  get rejected() { return translate("amendment.rejected"); },
 };
 
 export const ENROLLMENT_LABELS: Record<string, string> = {
-  promised: "Shart kutilmoqda",
-  granted: "Bonus berildi",
-  released: "Muddat tugadi",
-  rejected: "Rad etildi",
+  get promised() { return translate("promo.enrollment.promised"); },
+  get granted() { return translate("notification.promo.reward_granted.title"); },
+  get released() { return translate("promo.enrollment.released"); },
+  get rejected() { return translate("amendment.rejected"); },
 };
 
 export const INSTRUMENT_LABELS: Record<string, string> = {
-  passenger_bonus: "Mijoz bonusi",
-  driver_credit: "Haydovchi krediti",
+  get passenger_bonus() { return translate("promo.instrument.passengerBonus"); },
+  get driver_credit() { return translate("promo.instrument.driverCredit"); },
 };
 
 /** The five states of a discount right, in the order a person reads them. None of them is withdrawable money. */
 export function bucketRows(bucket: PromoBucketDTO): { label: string; minor: number; hint?: string }[] {
   return [
-    { label: "Ishlatish mumkin", minor: bucket.available_minor },
-    { label: "Band (bron uchun)", minor: bucket.reserved_minor, hint: "Bron tugaganda sarflanadi yoki qaytadi" },
-    { label: "Tekshiruvda", minor: bucket.under_review_minor, hint: "Tekshiruv tugaguncha ishlatib bo'lmaydi" },
-    { label: "Sarflangan", minor: bucket.consumed_minor },
-    { label: "Muddati tugagan", minor: bucket.expired_minor + bucket.reversed_minor },
+    { label: translate("promo.bucket.available"), minor: bucket.available_minor },
+    { label: translate("promo.bucket.reserved"), minor: bucket.reserved_minor, hint: translate("promo.bucket.reservedHint") },
+    { label: translate("docState.pending"), minor: bucket.under_review_minor, hint: translate("promo.bucket.underReviewHint") },
+    { label: translate("promo.bucket.consumed"), minor: bucket.consumed_minor },
+    { label: translate("promo.bucket.expired"), minor: bucket.expired_minor + bucket.reversed_minor },
   ];
 }
 

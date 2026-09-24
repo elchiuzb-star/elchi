@@ -110,6 +110,11 @@ import {
   withdrawProposal,
   listMyListings,
   publishListing,
+  getProposal,
+  patchListing,
+  pauseListing,
+  rejectProposal,
+  resumeListing,
   type CorridorDTO,
   type DirectionPreviewDTO,
   type EffectiveFlagsDTO,
@@ -132,15 +137,42 @@ import {
   type StopDTO,
 } from "../api/v2/marketplace.api";
 import { newIdempotencyKey } from "../api/v2/http";
-import { translate, translateDynamic } from "../i18n";
+import { LOCALES, translate, translateDynamic } from "../i18n";
+import { useLocale } from "../i18n/react";
 import { negotiationActions, turnLabel, type ActorSide } from "./auction";
 import { alternativeReason, splitFeedGroups } from "./feedGroups";
 import { offerableServices, type OfferService } from "./tripOffers";
+import {
+  CANCEL_REASONS,
+  canCancelBooking,
+  canOpenDispute,
+  canRate,
+  canReissueCode,
+  cancelBlockedByReview,
+  cancelRefusalKey,
+  counterpartSide,
+  disputeTypesFor,
+  intentOfBooking,
+  reissueWait,
+  waitParts,
+  type BookingSide,
+} from "./bookingControls";
+import { formFromListing, ownerListingActions, planListingPatch, windowEditable, type ListingEditForm } from "./listingEdit";
+import { inboxBody, inboxTitle, parseInboxLink, unreadCount } from "./inbox";
+import { bidTotalMinor, bpsPercent } from "./commissionPreview";
 import { TripIntentEditor, TripIntentFitNotes, TripIntentSummary, type IntentEditForm } from "./v2/TripIntentPanel";
+import { BlockPanel, MyReportsList, ReportForm } from "./v2/BlockAndReportPanel";
+import { ShareLinkPanel, TrackingGrantPanel } from "./v2/TrackingSharePanel";
+import { ReputationCard } from "./v2/ReputationCard";
+import { ParcelPolicyNotice } from "./v2/ParcelPolicyNotice";
+import { DriverTripDetail } from "./v2/DriverTripDetail";
+import { StopSearch } from "./v2/StopSearch";
+import { bookingCounterparty, canShareListing, canShareTracking, routesThroughStop } from "./safetyMounts";
 import {
   closeTripIntent,
   createTripIntent,
   editTripIntent,
+  getTripIntent,
   listTripIntents,
   reopenTripIntent,
   tripIntentFit,
@@ -170,6 +202,8 @@ import {
   listMyTrips,
   listMyVehicles,
   bookingAction,
+  commissionQuote,
+  type CommissionQuoteDTO,
   createTopup,
   listTopups,
   requestsFeed,
@@ -188,7 +222,11 @@ import {
   createSavedSearch,
   createSupportTicket,
   deleteSavedSearch,
+  getDispute,
+  markNotificationRead,
   myDisputes,
+  notifications as fetchNotifications,
+  type NotificationDTO,
   mySupportTickets,
   openDispute,
   rateBooking,
@@ -201,6 +239,9 @@ import {
 } from "../api/v2/client-extras.api";
 import {
   acceptAmendment,
+  cancelBooking,
+  reissueBookingCode,
+  type ProofKind,
   confirmAmendmentPromo,
   decideAmendment,
   decideCashReceipt,
@@ -245,12 +286,10 @@ import {
   submitDriverDocument,
   updateDriverProfile,
 } from "../api/driver.api";
-import { getNotifications, markNotificationRead } from "../api/notifications.api";
 import type { City, District } from "../types/city";
 import type { Bid } from "../types/bid";
 import type { ClientOrder, CreateOrderPayload, OrderStatus } from "../types/order";
 import type { DriverDocument, DriverDocumentType, DriverFeedOrder, DriverProfile, DriverRoute } from "../types/driver";
-import type { NotificationItem } from "../types/notification";
 import type { MobileRole } from "../types/auth";
 import { formatUzs } from "../utils/money";
 import { normalizeUzPhone } from "../utils/phone";
@@ -290,6 +329,8 @@ type Screen =
   | "booking-dispute"
   | "booking-chat"
   | "booking-amendment"
+  | "listing-edit"
+  | "dispute-detail"
   | "driver-saved-searches"
   | "my-disputes"
   | "support"
@@ -307,6 +348,8 @@ type Screen =
   | "driver-profile-form"
   | "driver-documents"
   | "driver-routes"
+  | "driver-trip-detail"
+  | "safety-center"
   | "driver-add-route"
   | "driver-offer-create"
   | "driver-feed"
@@ -371,20 +414,30 @@ type ConfirmAction =
 
 
 const driverVerificationLabels: Record<string, string> = {
-  new: "Yangi",
-  pending: "Ko'rib chiqilmoqda",
-  approved: "Tasdiqlangan",
-  rejected: "Rad etilgan",
-  blocked: "Bloklangan",
+  get new() { return translate("app.driverVerification.new"); },
+  get pending() { return translate("app.driverVerification.pending"); },
+  get approved() { return translate("status.approved"); },
+  get rejected() { return translate("status.rejected"); },
+  get blocked() { return translate("app.driverVerification.blocked"); },
 };
+
+/**
+ * A `[value, label]` pair whose label is read from the dictionary each time it is used, so the module-level
+ * option lists below follow a language switch without changing how their callers destructure them.
+ */
+function labelledPair(value: string, key: Parameters<typeof translate>[0]): [string, string] {
+  const pair: [string, string] = [value, ""];
+  Object.defineProperty(pair, 1, { get: () => translate(key), enumerable: true });
+  return pair;
+}
 
 /**
  * How many digits the code has.
  *
- * The backend decides it (`ELCHI_OTP_LENGTH`, 5 in this repo's `.env`) and refuses a code of any other
- * length, so the screen must not hard-code its own number.
+ * The backend decides it (`ELCHI_OTP_LENGTH`; Q137: 4 digits) and refuses a code of any other length, so the
+ * screen must not hard-code its own number - it reads the same setting and falls back to the decided 4.
  */
-const OTP_LENGTH = Number(import.meta.env.VITE_OTP_LENGTH) || 5;
+const OTP_LENGTH = Number(import.meta.env.VITE_OTP_LENGTH) || 4;
 
 /** How long the resend link stays hidden, from the reference client. Long enough that the SMS usually wins. */
 const RESEND_SECONDS = 59;
@@ -409,8 +462,6 @@ const emptyOrder: CreateOrderPayload = {
   comment: "",
 };
 
-const DRIVER_EARNING_STATUSES = new Set(["delivered", "confirmed"]);
-const DRIVER_NET_RATE = 0.85;
 
 /**
  * One end of the direction the person is composing.
@@ -431,12 +482,12 @@ const emptyDirectionEnd: DirectionEnd = { region: null, district: null, stop: nu
 
 /** Q68: the parcel kinds the contract allows, in the words the app uses for them. */
 const PARCEL_TYPES: Array<[string, string]> = [
-  ["documents", "Hujjat"],
-  ["box", "Quti"],
-  ["bag", "Sumka"],
-  ["electronics", "Elektronika"],
-  ["clothing", "Kiyim"],
-  ["other", "Boshqa"],
+  labelledPair("documents", "app.parcelType.documents"),
+  labelledPair("box", "app.parcelType.box"),
+  labelledPair("bag", "app.parcelType.bag"),
+  labelledPair("electronics", "app.parcelType.electronics"),
+  labelledPair("clothing", "app.parcelType.clothing"),
+  labelledPair("other", "app.parcelType.other"),
 ];
 
 /**
@@ -532,19 +583,19 @@ const CASH_RECORDABLE: Record<string, string[]> = {
 
 /** The passenger ladder, for a booking this client did not create but a driver may still be carrying. */
 const PASSENGER_PROGRESS: Array<[string, string]> = [
-  ["confirmed", "Tasdiqlandi"],
-  ["awaiting_pickup", "Haydovchi bekatda"],
-  ["onboard", "Yo'lda"],
-  ["completed", "Yakunlandi"],
+  labelledPair("confirmed", "status.confirmed"),
+  labelledPair("awaiting_pickup", "app.progress.driverAtStop"),
+  labelledPair("onboard", "status.in_transit"),
+  labelledPair("completed", "app.progress.completed"),
 ];
 
 const PARCEL_PROGRESS: Array<[string, string]> = [
-  ["confirmed", "Tasdiqlandi"],
-  ["awaiting_pickup", "Haydovchi bekatda"],
-  ["picked_up", "Yuk olindi"],
-  ["in_transit", "Yo'lda"],
-  ["delivered", "Yetkazildi"],
-  ["completed", "Yakunlandi"],
+  labelledPair("confirmed", "status.confirmed"),
+  labelledPair("awaiting_pickup", "app.progress.driverAtStop"),
+  labelledPair("picked_up", "app.progress.parcelPickedUp"),
+  labelledPair("in_transit", "status.in_transit"),
+  labelledPair("delivered", "status.delivered"),
+  labelledPair("completed", "app.progress.completed"),
 ];
 
 /** §17.1: the documents a driver has to upload before staff can verify them. */
@@ -611,9 +662,18 @@ function disputeTypeLabel(value: string): string {
   return translateDynamic(`disputeType.${value}`) ?? value;
 }
 
-/** S9/S10: what a participant can raise, as options for a picker. */
-function disputeTypeOptions(): Array<[string, string]> {
-  return ["service", "no_show", "payment", "delivery", "safety", "other"].map((type) => [type, disputeTypeLabel(type)]);
+/** S9/S10: what a participant can raise, as options for a picker. `commission` is the driver's only (Q16). */
+function disputeTypeOptions(side: BookingSide): Array<[string, string]> {
+  return disputeTypesFor(side).map((type) => [type, disputeTypeLabel(type)]);
+}
+
+/** A reissue refusal as a sentence: the wait the server named, and how many tries are left (Q75). */
+function reissueWaitText(wait: { retryAfterS: number; reissuesLeft: number | null }): string {
+  const parts = waitParts(wait.retryAfterS);
+  const when = parts.hours > 0
+    ? translate("reissue.waitHours", { hours: parts.hours, minutes: parts.minutes })
+    : translate("reissue.waitMinutes", { minutes: parts.minutes, seconds: parts.seconds });
+  return wait.reissuesLeft === null ? when : `${when} ${translate("reissue.left", { count: wait.reissuesLeft })}`;
 }
 
 function disputeStatusLabel(value: string): string {
@@ -745,8 +805,10 @@ function suggestedDepartureWindow(): { start: string; end: string } {
 
 /** Distance for a person, not for a log: whole kilometres, and metres only when it is under one. */
 function formatKm(metres: number): string {
-  if (!Number.isFinite(metres) || metres <= 0) return "0 km";
-  return metres < 1000 ? `${Math.round(metres)} m` : `${Math.round(metres / 1000)} km`;
+  if (!Number.isFinite(metres) || metres <= 0) return translate("app.distance.km", { value: 0 });
+  return metres < 1000
+    ? translate("app.distance.m", { value: Math.round(metres) })
+    : translate("app.distance.km", { value: Math.round(metres / 1000) });
 }
 
 /**
@@ -760,9 +822,9 @@ function formatDuration(seconds: number): string {
   const rounded = Math.round(seconds / 300) * 300;
   const hours = Math.floor(rounded / 3600);
   const minutes = Math.round((rounded % 3600) / 60);
-  if (hours && minutes) return `${hours} soat ${minutes} daqiqa`;
-  if (hours) return `${hours} soat`;
-  return `${Math.max(5, minutes)} daqiqa`;
+  if (hours && minutes) return translate("app.duration.hoursMinutes", { hours, minutes });
+  if (hours) return translate("app.duration.hours", { hours });
+  return translate("app.duration.minutes", { minutes: Math.max(5, minutes) });
 }
 
 /**
@@ -894,13 +956,13 @@ function offerWindowForTrip(trip: TripDTO | undefined, originStopId: string): { 
 
 function StatusTimeline({ status }: { status: OrderStatus }) {
   const steps: { status: OrderStatus; label: string }[] = [
-    { status: "published", label: "E'lon qilindi" },
-    { status: "bidding", label: "Takliflar bor" },
-    { status: "accepted", label: "Haydovchi tanlandi" },
-    { status: "picked_up", label: "Olib ketildi" },
-    { status: "in_transit", label: "Yo'lda" },
-    { status: "delivered", label: "Yetkazildi" },
-    { status: "confirmed", label: "Tasdiqlandi" },
+    { status: "published", label: translate("app.orderStatus.published") },
+    { status: "bidding", label: translate("status.bidding") },
+    { status: "accepted", label: translate("app.orderStatus.accepted") },
+    { status: "picked_up", label: translate("status.picked_up") },
+    { status: "in_transit", label: translate("status.in_transit") },
+    { status: "delivered", label: translate("status.delivered") },
+    { status: "confirmed", label: translate("status.confirmed") },
   ];
   const index = steps.findIndex((step) => step.status === status);
   const activeIndex = index >= 0 ? index : 0;
@@ -909,7 +971,7 @@ function StatusTimeline({ status }: { status: OrderStatus }) {
   // parcel actually is.
   return (
     <div className="rounded-[14px] border border-border bg-card p-4">
-      <p className="mb-3 text-[13px] font-semibold text-foreground">Buyurtma holati</p>
+      <p className="mb-3 text-[13px] font-semibold text-foreground">{translate("app.orderStatus.title")}</p>
       <JourneySpine steps={steps.map((step) => ({ key: step.status, label: step.label }))} current={activeIndex} />
     </div>
   );
@@ -924,7 +986,7 @@ function CitySelect(props: { label: string; cities: City[]; value: number; onCha
         onChange={(event) => props.onChange(Number(event.target.value))}
         className="h-[52px] rounded-[12px] border border-border bg-card px-4 text-[15px] text-foreground outline-none"
       >
-        <option value="">Shaharni tanlang</option>
+        <option value="">{translate("app.citySelect.placeholder")}</option>
         {props.cities.map((city) => (
           <option key={city.id} value={city.id}>
             {city.name_uz}
@@ -1122,7 +1184,7 @@ function RouteSummaryRow(props: {
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold text-muted-foreground">{props.label}</p>
         <p className="mt-1 break-words text-[16px] font-semibold leading-6 text-foreground">
-          {title || "Manzil kiritilmagan"}
+          {title || translate("app.route.noAddress")}
         </p>
         <p className="mt-1 text-[13px] leading-5 text-muted-foreground">{[region, props.district].filter(Boolean).join(" / ") || "-"}</p>
       </div>
@@ -1131,7 +1193,7 @@ function RouteSummaryRow(props: {
         onClick={props.onEdit}
         className="el-press h-9 shrink-0 rounded-full bg-muted px-3 text-[13px] font-semibold text-secondary-foreground"
       >
-        O'zgartirish
+        {translate("app.route.change")}
       </button>
     </div>
   );
@@ -1154,7 +1216,7 @@ function OrderCard({ order, onClick }: { order: ClientOrder | DriverFeedOrder; o
         <span className="font-semibold text-foreground">{formatUzs(("final_price" in order ? order.final_price : null) ?? order.suggested_price)}</span>
       </div>
       {"bids_count" in order && (
-        <p className="mt-2 text-[12px] text-muted-foreground">{order.bids_count ?? 0} ta taklif</p>
+        <p className="mt-2 text-[12px] text-muted-foreground">{translate("app.orderCard.bids", { count: order.bids_count ?? 0 })}</p>
       )}
     </button>
   );
@@ -1209,24 +1271,24 @@ function ParcelPhoto({
     <div className="rounded-[14px] border border-border bg-card p-4">
       <p className="text-[12px] text-muted-foreground">{label}</p>
       {!photo ? (
-        <p className="mt-1 text-[14px] font-medium text-foreground">Rasm yuklanmagan</p>
+        <p className="mt-1 text-[14px] font-medium text-foreground">{translate("app.photo.none")}</p>
       ) : (
         <>
           <button
             type="button"
             onClick={() => state === "ready" && setFull(true)}
             className="el-press relative mt-2 block h-[180px] w-full overflow-hidden rounded-[12px] bg-muted"
-            aria-label="Posilka rasmini kattalashtirish"
+            aria-label={translate("app.photo.zoom")}
           >
             {state !== "ready" && (
               <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[13px] text-muted-foreground">
                 <Package size={26} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
-                {state === "loading" ? "Rasm yuklanmoqda..." : "Rasmni ko'rsatib bo'lmadi"}
+                {state === "loading" ? translate("app.photo.loading") : translate("app.photo.failed")}
               </span>
             )}
             <img
               src={photo.url}
-              alt="Posilka rasmi"
+              alt={translate("app.photo.alt")}
               onLoad={() => setState("ready")}
               onError={() => setState("failed")}
               className={cls("h-full w-full object-cover", state === "ready" ? "opacity-100" : "opacity-0")}
@@ -1238,7 +1300,7 @@ function ParcelPhoto({
               onClick={onRefresh}
               className="el-press mt-2 h-10 w-full rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
             >
-              Qayta yuklash
+              {translate("app.photo.reload")}
             </button>
           )}
         </>
@@ -1249,11 +1311,11 @@ function ParcelPhoto({
           onClick={() => setFull(false)}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
         >
-          <img src={photo.url} alt="Posilka rasmi" className="max-h-full max-w-full object-contain" />
+          <img src={photo.url} alt={translate("app.photo.alt")} className="max-h-full max-w-full object-contain" />
           <button
             type="button"
             onClick={() => setFull(false)}
-            aria-label="Yopish"
+            aria-label={translate("common.close")}
             className="el-press absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-card/90"
           >
             <X size={20} />
@@ -1293,26 +1355,26 @@ function CashAcknowledgement({
   const mineAlready = receipt !== null && receipt.reported_by_side === side;
   return (
     <div className="rounded-[16px] border border-border bg-card p-4">
-      <p className="text-[15px] font-semibold text-foreground">Naqd to'lov qaydi</p>
+      <p className="text-[15px] font-semibold text-foreground">{translate("app.cash.title")}</p>
       <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-        Yo'lkira haydovchiga naqd beriladi. Bu yerda faqat qayd qoladi — ELCHI bu pulni qabul qilmaydi.
+        {translate("app.cash.explainer")}
       </p>
       <p className="mt-2 text-[13px] text-muted-foreground">
-        {booking.promo ? "Naqd to'lanadigan summa" : "Kelishilgan summa"}:{" "}
+        {booking.promo ? translate("app.cash.dueLabel") : translate("app.cash.agreedLabel")}:{" "}
         <span className="font-semibold text-foreground">{formatUzs(cashDueMinor(booking) / 100)}</span>
       </p>
 
       {booking.cash_status === "unpaid" && (
         <div className="mt-3 space-y-3">
           <Field
-            label={side === "driver" ? "Olingan summa (so'm)" : "Berilgan summa (so'm)"}
+            label={side === "driver" ? translate("app.cash.receivedField") : translate("app.cash.givenField")}
             type="number"
             value={amount}
             placeholder={String(Math.round(cashDueMinor(booking) / 100))}
             onChange={onAmountChange}
           />
           <PrimaryButton disabled={busy || !Number(amount)} onClick={onReport}>
-            {side === "driver" ? "Naqd olindi deb qayd qilish" : "Naqd berildi deb qayd qilish"}
+            {side === "driver" ? translate("app.cash.markReceived") : translate("app.cash.markGiven")}
           </PrimaryButton>
         </div>
       )}
@@ -1320,11 +1382,13 @@ function CashAcknowledgement({
       {booking.cash_status === "reported_paid" && receipt && (
         <div className="mt-3">
           <p className="text-[13px] text-secondary-foreground">
-            {mineAlready ? "Siz qayd qildingiz" : "Ikkinchi tomon qayd qildi"}: {formatUzs(receipt.amount_minor / 100)} ·{" "}
-            {formatDateTime(receipt.reported_at)}
+            {translate(mineAlready ? "app.cash.reportedByMe" : "app.cash.reportedByOther", {
+              amount: formatUzs(receipt.amount_minor / 100),
+              date: formatDateTime(receipt.reported_at),
+            })}
           </p>
           {mineAlready ? (
-            <p className="mt-2 text-[12px] leading-5 text-muted-foreground">Ikkinchi tomonning tasdig'i kutilmoqda.</p>
+            <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{translate("app.cash.awaitingOther")}</p>
           ) : (
             <div className="mt-3 flex gap-2">
               <button
@@ -1333,7 +1397,7 @@ function CashAcknowledgement({
                 onClick={() => onDecide("acknowledge")}
                 className="el-press h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
               >
-                Tasdiqlayman
+                {translate("app.cash.acknowledge")}
               </button>
               <button
                 type="button"
@@ -1341,7 +1405,7 @@ function CashAcknowledgement({
                 onClick={() => onDecide("contest")}
                 className="el-press h-11 flex-1 rounded-[12px] bg-destructive/10 text-[14px] font-semibold text-destructive"
               >
-                Rozi emasman
+                {translate("app.cash.contest")}
               </button>
             </div>
           )}
@@ -1349,11 +1413,11 @@ function CashAcknowledgement({
       )}
 
       {booking.cash_status === "acknowledged" && (
-        <p className="mt-3 text-[13px] font-semibold text-success">Ikkala tomon tasdiqladi.</p>
+        <p className="mt-3 text-[13px] font-semibold text-success">{translate("app.cash.bothConfirmed")}</p>
       )}
       {booking.cash_status === "contested" && (
         <p className="mt-3 text-[13px] font-semibold text-destructive">
-          Kelishmovchilik qayd etildi — operator ko'rib chiqadi.
+          {translate("app.cash.contested")}
         </p>
       )}
     </div>
@@ -1386,15 +1450,15 @@ function ListSkeleton({ rows = 3 }: { rows?: number }) {
 
 /** The name a driver saved a direction end by - never the opaque id the API returns. */
 function savedEndLabel(districtId: string | null | undefined, stopId: string | null | undefined, names: Record<string, string>): string {
-  if (districtId) return names[districtId] ?? "Tuman";
-  if (stopId) return "Tanlangan bekat";
+  if (districtId) return names[districtId] ?? translate("app.savedEnd.district");
+  if (stopId) return translate("app.savedEnd.stop");
   return "-";
 }
 
 function endLabel(
   stop: StopRefDTO | null | undefined,
   point: MapPointDTO | null | undefined,
-  fallback = "Xaritadagi joy",
+  fallback = translate("app.endLabel.mapPlace"),
 ): string {
   if (stop) return stop.name_uz;
   if (!point) return fallback;
@@ -1426,22 +1490,24 @@ function DriverVerificationGate({
   const decided = status === "rejected" || status === "blocked";
   return (
     <div className="rounded-[16px] border border-warning/40 bg-warning/10 p-4">
-      <p className="text-[15px] font-semibold text-foreground">Tasdiqlanmaguncha buyurtma qabul qila olmaysiz</p>
+      <p className="text-[15px] font-semibold text-foreground">{translate("app.driverGate.title")}</p>
       <p className="mt-1 text-[13px] text-muted-foreground">
-        Holat: {driverVerificationLabels[status ?? "new"] ?? status ?? "Yangi"}
+        {translate("app.driverGate.status", {
+          status: driverVerificationLabels[status ?? "new"] ?? status ?? translate("app.driverVerification.new"),
+        })}
       </p>
       <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
         {decided
-          ? "Hisobingiz bo'yicha qaror qabul qilingan. Sababi va keyingi qadamlar uchun qo'llab-quvvatlash xizmatiga yozing."
-          : "Profilni to'ldiring va barcha hujjatlarni yuklang — operator tekshirgandan so'ng taklif yubora olasiz."}
+          ? translate("app.driverGate.decided")
+          : translate("app.driverGate.pending")}
       </p>
       <div className="mt-3 space-y-2">
         {decided ? (
-          <PrimaryButton onClick={onSupport}>Qo'llab-quvvatlashga yozish</PrimaryButton>
+          <PrimaryButton onClick={onSupport}>{translate("app.driverGate.support")}</PrimaryButton>
         ) : (
           <>
-            <PrimaryButton onClick={onDocuments}>Hujjatlarni yuklash</PrimaryButton>
-            <SecondaryButton onClick={onProfile}>Profilni to'ldirish</SecondaryButton>
+            <PrimaryButton onClick={onDocuments}>{translate("app.driverGate.documents")}</PrimaryButton>
+            <SecondaryButton onClick={onProfile}>{translate("app.driverGate.profile")}</SecondaryButton>
           </>
         )}
       </div>
@@ -1471,17 +1537,17 @@ function RivalOfferBoard({ offers, unavailable }: { offers: ListingOfferDTO[]; u
   return (
     <div className="rounded-[14px] border border-border bg-background p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[14px] font-semibold text-foreground">Boshqa haydovchilar takliflari</p>
-        <span className="text-[12px] text-muted-foreground">{rivals.length} ta</span>
+        <p className="text-[14px] font-semibold text-foreground">{translate("app.rivalBoard.title")}</p>
+        <span className="text-[12px] text-muted-foreground">{translate("app.rivalBoard.count", { count: rivals.length })}</span>
       </div>
       {sorted.length === 0 ? (
         <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-          Hozircha boshqa taklif yo'q — birinchi bo'lib narx taklif qilishingiz mumkin.
+          {translate("app.rivalBoard.empty")}
         </p>
       ) : (
         <>
           <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-            Eng arzon taklif: <span className="font-semibold text-foreground">{formatUzs(sorted[0].total_minor / 100)}</span>
+            {translate("app.rivalBoard.cheapest")}{" "}<span className="font-semibold text-foreground">{formatUzs(sorted[0].total_minor / 100)}</span>
           </p>
           <ul className="mt-3 space-y-2">
             {sorted.map((offer) => {
@@ -1492,7 +1558,10 @@ function RivalOfferBoard({ offers, unavailable }: { offers: ListingOfferDTO[]; u
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-semibold text-foreground">{offer.label}</p>
                       <p className="mt-0.5 text-[12px] text-muted-foreground">
-                        {vehicleClassLabel(offer.vehicle_class)} · {offer.seat_capacity} o'rin
+                        {translate("app.rivalBoard.vehicleSeats", {
+                          vehicle: vehicleClassLabel(offer.vehicle_class),
+                          seats: offer.seat_capacity,
+                        })}
                       </p>
                       <p className="mt-0.5 text-[12px] text-muted-foreground">
                         {shortDate(offer.pickup_window_start)} - {shortDate(offer.pickup_window_end)}
@@ -1500,11 +1569,11 @@ function RivalOfferBoard({ offers, unavailable }: { offers: ListingOfferDTO[]; u
                       {bucket && (
                         // U6: the group and the count are one sentence; the count alone says how much it is worth.
                         <p className="mt-0.5 text-[12px] text-muted-foreground">
-                          {bucket} · {offer.rating_count} ta baho
+                          {translate("app.rivalBoard.ratings", { bucket, count: offer.rating_count })}
                         </p>
                       )}
                       {offer.response_pending && (
-                        <p className="mt-0.5 text-[12px] text-warning">Mijoz qarshi taklif yubordi</p>
+                        <p className="mt-0.5 text-[12px] text-warning">{translate("app.rivalBoard.countered")}</p>
                       )}
                     </div>
                     <span className="shrink-0 text-[15px] font-bold text-primary">
@@ -1519,7 +1588,7 @@ function RivalOfferBoard({ offers, unavailable }: { offers: ListingOfferDTO[]; u
       )}
       {mine && (
         <p className="mt-3 rounded-[12px] bg-accent px-3 py-2 text-[12px] leading-5 text-primary">
-          Sizning joriy taklifingiz: {formatUzs(mine.total_minor / 100)}
+          {translate("app.rivalBoard.mine", { price: formatUzs(mine.total_minor / 100) })}
         </p>
       )}
     </div>
@@ -1560,17 +1629,17 @@ function BottomNav({
   const tabs =
     role === "client"
       ? [
-          ["client-home", Home, "Bosh sahifa"],
-          ["client-orders", Package, "Buyurtmalar"],
-          ["client-notifications", Bell, "Xabarlar"],
-          ["client-profile", User, "Profil"],
+          ["client-home", Home, translate("app.nav.home")],
+          ["client-orders", Package, translate("app.nav.orders")],
+          ["client-notifications", Bell, translate("app.nav.messages")],
+          ["client-profile", User, translate("app.nav.profile")],
         ]
       : [
-          ["driver-home", Home, "Bosh sahifa"],
-          ["driver-routes", Navigation, "Yo'nalishlar"],
-          ["driver-feed", Package, "Moslar"],
-          ["driver-orders", Package, "Buyurtmalar"],
-          ["driver-profile", User, "Profil"],
+          ["driver-home", Home, translate("app.nav.home")],
+          ["driver-routes", Navigation, translate("app.nav.routes")],
+          ["driver-feed", Package, translate("app.nav.matches")],
+          ["driver-orders", Package, translate("app.nav.orders")],
+          ["driver-profile", User, translate("app.nav.profile")],
         ];
   return (
     <nav className="flex h-[72px] shrink-0 border-t border-border bg-card">
@@ -1589,6 +1658,8 @@ function BottomNav({
 
 export function ConnectedApp() {
   const auth = useAuth();
+  // Subscribing re-renders every screen in the chosen language; the text itself is looked up at render time.
+  const [locale, setLocale] = useLocale();
   const [screen, setScreen] = useState<Screen>("splash");
   const [selectedRole, setSelectedRole] = useState<MobileRole>("client");
   const [phone, setPhone] = useState("+998");
@@ -1778,7 +1849,24 @@ export function ConnectedApp() {
   const [driverCargoKg, setDriverCargoKg] = useState("20");
   const [driverCargoLitres, setDriverCargoLitres] = useState("100");
   const [bidPrice, setBidPrice] = useState("");
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notifications, setNotifications] = useState<NotificationDTO[]>([]);
+  /** B3: the cancel sheet of one booking - which side is asking, and against which version. */
+  const [cancelAsk, setCancelAsk] = useState<{ bookingId: string; side: BookingSide; version: number } | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelComment, setCancelComment] = useState("");
+  /** A cancel refusal in words (Q7/Q19: a pending no-show review), kept apart from the generic error banner. */
+  const [cancelRefusal, setCancelRefusal] = useState<string | null>(null);
+  /** B5a: the last reissue answer per code kind - the new code's note, or the server's wait (Q75). */
+  const [reissueNotice, setReissueNotice] = useState<{ kind: string; text: string; ok: boolean } | null>(null);
+  /** S5: the dispute opened from "Nizolarim". */
+  const [disputeDetail, setDisputeDetail] = useState<DisputeDTO | null>(null);
+  /** L3: the owner's edit of one listing, and whether the Q20 warning was already shown for it. */
+  const [listingEdit, setListingEdit] = useState<
+    { listing: ListingDTO; form: ListingEditForm; back: Screen; confirming: boolean; openOffers: number | null } | null
+  >(null);
+  /** W11: the driver's commission estimate for the bid being typed (driver only, Q16). */
+  const [feeQuote, setFeeQuote] = useState<{ quote: CommissionQuoteDTO; totalMinor: number } | null>(null);
+  const [feeQuoteFailed, setFeeQuoteFailed] = useState(false);
   const [locationSelectorMode, setLocationSelectorMode] = useState<"pickup" | "dropoff">("pickup");
   const [districtQuery, setDistrictQuery] = useState("");
   const [districtCity, setDistrictCity] = useState<City | null>(null);
@@ -1795,6 +1883,10 @@ export function ConnectedApp() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  // The trip the driver opened from "Yo'nalishlarim" (DriverTripDetail loads it itself).
+  const [openTripId, setOpenTripId] = useState<string | null>(null);
+  // Trip planning: a stop found by name narrows the corridor's routes to the ones through it.
+  const [routeStopFilter, setRouteStopFilter] = useState<{ id: string; name: string } | null>(null);
 
   const go = (next: Screen) => {
     setError("");
@@ -1884,7 +1976,7 @@ export function ConnectedApp() {
       void run(async () => {
         await auth.logout();
         go("role");
-      }, "Bu rol mobile ilova uchun mavjud emas");
+      }, translate("app.toast.roleUnsupported"));
       return;
     }
     if (authScreens.includes(screen)) {
@@ -2033,7 +2125,7 @@ export function ConnectedApp() {
   async function useCurrentLocation() {
     if (locating) return;
     if (!("geolocation" in navigator)) {
-      setError("Bu brauzer joylashuvni aniqlay olmaydi - joyni xaritadan belgilang.");
+      setError(translate("app.location.unsupported"));
       return;
     }
     setLocating(true);
@@ -2054,7 +2146,7 @@ export function ConnectedApp() {
       const nearest = nearestDistrict(districts, here);
       const region = nearest ? regions.find((item) => item.id === nearest.region.id) ?? null : null;
       if (!nearest || !region) {
-        setError("Joylashuvingizga mos tuman katalogda topilmadi - joyni xaritadan belgilang.");
+        setError(translate("app.location.noDistrict"));
         return;
       }
 
@@ -2072,13 +2164,13 @@ export function ConnectedApp() {
         pickup_lng: here.lng,
         pickup_address: address || `${nearest.name_uz}, ${region.name_uz}`,
       }));
-      setMessage(`Joylashuvingiz aniqlandi: ${nearest.name_uz}, ${region.name_uz}`);
+      setMessage(translate("app.location.found", { district: nearest.name_uz, region: region.name_uz }));
     } catch (err) {
       const denied = typeof err === "object" && err !== null && "code" in err && (err as GeolocationPositionError).code === 1;
       setError(
         denied
-          ? "Joylashuvga ruxsat berilmadi - brauzer sozlamasidan ruxsat bering yoki joyni xaritadan belgilang."
-          : "Joylashuvni aniqlab bo'lmadi - joyni xaritadan belgilang.",
+          ? translate("app.location.denied")
+          : translate("app.location.failed"),
       );
     } finally {
       setLocating(false);
@@ -2108,6 +2200,7 @@ export function ConnectedApp() {
       ["samarqand", "samarkand", "самарканд"],
       ["buxoro", "bukhara", "бухара", "бухарская"],
       ["andijon", "andijan", "андижан", "андижанская"],
+      // i18n-ignore: search aliases, not display text
       ["fargona", "farg ona", "fergana", "фергана", "ферганская"],
       ["namangan", "наманган", "наманганская"],
       ["navoiy", "navoi", "навои", "навоийская"],
@@ -2150,8 +2243,8 @@ export function ConnectedApp() {
     if (!preview) return null;
     const worst = Math.max(preview.origin.route_offset_m ?? 0, preview.destination.route_offset_m ?? 0);
     if (worst < 5000) return null;
-    return `Belgilangan joy yo'ldan ${Math.round(worst / 1000)} km chetda - bu masofa yuqoridagi vaqtga kirmagan.`;
-  }, [preview]);
+    return translate("app.location.offRoute", { km: Math.round(worst / 1000) });
+  }, [preview, locale]);
 
   /**
    * Why "Saqlash" is not available yet.
@@ -2164,22 +2257,22 @@ export function ConnectedApp() {
    */
   const saveBlockers = useMemo(() => {
     const problems: string[] = [];
-    if (!directionReady) problems.push("Ikkala nuqtani belgilang va yo'nalish tekshirilishini kuting.");
+    if (!directionReady) problems.push(translate("app.validation.bothPoints"));
     const start = listingForm.windowStart ? new Date(listingForm.windowStart) : null;
     const end = listingForm.windowEnd ? new Date(listingForm.windowEnd) : null;
     const startOk = start !== null && !Number.isNaN(start.getTime());
     const endOk = end !== null && !Number.isNaN(end.getTime());
-    if (!startOk) problems.push("Jo'nash oynasi boshlanishini to'liq kiriting (kun, oy, yil va vaqt).");
-    if (!endOk) problems.push("Jo'nash oynasi tugashini to'liq kiriting (kun, oy, yil va vaqt).");
+    if (!startOk) problems.push(translate("app.validation.windowStart"));
+    if (!endOk) problems.push(translate("app.validation.windowEnd"));
     if (startOk && endOk && end.getTime() <= start.getTime()) {
-      problems.push("Tugash vaqti boshlanish vaqtidan keyin bo'lishi kerak.");
+      problems.push(translate("app.validation.endAfterStart"));
     }
     if (endOk && end.getTime() <= Date.now()) {
-      problems.push("Jo'nash oynasi o'tib ketgan - kelajakdagi vaqtni tanlang.");
+      problems.push(translate("app.validation.windowPast"));
     }
-    if (listingUnitMinor <= 0) problems.push("Narxni kiriting.");
+    if (listingUnitMinor <= 0) problems.push(translate("listingOwner.invalid.price"));
     return problems;
-  }, [directionReady, listingForm.windowStart, listingForm.windowEnd, listingUnitMinor]);
+  }, [directionReady, listingForm.windowStart, listingForm.windowEnd, listingUnitMinor, locale]);
 
   /**
    * Q88: the moment both places are marked, ask the server whether a confirmed route serves them.
@@ -2215,7 +2308,7 @@ export function ConnectedApp() {
       .catch(() => {
         if (!isActive) return;
         setPreview(null);
-        setPreviewError("Bu ikki nuqta hozircha ELCHI yo'nalishiga mos kelmaydi.");
+        setPreviewError(translate("app.location.previewMismatch"));
       })
       .finally(() => {
         if (isActive) setPreviewBusy(false);
@@ -2378,10 +2471,181 @@ export function ConnectedApp() {
 
   /** B5: the codes belong to the client; the driver never sees them (rules.CLIENT_CODE_KINDS). */
   async function openClientBooking(bookingId: string) {
-    setClientBooking((await getBooking(bookingId)) as BookingClientDTO);
+    const booking = (await getBooking(bookingId)) as BookingClientDTO;
+    setClientBooking(booking);
     setBookingCodes(await getBookingCodes(bookingId).catch(() => null));
     setBookingDisputes(await myDisputes({ limit: 20 }).catch(() => [] as DisputeDTO[]));
+    setReissueNotice(null);
+    if (booking.service_status === "cancelled") await loadIntentOfBooking(bookingId);
     go("client-booking-detail");
+  }
+
+  /**
+   * ADR-0025: a cancelled booking that came from a saved request. The request is re-read from the server (not a
+   * copy kept on this device) so "Qayta qidirish" is offered exactly when the server says it may be (`can_reopen`).
+   */
+  async function loadIntentOfBooking(bookingId: string): Promise<TripIntentDTO | null> {
+    if (auth.user?.role !== "client") return null;
+    const booked = await listTripIntents("booked").catch(() => [] as TripIntentDTO[]);
+    const linked = intentOfBooking(booked, bookingId);
+    if (!linked) return null;
+    const fresh = await getTripIntent(linked.id).catch(() => linked);
+    setMyIntents((list) => [fresh, ...list.filter((item) => item.id !== fresh.id)]);
+    return fresh;
+  }
+
+  /** The explicit "search again" of ADR-0025, started from the cancelled booking itself. */
+  function searchAgainFor(intent: TripIntentDTO) {
+    void run(async () => {
+      const next = await reopenTripIntent(intent.id, intent.version);
+      rememberIntent(next);
+      setServiceMode(next.service_type as "parcel" | "passenger");
+      go("client-offers");
+    }, translate("app.toast.searchRestarted"));
+  }
+
+  /**
+   * B3: cancel a booking, from either side.
+   *
+   * The refusal the person most needs to understand - a no-show under operator review (Q7/Q19) - is said in its
+   * own words on the sheet, and the booking is re-read so the screen shows what is true now. On success a
+   * client's saved request is re-read, because that is what makes "Qayta qidirish" reachable (ADR-0025).
+   */
+  function submitCancel() {
+    const ask = cancelAsk;
+    if (!ask || !cancelReason) return;
+    void run(async () => {
+      setCancelRefusal(null);
+      try {
+        await cancelBooking(ask.bookingId, ask.version, cancelReason, cancelComment.trim() || undefined);
+      } catch (cause) {
+        const key = cancelRefusalKey(cause as { code?: string });
+        if (!key) throw cause;
+        const refusal = translateDynamic(key) ?? getErrorMessage(cause);
+        await (ask.side === "driver" ? openDriverBooking(ask.bookingId) : openClientBooking(ask.bookingId)).catch(() => undefined);
+        setCancelRefusal(refusal);
+        return;
+      }
+      setCancelAsk(null);
+      setCancelComment("");
+      if (ask.side === "driver") {
+        await openDriverBooking(ask.bookingId);
+        await loadDriverBookings().catch(() => undefined);
+      } else {
+        await openClientBooking(ask.bookingId);
+        await loadMyListings().catch(() => undefined);
+      }
+      setMessage(translate("bookingCancel.done"));
+    });
+  }
+
+  function openCancel(bookingId: string, side: BookingSide, version: number) {
+    setCancelAsk({ bookingId, side, version });
+    setCancelReason(CANCEL_REASONS[side][0]);
+    setCancelComment("");
+    setCancelRefusal(null);
+  }
+
+  /** B5a: a new code for its owner. The server's wait (Q75) is shown next to the code, not as a failure. */
+  function reissueCode(bookingId: string, kind: string) {
+    void run(async () => {
+      try {
+        const result = await reissueBookingCode(bookingId, kind as ProofKind);
+        setBookingCodes((current) => {
+          const fresh = result.data.codes;
+          const kept = (current?.codes ?? []).filter((code) => !fresh.some((item) => item.kind === code.kind));
+          return { booking_id: bookingId, codes: [...kept, ...fresh] };
+        });
+        setReissueNotice({ kind, text: translate("reissue.done"), ok: true });
+      } catch (cause) {
+        const wait = reissueWait(cause as { code?: string; details?: unknown });
+        if (!wait) throw cause;
+        setReissueNotice({ kind, text: reissueWaitText(wait), ok: false });
+      }
+    });
+  }
+
+  /** S1/S3 from either side: the booking the rating or dispute screen works on is the one open for that side. */
+  function openRating(bookingId: string, side: BookingSide) {
+    setOpenBooking({ id: bookingId, side });
+    setRating(5);
+    setRatingComment("");
+    go("booking-rating");
+  }
+
+  function openDisputeForm(bookingId: string, side: BookingSide) {
+    setOpenBooking({ id: bookingId, side });
+    setDisputeType("service");
+    setDisputeComment("");
+    go("booking-dispute");
+  }
+
+  /** S5: one dispute, re-read so both sides' latest evidence and any decision are current. */
+  async function openDisputeDetail(disputeId: string) {
+    setDisputeDetail(await getDispute(disputeId));
+    setEvidenceNote(null);
+    go("dispute-detail");
+  }
+
+  /** L3: the owner's edit form, opened on the listing as the server has it now (its `version` is what is sent). */
+  async function openListingEdit(listingId: string, back: Screen) {
+    const listing = await getListing(listingId);
+    const threads = listing.kind === "request"
+      ? await listListingProposals(listingId).catch(() => null)
+      : null;
+    setListingEdit({
+      listing,
+      form: formFromListing(listing),
+      back,
+      confirming: false,
+      openOffers: threads ? threads.filter((thread) => thread.state === "open").length : null,
+    });
+    go("listing-edit");
+  }
+
+  /** L5/L6: pause or resume, then show the listing as the server answered it. */
+  function setListingPaused(listing: ListingDTO, pause: boolean, after: () => Promise<void>) {
+    void run(async () => {
+      if (pause) await pauseListing(listing.id, listing.version);
+      else await resumeListing(listing.id, listing.version);
+      await after();
+    }, translate(pause ? "listingOwner.paused" : "listingOwner.resumed"));
+  }
+
+  /** ADR-0025: the editor opens on the request as the server has it, not a copy from another session. */
+  function openIntentEditor() {
+    void run(async () => {
+      if (activeIntent) rememberIntent(await getTripIntent(activeIntent.id));
+      go("client-intent-edit");
+    });
+  }
+
+  /**
+   * N4: where an inbox item leads. The link is the server's (`communications.recipients`); the screen it opens
+   * depends on which side this account is, because a booking has a client view and a driver view.
+   */
+  async function openInboxItem(item: NotificationDTO) {
+    if (!item.is_read) {
+      await markNotificationRead(item.id).catch(() => undefined);
+      setNotifications((list) => list.map((row) => (row.id === item.id ? { ...row, is_read: true } : row)));
+    }
+    const target = parseInboxLink(item.link);
+    const driver = auth.user?.role === "driver";
+    if (!target) return;
+    if (target.kind === "booking") {
+      if (driver) await openDriverBooking(target.id);
+      else await openClientBooking(target.id);
+      if (target.chat) await openChat(target.id, driver ? "driver" : "client");
+    } else if (target.kind === "listing") {
+      if (driver) go("driver-routes");
+      else await openListing(target.id);
+    } else if (target.kind === "proposal") {
+      go(driver ? "driver-proposals" : "client-proposals");
+    } else if (target.kind === "trip") {
+      if (driver) go("driver-routes");
+    } else if (target.kind === "dispute") {
+      await openDisputeDetail(target.id);
+    }
   }
 
   const CHAT_PAGE = 30;
@@ -2783,7 +3047,7 @@ export function ConnectedApp() {
     });
     void run(async () => {
       if (await sendIntentEdit(body, "client-offers")) go("client-offers");
-    }, "Talab yangilandi");
+    }, translate("app.toast.intentUpdated"));
   }
 
   function closeActiveIntent() {
@@ -2794,7 +3058,7 @@ export function ConnectedApp() {
       const next = await loadIntents();
       go("client-offers");
       await loadOfferFeed(serviceMode, next);
-    }, "Talab yopildi");
+    }, translate("app.toast.intentClosed"));
   }
 
   /** Explicit "search again" after a cancelled booking; the old offers stay closed (ADR-0025). */
@@ -2805,7 +3069,7 @@ export function ConnectedApp() {
       const next = await reopenTripIntent(intent.id, intent.version);
       rememberIntent(next);
       await loadOfferFeed(serviceMode, next);
-    }, "Qidiruv qayta boshlandi");
+    }, translate("app.toast.searchRestarted"));
   }
 
   function startNewIntent() {
@@ -2820,9 +3084,13 @@ export function ConnectedApp() {
     go("client-home");
   }
 
+  /** The list may be older than the request (edited from another device): the chosen one is re-read first. */
   function selectIntent(intent: TripIntentDTO) {
-    rememberIntent(intent);
-    void run(() => loadOfferFeed(serviceMode, intent));
+    void run(async () => {
+      const fresh = await getTripIntent(intent.id);
+      rememberIntent(fresh);
+      await loadOfferFeed(serviceMode, fresh);
+    });
   }
 
   /** The request the offer screen works with: live, and of the same service as this driver's offer. */
@@ -2915,6 +3183,7 @@ export function ConnectedApp() {
   async function openDriverBooking(bookingId: string) {
     setProofCode("");
     setDriverBooking((await getBooking(bookingId)) as BookingDTO);
+    setBookingDisputes(await myDisputes({ limit: 20 }).catch(() => [] as DisputeDTO[]));
     go("driver-order-detail");
   }
 
@@ -2922,9 +3191,9 @@ export function ConnectedApp() {
     setDriverBookings(await listMyBookings({ role: "driver", limit: 30 }));
   }
 
+  /** N4 (v2): the in-app inbox is the only delivery channel in the pilot (Q82), so the bell count comes from here. */
   async function loadNotifications() {
-    const data = await getNotifications({ limit: 50 });
-    setNotifications(data.items ?? []);
+    setNotifications(await fetchNotifications({ limit: 50 }));
   }
 
   /**
@@ -3028,7 +3297,34 @@ export function ConnectedApp() {
     if (screen === "driver-income") void run(loadWallet);
   }, [screen, auth.isAuthenticated]);
 
-  const unreadNotifications = notifications.filter((item) => !item.is_read).length;
+  const unreadNotifications = unreadCount(notifications);
+
+  /**
+   * W11: the driver's commission estimate for the bid being typed, re-asked shortly after the price stops
+   * changing. Driver-only by construction (Q16) - this screen is never a client's - and it fails soft: an
+   * unavailable estimate must not stop a bid.
+   */
+  useEffect(() => {
+    if (screen !== "driver-bid" || auth.user?.role !== "driver" || !selectedRequest) {
+      setFeeQuote(null);
+      setFeeQuoteFailed(false);
+      return;
+    }
+    const listing = selectedRequest.listing;
+    const total = bidTotalMinor(listing.price_basis, Math.round(Number(bidPrice)) * 100, listing.quantity);
+    if (total <= 0) {
+      setFeeQuote(null);
+      setFeeQuoteFailed(false);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void commissionQuote({ service_type: listing.service_type, total_minor: total })
+        .then((quote) => { if (active) { setFeeQuote({ quote, totalMinor: total }); setFeeQuoteFailed(false); } })
+        .catch(() => { if (active) { setFeeQuote(null); setFeeQuoteFailed(true); } });
+    }, 400);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [screen, bidPrice, selectedRequest, auth.user?.role]);
 
   /**
    * D16 / §17.1: an unverified driver takes no new business at all - no bid, no trip, no trip offer.
@@ -3040,9 +3336,171 @@ export function ConnectedApp() {
    */
   const driverApproved = driverProfile?.verification_status === "approved";
 
+  /**
+   * B3 on either booking screen: the button, the inline confirmation with a reason, and the server's refusal.
+   *
+   * The confirmation says what happens - the booking closes, the seat is freed, no penalty in the pilot (Q45) -
+   * and a pending no-show review is named before the person tries, because only the operator may cancel then
+   * (Q7/Q19). The server stays the authority: its refusal is shown here in words, next to the button.
+   */
+  function renderCancelControls(
+    booking: { id: string; version: number; service_status: string; no_show_review?: { status: string } | null },
+    side: BookingSide,
+  ) {
+    const mine = cancelAsk?.bookingId === booking.id;
+    const refusal = mine && cancelRefusal ? (
+      <p className="rounded-[12px] bg-destructive/10 px-3 py-2.5 text-[13px] leading-5 text-destructive">{cancelRefusal}</p>
+    ) : null;
+    if (!canCancelBooking(booking.service_status)) return refusal;
+    if (cancelBlockedByReview(booking.no_show_review)) {
+      return (
+        <>
+          {refusal}
+          <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
+            {translate("bookingCancel.reviewPending")}
+          </p>
+        </>
+      );
+    }
+    if (!mine || cancelRefusal) {
+      return (
+        <>
+          {refusal}
+          <SecondaryButton danger disabled={busy} onClick={() => openCancel(booking.id, side, booking.version)}>
+            {translate("bookingCancel.button")}
+          </SecondaryButton>
+        </>
+      );
+    }
+    return (
+      <div className="space-y-3 rounded-[16px] border border-destructive/30 bg-card p-4">
+        <p className="text-[15px] font-semibold text-foreground">{translate("bookingCancel.title")}</p>
+        <p className="text-[13px] leading-5 text-muted-foreground">{translate("bookingCancel.body")}</p>
+        <PickSelect
+          label={translate("bookingCancel.reasonLabel")}
+          placeholder={translate("bookingCancel.reasonLabel")}
+          value={cancelReason}
+          options={CANCEL_REASONS[side].map((code) => [code, translateDynamic(`bookingCancel.reason.${code}`) ?? code])}
+          onChange={setCancelReason}
+        />
+        <Field
+          label={translate("bookingCancel.commentLabel")}
+          value={cancelComment}
+          multiline
+          onChange={setCancelComment}
+          hint={translate("app.bookingCancel.commentHint")}
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={busy || !cancelReason}
+            onClick={submitCancel}
+            className="el-press h-11 flex-1 rounded-[12px] bg-destructive text-[14px] font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {translate("bookingCancel.confirm")}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setCancelAsk(null); setCancelRefusal(null); }}
+            className="el-press h-11 flex-1 rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
+          >
+            {translate("bookingCancel.keep")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /** What a cancelled booking says about itself: who cancelled, when, and why (the machine code in words). */
+  function renderCancelledNote(booking: { cancelled?: { at: string; by_side: string; reason_code: string } | null }) {
+    if (!booking.cancelled) return null;
+    const who = translateDynamic(`dispute.side.${booking.cancelled.by_side}`) ?? booking.cancelled.by_side;
+    const why = translateDynamic(`bookingCancel.reason.${booking.cancelled.reason_code}`) ?? booking.cancelled.reason_code;
+    return (
+      <p className="text-[13px] leading-5 text-muted-foreground">
+        {translate("bookingCancel.cancelledBy")}: {who} · {formatDateTime(booking.cancelled.at)} · {why}
+      </p>
+    );
+  }
+
+  /** The disputes of one booking, each opening its detail (S5). */
+  function renderBookingDisputes(bookingId: string) {
+    return bookingDisputes.filter((item) => item.booking_id === bookingId).map((item) => (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => void run(() => openDisputeDetail(item.id))}
+        className="el-press w-full rounded-[14px] border border-border bg-card p-4 text-left"
+      >
+        <p className="text-[12px] text-muted-foreground">{translate("dispute.detailTitle")}</p>
+        <p className="mt-1 text-[14px] font-medium text-foreground">
+          {disputeTypeLabel(item.type)} · {disputeStatusLabel(item.status)}
+        </p>
+      </button>
+    ));
+  }
+
+  /**
+   * The person on the other side of an accepted booking: reputation, then "Xavfsizlik" (report this booking, block
+   * this person). Only a booking carries the counterparty's id (Q43) - nothing here derives one.
+   */
+  function renderBookingSafety(booking: AnyBooking, side: "client" | "driver") {
+    const other = bookingCounterparty(booking, side);
+    return (
+      <>
+        {other && (
+          <div className="space-y-2">
+            <p className="px-1 text-[13px] font-semibold text-muted-foreground">
+              {translate(side === "client" ? "safety.driverTitle" : "safety.clientTitle")}: {other.name}
+            </p>
+            <ReputationCard userId={other.userId} serviceType={booking.service_type} />
+          </div>
+        )}
+        <div className="space-y-2">
+          <p className="px-1 text-[13px] font-semibold text-muted-foreground">{translate("safety.section")}</p>
+          <p className="px-1 text-[12px] leading-5 text-muted-foreground">{translate("safety.sectionHint")}</p>
+          <ReportForm subjectType="booking" subjectId={booking.id} />
+          {other ? (
+            <BlockPanel targetUserId={other.userId} labelFor={(id) => (id === other.userId ? other.name : id)} />
+          ) : (
+            <p className="px-1 text-[12px] leading-5 text-muted-foreground">{translate("safety.counterpartyMissing")}</p>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  /** L5/L6/L3: the owner's pause, resume and edit buttons under one listing. */
+  function renderListingOwnerControls(listing: ListingDTO, back: Screen, after: () => Promise<void>) {
+    const actions = ownerListingActions(listing.status);
+    if (!actions.canEdit && !actions.canPause && !actions.canResume) return null;
+    return (
+      <div className="space-y-2">
+        {actions.canPause && (
+          <>
+            <SecondaryButton disabled={busy} onClick={() => setListingPaused(listing, true, after)}>
+              {translate("listingOwner.pause")}
+            </SecondaryButton>
+            <p className="text-[12px] leading-5 text-muted-foreground">{translate("listingOwner.pauseHint")}</p>
+          </>
+        )}
+        {actions.canResume && (
+          <PrimaryButton disabled={busy} onClick={() => setListingPaused(listing, false, after)}>
+            {translate("listingOwner.resume")}
+          </PrimaryButton>
+        )}
+        {actions.canEdit && (
+          <SecondaryButton disabled={busy} onClick={() => void run(() => openListingEdit(listing.id, back))}>
+            {translate("listingOwner.edit")}
+          </SecondaryButton>
+        )}
+      </div>
+    );
+  }
+
   const content = (() => {
     if (auth.isLoading) {
-      return <EmptyState icon={Loader2} title="Yuklanmoqda..." />;
+      return <EmptyState icon={Loader2} title={translate("common.loading")} />;
     }
 
     if (screen === "splash") {
@@ -3068,7 +3526,7 @@ export function ConnectedApp() {
             <div>
               <h1 className="anim-rise stagger-1 font-display text-[26px] font-bold text-foreground">elchi</h1>
               <p className="anim-rise stagger-2 mt-1.5 text-[14px] leading-6 text-muted-foreground">
-                Shaharlararo posilka va yo'lovchi xizmati
+                {translate("onboarding.tagline")}
               </p>
             </div>
             <div className="anim-fade stagger-2 mt-2 flex items-center" aria-hidden="true">
@@ -3090,7 +3548,7 @@ export function ConnectedApp() {
             </div>
           </div>
           <div className="el-fade w-full">
-            <PrimaryButton onClick={() => go("onboarding")}>Boshlash</PrimaryButton>
+            <PrimaryButton onClick={() => go("onboarding")}>{translate("onboarding.start")}</PrimaryButton>
           </div>
         </main>
       );
@@ -3100,9 +3558,9 @@ export function ConnectedApp() {
       // Each step carries its own tint (reference design): the eye reads three different promises, not one
       // screen shown three times.
       const steps = [
-        ["Posilkangizni shahardan shaharga yuboring", "Yo'nalishni tanlang, manzillarni kiriting va haydovchilardan taklif oling.", MapPin, "var(--accent)", "var(--primary)"],
-        ["Haydovchilar narx taklif qiladi", "Sizga mos narx va haydovchini o'zingiz tanlaysiz.", FileText, "color-mix(in srgb, var(--success) 8%, transparent)", "var(--success)"],
-        ["Yetkazildi - tasdiqlang va baholang", "Posilka yetib borgach, buyurtmani tasdiqlang va haydovchiga baho bering.", CheckCircle, "color-mix(in srgb, var(--warning) 8%, transparent)", "var(--warning)"],
+        [translate("onboarding.step1Title"), translate("onboarding.step1Text"), MapPin, "var(--accent)", "var(--primary)"],
+        [translate("onboarding.step2Title"), translate("onboarding.step2Text"), FileText, "color-mix(in srgb, var(--success) 8%, transparent)", "var(--success)"],
+        [translate("onboarding.step3Title"), translate("onboarding.step3Text"), CheckCircle, "color-mix(in srgb, var(--warning) 8%, transparent)", "var(--warning)"],
       ] as const;
       const [title, subtitle, Icon, tint, tone] = steps[onboardingStep];
       const last = onboardingStep === steps.length - 1;
@@ -3134,9 +3592,9 @@ export function ConnectedApp() {
           </div>
           <div className="space-y-2">
             <PrimaryButton onClick={() => (last ? go("role") : setOnboardingStep(onboardingStep + 1))}>
-              {last ? "Boshlash" : "Keyingisi"}
+              {last ? translate("onboarding.start") : translate("onboarding.next")}
             </PrimaryButton>
-            {!last && <GhostButton onClick={() => go("role")}>O&apos;tkazib yuborish</GhostButton>}
+            {!last && <GhostButton onClick={() => go("role")}>{translate("onboarding.skip")}</GhostButton>}
           </div>
         </main>
       );
@@ -3144,15 +3602,15 @@ export function ConnectedApp() {
 
     if (screen === "role") {
       const roles = [
-        ["client", Package, "Men mijozman", "Posilka yuborish yoki yo'lovchi sifatida borish"],
-        ["driver", Truck, "Men haydovchiman", "Yo'nalishingizga yuk va yo'lovchi olish"],
+        ["client", Package, translate("onboarding.roleClient"), translate("onboarding.roleClientHint")],
+        ["driver", Truck, translate("onboarding.roleDriver"), translate("onboarding.roleDriverHint")],
       ] as const;
       return (
         <main className="flex flex-1 flex-col bg-background px-5 pb-8 pt-10">
           <button
             type="button"
             onClick={() => go("onboarding")}
-            aria-label="Orqaga"
+            aria-label={translate("common.back")}
             className="el-press mb-6 flex h-9 w-9 items-center justify-center self-start rounded-xl bg-secondary"
           >
             <ChevronLeft size={18} className="text-foreground" />
@@ -3161,8 +3619,8 @@ export function ConnectedApp() {
             <ElchiLogo size={36} />
           </div>
           <div className="anim-rise stagger-1 mb-8 mt-6">
-            <h2 className="font-display text-[22px] font-bold text-foreground">Qanday davom etamiz?</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">Rolingizni tanlang - keyin ham almashtira olasiz.</p>
+            <h2 className="font-display text-[22px] font-bold text-foreground">{translate("onboarding.roleTitle")}</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">{translate("onboarding.roleSubtitle")}</p>
           </div>
           {/* The reference client selects and moves on in one tap: the role is the question this screen asks,
               so a second "continue" only adds a step to answer it twice. */}
@@ -3204,13 +3662,13 @@ export function ConnectedApp() {
         run(async () => {
           await auth.requestOtp({ phone, role: selectedRole });
           go("otp");
-        }, "Kod yuborildi");
+        }, translate("auth.codeSent"));
       return (
         <main className="flex flex-1 flex-col bg-background px-5 pb-8 pt-10">
           <button
             type="button"
             onClick={() => go("role")}
-            aria-label="Orqaga"
+            aria-label={translate("common.back")}
             className="el-press mb-6 flex h-9 w-9 items-center justify-center self-start rounded-xl bg-secondary"
           >
             <ChevronLeft size={18} className="text-foreground" />
@@ -3222,20 +3680,20 @@ export function ConnectedApp() {
             </span>
             <span className="text-xs font-medium text-muted-foreground">
               <span className="font-semibold text-foreground">
-                {selectedRole === "driver" ? "Haydovchi" : "Mijoz"}
+                {selectedRole === "driver" ? translate("dispute.side.driver") : translate("dispute.side.client")}
               </span>{" "}
-              sifatida
+              {translate("auth.roleSuffix")}
             </span>
           </div>
           <div className="anim-rise stagger-1">
-            <h2 className="font-display mb-1.5 text-[22px] font-bold text-foreground">Telefon raqamingiz</h2>
-            <p className="mb-8 text-sm text-muted-foreground">Tasdiqlash kodi SMS orqali yuboriladi.</p>
+            <h2 className="font-display mb-1.5 text-[22px] font-bold text-foreground">{translate("auth.phoneTitle")}</h2>
+            <p className="mb-8 text-sm text-muted-foreground">{translate("auth.phoneSubtitle")}</p>
           </div>
           <div className="anim-rise stagger-2 flex-1">
             <PhoneField value={phoneDigits} onChange={(digits) => setPhone(`+998${digits}`)} onSubmit={submit} />
           </div>
           <PrimaryButton disabled={busy || phoneDigits.length < 9} onClick={submit} icon={Send} busy={busy}>
-            Kod olish
+            {translate("auth.getCode")}
           </PrimaryButton>
         </main>
       );
@@ -3252,32 +3710,32 @@ export function ConnectedApp() {
           <button
             type="button"
             onClick={() => go("phone")}
-            aria-label="Orqaga"
+            aria-label={translate("common.back")}
             className="el-press flex h-9 w-9 items-center justify-center self-start rounded-xl bg-secondary"
           >
             <ChevronLeft size={18} className="text-foreground" />
           </button>
 
           <div className="anim-rise mt-6 text-center">
-            <h2 className="font-display text-[22px] font-bold text-foreground">Kodni kiriting</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">Kod shu raqamga yuborildi</p>
+            <h2 className="font-display text-[22px] font-bold text-foreground">{translate("auth.otpTitle")}</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">{translate("auth.otpSentTo")}</p>
             <p className="mt-1 break-all font-mono text-sm font-semibold text-foreground">{phone}</p>
           </div>
 
           <div className="anim-rise stagger-2 mt-8">
-            <CodeField label={`${OTP_LENGTH} xonali kod`} value={otp} length={OTP_LENGTH} onChange={setOtp} onComplete={verify} />
+            <CodeField label={translate("auth.otpLabel", { length: OTP_LENGTH })} value={otp} length={OTP_LENGTH} onChange={setOtp} onComplete={verify} />
           </div>
 
           {import.meta.env.DEV && (
             <p className="mt-3 text-center text-[12px] text-muted-foreground">
-              Mahalliy test kodi: {import.meta.env.VITE_DEV_OTP || "12345"}
+              {translate("auth.devCode", { code: import.meta.env.VITE_DEV_OTP || "12345" })}
             </p>
           )}
 
           <div className="mt-5 flex justify-center">
             {resendIn > 0 ? (
               <p className="font-mono text-xs text-muted-foreground">
-                Qayta yuborish 0:{resendIn.toString().padStart(2, "0")}
+                {translate("auth.resendIn", { seconds: resendIn.toString().padStart(2, "0") })}
               </p>
             ) : (
               <button
@@ -3286,19 +3744,19 @@ export function ConnectedApp() {
                   run(async () => {
                     await auth.requestOtp({ phone, role: selectedRole });
                     setResendIn(RESEND_SECONDS);
-                  }, "Kod qayta yuborildi")
+                  }, translate("auth.codeResent"))
                 }
                 className="el-press flex items-center gap-1 text-xs font-medium text-primary"
               >
                 <RefreshCw size={11} />
-                Kodni qayta yuborish
+                {translate("auth.resendCode")}
               </button>
             )}
           </div>
 
           <div className="mt-7">
             <PrimaryButton disabled={busy || otp.length !== OTP_LENGTH} onClick={verify} icon={ArrowRight} iconAfter busy={busy}>
-              Tasdiqlash
+              {translate("common.confirm")}
             </PrimaryButton>
           </div>
         </main>
@@ -3318,33 +3776,33 @@ export function ConnectedApp() {
        */
       const faqs = [
         [
-          "Buyurtma qanday yarataman?",
-          "Olib ketish va yetkazish joyini xaritada belgilang, keyin o'z narxingiz bilan e'lon bering yoki haydovchilarning e'lonlariga narx taklif qiling.",
+          translate("support.faq1Question"),
+          translate("support.faq1Answer"),
         ],
         [
-          "Narx qanday belgilanadi?",
-          "Narxni siz va haydovchi kelishasiz. Siz narx taklif qilasiz, haydovchi qarshi taklif berishi mumkin; qabul qilingan oxirgi taklif bron narxi bo'ladi. ELCHI narxni o'zi belgilamaydi.",
+          translate("support.faq2Question"),
+          translate("support.faq2Answer"),
         ],
         [
-          "Buyurtmani bekor qilsam bo'ladimi?",
-          "Ha. Taklif qabul qilinmaguncha e'lonni istalgan vaqtda yopishingiz mumkin. Bron tuzilgandan keyin bekor qilish shartlari bron sahifasida ko'rsatiladi.",
+          translate("support.faq3Question"),
+          translate("support.faq3Answer"),
         ],
         [
-          "Haydovchining telefoni qachon ochiladi?",
-          "Xizmat boshlanganda: yo'lovchi uchun siz mashinaga chiqqanda, pochta uchun yuk olib ketilganda. Undan oldin aloqa ilova ichidagi chat orqali bo'ladi.",
+          translate("support.faq4Question"),
+          translate("support.faq4Answer"),
         ],
       ] as const;
       const contacts = supportInfo;
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Yordam" back={() => go(auth.user?.role === "driver" ? "driver-profile" : "client-profile")} />
+          <TopBar title={translate("support.title")} back={() => go(auth.user?.role === "driver" ? "driver-profile" : "client-profile")} />
           <section className="el-enter flex-1 space-y-5 overflow-y-auto px-4 py-4">
             <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/10 p-4">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/15">
                 <Headphones size={20} className="text-primary" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-foreground">Qo'llab-quvvatlash</p>
+                <p className="text-sm font-semibold text-foreground">{translate("support.cardTitle")}</p>
                 {contacts?.available && contacts.phone ? (
                   <>
                     {contacts.hours_text && (
@@ -3360,21 +3818,20 @@ export function ConnectedApp() {
                   </>
                 ) : (
                   <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                    Hozircha telefon liniyasi yo'q. Murojaatingizni shu yerdan yozib qoldiring - operator ilova
-                    ichida javob beradi.
+                    {translate("support.noPhoneLine")}
                   </p>
                 )}
               </div>
             </div>
 
             <div>
-              <SectionLabel>Murojaat yuborish</SectionLabel>
+              <SectionLabel>{translate("support.newTicket")}</SectionLabel>
               <div className="rounded-2xl border border-border bg-card p-4">
                 <textarea
                   value={supportMessage}
                   onChange={(event) => setSupportMessage(event.target.value)}
                   rows={4}
-                  placeholder="Nima bo'ldi? Bron raqamini ham yozsangiz tezroq topamiz."
+                  placeholder={translate("support.messagePlaceholder")}
                   className="el-focus w-full resize-none rounded-[12px] border-[1.5px] border-border bg-card p-3 text-[15px] text-foreground outline-none placeholder:text-slate-400"
                 />
                 <div className="mt-3">
@@ -3389,10 +3846,10 @@ export function ConnectedApp() {
                         );
                         setSupportMessage("");
                         await loadSupport();
-                      }, "Murojaat yuborildi")
+                      }, translate("support.ticketSent"))
                     }
                   >
-                    Yuborish
+                    {translate("common.send")}
                   </PrimaryButton>
                 </div>
               </div>
@@ -3400,7 +3857,7 @@ export function ConnectedApp() {
 
             {supportTickets.length > 0 && (
               <div>
-                <SectionLabel>Murojaatlarim</SectionLabel>
+                <SectionLabel>{translate("support.myTickets")}</SectionLabel>
                 <div className="space-y-2">
                   {supportTickets.map((ticket) => (
                     <div key={ticket.id} className="rounded-2xl border border-border bg-card p-4">
@@ -3418,7 +3875,7 @@ export function ConnectedApp() {
             )}
 
             <div>
-              <SectionLabel>Savollar</SectionLabel>
+              <SectionLabel>{translate("support.faqTitle")}</SectionLabel>
               <div className="flex flex-col gap-2">
                 {faqs.map(([question, answer]) => (
                   <FaqItem key={question} question={question} answer={answer} />
@@ -3439,22 +3896,47 @@ export function ConnectedApp() {
        * channel is the in-app inbox, which cannot be switched off without silencing the product. A switch that
        * remembers nothing and controls nothing is worse than no switch.
        *
-       * The language picker is not here either, for the same kind of reason: the vocabulary layer is
-       * translated but the screen copy is not, so choosing Russian would produce a half-Russian app.
+       * The language picker is here since the screen copy moved into the dictionary (`scripts/i18n_coverage.py`
+       * measures what is left). The choice is per device, like the theme; staff screens stay Uzbek.
        */
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Sozlamalar" back={() => go(auth.user?.role === "driver" ? "driver-profile" : "client-profile")} />
+          <TopBar title={translate("settingsScreen.title")} back={() => go(auth.user?.role === "driver" ? "driver-profile" : "client-profile")} />
           <section className="el-enter flex-1 space-y-5 overflow-y-auto px-4 py-4 pb-8">
             <div>
-              <SectionLabel>Ko'rinish</SectionLabel>
+              <SectionLabel>{translate("settingsScreen.appearance")}</SectionLabel>
               <div className="rounded-2xl border border-border bg-card p-4">
                 <AppearancePicker />
               </div>
             </div>
 
             <div>
-              <SectionLabel>Akkaunt</SectionLabel>
+              <SectionLabel>{translate("settings.language")}</SectionLabel>
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="mb-3 text-xs text-muted-foreground">{translate("settings.languageHint")}</p>
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label={translate("settings.language")}>
+                  {LOCALES.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      lang={option.value}
+                      aria-pressed={locale === option.value}
+                      onClick={() => setLocale(option.value)}
+                      className={
+                        locale === option.value
+                          ? "el-press rounded-xl border border-primary bg-primary/10 px-3 py-3 text-sm font-semibold text-primary"
+                          : "el-press rounded-xl border border-border bg-secondary/50 px-3 py-3 text-sm font-semibold text-foreground"
+                      }
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <SectionLabel>{translate("settingsScreen.account")}</SectionLabel>
               <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
                 <button
                   type="button"
@@ -3462,7 +3944,7 @@ export function ConnectedApp() {
                   className="el-press flex w-full items-center gap-3 px-4 py-3.5 text-left"
                 >
                   <IconTile icon={Headphones} size={34} />
-                  <span className="flex-1 text-sm font-medium text-foreground">Yordam</span>
+                  <span className="flex-1 text-sm font-medium text-foreground">{translate("support.title")}</span>
                   <ChevronRight size={16} className="text-muted-foreground" />
                 </button>
                 <a
@@ -3470,7 +3952,7 @@ export function ConnectedApp() {
                   className="el-press flex w-full items-center gap-3 px-4 py-3.5 text-left"
                 >
                   <IconTile icon={Shield} size={34} />
-                  <span className="flex-1 text-sm font-medium text-foreground">Maxfiylik siyosati</span>
+                  <span className="flex-1 text-sm font-medium text-foreground">{translate("settingsScreen.privacy")}</span>
                   <ChevronRight size={16} className="text-muted-foreground" />
                 </a>
               </div>
@@ -3483,7 +3965,7 @@ export function ConnectedApp() {
                 className="el-press flex w-full items-center gap-3 px-4 py-3.5 text-left"
               >
                 <IconTile icon={LogOut} size={34} tone="danger" />
-                <span className="flex-1 text-sm font-medium text-destructive">Chiqish</span>
+                <span className="flex-1 text-sm font-medium text-destructive">{translate("settingsScreen.logout")}</span>
               </button>
             </div>
 
@@ -3510,7 +3992,7 @@ export function ConnectedApp() {
               onClick={() => void useCurrentLocation()}
               disabled={locating}
               className="el-press pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-card text-primary shadow-lg disabled:text-slate-400"
-              aria-label="Joriy joylashuv"
+              aria-label={translate("home.currentLocation")}
               aria-busy={locating}
             >
               <LocateFixed size={20} />
@@ -3527,23 +4009,23 @@ export function ConnectedApp() {
                 onClick={() => go("client-bonus")}
                 className="el-press mb-3 w-full rounded-[14px] border border-primary/30 bg-accent px-4 py-3 text-left text-[13px] font-semibold text-primary"
               >
-                Taklif kodi saqlandi: {pendingCode()} — tasdiqlash uchun bosing
+                {translate("home.referralCodeSaved", { code: pendingCode() ?? "" })}
               </button>
             )}
             {flags?.passenger_enabled ? (
               <div className="mb-4">
                 <SegmentedControl
                   value={serviceMode}
-                  options={[["passenger", "Taksi"], ["parcel", "Pochta"]] as const}
+                  options={[["passenger", translate("home.modeTaxi")], ["parcel", translate("home.modeParcel")]] as const}
                   onChange={setServiceMode}
                 />
               </div>
             ) : (
-              <h1 className="mb-4 text-[22px] font-bold text-foreground">Pochta</h1>
+              <h1 className="mb-4 text-[22px] font-bold text-foreground">{translate("home.modeParcel")}</h1>
             )}
             <div className="overflow-hidden rounded-[18px] border border-border bg-card">
               <LocationPointRow
-                label="Qayerdan?"
+                label={translate("direction.from")}
                 title={pickupEnd.region?.name_uz}
                 address={orderForm.pickup_address}
                 hasPoint={hasLocation(orderForm.pickup_lat, orderForm.pickup_lng)}
@@ -3552,7 +4034,7 @@ export function ConnectedApp() {
               />
               <DirectionLink />
               <LocationPointRow
-                label="Qayerga?"
+                label={translate("direction.to")}
                 title={dropoffEnd.region?.name_uz}
                 address={orderForm.dropoff_address}
                 hasPoint={hasLocation(orderForm.dropoff_lat, orderForm.dropoff_lng)}
@@ -3562,14 +4044,14 @@ export function ConnectedApp() {
             </div>
             {previewBusy && (
               <div className="mt-3 rounded-[14px] bg-muted px-4 py-3">
-                <p className="text-[13px] text-muted-foreground">Yo'nalish tekshirilmoqda...</p>
+                <p className="text-[13px] text-muted-foreground">{translate("home.checkingRoute")}</p>
               </div>
             )}
             {!previewBusy && previewError && (
               <div className="mt-3 rounded-[14px] bg-destructive/10 px-4 py-3">
                 <p className="text-[13px] font-semibold leading-5 text-destructive">{previewError}</p>
                 <p className="mt-1 text-[12px] leading-5 text-destructive">
-                  Nuqtalardan birini ELCHI yo'nalishiga yaqinroq joyga ko'chiring.
+                  {translate("home.movePointHint")}
                 </p>
               </div>
             )}
@@ -3583,19 +4065,19 @@ export function ConnectedApp() {
                   {formatKm(preview.leg_distance_m)} · {formatDuration(preview.leg_duration_s)}
                 </p>
                 <p className="mt-0.5 text-[12px] text-muted-foreground">
-                  Taxminiy yo'l vaqti · {preview.corridor_name}
+                  {translate("home.estimatedTime", { corridor: preview.corridor_name })}
                 </p>
                 {offRouteNote && <p className="mt-1.5 text-[12px] leading-5 text-warning">{offRouteNote}</p>}
               </div>
             )}
             {!previewBusy && !preview && !previewError && directionReady && (
               <div className="mt-3 rounded-[14px] bg-accent px-4 py-3">
-                <p className="text-[12px] font-semibold text-primary">Yo'nalishdagi tumanlar</p>
+                <p className="text-[12px] font-semibold text-primary">{translate("home.routeDistricts")}</p>
                 <p className="mt-0.5 text-[15px] font-semibold text-foreground">
-                  {routeDistricts.filter((item) => item.on_confirmed_route).map((item) => item.district.name_uz).join(" - ") || "Yo'nalish yuklanmoqda..."}
+                  {routeDistricts.filter((item) => item.on_confirmed_route).map((item) => item.district.name_uz).join(" - ") || translate("home.routeLoading")}
                 </p>
                 <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                  Shu tumanlardagi haydovchilar ham e'loningizni ko'radi.
+                  {translate("home.districtDriversNote")}
                 </p>
               </div>
             )}
@@ -3607,13 +4089,13 @@ export function ConnectedApp() {
                   selected, so a closed parcel service would have disabled the passenger flow too - and the
                   sentence under it would have named the wrong service. */}
               <PrimaryButton disabled={!directionReady || serviceClosed} onClick={() => go("client-route-summary")}>
-                Yo'nalishni ko'rish
+                {translate("home.viewRoute")}
               </PrimaryButton>
               {serviceClosed && (
                 <p className="mt-2 text-center text-[12px] leading-5 text-destructive">
                   {serviceMode === "passenger"
-                    ? "Yo'lovchi xizmati bu hududda hali ochilmagan."
-                    : "Pochta xizmati bu hududda hali ochilmagan."}
+                    ? translate("home.passengerClosed")
+                    : translate("home.parcelClosed")}
                 </p>
               )}
               {/* Q92: ELCHI is a market in both directions. The button above publishes this client's own
@@ -3621,12 +4103,12 @@ export function ConnectedApp() {
                   and it now has its own place in the drawer rather than a second button under this one. */}
               {pickupEnd.stop && dropoffEnd.stop && pickupEnd.stop.id === dropoffEnd.stop.id && (
                 <p className="mt-2 text-center text-[12px] leading-5 text-destructive">
-                  Olib ketish va yetkazish bekati bir xil bo'lishi mumkin emas.
+                  {translate("home.sameStop")}
                 </p>
               )}
               {pickupEnd.stop && dropoffEnd.stop && !sameCorridor && (
                 <p className="mt-2 text-center text-[12px] leading-5 text-destructive">
-                  Bu ikki bekat orasida tasdiqlangan yo'nalish yo'q.
+                  {translate("home.noConfirmedRoute")}
                 </p>
               )}
             </div>
@@ -3665,13 +4147,17 @@ export function ConnectedApp() {
               <span>{shortDate(item.listing.departure_window_start)}</span>
               <span className="font-semibold text-foreground">
                 {formatUzs(item.listing.unit_price_minor / 100)}
-                {item.listing.price_basis === "per_seat" ? " / o'rin" : ""}
+                {item.listing.price_basis === "per_seat" ? ` / ${translate("common.seat")}` : ""}
               </span>
             </div>
             {/* Section 8.2 / AC36: no invented 4.5 for a driver nobody has rated - the label is the server's. */}
             <p className="mt-1 text-[12px] text-muted-foreground">
-              Haydovchi narxi · {item.reputation.completed_bookings} ta bajarilgan safar
-              {item.reputation.average_rating !== null ? ` · ${item.reputation.average_rating}` : " · hali baholanmagan"}
+              {item.reputation.average_rating !== null
+                ? translate("offers.driverPriceRated", {
+                    count: item.reputation.completed_bookings,
+                    rating: String(item.reputation.average_rating),
+                  })
+                : translate("offers.driverPriceUnrated", { count: item.reputation.completed_bookings })}
             </p>
             <button
               type="button"
@@ -3681,14 +4167,14 @@ export function ConnectedApp() {
                 isAlternative ? "border border-primary text-primary" : "bg-primary text-primary-foreground",
               )}
             >
-              Narxingizni taklif qiling
+              {translate("offers.makeOffer")}
             </button>
           </div>
         );
       };
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Haydovchi e'lonlari" back={() => go("client-home")} />
+          <TopBar title={translate("offers.title")} back={() => go("client-home")} />
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <TripIntentSummary
               intent={activeIntent}
@@ -3696,7 +4182,7 @@ export function ConnectedApp() {
               loading={intentLoading}
               error={intentError}
               busy={busy}
-              onEdit={() => go("client-intent-edit")}
+              onEdit={openIntentEditor}
               onNew={startNewIntent}
               onReopen={reopenActiveIntent}
               onRetry={() => void loadIntents()}
@@ -3704,8 +4190,8 @@ export function ConnectedApp() {
             />
             <p className="text-[13px] leading-5 text-muted-foreground">
               {(activeIntent?.status === "active" ? activeIntent.service_type : serviceMode) === "passenger"
-                ? "Shu yo'nalishda safar e'lon qilgan haydovchilar. Narxi to'g'ri kelmasa, o'z narxingizni taklif qiling."
-                : "Shu yo'nalishda yuk oladigan haydovchilar. Narxi to'g'ri kelmasa, o'z narxingizni taklif qiling."}
+                ? translate("offers.introPassenger")
+                : translate("offers.introParcel")}
             </p>
             {matchScope === "confirmed_stops" && (offerFeed.length > 0) && (
               <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
@@ -3728,9 +4214,9 @@ export function ConnectedApp() {
             ) : (
               <EmptyState
                 icon={Truck}
-                title="Bu yo'nalishda e'lon yo'q"
-                subtitle="O'zingiz e'lon bering - haydovchilar sizga narx taklif qiladi."
-                action="O'zim e'lon beraman"
+                title={translate("offers.emptyTitle")}
+                subtitle={translate("offers.emptySubtitle")}
+                action={translate("offers.emptyAction")}
                 onAction={() => go("client-home")}
               />
             )}
@@ -3756,25 +4242,25 @@ export function ConnectedApp() {
       );
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Narxingizni taklif qiling" back={() => go("client-offers")} />
+          <TopBar title={translate("offers.makeOffer")} back={() => go("client-offers")} />
           <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
             {bidIntent && (
               <div className="rounded-[14px] border border-primary/30 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">Talabingiz</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">{translate("offerBid.yourRequest")}</p>
                 <p className="mt-0.5 text-[14px] font-semibold leading-5 text-foreground">{intentSummary(bidIntent)}</p>
                 <div className="mt-1.5 flex gap-4">
-                  <button type="button" onClick={() => go("client-intent-edit")} className="el-press text-[13px] font-semibold text-primary">
-                    Tahrirlash
+                  <button type="button" onClick={openIntentEditor} className="el-press text-[13px] font-semibold text-primary">
+                    {translate("listingOwner.edit")}
                   </button>
                   <button type="button" onClick={startNewIntent} className="el-press text-[13px] font-semibold text-muted-foreground">
-                    Yangi safar/jo'natma
+                    {translate("offerBid.newIntent")}
                   </button>
                 </div>
               </div>
             )}
             {bidIntent && intentExpired && (
               <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
-                Talabingizdagi vaqt o'tib ketgan. Sana avtomatik o'zgartirilmaydi - avval vaqtni yangilang.
+                {translate("offerBid.intentExpired")}
               </p>
             )}
             {bidIntent && <TripIntentFitNotes fit={intentFit} loading={intentFitLoading} />}
@@ -3784,69 +4270,77 @@ export function ConnectedApp() {
               </p>
               {/* The driver's advertised price and the client's own offer are two lines, never one number. */}
               <p className="mt-1 text-[13px] text-muted-foreground">
-                Haydovchi narxi: {bidIntent
-                  ? priceLine(offer.price_basis, offer.unit_price_minor, seats)
-                  : `${formatUzs(offer.unit_price_minor / 100)}${perSeat ? " / o'rin" : ""}`}
+                {translate("offerBid.driverPrice", {
+                  price: bidIntent
+                    ? priceLine(offer.price_basis, offer.unit_price_minor, seats)
+                    : `${formatUzs(offer.unit_price_minor / 100)}${perSeat ? ` / ${translate("common.seat")}` : ""}`,
+                })}
               </p>
               <p className="mt-1 text-[13px] text-muted-foreground">
-                Chiqish: {shortDate(offer.departure_window_start)} - {shortDate(offer.departure_window_end)}
+                {translate("offerBid.departure", {
+                  from: shortDate(offer.departure_window_start),
+                  to: shortDate(offer.departure_window_end),
+                })}
               </p>
             </div>
 
             {bidIntent && bidIntent.service_type === "passenger" && (
               <p className="text-[13px] text-secondary-foreground">
-                Odamlar soni: <span className="font-semibold">{seats} kishi</span> (talabingizdan; o'zgartirish uchun
-                "Tahrirlash")
+                {translate("offerBid.peopleLabel")}{" "}
+                <span className="font-semibold">{translate("offerBid.peopleCount", { count: seats })}</span>{" "}
+                {translate("offerBid.peopleFromIntent")}
               </p>
             )}
             {perSeat && !bidIntent && (
               <Field
-                label="Nechta o'rin"
+                label={translate("offerBid.seatsLabel")}
                 type="number"
                 value={String(offerBid.seats)}
                 onChange={(value) => setOfferBid({ ...offerBid, seats: Math.max(1, Math.min(8, Number(value) || 1)) })}
               />
             )}
             <Field
-              label={perSeat ? "Bir o'rin uchun narxingiz (so'm)" : "Narxingiz (so'm)"}
+              label={perSeat ? translate("offerBid.pricePerSeatLabel") : translate("offerBid.priceLabel")}
               type="number"
               value={offerBid.price}
               onChange={(value) => setOfferBid({ ...offerBid, price: value })}
-              placeholder="Masalan: 180000"
+              placeholder={translate("offerBid.pricePlaceholder")}
             />
             {bidIntent && priceSoum > 0 ? (
               <p className="text-[13px] font-semibold leading-5 text-foreground">
-                Sizning taklifingiz: {priceLine(offer.price_basis, priceSoum * 100, seats)}
+                {translate("offerBid.yourOffer", { price: priceLine(offer.price_basis, priceSoum * 100, seats) })}
               </p>
             ) : perSeat && priceSoum > 0 ? (
               <p className="text-[12px] leading-5 text-muted-foreground">
-                {seats} o'rin uchun jami: {formatUzs(priceSoum * seats)}
+                {translate("offerBid.totalForSeats", { seats, total: formatUzs(priceSoum * seats) })}
               </p>
             ) : null}
             {bidIntent && requestPrice && !priceFromRequest && (
               <p className="text-[12px] leading-5 text-muted-foreground">
-                Talabingizdagi narx ({priceLine(requestPrice.price_basis ?? "total", requestPrice.unit_price_minor ?? 0, seats)})
-                boshqa birlikda, shuning uchun maydon haydovchi narxidan boshlandi.
+                {translate("offerBid.requestPriceOtherBasis", {
+                  price: priceLine(requestPrice.price_basis ?? "total", requestPrice.unit_price_minor ?? 0, seats),
+                })}
               </p>
             )}
             {bidIntent && (
               <p className="text-[12px] leading-5 text-muted-foreground">
-                Bu narx faqat shu haydovchiga yuboriladi; saqlangan talabingiz o'zgarmaydi.
+                {translate("offerBid.priceOnlyForDriver")}
               </p>
             )}
 
             {parcelNeeded && (
               <>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="Og'irlik (kg)" type="number" value={offerBid.weightKg} onChange={(v) => setOfferBid({ ...offerBid, weightKg: v })} />
-                  <Field label="Uzunlik (sm)" type="number" value={offerBid.lengthCm} onChange={(v) => setOfferBid({ ...offerBid, lengthCm: v })} />
-                  <Field label="Eni (sm)" type="number" value={offerBid.widthCm} onChange={(v) => setOfferBid({ ...offerBid, widthCm: v })} />
-                  <Field label="Balandligi (sm)" type="number" value={offerBid.heightCm} onChange={(v) => setOfferBid({ ...offerBid, heightCm: v })} />
+                  <Field label={translate("offerBid.weightKg")} type="number" value={offerBid.weightKg} onChange={(v) => setOfferBid({ ...offerBid, weightKg: v })} />
+                  <Field label={translate("offerBid.lengthCm")} type="number" value={offerBid.lengthCm} onChange={(v) => setOfferBid({ ...offerBid, lengthCm: v })} />
+                  <Field label={translate("offerBid.widthCm")} type="number" value={offerBid.widthCm} onChange={(v) => setOfferBid({ ...offerBid, widthCm: v })} />
+                  <Field label={translate("offerBid.heightCm")} type="number" value={offerBid.heightCm} onChange={(v) => setOfferBid({ ...offerBid, heightCm: v })} />
                 </div>
                 {/* W21-4 (Q79): a trip-offer parcel needs a receiver before pickup, and only the sender can give
                     one - asked for here, where it can still be fixed, not at the driver's `pick_up`. */}
-                <Field label="Qabul qiluvchi ismi" value={offerBid.receiverName} onChange={(v) => setOfferBid({ ...offerBid, receiverName: v })} />
-                <Field label="Qabul qiluvchi telefoni" value={offerBid.receiverPhone} onChange={(v) => setOfferBid({ ...offerBid, receiverPhone: v })} placeholder="+998..." />
+                <Field label={translate("offerBid.receiverName")} value={offerBid.receiverName} onChange={(v) => setOfferBid({ ...offerBid, receiverName: v })} />
+                <Field label={translate("offerBid.receiverPhone")} value={offerBid.receiverPhone} onChange={(v) => setOfferBid({ ...offerBid, receiverPhone: v })} placeholder="+998..." />
+                <ParcelPolicyNotice />
               </>
             )}
 
@@ -3862,8 +4356,7 @@ export function ConnectedApp() {
             {/* Section 5.3: an offer reserves nothing. Saying so here is what stops "men taklif berdim" from
                 reading as "joy band qilindi". */}
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Taklif o'rin band qilmaydi - haydovchi qabul qilganda yoki siz uning qarshi taklifini qabul
-              qilganingizda bron yaratiladi.
+              {translate("offerBid.reservesNothing")}
             </p>
 
             <div className="mt-auto">
@@ -3925,9 +4418,9 @@ export function ConnectedApp() {
                   setOfferConsent(NO_CONSENT);
                   await loadOfferFeed();
                   go("client-proposals");
-                }, "Taklifingiz yuborildi")}
+                }, translate("offerBid.sent"))}
               >
-                Taklif yuborish
+                {translate("offerBid.submit")}
               </PrimaryButton>
             </div>
           </section>
@@ -3939,7 +4432,7 @@ export function ConnectedApp() {
       return (
         <main className="flex flex-1 flex-col bg-card">
           <TopBar
-            title={activeIntent?.service_type === "parcel" ? "Jo'natma talabi" : "Safar talabi"}
+            title={activeIntent?.service_type === "parcel" ? translate("offerBid.parcelRequestTitle") : translate("offerBid.tripRequestTitle")}
             back={() => go("client-offers")}
           />
           {activeIntent ? (
@@ -3952,14 +4445,14 @@ export function ConnectedApp() {
               onClose={closeActiveIntent}
             />
           ) : (
-            <EmptyState icon={MapPin} title="Saqlangan talab yo'q" action="Yangi safar/jo'natma" onAction={startNewIntent} />
+            <EmptyState icon={MapPin} title={translate("offerBid.noSavedRequest")} action={translate("offerBid.newIntent")} onAction={startNewIntent} />
           )}
         </main>
       );
     }
 
     if (screen === "client-location-selector") {
-      const selectorTitle = locationSelectorMode === "pickup" ? "Qayerdan?" : "Qayerga?";
+      const selectorTitle = locationSelectorMode === "pickup" ? translate("direction.from") : translate("direction.to");
       return (
         <RegionSelector
           title={selectorTitle}
@@ -3980,7 +4473,7 @@ export function ConnectedApp() {
     }
 
     if (screen === "client-point-picker") {
-      const title = locationSelectorMode === "pickup" ? "Qayerdan?" : "Qayerga?";
+      const title = locationSelectorMode === "pickup" ? translate("direction.from") : translate("direction.to");
       return (
         <MapPointPicker
           title={title}
@@ -4002,14 +4495,14 @@ export function ConnectedApp() {
     if (screen === "client-route-summary") {
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Yo'nalish" back={() => go("client-home")} />
+          <TopBar title={translate("routeSummary.direction")} back={() => go("client-home")} />
           <section className="el-enter min-h-0 flex-1 overflow-y-auto px-5 py-5">
             <div className="overflow-hidden rounded-[18px] border border-border bg-card">
               {/* A Q88 end is a marked place, so its name is the reverse-geocoded address - the stop name is
                   only there for the minority of ends chosen from the verified catalogue. Reading the stop
                   alone is why every marked place used to render as "Manzil kiritilmagan". */}
               <RouteSummaryRow
-                label="Olib ketish"
+                label={translate("routeSummary.pickup")}
                 address={pickupEnd.stop?.name_uz ?? pickupEnd.point?.address ?? ""}
                 fallback={pickupEnd.point ? coordinateLabel(pickupEnd.point.lat, pickupEnd.point.lng) : undefined}
                 city={pickupEnd.region?.name_uz}
@@ -4018,7 +4511,7 @@ export function ConnectedApp() {
                 icon={Navigation}
               />
               <RouteSummaryRow
-                label="Yetkazish"
+                label={translate("routeSummary.dropoff")}
                 address={dropoffEnd.stop?.name_uz ?? dropoffEnd.point?.address ?? ""}
                 fallback={dropoffEnd.point ? coordinateLabel(dropoffEnd.point.lat, dropoffEnd.point.lng) : undefined}
                 city={dropoffEnd.region?.name_uz}
@@ -4030,15 +4523,15 @@ export function ConnectedApp() {
             {preview && (
               <div className="mt-4 flex items-baseline justify-between gap-3 rounded-[16px] bg-accent px-4 py-3">
                 <div>
-                  <p className="text-[12px] font-semibold text-primary">Taxminiy yo'l</p>
+                  <p className="text-[12px] font-semibold text-primary">{translate("routeSummary.estimatedRoute")}</p>
                   <p className="mt-0.5 text-[18px] font-bold text-foreground">
                     {formatKm(preview.leg_distance_m)} · {formatDuration(preview.leg_duration_s)}
                   </p>
                 </div>
                 <p className="shrink-0 text-right text-[11px] leading-4 text-muted-foreground">
-                  Haydovchi jo'nash
+                  {translate("routeSummary.driverProposesTimeLine1")}
                   <br />
-                  vaqtini o'zi taklif qiladi
+                  {translate("routeSummary.driverProposesTimeLine2")}
                 </p>
               </div>
             )}
@@ -4053,33 +4546,33 @@ export function ConnectedApp() {
                 stops={corridorStops}
                 routeStops={routeVersion?.stops ?? []}
                 highlight={{ originStopId: pickupEnd.stop?.id, destinationStopId: dropoffEnd.stop?.id }}
-                note="Tasdiqlangan yo'nalish va uning bekatlari."
+                note={translate("routeSummary.mapNote")}
               />
             </div>
             {routeDistricts.length > 0 && (
               <div className="mt-4 rounded-[16px] bg-accent p-4">
-                <p className="text-[13px] font-semibold text-primary">Yo'nalishdagi tumanlar</p>
+                <p className="text-[13px] font-semibold text-primary">{translate("routeSummary.districtsTitle")}</p>
                 <p className="mt-1 text-[15px] font-semibold leading-6 text-foreground">
                   {routeDistricts.filter((item) => item.on_confirmed_route).map((item) => item.district.name_uz).join(" - ")}
                 </p>
                 <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
-                  Shu tumanlardagi haydovchilar ham e'loningizni tavsiya sifatida ko'radi.
+                  {translate("routeSummary.districtsHint")}
                 </p>
               </div>
             )}
             <div className="mt-4 space-y-4">
               <Field
-                label="Jo'nash oynasi boshlanishi"
+                label={translate("listingOwner.windowStart")}
                 type="datetime-local"
                 min={localNowInputValue()}
                 value={listingForm.windowStart}
                 onChange={(v) => setListingForm({ ...listingForm, windowStart: v })}
               />
               <Field
-                label="Jo'nash oynasi tugashi"
+                label={translate("listingOwner.windowEnd")}
                 type="datetime-local"
                 min={listingForm.windowStart || localNowInputValue()}
-                hint="Haydovchilar shu oraliqda jo'nashni taklif qiladi."
+                hint={translate("routeSummary.windowHint")}
                 value={listingForm.windowEnd}
                 onChange={(v) => setListingForm({ ...listingForm, windowEnd: v })}
               />
@@ -4087,7 +4580,7 @@ export function ConnectedApp() {
                 <SeatPicker selected={selectedSeats} onChange={setSelectedSeats} />
               )}
               <Field
-                label={serviceMode === "passenger" ? "Bir kishi uchun narx (so'm)" : "Narx (so'm)"}
+                label={serviceMode === "passenger" ? translate("routeSummary.pricePerPerson") : translate("listingOwner.priceLabel")}
                 type="number"
                 placeholder="200000"
                 value={listingForm.unitPrice}
@@ -4095,7 +4588,7 @@ export function ConnectedApp() {
               />
               {listingUnitMinor > 0 && (
                 <div className="rounded-[14px] bg-accent px-4 py-3">
-                  <p className="text-[12px] font-semibold text-primary">Jami</p>
+                  <p className="text-[12px] font-semibold text-primary">{translate("common.total")}</p>
                   <p className="mt-0.5 text-[18px] font-bold text-foreground">
                     {formatUzs((listingUnitMinor * (serviceMode === "passenger" ? seatCount : 1)) / 100)}
                   </p>
@@ -4104,7 +4597,7 @@ export function ConnectedApp() {
                       {seatCount} × {formatUzs(listingUnitMinor / 100)}
                     </p>
                   )}
-                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">Haydovchilar o'z taklifini yuboradi.</p>
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("routeSummary.driversSendOffers")}</p>
                 </div>
               )}
             </div>
@@ -4113,18 +4606,18 @@ export function ConnectedApp() {
                 disabled={saveBlockers.length > 0}
                 onClick={() => go(serviceMode === "passenger" ? "client-order-review" : "client-order-address")}
               >
-                Saqlash
+                {translate("common.save")}
               </PrimaryButton>
               {/* ADR-0025: the same answers, kept privately as a request that fills each driver's offer screen. It
                   is not published and sends nothing by itself; the price is optional here. */}
               <div className="mt-2">
                 <SecondaryButton
-                  disabled={busy || saveBlockers.some((problem) => problem !== "Narxni kiriting.")}
+                  disabled={busy || saveBlockers.some((problem) => problem !== translate("listingOwner.invalid.price"))}
                   onClick={() => void run(saveIntentFromHome)}
                 >
                   {intentDraftMode === "edit" && activeIntent?.status === "active" && activeIntent.service_type === serviceMode
-                    ? "Talabni yangilash"
-                    : "Haydovchi e'lonlarini ko'rish"}
+                    ? translate("routeSummary.updateRequest")
+                    : translate("routeSummary.seeDriverOffers")}
                 </SecondaryButton>
               </div>
               {saveBlockers.length > 0 && (
@@ -4145,20 +4638,20 @@ export function ConnectedApp() {
     if (screen === "client-order-address") {
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Aloqa ma'lumotlari" back={() => go("client-route-summary")} />
+          <TopBar title={translate("orderForm.contactTitle")} back={() => go("client-route-summary")} />
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
             <div className="rounded-[18px] bg-slate-50 p-4">
-              <p className="text-[13px] font-semibold text-muted-foreground">Yo'nalish</p>
+              <p className="text-[13px] font-semibold text-muted-foreground">{translate("routeSummary.direction")}</p>
               <p className="mt-1 text-[15px] font-semibold text-foreground">{directionEndLabel(pickupEnd)}</p>
               <p className="mt-1 text-[15px] font-semibold text-foreground">{directionEndLabel(dropoffEnd)}</p>
             </div>
-            <Field label="Yuboruvchi ismi" value={listingForm.senderName} onChange={(v) => setListingForm({ ...listingForm, senderName: v })} />
-            <Field label="Yuboruvchi telefon raqami" value={orderForm.sender_phone} placeholder="+998 __ ___ __ __" onChange={(v) => setOrderForm({ ...orderForm, sender_phone: v })} />
-            <Field label="Qabul qiluvchi ismi" value={listingForm.receiverName} onChange={(v) => setListingForm({ ...listingForm, receiverName: v })} />
-            <Field label="Qabul qiluvchi telefon raqami" value={orderForm.receiver_phone} placeholder="+998 __ ___ __ __" onChange={(v) => setOrderForm({ ...orderForm, receiver_phone: v })} />
-            <Field label="Izoh" value={orderForm.comment ?? ""} multiline onChange={(v) => setOrderForm({ ...orderForm, comment: v })} />
+            <Field label={translate("orderForm.senderName")} value={listingForm.senderName} onChange={(v) => setListingForm({ ...listingForm, senderName: v })} />
+            <Field label={translate("orderForm.senderPhone")} value={orderForm.sender_phone} placeholder="+998 __ ___ __ __" onChange={(v) => setOrderForm({ ...orderForm, sender_phone: v })} />
+            <Field label={translate("orderForm.receiverName")} value={listingForm.receiverName} onChange={(v) => setListingForm({ ...listingForm, receiverName: v })} />
+            <Field label={translate("orderForm.receiverPhone")} value={orderForm.receiver_phone} placeholder="+998 __ ___ __ __" onChange={(v) => setOrderForm({ ...orderForm, receiver_phone: v })} />
+            <Field label={translate("listingOwner.commentLabel")} value={orderForm.comment ?? ""} multiline onChange={(v) => setOrderForm({ ...orderForm, comment: v })} />
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Telefon raqamlar taklif qabul qilinmaguncha haydovchiga ko'rsatilmaydi.
+              {translate("orderForm.phonesHidden")}
             </p>
             <PrimaryButton
               disabled={
@@ -4169,7 +4662,7 @@ export function ConnectedApp() {
               }
               onClick={() => go("client-order-parcel")}
             >
-              Davom etish
+              {translate("common.continue")}
             </PrimaryButton>
           </section>
         </main>
@@ -4179,10 +4672,10 @@ export function ConnectedApp() {
     if (screen === "client-order-parcel") {
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Posilka ma'lumotlari" back={() => go("client-order-address")} />
+          <TopBar title={translate("orderForm.parcelTitle")} back={() => go("client-order-address")} />
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
             <div className="flex flex-col gap-1.5">
-              <span className="text-[14px] font-medium text-secondary-foreground">Posilka turi</span>
+              <span className="text-[14px] font-medium text-secondary-foreground">{translate("orderForm.parcelType")}</span>
               <div className="grid grid-cols-3 gap-2">
                 {PARCEL_TYPES.map(([value, label]) => (
                   <button
@@ -4200,17 +4693,18 @@ export function ConnectedApp() {
                 ))}
               </div>
             </div>
-            <Field label="Og'irligi (kg)" type="number" placeholder="3" value={listingForm.weightKg} onChange={(v) => setListingForm({ ...listingForm, weightKg: v })} />
+            <Field label={translate("orderForm.weight")} type="number" placeholder="3" value={listingForm.weightKg} onChange={(v) => setListingForm({ ...listingForm, weightKg: v })} />
             <div className="grid grid-cols-3 gap-2">
-              <Field label="Uzunligi (sm)" type="number" placeholder="40" value={listingForm.lengthCm} onChange={(v) => setListingForm({ ...listingForm, lengthCm: v })} />
-              <Field label="Eni (sm)" type="number" placeholder="30" value={listingForm.widthCm} onChange={(v) => setListingForm({ ...listingForm, widthCm: v })} />
-              <Field label="Balandligi (sm)" type="number" placeholder="20" value={listingForm.heightCm} onChange={(v) => setListingForm({ ...listingForm, heightCm: v })} />
+              <Field label={translate("orderForm.length")} type="number" placeholder="40" value={listingForm.lengthCm} onChange={(v) => setListingForm({ ...listingForm, lengthCm: v })} />
+              <Field label={translate("orderForm.width")} type="number" placeholder="30" value={listingForm.widthCm} onChange={(v) => setListingForm({ ...listingForm, widthCm: v })} />
+              <Field label={translate("orderForm.height")} type="number" placeholder="20" value={listingForm.heightCm} onChange={(v) => setListingForm({ ...listingForm, heightCm: v })} />
             </div>
             <p className="text-[12px] leading-5 text-muted-foreground">
-              O'lcham va og'irlik haydovchi mashinasiga sig'ishini tekshirish uchun kerak.
+              {translate("orderForm.sizeHint")}
             </p>
+            <ParcelPolicyNotice />
             <PrimaryButton disabled={!parcelReady} onClick={() => go("client-order-photo")}>
-              Davom etish
+              {translate("common.continue")}
             </PrimaryButton>
           </section>
         </main>
@@ -4220,12 +4714,12 @@ export function ConnectedApp() {
     if (screen === "client-order-photo") {
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Posilka rasmi" back={() => go("client-order-parcel")} />
+          <TopBar title={translate("orderForm.photoTitle")} back={() => go("client-order-parcel")} />
           <section className="flex flex-1 flex-col gap-4 px-5 py-5">
             <label className="flex cursor-pointer flex-col items-center justify-center rounded-[16px] border border-dashed border-primary bg-accent p-8 text-center">
               <Upload size={30} color="var(--primary)" />
-              <span className="mt-3 text-[16px] font-semibold text-foreground">Rasm yuklash</span>
-              <span className="mt-1 text-[13px] text-muted-foreground">Posilkani haydovchi ko'rishi uchun bitta rasm yuklang</span>
+              <span className="mt-3 text-[16px] font-semibold text-foreground">{translate("orderForm.uploadPhoto")}</span>
+              <span className="mt-1 text-[13px] text-muted-foreground">{translate("orderForm.uploadPhotoHint")}</span>
               <input
                 type="file"
                 accept="image/*"
@@ -4236,7 +4730,7 @@ export function ConnectedApp() {
                   void run(async () => {
                     const uploaded = await uploadFile(file, "cargo_photo");
                     setOrderForm((current) => ({ ...current, cargo_photo_url: uploaded.file_url }));
-                  }, "Rasm yuklandi");
+                  }, translate("orderForm.photoUploaded"));
                 }}
               />
             </label>
@@ -4244,14 +4738,14 @@ export function ConnectedApp() {
               <div className="space-y-2">
                 {/* The upload returns a signed link: render it, never print it - a URL with a signature in it
                     is a credential, not a label. */}
-                <img src={orderForm.cargo_photo_url} alt="Yuklangan posilka rasmi" className="h-[180px] w-full rounded-[12px] object-cover" />
-                <p className="text-[13px] text-success">Rasm tayyor</p>
+                <img src={orderForm.cargo_photo_url} alt={translate("orderForm.photoAlt")} className="h-[180px] w-full rounded-[12px] object-cover" />
+                <p className="text-[13px] text-success">{translate("orderForm.photoReady")}</p>
               </div>
             )}
-            {!orderForm.cargo_photo_url && <p className="text-[13px] text-destructive">Posilka rasmini yuklang</p>}
+            {!orderForm.cargo_photo_url && <p className="text-[13px] text-destructive">{translate("orderForm.photoRequired")}</p>}
             <div className="mt-auto">
               <PrimaryButton disabled={!orderForm.cargo_photo_url} onClick={() => go("client-order-review")}>
-                Buyurtmani ko'rib chiqish
+                {translate("orderForm.reviewOrder")}
               </PrimaryButton>
             </div>
           </section>
@@ -4277,7 +4771,7 @@ export function ConnectedApp() {
       return (
         <main className="relative flex min-h-0 flex-1 flex-col bg-background">
           <TopBar
-            title="Buyurtmani tekshiring"
+            title={translate("orderForm.review.title")}
             back={() => go(passengerMode ? "client-route-summary" : "client-order-photo")}
           />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
@@ -4293,7 +4787,7 @@ export function ConnectedApp() {
                   || end.point?.address
                   || (end.point ? coordinateLabel(end.point.lat, end.point.lng) : "");
                 const where = [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ");
-                return [label, place || where || "-", end.stop ? `Tasdiqlangan bekat · ${where}` : where];
+                return [label, place || where || "-", end.stop ? translate("orderForm.review.verifiedStop", { where }) : where];
               };
               // The districts come from the preview, which is the answer for *these two places*; the
               // corridor-wide list is only populated when an end was picked from the stop catalogue.
@@ -4304,44 +4798,44 @@ export function ConnectedApp() {
 
               const rows: Array<[string, string, string?]> = [
                 [
-                  "Yo'nalish",
+                  translate("routeSummary.direction"),
                   `${pickupEnd.region?.name_uz ?? "-"} -> ${dropoffEnd.region?.name_uz ?? "-"}`,
                   preview?.corridor_name,
                 ],
-                endRow("Olib ketish joyi", pickupEnd),
-                endRow("Yetkazish joyi", dropoffEnd),
+                endRow(translate("orderForm.review.pickupPlace"), pickupEnd),
+                endRow(translate("orderForm.review.dropoffPlace"), dropoffEnd),
               ];
               if (preview) {
                 rows.push([
-                  "Taxminiy yo'l",
+                  translate("routeSummary.estimatedRoute"),
                   `${formatKm(preview.leg_distance_m)} · ${formatDuration(preview.leg_duration_s)}`,
                   offRouteNote ?? undefined,
                 ]);
               }
-              if (onRoute) rows.push(["Yo'nalishdagi tumanlar", onRoute, "Shu tumanlardagi haydovchilar ham ko'radi"]);
+              if (onRoute) rows.push([translate("routeSummary.districtsTitle"), onRoute, translate("orderForm.review.districtsDetail")]);
               rows.push([
-                "Jo'nash oynasi",
+                translate("orderForm.review.window"),
                 `${formatWindowInput(listingForm.windowStart)} - ${formatWindowInput(listingForm.windowEnd)}`,
               ]);
               rows.push(
                 passengerMode
-                  ? ["Narx", formatUzs(totalMinor / 100), `${seatCount} × ${formatUzs(listingUnitMinor / 100)} (bir kishi uchun)`]
-                  : ["Narx", formatUzs(totalMinor / 100), "Haydovchilar o'z taklifini yuboradi"],
+                  ? [translate("common.price"), formatUzs(totalMinor / 100), translate("orderForm.review.perPersonDetail", { count: seatCount, price: formatUzs(listingUnitMinor / 100) })]
+                  : [translate("common.price"), formatUzs(totalMinor / 100), translate("orderForm.review.driversSendOffers")],
               );
               if (passengerMode) {
-                rows.push(["Yo'lovchilar", `${seatCount} kishi`, "O'rin haydovchi bilan kelishiladi"]);
+                rows.push([translate("orderForm.review.passengers"), translate("orderForm.review.peopleCount", { count: seatCount }), translate("orderForm.review.seatNegotiated")]);
               } else {
                 const parcelName = PARCEL_TYPES.find(([value]) => value === listingForm.parcelType)?.[1] ?? "-";
                 rows.push([
-                  "Posilka",
-                  `${parcelName}, ${listingForm.weightKg || "-"} kg`,
-                  `${listingForm.lengthCm || "-"} x ${listingForm.widthCm || "-"} x ${listingForm.heightCm || "-"} sm`,
+                  translate("orderForm.review.parcel"),
+                  translate("orderForm.review.parcelWeight", { type: parcelName, weight: listingForm.weightKg || "-" }),
+                  translate("orderForm.review.parcelSize", { length: listingForm.lengthCm || "-", width: listingForm.widthCm || "-", height: listingForm.heightCm || "-" }),
                 ]);
-                rows.push(["Yuboruvchi", listingForm.senderName || "-", orderForm.sender_phone || "Telefon kiritilmagan"]);
-                rows.push(["Qabul qiluvchi", listingForm.receiverName || "-", orderForm.receiver_phone || "Telefon kiritilmagan"]);
-                rows.push(["Posilka rasmi", orderForm.cargo_photo_url ? "Yuklangan" : "Yuklanmagan"]);
+                rows.push([translate("orderForm.review.sender"), listingForm.senderName || "-", orderForm.sender_phone || translate("orderForm.review.noPhone")]);
+                rows.push([translate("orderForm.review.receiver"), listingForm.receiverName || "-", orderForm.receiver_phone || translate("orderForm.review.noPhone")]);
+                rows.push([translate("orderForm.photoTitle"), orderForm.cargo_photo_url ? translate("orderForm.review.uploaded") : translate("docState.missing")]);
               }
-              if (orderForm.comment) rows.push(["Izoh", orderForm.comment]);
+              if (orderForm.comment) rows.push([translate("listingOwner.commentLabel"), orderForm.comment]);
 
               return rows.map(([label, value, detail]) => (
                 <div key={label} className="rounded-[14px] border border-border bg-card p-4">
@@ -4356,22 +4850,22 @@ export function ConnectedApp() {
             {!canPublish && (
               <p className="mb-2 text-center text-[12px] leading-5 text-destructive">
                 {passengerMode
-                  ? "E'lon qilish uchun yo'nalish, vaqt va narx to'liq bo'lishi kerak."
-                  : "E'lon qilish uchun yo'nalish, telefonlar va posilka rasmi to'liq bo'lishi kerak."}
+                  ? translate("orderForm.review.incompletePassenger")
+                  : translate("orderForm.review.incompleteParcel")}
               </p>
             )}
             <PrimaryButton
               disabled={busy || !canPublish}
               onClick={() => void run(publishListingDraft)}
             >
-              Buyurtmani e'lon qilish
+              {translate("orderForm.review.publish")}
             </PrimaryButton>
             <button
               type="button"
               onClick={() => go(passengerMode ? "client-route-summary" : "client-order-address")}
               className="el-press mt-3 h-10 w-full text-[14px] font-semibold text-primary"
             >
-              Tahrirlash
+              {translate("listingOwner.edit")}
             </button>
           </div>
         </main>
@@ -4382,17 +4876,17 @@ export function ConnectedApp() {
       return (
         <main className="flex flex-1 flex-col items-center justify-center bg-card px-6 text-center">
           <CheckCircle size={72} color="var(--success)" />
-          <h1 className="mt-5 text-[24px] font-bold text-foreground">Buyurtma e'lon qilindi</h1>
-          <p className="mt-2 text-[15px] leading-6 text-muted-foreground">Haydovchilardan takliflar kutilmoqda</p>
-          <p className="mt-1 text-[14px] leading-6 text-muted-foreground">Taklif kelganda sizga xabar beramiz</p>
+          <h1 className="mt-5 text-[24px] font-bold text-foreground">{translate("orderForm.success.title")}</h1>
+          <p className="mt-2 text-[15px] leading-6 text-muted-foreground">{translate("orderForm.success.waiting")}</p>
+          <p className="mt-1 text-[14px] leading-6 text-muted-foreground">{translate("orderForm.success.notify")}</p>
           {listingWarnings.length > 0 && (
             <div className="mt-5 w-full rounded-[14px] bg-warning/14 px-4 py-3 text-left">
-              <p className="text-[13px] font-semibold text-warning">Izohdagi aloqa ma'lumotlari yashirildi</p>
+              <p className="text-[13px] font-semibold text-warning">{translate("orderForm.success.contactsHidden")}</p>
               <p className="mt-1 text-[12px] leading-5 text-warning">{listingWarnings.join(", ")}</p>
             </div>
           )}
           <div className="mt-8 w-full">
-            <PrimaryButton onClick={() => go("client-orders")}>Buyurtmalarimga o'tish</PrimaryButton>
+            <PrimaryButton onClick={() => go("client-orders")}>{translate("orderForm.success.toOrders")}</PrimaryButton>
           </div>
         </main>
       );
@@ -4404,7 +4898,7 @@ export function ConnectedApp() {
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <div className="flex items-center gap-3">
               <SidebarButton className="shadow-none ring-1 ring-border" onClick={() => setSidebarOpen(true)} />
-              <h1 className="text-[24px] font-bold text-foreground">Buyurtmalar</h1>
+              <h1 className="text-[24px] font-bold text-foreground">{translate("orders.title")}</h1>
             </div>
             {clientBookings.map((raw) => {
               const booking = raw as BookingClientDTO;
@@ -4432,10 +4926,10 @@ export function ConnectedApp() {
             {myListings.map((listing) => (
               <ListingCard key={listing.id} listing={listing} onClick={() => void run(() => openListing(listing.id))} />
             ))}
-            {!myListings.length && !clientBookings.length && !orders.length && <EmptyState icon={Package} title="Hozircha buyurtmalar yo'q" />}
+            {!myListings.length && !clientBookings.length && !orders.length && <EmptyState icon={Package} title={translate("orders.empty")} />}
             {orders.length > 0 && (
               <>
-                <p className="pt-2 text-[13px] font-semibold text-muted-foreground">Eski buyurtmalar</p>
+                <p className="pt-2 text-[13px] font-semibold text-muted-foreground">{translate("orders.legacy")}</p>
                 {orders.map((order) => (
                   <OrderCard key={order.id} order={order} onClick={() => void run(() => openClientOrder(order.id))} />
                 ))}
@@ -4449,15 +4943,15 @@ export function ConnectedApp() {
     if (screen === "client-order-detail" && orderDetail) {
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Buyurtma tafsilotlari" back={() => go("client-orders")} />
+          <TopBar title={translate("orders.detailTitle")} back={() => go("client-orders")} />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
             <OrderCard order={orderDetail} />
             {[
-              ["Olib ketish", orderDetail.pickup_address],
-              ["Yetkazish", orderDetail.dropoff_address],
-              ["Yuboruvchi", orderDetail.sender_phone],
-              ["Qabul qiluvchi", orderDetail.receiver_phone],
-              ["Izoh", orderDetail.comment || "-"],
+              [translate("routeSummary.pickup"), orderDetail.pickup_address],
+              [translate("routeSummary.dropoff"), orderDetail.dropoff_address],
+              [translate("orderForm.review.sender"), orderDetail.sender_phone],
+              [translate("orderForm.review.receiver"), orderDetail.receiver_phone],
+              [translate("listingOwner.commentLabel"), orderDetail.comment || "-"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-[14px] border border-border bg-card p-4">
                 <p className="text-[12px] text-muted-foreground">{label}</p>
@@ -4466,19 +4960,19 @@ export function ConnectedApp() {
             ))}
             {orderDetail.assigned_driver && (
               <div className="rounded-[14px] border border-border bg-card p-4">
-                <p className="text-[12px] text-muted-foreground">Haydovchi</p>
-                <p className="mt-1 text-[15px] font-semibold text-foreground">{orderDetail.assigned_driver.full_name ?? "Haydovchi"}</p>
+                <p className="text-[12px] text-muted-foreground">{translate("dispute.side.driver")}</p>
+                <p className="mt-1 text-[15px] font-semibold text-foreground">{orderDetail.assigned_driver.full_name ?? translate("dispute.side.driver")}</p>
                 <p className="text-[13px] text-muted-foreground">{orderDetail.assigned_driver.car_model} / {orderDetail.assigned_driver.plate_number}</p>
               </div>
             )}
             {(hasLocation(orderDetail.pickup_lat, orderDetail.pickup_lng) || hasLocation(orderDetail.dropoff_lat, orderDetail.dropoff_lng)) && (
               <div className="rounded-[14px] border border-border bg-card p-4">
-                <p className="text-[12px] text-muted-foreground">Xarita nuqtalari</p>
+                <p className="text-[12px] text-muted-foreground">{translate("orders.mapPoints")}</p>
                 <p className="mt-1 text-[14px] font-medium text-foreground">
-                  {hasLocation(orderDetail.pickup_lat, orderDetail.pickup_lng) ? "Olib ketish joyi belgilangan" : "Olib ketish joyi belgilanmagan"}
+                  {hasLocation(orderDetail.pickup_lat, orderDetail.pickup_lng) ? translate("orders.pickupMarked") : translate("orders.pickupNotMarked")}
                 </p>
                 <p className="mt-1 text-[14px] font-medium text-foreground">
-                  {hasLocation(orderDetail.dropoff_lat, orderDetail.dropoff_lng) ? "Yetkazish joyi belgilangan" : "Yetkazish joyi belgilanmagan"}
+                  {hasLocation(orderDetail.dropoff_lat, orderDetail.dropoff_lng) ? translate("orders.dropoffMarked") : translate("orders.dropoffNotMarked")}
                 </p>
                 <button
                   type="button"
@@ -4492,23 +4986,23 @@ export function ConnectedApp() {
                   })}
                   className="el-press mt-3 h-10 w-full rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
                 >
-                  Xaritada ko'rish
+                  {translate("orders.viewOnMap")}
                 </button>
               </div>
             )}
             <StatusTimeline status={orderDetail.status} />
             {["published", "bidding"].includes(orderDetail.status) && (orderDetail.bids_count ?? 0) === 0 && (
-              <EmptyState icon={Package} title="Hozircha takliflar yo'q" subtitle="Haydovchilar taklif yuborishi bilan shu yerda ko'rasiz" />
+              <EmptyState icon={Package} title={translate("orders.noBids")} subtitle={translate("orders.noBidsHint")} />
             )}
-            {orderDetail.status === "delivered" && <PrimaryButton onClick={() => setConfirmAction({ type: "confirm-delivery" })}>Yetkazilganini tasdiqlash</PrimaryButton>}
-            {["published", "bidding"].includes(orderDetail.status) && <PrimaryButton onClick={() => void run(() => openClientOrder(orderDetail.id, "client-bids"))}>Takliflarni ko'rish</PrimaryButton>}
+            {orderDetail.status === "delivered" && <PrimaryButton onClick={() => setConfirmAction({ type: "confirm-delivery" })}>{translate("orders.confirmDelivered")}</PrimaryButton>}
+            {["published", "bidding"].includes(orderDetail.status) && <PrimaryButton onClick={() => void run(() => openClientOrder(orderDetail.id, "client-bids"))}>{translate("orders.viewBids")}</PrimaryButton>}
             {["draft", "published", "bidding", "accepted"].includes(orderDetail.status) && (
               <SecondaryButton danger onClick={() => setConfirmAction({ type: "cancel-order" })}>
-                Buyurtmani bekor qilish
+                {translate("orders.cancel")}
               </SecondaryButton>
             )}
             {["picked_up", "in_transit", "delivered", "disputed"].includes(orderDetail.status) && (
-              <SecondaryButton onClick={() => go("client-dispute")}>Muammo haqida xabar berish</SecondaryButton>
+              <SecondaryButton onClick={() => go("client-dispute")}>{translate("orders.reportProblem")}</SecondaryButton>
             )}
           </section>
         </main>
@@ -4519,7 +5013,7 @@ export function ConnectedApp() {
       const booking = clientBooking;
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Buyurtma tafsilotlari" back={() => go("client-orders")} />
+          <TopBar title={translate("orders.detailTitle")} back={() => go("client-orders")} />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
             <div className="rounded-[16px] border border-border bg-card p-4">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -4537,18 +5031,18 @@ export function ConnectedApp() {
             </div>
             <PromoMoneyCard promo={booking.promo} />
             <div className="rounded-[14px] border border-border bg-card p-4">
-              <p className="text-[12px] text-muted-foreground">Yo'lkira</p>
+              <p className="text-[12px] text-muted-foreground">{translate("bookingDetail.fare")}</p>
               <p className="mt-1 text-[14px] font-medium text-foreground">
-                {formatUzs(cashDueMinor(booking) / 100)} — haydovchiga naqd to'lanadi
+                {translate("bookingDetail.fareCash", { amount: formatUzs(cashDueMinor(booking) / 100) })}
               </p>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                To'lov ilova orqali o'tmaydi; ELCHI bu summani qabul qilmaydi.
+                {translate("bookingDetail.fareNote")}
               </p>
             </div>
             {booking.service_type === "parcel" && (
               <ParcelPhoto
                 photo={booking.parcel_photo}
-                label="Posilka rasmi"
+                label={translate("orderForm.photoTitle")}
                 onRefresh={() => void run(() => openClientBooking(booking.id))}
               />
             )}
@@ -4559,6 +5053,24 @@ export function ConnectedApp() {
                 <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
                   {proofCodeHint(code.kind)}
                 </p>
+                {canReissueCode("client", code.kind, booking.service_status) && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => reissueCode(booking.id, code.kind)}
+                      className="el-press mt-3 h-10 w-full rounded-[10px] bg-accent text-[14px] font-semibold text-primary disabled:opacity-60"
+                    >
+                      {translate("reissue.button")}
+                    </button>
+                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{translate("reissue.hint")}</p>
+                  </>
+                )}
+                {reissueNotice?.kind === code.kind && (
+                  <p className={cls("mt-2 text-[12px] leading-5", reissueNotice.ok ? "text-success" : "text-warning")}>
+                    {reissueNotice.text}
+                  </p>
+                )}
               </div>
             ))}
             {(CASH_RECORDABLE[booking.service_type] ?? []).includes(booking.service_status) && (
@@ -4568,9 +5080,9 @@ export function ConnectedApp() {
                 busy={busy}
                 amount={cashAmount}
                 onAmountChange={setCashAmount}
-                onReport={() => void run(() => reportCash(booking.id, "client", booking.version), "Qayd saqlandi")}
+                onReport={() => void run(() => reportCash(booking.id, "client", booking.version), translate("bookingDetail.cashRecorded"))}
                 onDecide={(decision) =>
-                  booking.cash_receipt && void run(() => decideCash(booking.id, "client", booking.cash_receipt!, decision), "Javob saqlandi")
+                  booking.cash_receipt && void run(() => decideCash(booking.id, "client", booking.cash_receipt!, decision), translate("bookingDetail.answerSaved"))
                 }
               />
             )}
@@ -4580,39 +5092,58 @@ export function ConnectedApp() {
                 onClick={() => void run(() => openChat(booking.id, "client"))}
                 className="el-press h-11 flex-1 rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
               >
-                Xabarlar
+                {translate("bookingDetail.messages")}
               </button>
               <button
                 type="button"
                 onClick={() => void run(() => openTracking(booking.id, "client"))}
                 className="el-press h-11 flex-1 rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
               >
-                Kuzatuv
+                {translate("bookingDetail.tracking")}
               </button>
             </div>
+            {/* K5: a live-tracking link for family, the booking owner's only (the server re-checks both). */}
+            {canShareTracking(booking.service_status) && (
+              <div className="space-y-2">
+                <p className="px-1 text-[13px] font-semibold text-muted-foreground">{translate("tracking.shareTitle")}</p>
+                <TrackingGrantPanel bookingId={booking.id} />
+              </div>
+            )}
             {AMENDABLE_STATUSES.includes(booking.service_status) && (
               <SecondaryButton onClick={() => void run(() => openAmendments(booking.id, "client"))}>
-                Shartlarni o'zgartirish
+                {translate("bookingDetail.changeTerms")}
               </SecondaryButton>
             )}
-            {booking.service_status === "completed" && (
-              <PrimaryButton disabled={busy} onClick={() => { setRating(5); setRatingComment(""); go("booking-rating"); }}>
-                Haydovchini baholash
+            {canRate(booking.service_status) && (
+              <PrimaryButton disabled={busy} onClick={() => openRating(booking.id, "client")}>
+                {translate("rating.rateDriver")}
               </PrimaryButton>
             )}
-            {["picked_up", "in_transit", "delivered", "completed"].includes(booking.service_status) && (
-              <SecondaryButton onClick={() => { setDisputeType("service"); setDisputeComment(""); go("booking-dispute"); }}>
-                Muammo haqida xabar berish
+            {canOpenDispute(booking.service_status) && (
+              <SecondaryButton onClick={() => openDisputeForm(booking.id, "client")}>
+                {translate("orders.reportProblem")}
               </SecondaryButton>
             )}
-            {bookingDisputes.filter((item) => item.booking_id === booking.id).map((item) => (
-              <div key={item.id} className="rounded-[14px] border border-border bg-card p-4">
-                <p className="text-[12px] text-muted-foreground">Nizo</p>
-                <p className="mt-1 text-[14px] font-medium text-foreground">
-                  {disputeTypeLabel(item.type)} · {disputeStatusLabel(item.status)}
-                </p>
-              </div>
-            ))}
+            {renderBookingDisputes(booking.id)}
+            {renderCancelControls(booking, "client")}
+            {booking.service_status === "cancelled" && (() => {
+              // ADR-0025: the booking came from a saved request; searching again is an explicit act, and the
+              // old offers stay closed. `can_reopen` is the server's answer, re-read when this screen opened.
+              const intent = intentOfBooking(myIntents, booking.id);
+              return (
+                <div className="space-y-2 rounded-[14px] border border-border bg-card p-4">
+                  {renderCancelledNote(booking)}
+                  {intent?.can_reopen && (
+                    <>
+                      <p className="text-[12px] leading-5 text-muted-foreground">{translate("bookingCancel.searchAgainHint")}</p>
+                      <PrimaryButton disabled={busy} onClick={() => searchAgainFor(intent)}>
+                        {translate("bookingCancel.searchAgain")}
+                      </PrimaryButton>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
             {booking.service_status === "delivered" && (
               <PrimaryButton
                 disabled={busy}
@@ -4620,11 +5151,12 @@ export function ConnectedApp() {
                   await bookingAction(booking.id, "complete", { expected_version: booking.version });
                   await openClientBooking(booking.id);
                   await loadMyListings();
-                }, "Buyurtma yakunlandi")}
+                }, translate("bookingDetail.completed"))}
               >
-                Yetkazilganini tasdiqlash
+                {translate("orders.confirmDelivered")}
               </PrimaryButton>
             )}
+            {renderBookingSafety(booking, "client")}
           </section>
         </main>
       );
@@ -4637,7 +5169,7 @@ export function ConnectedApp() {
       const mySide: ActorSide = screen === "client-proposals" ? "client" : "driver";
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Takliflarim" back={() => go(mySide === "client" ? "client-profile" : "driver-profile")} />
+          <TopBar title={translate("proposals.title")} back={() => go(mySide === "client" ? "client-profile" : "driver-profile")} />
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
             {busy && !myProposals.length ? <ListSkeleton /> : myProposals.length ? myProposals.map((thread) => {
               const version = thread.current_version;
@@ -4666,7 +5198,7 @@ export function ConnectedApp() {
 
                   {!open && version && (
                     <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
-                      Yopilgan ({proposalStatusLabel(version.status)}) — javob berib bo'lmaydi.
+                      {translate("proposals.closed", { status: proposalStatusLabel(version.status) })}
                     </p>
                   )}
 
@@ -4679,7 +5211,7 @@ export function ConnectedApp() {
                   {open && version && counterFor === thread.id && (
                     <div className="mt-3 space-y-3">
                       <Field
-                        label="Yangi narx (so'm)"
+                        label={translate("proposals.newPrice")}
                         type="number"
                         value={counterPrice}
                         placeholder={String(Math.round(version.total_minor / 100))}
@@ -4699,17 +5231,17 @@ export function ConnectedApp() {
                         <button
                           type="button"
                           disabled={counterPending || busy || soumToMinor(counterPrice) <= 0}
-                          onClick={() => void run(() => sendCounter(thread.id, version.revision, loadMyProposals, mySide === "client"), "Qarshi taklif yuborildi")}
+                          onClick={() => void run(() => sendCounter(thread.id, version.revision, loadMyProposals, mySide === "client"), translate("proposals.counterSent"))}
                           className="h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
                         >
-                          {counterPending ? "Yuborilmoqda..." : "Yuborish"}
+                          {counterPending ? translate("common.sending") : translate("common.send")}
                         </button>
                         <button
                           type="button"
                           onClick={() => { setCounterFor(null); setCounterPrice(""); }}
                           className="el-press h-11 flex-1 rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
                         >
-                          Bekor qilish
+                          {translate("common.cancel")}
                         </button>
                       </div>
                     </div>
@@ -4719,7 +5251,7 @@ export function ConnectedApp() {
                     <div className="mt-3 space-y-2">
                       {actions.canAccept && version.promo_quote?.view === "driver" && (
                         // the driver reads the cash to collect, the credit used and the commission before agreeing
-                        <PromoMoneyCard promo={version.promo_quote} title="Qabul qilsangiz" agreed={false} />
+                        <PromoMoneyCard promo={version.promo_quote} title={translate("proposals.ifYouAccept")} agreed={false} />
                       )}
                       {actions.canAccept && mySide === "client" && (
                         <AcceptConsentPanel
@@ -4754,9 +5286,9 @@ export function ConnectedApp() {
                             if (mySide === "client") await openClientBooking(booking.data.id);
                             else await openDriverBooking(booking.data.id);
                             await openChat(booking.data.id, mySide);
-                          }, "Kelishuv tuzildi")}
+                          }, translate("notification.booking.accepted.title"))}
                         >
-                          {mySide === "client" ? "Haydovchi narxini qabul qilish" : "Mijoz narxini qabul qilish"}
+                          {mySide === "client" ? translate("proposals.acceptDriverPrice") : translate("proposals.acceptClientPrice")}
                         </PrimaryButton>
                       )}
                       {actions.canCounter ? (
@@ -4765,10 +5297,10 @@ export function ConnectedApp() {
                           onClick={() => { setCounterFor(thread.id); setCounterPrice(String(Math.round(version.total_minor / 100))); }}
                           className="el-press h-11 w-full rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
                         >
-                          Boshqa narx taklif qilish ({actions.revisionsLeft} marta qoldi)
+                          {translate("proposals.counterAnother", { count: actions.revisionsLeft })}
                         </button>
                       ) : (
-                        <p className="text-[12px] leading-5 text-muted-foreground">Narxni o'zgartirish imkoni tugadi.</p>
+                        <p className="text-[12px] leading-5 text-muted-foreground">{translate("proposals.noRevisionsLeft")}</p>
                       )}
                       {actions.canWithdraw && (
                         <button
@@ -4777,23 +5309,53 @@ export function ConnectedApp() {
                           onClick={() => void run(async () => {
                             await withdrawProposal(thread.id, version.revision);
                             await loadMyProposals();
-                          }, "Taklif qaytarib olindi")}
+                          }, translate("notification.proposal.withdrawn.title"))}
                           className="el-press h-11 w-full rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
                         >
-                          Taklifni qaytarib olish
+                          {translate("proposals.withdraw")}
+                        </button>
+                      )}
+                      {actions.canReject && (
+                        // P7: refuse what the other side wrote; a stale revision is refused by the server and the
+                        // list is re-read, so the person always answers the version they can see.
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void run(async () => {
+                            try {
+                              await rejectProposal(thread.id, version.revision);
+                            } finally {
+                              await loadMyProposals().catch(() => undefined);
+                            }
+                          }, translate("proposal.rejected"))}
+                          className="el-press h-11 w-full rounded-[12px] bg-destructive/10 text-[14px] font-semibold text-destructive"
+                        >
+                          {translate("proposal.reject")}
                         </button>
                       )}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(async () => {
+                      // P5: this one thread as the server has it now - the other side may have moved.
+                      const fresh = await getProposal(thread.id);
+                      setMyProposals((list) => list.map((item) => (item.id === fresh.id ? fresh : item)));
+                    })}
+                    className="el-press mt-2 h-9 w-full rounded-[10px] text-[13px] font-semibold text-muted-foreground"
+                  >
+                    {translate("proposal.refresh")}
+                  </button>
                 </div>
               );
             }) : (
               <EmptyState
                 icon={Package}
-                title="Taklif yubormagansiz"
+                title={translate("proposals.empty")}
                 subtitle={mySide === "client"
-                  ? "Haydovchi e'lonlaridan birini tanlab o'z narxingizni taklif qiling."
-                  : "«Moslar» bo'limidan mijoz so'roviga narx taklif qiling."}
+                  ? translate("proposals.emptyClient")
+                  : translate("proposals.emptyDriver")}
               />
             )}
           </section>
@@ -4809,23 +5371,28 @@ export function ConnectedApp() {
       return <BonusScreen role="driver" back={() => go("driver-profile")} />;
     }
 
-    if (screen === "booking-rating" && clientBooking) {
-      const booking = clientBooking;
+    if (screen === "booking-rating" && openBooking) {
+      // S1 from either side: a client rates the driver, a driver rates the client - never themselves.
+      const side = openBooking.side;
+      const booking = side === "driver" ? driverBooking : clientBooking;
+      if (!booking) return <EmptyState icon={Package} title={translate("bookingRating.bookingNotFound")} />;
+      const back = () => go(side === "driver" ? "driver-order-detail" : "client-booking-detail");
+      const subject = counterpartSide(side);
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Haydovchini baholang" back={() => go("client-booking-detail")} />
+          <TopBar title={translate(subject === "driver" ? "rating.titleDriver" : "rating.titleClient")} back={back} />
           <section className="flex flex-1 flex-col gap-5 px-5 py-6">
-            <p className="text-center text-[14px] text-muted-foreground">1 dan 5 gacha baho bering</p>
+            <p className="text-center text-[14px] text-muted-foreground">{translate("bookingRating.prompt")}</p>
             <div className="flex justify-center gap-2">
               {[1, 2, 3, 4, 5].map((value) => (
-                <button type="button" className="el-press" key={value} onClick={() => setRating(value)} aria-label={`${value} yulduz`}>
+                <button type="button" className="el-press" key={value} onClick={() => setRating(value)} aria-label={translate("bookingRating.starsAria", { value })}>
                   <Star fill={value <= rating ? "var(--warning)" : "none"} color="var(--warning)" size={34} />
                 </button>
               ))}
             </div>
-            <Field label="Izoh qoldiring" value={ratingComment} multiline onChange={setRatingComment} />
+            <Field label={translate("bookingRating.commentLabel")} value={ratingComment} multiline onChange={setRatingComment} />
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Izoh nashr etilishidan oldin tekshiriladi; aloqa ma'lumotlari yashiriladi.
+              {translate("bookingRating.moderationNote")}
             </p>
             <div className="mt-auto">
               <PrimaryButton
@@ -4833,17 +5400,17 @@ export function ConnectedApp() {
                 onClick={() => void run(async () => {
                   const result = await rateBooking(
                     booking.id,
-                    { subject_side: "driver", stars: rating, comment: ratingComment.trim() || null },
+                    { subject_side: subject, stars: rating, comment: ratingComment.trim() || null },
                     newIdempotencyKey(),
                   );
                   setListingWarnings(result.warnings.map((warning) => warning.code));
-                  await openClientBooking(booking.id);
-                }, "Baho yuborildi")}
+                  await (side === "driver" ? openDriverBooking(booking.id) : openClientBooking(booking.id));
+                }, translate("bookingRating.sent"))}
               >
-                Bahoni yuborish
+                {translate("bookingRating.submit")}
               </PrimaryButton>
-              <button type="button" onClick={() => go("client-booking-detail")} className="el-press mt-3 h-10 w-full text-[14px] font-semibold text-muted-foreground">
-                Keyinroq
+              <button type="button" onClick={back} className="el-press mt-3 h-10 w-full text-[14px] font-semibold text-muted-foreground">
+                {translate("bookingRating.later")}
               </button>
             </div>
           </section>
@@ -4851,22 +5418,26 @@ export function ConnectedApp() {
       );
     }
 
-    if (screen === "booking-dispute" && clientBooking) {
-      const booking = clientBooking;
+    if (screen === "booking-dispute" && openBooking) {
+      // S3 from either side. The commission type is the driver's alone (Q16), so the picker depends on the side.
+      const side = openBooking.side;
+      const booking = side === "driver" ? driverBooking : clientBooking;
+      if (!booking) return <EmptyState icon={Package} title={translate("bookingRating.bookingNotFound")} />;
+      const back = () => go(side === "driver" ? "driver-order-detail" : "client-booking-detail");
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Muammo haqida xabar berish" back={() => go("client-booking-detail")} />
+          <TopBar title={translate("bookingDispute.title")} back={back} />
           <section className="flex flex-1 flex-col gap-4 px-5 py-5">
             <PickSelect
-              label="Muammo turi"
-              placeholder="Turini tanlang"
+              label={translate("bookingDispute.typeLabel")}
+              placeholder={translate("bookingDispute.typePlaceholder")}
               value={disputeType}
-              options={disputeTypeOptions()}
+              options={disputeTypeOptions(side)}
               onChange={setDisputeType}
             />
-            <Field label="Izoh" value={disputeComment} multiline onChange={setDisputeComment} />
+            <Field label={translate("listingOwner.commentLabel")} value={disputeComment} multiline onChange={setDisputeComment} />
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Nizo ochilganda safar GPS nuqtalari dalil sifatida saqlanadi (Q77).
+              {translate("bookingDispute.gpsEvidenceNote")}
             </p>
             <div className="mt-auto">
               <PrimaryButton
@@ -4878,10 +5449,10 @@ export function ConnectedApp() {
                     newIdempotencyKey(),
                   );
                   setDisputeComment("");
-                  await openClientBooking(booking.id);
-                }, "Nizo ochildi. Operatorlar muammoni ko'rib chiqadi")}
+                  await (side === "driver" ? openDriverBooking(booking.id) : openClientBooking(booking.id));
+                }, translate("bookingDispute.opened"))}
               >
-                Yuborish
+                {translate("common.send")}
               </PrimaryButton>
             </div>
           </section>
@@ -4895,7 +5466,7 @@ export function ConnectedApp() {
       // the two fields that can legally change, and nothing that would quietly rewrite what was agreed.
       const side = openBooking.side;
       const booking = side === "driver" ? driverBooking : clientBooking;
-      if (!booking) return <EmptyState icon={Package} title="Bron topilmadi" />;
+      if (!booking) return <EmptyState icon={Package} title={translate("bookingRating.bookingNotFound")} />;
       const back = () => go(side === "driver" ? "driver-order-detail" : "client-booking-detail");
       const quantity = Number(amendmentForm.quantity);
       const unitMinor = soumToMinor(amendmentForm.unitPrice);
@@ -4907,51 +5478,52 @@ export function ConnectedApp() {
 
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Shartlarni o'zgartirish" back={back} />
+          <TopBar title={translate("amendment.title")} back={back} />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <div className="rounded-[16px] border border-border bg-card p-4">
-              <p className="text-[12px] text-muted-foreground">Hozirgi kelishuv</p>
+              <p className="text-[12px] text-muted-foreground">{translate("amendment.currentTerms")}</p>
               <p className="mt-1 text-[15px] font-semibold text-foreground">
                 {booking.quantity} × {formatUzs(booking.unit_price_minor / 100)} = {formatUzs(booking.total_minor / 100)}
               </p>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                O'zgartirish ikkinchi tomon qabul qilgandan keyingina kuchga kiradi. Qabul qilinmaguncha bron
-                shu shartlarda qoladi.
+                {translate("amendment.takesEffectNote")}
               </p>
             </div>
 
             {open.length === 0 && (
               <div className="space-y-3 rounded-[16px] border border-border bg-card p-4">
-                <p className="text-[13px] font-semibold text-foreground">Yangi shart taklif qilish</p>
+                <p className="text-[13px] font-semibold text-foreground">{translate("amendment.proposeTitle")}</p>
                 <Field
-                  label={booking.service_type === "passenger" ? "O'rinlar soni" : "Miqdor"}
+                  label={booking.service_type === "passenger" ? translate("amendment.seatsLabel") : translate("amendment.quantityLabel")}
                   type="number"
                   value={amendmentForm.quantity}
                   onChange={(value) => setAmendmentForm({ ...amendmentForm, quantity: value })}
                 />
                 <Field
-                  label={booking.price_basis === "per_seat" ? "Bir o'rin narxi (so'm)" : "Narx (so'm)"}
+                  label={booking.price_basis === "per_seat" ? translate("amendment.seatPriceLabel") : translate("amendment.priceLabel")}
                   type="number"
                   value={amendmentForm.unitPrice}
                   onChange={(value) => setAmendmentForm({ ...amendmentForm, unitPrice: value })}
                 />
                 <Field
-                  label="Sabab"
+                  label={translate("common.reason")}
                   value={amendmentForm.reason}
                   onChange={(value) => setAmendmentForm({ ...amendmentForm, reason: value })}
-                  placeholder="Nega o'zgartirmoqchisiz?"
-                  hint="Ikkinchi tomon shu izohni ko'radi."
+                  placeholder={translate("amendment.reasonPlaceholder")}
+                  hint={translate("amendment.reasonHint")}
                 />
                 {changed && unitMinor > 0 && (
                   <p className="rounded-[12px] bg-accent px-3 py-2.5 text-[13px] font-semibold text-primary">
-                    Yangi jami: {formatUzs(newTotal / 100)}
+                    {translate("amendment.newTotal", { total: formatUzs(newTotal / 100) })}
                   </p>
                 )}
                 {amendConsentAsk && (
                   // Q116/Q125: on a discounted booking the client confirms the new cash amount the server computed
                   <div className="rounded-[12px] border border-warning/30 bg-warning/8 p-3 text-[13px] leading-5 text-foreground">
-                    Yangi hisob: bonus chegirmasi {nbsp(formatUzs(amendConsentAsk.passenger_discount_minor / 100))}, haydovchiga
-                    naqd {nbsp(formatUzs(amendConsentAsk.cash_due_minor / 100))}. Rozi bo'lsangiz, qayta yuboring.
+                    {translate("amendment.consentAsk", {
+                      discount: nbsp(formatUzs(amendConsentAsk.passenger_discount_minor / 100)),
+                      cash: nbsp(formatUzs(amendConsentAsk.cash_due_minor / 100)),
+                    })}
                     {booking.promo?.view === "client" && amendConsentAsk.fare_minor !== undefined && (() => {
                       const note = amendmentCashNote(booking.promo, {
                         fare_minor: amendConsentAsk.fare_minor,
@@ -4964,8 +5536,10 @@ export function ConnectedApp() {
                 )}
                 {amendAckAsk && side === "driver" && (
                   <p className="rounded-[12px] border border-warning/30 bg-warning/8 p-3 text-[13px] leading-5 text-foreground">
-                    O'zgarishdan keyin: mijozdan naqd {nbsp(formatUzs(amendAckAsk.cash_to_collect_minor / 100))}, balansingizdan
-                    yechiladi {nbsp(formatUzs(amendAckAsk.commission_charged_minor / 100))}. Rozi bo'lsangiz, qayta yuboring.
+                    {translate("amendment.driverAckAsk", {
+                      cash: nbsp(formatUzs(amendAckAsk.cash_to_collect_minor / 100)),
+                      commission: nbsp(formatUzs(amendAckAsk.commission_charged_minor / 100)),
+                    })}
                   </p>
                 )}
                 <PrimaryButton
@@ -5002,15 +5576,15 @@ export function ConnectedApp() {
                       throw cause;
                     }
                     await loadAmendments(booking.id);
-                  }, "Taklif yuborildi")}
+                  }, translate("amendment.sent"))}
                 >
-                  {amendConsentAsk ? "Yangi naqd summaga roziman — yuborish" : amendAckAsk && side === "driver" ? "Shu hisobga roziman — yuborish" : "Taklif yuborish"}
+                  {amendConsentAsk ? translate("amendment.submitConsent") : amendAckAsk && side === "driver" ? translate("amendment.submitDriverAck") : translate("amendment.submit")}
                 </PrimaryButton>
               </div>
             )}
 
             {amendments.length === 0 ? (
-              <p className="text-[13px] leading-5 text-muted-foreground">Hozircha o'zgartirish takliflari yo'q.</p>
+              <p className="text-[13px] leading-5 text-muted-foreground">{translate("amendment.empty")}</p>
             ) : (
               amendments.map((item) => {
                 const mine = item.author_side === side;
@@ -5023,7 +5597,7 @@ export function ConnectedApp() {
                           {item.new_quantity} × {formatUzs(item.new_unit_price_minor / 100)}
                         </p>
                         <p className="mt-1 text-[12px] text-muted-foreground">
-                          {mine ? "Sizning taklifingiz" : "Ikkinchi tomon taklifi"}
+                          {mine ? translate("amendment.mine") : translate("amendment.theirs")}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
@@ -5031,7 +5605,7 @@ export function ConnectedApp() {
                         <StatusBadge status={item.status} />
                       </div>
                     </div>
-                    <PromoMoneyCard promo={item.promo} title="O'zgarishdan keyingi hisob" agreed={item.status === "accepted"} />
+                    <PromoMoneyCard promo={item.promo} title={translate("amendment.afterChangeTitle")} agreed={item.status === "accepted"} />
                     {pending && side === "client" && item.promo?.view === "client" && booking.promo?.view === "client" && (() => {
                       // Q125: a lower fare that still raises the cash is said out loud, not left to be noticed
                       const note = amendmentCashNote(booking.promo, item.promo);
@@ -5060,18 +5634,18 @@ export function ConnectedApp() {
                             // Re-open rather than only reloading the list: accepting changes the booking's
                             // terms *and* its version, and the next amendment is proposed against that version.
                             await openAmendments(booking.id, side);
-                          }, "Yangi shartlar kuchga kirdi")}
+                          }, translate("amendment.accepted"))}
                         >
-                          Qabul qilish
+                          {translate("amendment.accept")}
                         </PrimaryButton>
                         <SecondaryButton
                           danger
                           onClick={() => void run(async () => {
                             await decideAmendment(item.id, "reject", item.version);
                             await loadAmendments(booking.id);
-                          }, "Rad etildi")}
+                          }, translate("amendment.rejected"))}
                         >
-                          Rad etish
+                          {translate("proposal.reject")}
                         </SecondaryButton>
                       </div>
                     )}
@@ -5088,18 +5662,18 @@ export function ConnectedApp() {
                                   ? { promo_driver_ack: { cash_to_collect_minor: promo.cash_to_collect_minor, commission_charged_minor: promo.commission_charged_minor } }
                                   : {});
                               await loadAmendments(booking.id);
-                            }, "Bonus shartlari qayta tasdiqlandi")}
+                            }, translate("amendment.promoReconfirmed"))}
                           >
-                            Bonus shartlarini qayta tasdiqlash
+                            {translate("amendment.promoReconfirm")}
                           </SecondaryButton>
                         )}
                         <SecondaryButton
                           onClick={() => void run(async () => {
                             await decideAmendment(item.id, "withdraw", item.version);
                             await loadAmendments(booking.id);
-                          }, "Taklif qaytarib olindi")}
+                          }, translate("amendment.withdrawn"))}
                         >
-                          Taklifni qaytarib olish
+                          {translate("amendment.withdraw")}
                         </SecondaryButton>
                       </div>
                     )}
@@ -5118,14 +5692,13 @@ export function ConnectedApp() {
       const canSave = Boolean((pickupEnd.district || pickupEnd.stop) && (dropoffEnd.district || dropoffEnd.stop));
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Saqlangan yo'nalishlar" back={() => go("driver-feed")} />
+          <TopBar title={translate("savedSearches.title")} back={() => go("driver-feed")} />
           <section className="el-enter el-stagger min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <p className="text-[13px] leading-5 text-muted-foreground">
-              Yo'nalishni saqlasangiz, shu yo'nalishda yangi mijoz so'rovi chiqqanda bildirishnoma olasiz.
-              Bildirishnomalar ilova ichida ko'rinadi.
+              {translate("savedSearches.intro")}
             </p>
             <div className="rounded-[16px] border border-border bg-card p-4">
-              <p className="text-[13px] font-semibold text-foreground">Hozirgi yo'nalish</p>
+              <p className="text-[13px] font-semibold text-foreground">{translate("savedSearches.currentDirection")}</p>
               <p className="mt-1 text-[14px] text-foreground">
                 {directionEndLabel(pickupEnd)} {"->"} {directionEndLabel(dropoffEnd)}
               </p>
@@ -5151,13 +5724,13 @@ export function ConnectedApp() {
                       newIdempotencyKey(),
                     );
                     await loadSavedSearches();
-                  }, "Yo'nalish saqlandi")}
+                  }, translate("savedSearches.saved"))}
                 >
-                  Shu yo'nalishni saqlash
+                  {translate("savedSearches.save")}
                 </PrimaryButton>
                 {!canSave && (
                   <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-                    Avval «Moslar» sahifasida ikkala uchni tanlang.
+                    {translate("savedSearches.pickEndsFirst")}
                   </p>
                 )}
               </div>
@@ -5171,7 +5744,7 @@ export function ConnectedApp() {
                 </p>
                 <p className="mt-1 text-[12px] text-muted-foreground">
                   {shortDate(item.time_window_start)} - {shortDate(item.time_window_end)}
-                  {item.notify ? " · bildirishnoma yoqilgan" : " · bildirishnoma o'chirilgan"}
+                  {item.notify ? ` · ${translate("savedSearches.notifyOn")}` : ` · ${translate("savedSearches.notifyOff")}`}
                 </p>
                 <div className="mt-3">
                   <SecondaryButton
@@ -5179,17 +5752,17 @@ export function ConnectedApp() {
                     onClick={() => void run(async () => {
                       await deleteSavedSearch(item.id);
                       await loadSavedSearches();
-                    }, "O'chirildi")}
+                    }, translate("savedSearches.deleted"))}
                   >
-                    O'chirish
+                    {translate("common.delete")}
                   </SecondaryButton>
                 </div>
               </div>
             )) : (
               <EmptyState
                 icon={Navigation}
-                title="Saqlangan yo'nalish yo'q"
-                subtitle="Tez-tez yuradigan yo'nalishingizni saqlab qo'ying — yangi so'rovlardan xabar topasiz."
+                title={translate("savedSearches.emptyTitle")}
+                subtitle={translate("savedSearches.emptySubtitle")}
               />
             )}
           </section>
@@ -5207,7 +5780,7 @@ export function ConnectedApp() {
       const back = () => go(side === "driver" ? "driver-profile" : "client-profile");
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Nizolarim" back={back} />
+          <TopBar title={translate("disputes.title")} back={back} />
           <section className="el-enter el-stagger min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
             {busy && !bookingDisputes.length ? <ListSkeleton rows={2} /> : bookingDisputes.length ? bookingDisputes.map((item) => {
               const open = !["resolved", "rejected", "withdrawn", "closed"].includes(item.status);
@@ -5224,13 +5797,21 @@ export function ConnectedApp() {
                     <StatusBadge status={item.status} />
                   </div>
                   <p className="mt-2 text-[13px] leading-5 text-secondary-foreground">{item.description}</p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(() => openDisputeDetail(item.id))}
+                    className="el-press mt-2 text-[13px] font-semibold text-primary"
+                  >
+                    {translate("dispute.details")}
+                  </button>
 
                   {item.evidence.length > 0 && (
                     <div className="mt-3 space-y-1.5 rounded-[12px] bg-slate-50 p-3">
-                      <p className="text-[12px] font-semibold text-muted-foreground">Dalillar</p>
+                      <p className="text-[12px] font-semibold text-muted-foreground">{translate("disputes.evidence")}</p>
                       {item.evidence.map((entry, index) => (
                         <p key={index} className="text-[12px] leading-5 text-secondary-foreground">
-                          {entry.note || "Fayl biriktirildi"}
+                          {entry.note || translate("disputes.fileAttached")}
                         </p>
                       ))}
                     </div>
@@ -5238,25 +5819,25 @@ export function ConnectedApp() {
 
                   {item.resolution && (
                     <p className="mt-3 rounded-[12px] bg-accent px-3 py-2.5 text-[13px] leading-5 text-primary">
-                      Qaror: {item.resolution.text || disputeResolutionLabel(item.resolution.code ?? "") || item.resolution.code}
+                      {translate("disputes.decisionPrefix")} {item.resolution.text || disputeResolutionLabel(item.resolution.code ?? "") || item.resolution.code}
                     </p>
                   )}
 
                   {open && !editing && (
                     <div className="mt-3">
                       <SecondaryButton onClick={() => setEvidenceNote({ id: item.id, note: "" })}>
-                        Dalil qo&apos;shish
+                        {translate("disputes.addEvidence")}
                       </SecondaryButton>
                     </div>
                   )}
                   {open && editing && (
                     <div className="mt-3 space-y-2">
                       <Field
-                        label="Qo'shimcha izoh"
+                        label={translate("disputes.extraNoteLabel")}
                         multiline
                         value={evidenceNote.note}
                         onChange={(note) => setEvidenceNote({ id: item.id, note })}
-                        hint="Telefon raqam va havolalar avtomatik yashiriladi."
+                        hint={translate("disputes.contactsHiddenHint")}
                       />
                       <div className="flex gap-2">
                         <button
@@ -5266,17 +5847,17 @@ export function ConnectedApp() {
                             await addDisputeEvidence(item.id, { note: evidenceNote.note.trim(), file_ids: [] }, newIdempotencyKey());
                             setEvidenceNote(null);
                             setBookingDisputes(await myDisputes());
-                          }, "Dalil qo'shildi")}
+                          }, translate("disputes.evidenceAdded"))}
                           className="el-press h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
                         >
-                          Yuborish
+                          {translate("common.send")}
                         </button>
                         <button
                           type="button"
                           onClick={() => setEvidenceNote(null)}
                           className="el-press h-11 flex-1 rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
                         >
-                          Bekor qilish
+                          {translate("common.cancel")}
                         </button>
                       </div>
                     </div>
@@ -5286,10 +5867,171 @@ export function ConnectedApp() {
             }) : (
               <EmptyState
                 icon={FileText}
-                title="Nizo yo'q"
-                subtitle="Buyurtmada muammo bo'lsa, bron ekranidan «Muammo haqida xabar berish» tugmasi orqali ochasiz."
+                title={translate("disputes.emptyTitle")}
+                subtitle={translate("disputes.emptySubtitle")}
               />
             )}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "dispute-detail" && disputeDetail) {
+      // S5: one dispute as its participant sees it. Re-read on open and on demand, because the other side and the
+      // operator add to it after the first report - a stale copy would hide the decision.
+      const item = disputeDetail;
+      const open = !["resolved", "rejected", "withdrawn", "closed"].includes(item.status);
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title={translate("dispute.detailTitle")} back={() => go("my-disputes")} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <div className="rounded-[16px] border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[16px] font-semibold text-foreground">{disputeTypeLabel(item.type)}</p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">{formatDateTime(item.created_at)}</p>
+                </div>
+                <StatusBadge status={item.status} />
+              </div>
+              <p className="mt-2 text-[12px] text-muted-foreground">
+                {translate("dispute.openedBy")}: {translateDynamic(`dispute.side.${item.opened_by_side}`) ?? item.opened_by_side}
+              </p>
+              {item.escalated && open && (
+                <p className="mt-1 text-[12px] text-warning">{translate("dispute.escalated")}</p>
+              )}
+              <p className="mt-3 text-[14px] leading-6 text-secondary-foreground">{item.description}</p>
+            </div>
+            {item.evidence.length > 0 && (
+              <div className="space-y-2 rounded-[16px] border border-border bg-card p-4">
+                <p className="text-[13px] font-semibold text-muted-foreground">{translate("disputes.evidence")}</p>
+                {item.evidence.map((entry, index) => (
+                  <div key={index} className="rounded-[12px] bg-background px-3 py-2">
+                    <p className="text-[12px] text-muted-foreground">
+                      {translateDynamic(`dispute.side.${entry.author_side}`) ?? entry.author_side} · {formatDateTime(entry.created_at)}
+                    </p>
+                    <p className="mt-0.5 text-[13px] leading-5 text-secondary-foreground">
+                      {entry.note || (entry.file_ids.length ? translate("disputes.filesAttached", { count: entry.file_ids.length }) : "-")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {item.resolution && (
+              <p className="rounded-[12px] bg-accent px-3 py-2.5 text-[13px] leading-5 text-primary">
+                {translate("disputes.decisionPrefix")} {item.resolution.text || disputeResolutionLabel(item.resolution.code ?? "") || item.resolution.code}
+                {item.resolution.decided_at ? ` · ${formatDateTime(item.resolution.decided_at)}` : ""}
+              </p>
+            )}
+            {open && (
+              evidenceNote?.id === item.id ? (
+                <div className="space-y-2">
+                  <Field
+                    label={translate("disputes.extraNoteLabel")}
+                    multiline
+                    value={evidenceNote.note}
+                    onChange={(note) => setEvidenceNote({ id: item.id, note })}
+                    hint={translate("disputes.contactsHiddenHint")}
+                  />
+                  <PrimaryButton
+                    disabled={busy || evidenceNote.note.trim().length < 3}
+                    onClick={() => void run(async () => {
+                      const result = await addDisputeEvidence(item.id, { note: evidenceNote.note.trim(), file_ids: [] }, newIdempotencyKey());
+                      setEvidenceNote(null);
+                      setDisputeDetail(result.data);
+                    }, translate("disputes.evidenceAdded"))}
+                  >
+                    {translate("common.send")}
+                  </PrimaryButton>
+                </div>
+              ) : (
+                <SecondaryButton onClick={() => setEvidenceNote({ id: item.id, note: "" })}>{translate("disputes.addEvidence")}</SecondaryButton>
+              )
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run(() => openDisputeDetail(item.id))}
+              className="el-press h-10 w-full text-[13px] font-semibold text-muted-foreground"
+            >
+              {translate("dispute.refresh")}
+            </button>
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "listing-edit" && listingEdit) {
+      // L3 / Q20: what changes, and whether it closes the open offers, is worked out before anything is sent.
+      const { listing, form, back, confirming, openOffers } = listingEdit;
+      const plan = planListingPatch(listing, form);
+      const setForm = (patch: Partial<ListingEditForm>) =>
+        setListingEdit({ ...listingEdit, form: { ...form, ...patch }, confirming: false });
+      const allowWindow = windowEditable(listing);
+      const save = () => void run(async () => {
+        const result = await patchListing(listing.id, { expected_version: listing.version, ...plan.body });
+        setListingWarnings(result.warnings.map((warning) => warning.code));
+        setListingEdit(null);
+        if (back === "client-listing-detail") await openListing(listing.id);
+        else {
+          await loadDriverTrips();
+          go(back);
+        }
+      }, translate("listingOwner.saved"));
+      return (
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title={translate("listingOwner.editTitle")} back={() => { setListingEdit(null); go(back); }} />
+          <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+            <Field
+              label={translate("listingOwner.priceLabel") + (listing.price_basis === "per_seat" ? translate("listingEdit.perSeatSuffix") : "")}
+              type="number"
+              value={form.price}
+              onChange={(price) => setForm({ price })}
+            />
+            <Field
+              label={translate("listingOwner.commentLabel")}
+              value={form.comment}
+              multiline
+              onChange={(comment) => setForm({ comment })}
+              hint={translate("disputes.contactsHiddenHint")}
+            />
+            {allowWindow ? (
+              <>
+                <Field
+                  label={translate("listingOwner.windowStart")}
+                  type="datetime-local"
+                  value={form.windowStart}
+                  onChange={(windowStart) => setForm({ windowStart })}
+                />
+                <Field
+                  label={translate("listingOwner.windowEnd")}
+                  type="datetime-local"
+                  value={form.windowEnd}
+                  onChange={(windowEnd) => setForm({ windowEnd })}
+                />
+              </>
+            ) : (
+              <p className="text-[12px] leading-5 text-muted-foreground">{translate("listingOwner.windowFromTrip")}</p>
+            )}
+            <p className="text-[12px] leading-5 text-muted-foreground">{translate("listingOwner.nonMaterialNote")}</p>
+            {plan.material && (
+              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
+                {translate("listingOwner.materialWarning")}
+                {openOffers !== null ? ` ${translate("listingOwner.openOffers", { count: openOffers })}` : ""}
+              </p>
+            )}
+            {plan.invalid && (
+              <p className="text-[12px] leading-5 text-destructive">
+                {translateDynamic(`listingOwner.invalid.${plan.invalid}`) ?? plan.invalid}
+              </p>
+            )}
+            <div className="mt-auto">
+              <PrimaryButton
+                disabled={busy || plan.empty || Boolean(plan.invalid)}
+                onClick={() => (plan.material && !confirming ? setListingEdit({ ...listingEdit, confirming: true }) : save())}
+              >
+                {plan.material && confirming ? translate("listingOwner.materialConfirm") : translate("common.save")}
+              </PrimaryButton>
+            </div>
           </section>
         </main>
       );
@@ -5337,11 +6079,11 @@ export function ConnectedApp() {
             </div>
             {item.reputation.completed_bookings > 0 && (
               <p className="mt-1 text-[12px] text-muted-foreground">
-                {item.reputation.completed_bookings} ta bajarilgan buyurtma
+                {translate("matches.completedCount", { count: item.reputation.completed_bookings })}
                 {/* U6: no invented rating for a new account (§8.2) - the label says which case this is. */}
                 {item.reputation.average_rating !== null && item.reputation.average_rating !== undefined
-                  ? ` · reyting ${item.reputation.average_rating.toFixed(1)}`
-                  : " · hali baholanmagan"}
+                  ? ` · ${translate("matches.rating", { rating: item.reputation.average_rating.toFixed(1) })}`
+                  : ` · ${translate("matches.notRated")}`}
               </p>
             )}
             <div className="mt-3">
@@ -5365,7 +6107,7 @@ export function ConnectedApp() {
                   isAlternative ? "border border-primary text-primary" : "bg-primary text-primary-foreground",
                 )}
               >
-                Narx taklif qilish
+                {translate("matches.makeOffer")}
               </button>
             </div>
           </div>
@@ -5373,12 +6115,12 @@ export function ConnectedApp() {
       };
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title={isRequest ? "Mos safarlar" : "Mos so'rovlar"} back={back} />
+          <TopBar title={isRequest ? translate("matches.titleTrips") : translate("matches.titleRequests")} back={back} />
           <section className="el-enter el-stagger min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <p className="text-[13px] leading-5 text-muted-foreground">
               {isRequest
-                ? "E'loningizdagi yo'nalish, vaqt va miqdor bo'yicha mos safarlar. Tartib — tavsiya, tanlov sizniki."
-                : "Safaringizga mos mijoz so'rovlari. Tartib — tavsiya, tanlov sizniki."}
+                ? translate("matches.introTrips")
+                : translate("matches.introRequests")}
             </p>
             {matchScope === "confirmed_stops" && matches.length > 0 && (
               <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
@@ -5401,10 +6143,10 @@ export function ConnectedApp() {
             ) : (
               <EmptyState
                 icon={Truck}
-                title={isRequest ? "Hozircha mos safar yo'q" : "Hozircha mos so'rov yo'q"}
+                title={isRequest ? translate("matches.emptyTrips") : translate("matches.emptyRequests")}
                 subtitle={isRequest
-                  ? "Haydovchilar safar e'lon qilgach shu yerda ko'rinadi. E'loningiz o'z holicha ham haydovchilarga ko'rinib turadi."
-                  : "Mijozlar so'rov qo'ygach shu yerda ko'rinadi."}
+                  ? translate("matches.emptyTripsSubtitle")
+                  : translate("matches.emptyRequestsSubtitle")}
               />
             )}
           </section>
@@ -5417,7 +6159,7 @@ export function ConnectedApp() {
       const back = () => go(thread.side === "driver" ? "driver-order-detail" : "client-booking-detail");
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Xabarlar" back={back} />
+          <TopBar title={translate("bookingChat.title")} back={back} />
           <section className="el-enter min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
             {chatHasMore && (
               <button
@@ -5426,14 +6168,14 @@ export function ConnectedApp() {
                 onClick={() => void run(() => loadChat(thread.id, chatMessages.length + CHAT_PAGE))}
                 className="el-press h-9 w-full rounded-[10px] bg-card text-[13px] font-semibold text-primary"
               >
-                Oldingi xabarlar
+                {translate("bookingChat.olderMessages")}
               </button>
             )}
             {chatMessages.length === 0 && !busy && (
               <EmptyState
                 icon={Bell}
-                title="Xabar yo'q"
-                subtitle="Xizmat boshlangunicha aloqa faqat shu chat orqali bo'ladi."
+                title={translate("bookingChat.emptyTitle")}
+                subtitle={translate("bookingChat.emptySubtitle")}
               />
             )}
             {chatMessages.map((message) => (
@@ -5446,7 +6188,7 @@ export function ConnectedApp() {
               >
                 <p className="whitespace-pre-wrap text-[14px] leading-5">
                   {message.moderation_status === "hidden_by_staff"
-                    ? "Xabar operator tomonidan yashirildi"
+                    ? translate("bookingChat.hiddenByStaff")
                     : message.quick_reply_code
                       // A quick reply carries a code, not text: it is rendered in the reader's language.
                       ? quickReplyLabel(message.quick_reply_code)
@@ -5497,18 +6239,18 @@ export function ConnectedApp() {
             </div>
             {chatWarnings.length > 0 && (
               <p className="mb-2 text-[12px] leading-5 text-warning">
-                Aloqa ma'lumotlari yashirildi: {chatWarnings.join(", ")}
+                {translate("bookingChat.contactsHidden", { codes: chatWarnings.join(", ") })}
               </p>
             )}
             {chatFailed && (
               <div className="mb-2 flex items-center justify-between gap-2 rounded-[10px] bg-destructive/10 px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-[12px] text-destructive">Yuborilmadi: {chatFailed}</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-destructive">{translate("bookingChat.notSent", { text: chatFailed })}</span>
                 <button
                   type="button"
                   onClick={() => { setChatDraft(chatFailed); setChatFailed(null); }}
                   className="el-press shrink-0 text-[12px] font-semibold text-destructive"
                 >
-                  Qayta urinish
+                  {translate("common.retry")}
                 </button>
               </div>
             )}
@@ -5517,7 +6259,7 @@ export function ConnectedApp() {
                 value={chatDraft}
                 onChange={(event) => setChatDraft(event.target.value)}
                 rows={1}
-                placeholder="Xabar yozing"
+                placeholder={translate("bookingChat.placeholder")}
                 className="min-h-[44px] flex-1 resize-none rounded-[12px] border border-border bg-card px-4 py-2.5 text-[15px] text-foreground outline-none"
               />
               <button
@@ -5538,13 +6280,13 @@ export function ConnectedApp() {
                     .finally(() => setChatSending(false));
                 }}
                 className="el-press flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-primary text-primary-foreground disabled:bg-slate-400"
-                aria-label="Yuborish"
+                aria-label={translate("common.send")}
               >
                 <Navigation size={18} />
               </button>
             </div>
             <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
-              Telefon raqam va havolalar avtomatik yashiriladi.
+              {translate("bookingChat.autoMaskNote")}
             </p>
           </div>
           )}
@@ -5559,12 +6301,12 @@ export function ConnectedApp() {
       const liveOpen = Boolean(flags?.tracking_enabled && tracking?.window.is_open && tracking?.last_point);
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Kuzatuv" back={back} />
+          <TopBar title={translate("bookingTracking.title")} back={back} />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <div className="rounded-[16px] border border-border bg-card p-4">
-              <p className="text-[13px] font-semibold text-secondary-foreground">Holat kuzatuvi</p>
+              <p className="text-[13px] font-semibold text-secondary-foreground">{translate("bookingTracking.progressTitle")}</p>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                Buyurtma bosqichlari — haydovchi belgilagan holatlar bo'yicha.
+                {translate("bookingTracking.progressHint")}
               </p>
               <ol className="mt-3 space-y-2">
                 {(booking?.service_type === "passenger" ? PASSENGER_PROGRESS : PARCEL_PROGRESS).map(([status, label]) => {
@@ -5583,11 +6325,11 @@ export function ConnectedApp() {
             </div>
 
             <div className="rounded-[16px] border border-border bg-card p-4">
-              <p className="text-[13px] font-semibold text-secondary-foreground">Jonli joylashuv</p>
+              <p className="text-[13px] font-semibold text-secondary-foreground">{translate("bookingTracking.liveTitle")}</p>
               {trackingError && <p className="mt-1 text-[13px] text-destructive">{trackingError}</p>}
               {!trackingError && !flags?.tracking_enabled && (
                 <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
-                  Bu yo'nalishda jonli kuzatuv hali yoqilmagan.
+                  {translate("bookingTracking.liveDisabled")}
                 </p>
               )}
               {!trackingError && flags?.tracking_enabled && !liveOpen && (
@@ -5609,14 +6351,14 @@ export function ConnectedApp() {
                         tracking.freshness === "fresh" ? "el-live-dot bg-success" : "bg-slate-400",
                       )}
                     />
-                    Oxirgi nuqta: {formatDateTime(tracking.last_point.captured_at)}
+                    {translate("bookingTracking.lastPoint", { time: formatDateTime(tracking.last_point.captured_at) })}
                   </p>
                   <p className="mt-1 text-[13px] text-muted-foreground">
                     {tracking.last_point.lat.toFixed(5)}, {tracking.last_point.lng.toFixed(5)}
-                    {tracking.last_point.low_accuracy ? " · aniqligi past" : ""}
+                    {tracking.last_point.low_accuracy ? ` · ${translate("bookingTracking.lowAccuracy")}` : ""}
                   </p>
                   <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                    Manba: haydovchining telefoni. Yangilanish: {trackingFreshnessLabel(tracking.freshness)}.
+                    {translate("bookingTracking.sourceLine", { freshness: trackingFreshnessLabel(tracking.freshness) })}
                   </p>
                 </>
               )}
@@ -5624,12 +6366,12 @@ export function ConnectedApp() {
 
             {tracking?.eta_window_start && (
               <div className="rounded-[16px] bg-accent p-4">
-                <p className="text-[13px] font-semibold text-primary">Taxminiy yetib kelish</p>
+                <p className="text-[13px] font-semibold text-primary">{translate("bookingTracking.etaTitle")}</p>
                 <p className="mt-1 text-[15px] font-semibold text-foreground">
                   {shortDate(tracking.eta_window_start)} - {shortDate(tracking.eta_window_end ?? undefined)}
                 </p>
                 {tracking.eta_is_estimate && (
-                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">Bu taxmin, kafolat emas.</p>
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("bookingTracking.etaDisclaimer")}</p>
                 )}
               </div>
             )}
@@ -5642,18 +6384,18 @@ export function ConnectedApp() {
       const listing = listingDetail;
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Buyurtma tafsilotlari" back={() => go("client-orders")} />
+          <TopBar title={translate("listingDetail.title")} back={() => go("client-orders")} />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
             <ListingCard listing={listing} />
             {[
-              [endRowLabel(listing.origin_stop, "Olib ketish bekati", "Olib ketish joyi"), endLabel(listing.origin_stop, listing.origin_point)],
-              [endRowLabel(listing.destination_stop, "Yetkazish bekati", "Yetkazish joyi"), endLabel(listing.destination_stop, listing.destination_point)],
-              ["Jo'nash oynasi", `${shortDate(listing.departure_window_start)} - ${shortDate(listing.departure_window_end)}`],
-              ["Narx", formatUzs(listing.total_minor / 100)],
-              ["Posilka", listing.parcel
-                ? `${PARCEL_TYPES.find(([value]) => value === listing.parcel?.parcel_type)?.[1] ?? "-"}, ${Math.round((listing.parcel.weight_g ?? 0) / 100) / 10} kg`
+              [endRowLabel(listing.origin_stop, translate("listingDetail.pickupStop"), translate("listingDetail.pickupPoint")), endLabel(listing.origin_stop, listing.origin_point)],
+              [endRowLabel(listing.destination_stop, translate("listingDetail.dropoffStop"), translate("listingDetail.dropoffPoint")), endLabel(listing.destination_stop, listing.destination_point)],
+              [translate("listingDetail.departureWindow"), `${shortDate(listing.departure_window_start)} - ${shortDate(listing.departure_window_end)}`],
+              [translate("common.price"), formatUzs(listing.total_minor / 100)],
+              [translate("listingDetail.parcel"), listing.parcel
+                ? translate("listingDetail.parcelValue", { type: PARCEL_TYPES.find(([value]) => value === listing.parcel?.parcel_type)?.[1] ?? "-", weight: Math.round((listing.parcel.weight_g ?? 0) / 100) / 10 })
                 : "-"],
-              ["Izoh", listing.comment || "-"],
+              [translate("listingOwner.commentLabel"), listing.comment || "-"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-[14px] border border-border bg-card p-4">
                 <p className="text-[12px] text-muted-foreground">{label}</p>
@@ -5662,18 +6404,18 @@ export function ConnectedApp() {
             ))}
             <ParcelPhoto
               photo={listing.parcel?.photo}
-              label="Posilka rasmi"
+              label={translate("listingDetail.parcelPhoto")}
               onRefresh={() => void run(() => openListing(listing.id))}
             />
             {listing.status === "published" && listingThreads.length === 0 && (
-              <EmptyState icon={Package} title="Hozircha takliflar yo'q" subtitle="Haydovchilar taklif yuborishi bilan shu yerda ko'rasiz" />
+              <EmptyState icon={Package} title={translate("listingBids.emptyTitle")} subtitle={translate("listingBids.emptySubtitle")} />
             )}
             {listingThreads.length > 0 && (
-              <PrimaryButton onClick={() => go("client-listing-bids")}>Takliflarni ko'rish</PrimaryButton>
+              <PrimaryButton onClick={() => go("client-listing-bids")}>{translate("listingDetail.viewOffers")}</PrimaryButton>
             )}
             {listing.status === "published" && (
               <SecondaryButton onClick={() => void run(() => openMatches(listing.id, listing.kind))}>
-                Mos safarlarni ko'rish
+                {translate("listingDetail.viewMatches")}
               </SecondaryButton>
             )}
             {["draft", "published", "paused"].includes(listing.status) && (
@@ -5684,11 +6426,18 @@ export function ConnectedApp() {
                     await cancelListing(listing.id, listing.version, "client_changed_plan");
                     await loadMyListings();
                     go("client-orders");
-                  }, "Buyurtma bekor qilindi")
+                  }, translate("listingDetail.cancelled"))
                 }
               >
-                Buyurtmani bekor qilish
+                {translate("listingDetail.cancel")}
               </SecondaryButton>
+            )}
+            {renderListingOwnerControls(listing, "client-listing-detail", () => openListing(listing.id))}
+            {canShareListing(listing.status) && (
+              <div className="space-y-2">
+                <p className="px-1 text-[13px] font-semibold text-muted-foreground">{translate("listingShare.title")}</p>
+                <ShareLinkPanel listingId={listing.id} />
+              </div>
             )}
           </section>
         </main>
@@ -5699,7 +6448,7 @@ export function ConnectedApp() {
       const listing = listingDetail;
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Haydovchi takliflari" back={() => go("client-listing-detail")} />
+          <TopBar title={translate("listingBids.title")} back={() => go("client-listing-detail")} />
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
             {busy && !listingThreads.length ? <ListSkeleton /> : listingThreads.length ? listingThreads.map((thread) => {
               const version = thread.current_version;
@@ -5733,7 +6482,7 @@ export function ConnectedApp() {
                       {counterFor === thread.id ? (
                         <div className="space-y-3">
                           <Field
-                            label="Sizning narxingiz (so'm)"
+                            label={translate("listingBids.yourPrice")}
                             type="number"
                             value={counterPrice}
                             placeholder={String(Math.round(version.total_minor / 100))}
@@ -5751,17 +6500,17 @@ export function ConnectedApp() {
                             <button
                               type="button"
                               disabled={counterPending || busy || soumToMinor(counterPrice) <= 0}
-                              onClick={() => void run(() => sendCounter(thread.id, version.revision, () => openListing(listing.id, "client-listing-bids"), true), "Qarshi taklif yuborildi")}
+                              onClick={() => void run(() => sendCounter(thread.id, version.revision, () => openListing(listing.id, "client-listing-bids"), true), translate("listingBids.counterSent"))}
                               className="h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
                             >
-                              {counterPending ? "Yuborilmoqda..." : "Yuborish"}
+                              {counterPending ? translate("common.sending") : translate("common.send")}
                             </button>
                             <button
                               type="button"
                               onClick={() => { setCounterFor(null); setCounterPrice(""); }}
                               className="el-press h-11 flex-1 rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
                             >
-                              Bekor qilish
+                              {translate("common.cancel")}
                             </button>
                           </div>
                         </div>
@@ -5771,18 +6520,18 @@ export function ConnectedApp() {
                           onClick={() => { setCounterFor(thread.id); setCounterPrice(String(Math.round(version.total_minor / 100))); }}
                           className="el-press h-11 w-full rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
                         >
-                          Boshqa narx taklif qilish ({version.price_revisions_left.client} marta qoldi)
+                          {translate("listingBids.counterButton", { count: version.price_revisions_left.client })}
                         </button>
                       ) : (
                         <p className="text-[12px] leading-5 text-muted-foreground">
-                          Narxni o'zgartirish imkoni tugadi — taklifni qabul qiling yoki rad eting.
+                          {translate("listingBids.noRevisionsLeft")}
                         </p>
                       )}
                     </div>
                   )}
                   {version && version.status === "active" && version.author_side === "client" && (
                     <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
-                      Sizning qarshi taklifingiz yuborildi — haydovchining javobi kutilmoqda.
+                      {translate("listingBids.awaitingDriver")}
                     </p>
                   )}
                   {version && version.status === "active" && version.author_side === "driver" && counterFor !== thread.id && (
@@ -5807,23 +6556,37 @@ export function ConnectedApp() {
                             // back goes to the booking rather than to an empty screen.
                             await openClientBooking(accepted.data.id);
                             await openChat(accepted.data.id, "client");
-                          }, "Haydovchi tanlandi")
+                          }, translate("listingBids.driverChosen"))
                         }
                       >
-                        Shu haydovchini tanlash
+                        {translate("listingBids.chooseDriver")}
                       </PrimaryButton>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void run(async () => {
+                          try {
+                            await rejectProposal(thread.id, version.revision);
+                          } finally {
+                            setListingThreads(await listListingProposals(listing.id).catch(() => listingThreads));
+                          }
+                        }, translate("proposal.rejected"))}
+                        className="el-press h-11 w-full rounded-[12px] bg-destructive/10 text-[14px] font-semibold text-destructive"
+                      >
+                        {translate("proposal.reject")}
+                      </button>
                     </div>
                   )}
                   {version && version.status !== "active" && (
                     <p className="mt-3 text-[12px] leading-5 text-muted-foreground">
-                      Bu taklif yopilgan ({proposalStatusLabel(version.status)}) — javob berib bo'lmaydi.
+                      {translate("listingBids.closed", { status: proposalStatusLabel(version.status) })}
                     </p>
                   )}
                 </div>
               );
-            }) : <EmptyState icon={Package} title="Hozircha takliflar yo'q" subtitle="Haydovchilar taklif yuborishi bilan shu yerda ko'rasiz" />}
+            }) : <EmptyState icon={Package} title={translate("listingBids.emptyTitle")} subtitle={translate("listingBids.emptySubtitle")} />}
             <p className="pt-2 text-center text-[12px] leading-5 text-muted-foreground">
-              Haydovchining ismi, telefoni va davlat raqami taklif qabul qilinmaguncha ko'rsatilmaydi.
+              {translate("listingBids.identityHidden")}
             </p>
           </section>
         </main>
@@ -5833,15 +6596,15 @@ export function ConnectedApp() {
     if (screen === "client-bids") {
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Haydovchi takliflari" back={() => go("client-order-detail")} />
+          <TopBar title={translate("listingBids.title")} back={() => go("client-order-detail")} />
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
             {busy && !bids.length ? <ListSkeleton /> : bids.length ? bids.map((bid) => (
               <div key={bid.id ?? bid.bid_id} className="rounded-[16px] border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[16px] font-semibold text-foreground">{bid.driver?.full_name ?? "Haydovchi"}</p>
+                    <p className="text-[16px] font-semibold text-foreground">{bid.driver?.full_name ?? translate("dispute.side.driver")}</p>
                     <p className="text-[13px] text-muted-foreground">{bid.driver?.car_model ?? "-"} / {bid.driver?.plate_number ?? "-"}</p>
-                    <p className="mt-1 text-[13px] text-muted-foreground">Reyting: {bid.driver?.rating ?? "-"}</p>
+                    <p className="mt-1 text-[13px] text-muted-foreground">{translate("legacyOrder.rating", { rating: bid.driver?.rating ?? "-" })}</p>
                   </div>
                   <p className="text-[17px] font-bold text-primary">{formatUzs(bid.price)}</p>
                 </div>
@@ -5849,11 +6612,11 @@ export function ConnectedApp() {
                   <PrimaryButton
                     onClick={() => setConfirmAction({ type: "select-driver", bid })}
                   >
-                    Shu haydovchini tanlash
+                    {translate("listingBids.chooseDriver")}
                   </PrimaryButton>
                 </div>
               </div>
-            )) : <EmptyState icon={Package} title="Hozircha takliflar yo'q" subtitle="Haydovchilar taklif yuborishi bilan shu yerda ko'rasiz" />}
+            )) : <EmptyState icon={Package} title={translate("listingBids.emptyTitle")} subtitle={translate("listingBids.emptySubtitle")} />}
           </section>
         </main>
       );
@@ -5862,11 +6625,11 @@ export function ConnectedApp() {
     if (screen === "client-confirm" && orderDetail) {
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Buyurtmani tasdiqlang" back={() => go("client-order-detail")} />
+          <TopBar title={translate("legacyOrder.confirmTitle")} back={() => go("client-order-detail")} />
           <section className="flex flex-1 flex-col justify-center gap-5 px-5 text-center">
             <CheckCircle className="mx-auto" size={72} color="var(--success)" />
-            <p className="text-[16px] leading-6 text-secondary-foreground">Posilka yetib kelgan bo'lsa, buyurtmani tasdiqlang.</p>
-            <PrimaryButton onClick={() => run(async () => { await confirmClientOrder(orderDetail.id); go("client-rating"); }, "Buyurtma tasdiqlandi")}>Tasdiqlash</PrimaryButton>
+            <p className="text-[16px] leading-6 text-secondary-foreground">{translate("legacyOrder.confirmBody")}</p>
+            <PrimaryButton onClick={() => run(async () => { await confirmClientOrder(orderDetail.id); go("client-rating"); }, translate("legacyOrder.confirmed"))}>{translate("common.confirm")}</PrimaryButton>
           </section>
         </main>
       );
@@ -5875,21 +6638,21 @@ export function ConnectedApp() {
     if (screen === "client-rating" && selectedOrderId) {
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Haydovchini baholang" back={() => go("client-orders")} />
+          <TopBar title={translate("rating.titleDriver")} back={() => go("client-orders")} />
           <section className="flex flex-1 flex-col gap-5 px-5 py-6">
-            <p className="text-center text-[14px] text-muted-foreground">1 dan 5 gacha baho bering</p>
+            <p className="text-center text-[14px] text-muted-foreground">{translate("legacyOrder.ratingHint")}</p>
             <div className="flex justify-center gap-2">
               {[1, 2, 3, 4, 5].map((value) => (
-                <button type="button" className="el-press" key={value} onClick={() => setRating(value)} aria-label={`${value} yulduz`}>
+                <button type="button" className="el-press" key={value} onClick={() => setRating(value)} aria-label={translate("legacyOrder.stars", { value })}>
                   <Star fill={value <= rating ? "var(--warning)" : "none"} color="var(--warning)" size={34} />
                 </button>
               ))}
             </div>
-            <Field label="Izoh qoldiring" value={ratingComment} multiline onChange={setRatingComment} />
+            <Field label={translate("legacyOrder.ratingComment")} value={ratingComment} multiline onChange={setRatingComment} />
             <div className="mt-auto">
-              <PrimaryButton onClick={() => run(async () => { await rateClientOrder(selectedOrderId, { rating, comment: ratingComment || null }); go("client-orders"); }, "Baho yuborildi")}>Bahoni yuborish</PrimaryButton>
+              <PrimaryButton onClick={() => run(async () => { await rateClientOrder(selectedOrderId, { rating, comment: ratingComment || null }); go("client-orders"); }, translate("legacyOrder.ratingSent"))}>{translate("legacyOrder.ratingSubmit")}</PrimaryButton>
               <button type="button" onClick={() => go("client-orders")} className="el-press mt-3 h-10 w-full text-[14px] font-semibold text-muted-foreground">
-                Keyinroq
+                {translate("legacyOrder.later")}
               </button>
             </div>
           </section>
@@ -5898,31 +6661,38 @@ export function ConnectedApp() {
     }
 
     if (screen === "client-dispute" && orderDetail) {
-      const reasons = ["Haydovchi kelmadi", "Posilka kechikdi", "Narx bo'yicha kelishmovchilik", "Boshqa muammo"];
+      // The v1 server stores the Uzbek reason text as sent, so the value stays Uzbek and only the label follows
+      // the reader's language.
+      const reasons: Array<[string, string]> = [
+        ["Haydovchi kelmadi", translate("legacyOrder.dispute.driverNoShow")],
+        ["Posilka kechikdi", translate("legacyOrder.dispute.parcelLate")],
+        ["Narx bo'yicha kelishmovchilik", translate("legacyOrder.dispute.priceDisagreement")],
+        ["Boshqa muammo", translate("disputeType.other")],
+      ];
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Muammo haqida xabar berish" back={() => go("client-order-detail")} />
+          <TopBar title={translate("legacyOrder.dispute.title")} back={() => go("client-order-detail")} />
           <section className="flex flex-1 flex-col gap-4 px-5 py-5">
             <label className="flex flex-col gap-1.5">
-              <span className="text-[14px] font-medium text-secondary-foreground">Muammo turi</span>
+              <span className="text-[14px] font-medium text-secondary-foreground">{translate("legacyOrder.dispute.typeLabel")}</span>
               <select
                 value={disputeReason}
                 onChange={(event) => setDisputeReason(event.target.value)}
                 className="h-[52px] rounded-[12px] border border-border bg-card px-4 text-[15px] text-foreground outline-none"
               >
-                {reasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+                {reasons.map(([reason, reasonLabel]) => <option key={reason} value={reason}>{reasonLabel}</option>)}
               </select>
             </label>
-            <Field label="Izoh" value={disputeComment} multiline onChange={setDisputeComment} />
+            <Field label={translate("listingOwner.commentLabel")} value={disputeComment} multiline onChange={setDisputeComment} />
             <div className="mt-auto">
               <PrimaryButton
                 onClick={() => run(async () => {
                   await openClientDispute(orderDetail.id, { reason: disputeReason, comment: disputeComment || null });
                   setDisputeComment("");
                   await openClientOrder(orderDetail.id);
-                }, "Nizo ochildi. Operatorlar muammoni ko'rib chiqadi")}
+                }, translate("legacyOrder.dispute.opened"))}
               >
-                Yuborish
+                {translate("common.send")}
               </PrimaryButton>
             </div>
           </section>
@@ -5941,23 +6711,26 @@ export function ConnectedApp() {
               {inboxRole === "client" && (
                 <SidebarButton className="shadow-none ring-1 ring-border" onClick={() => setSidebarOpen(true)} />
               )}
-              <h1 className="text-[24px] font-bold text-foreground">Bildirishnomalar</h1>
+              <h1 className="text-[24px] font-bold text-foreground">{translate("notifications.title")}</h1>
             </div>
-            {busy && !notifications.length ? <ListSkeleton /> : notifications.length ? notifications.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => run(async () => {
-                  await markNotificationRead(item.id).catch(() => undefined);
-                  await loadNotifications();
-                  const orderId = item.order_id ?? (item.entity_type === "order" ? item.entity_id : undefined);
-                  if (orderId) await openClientOrder(orderId, item.type === "new_bid" ? "client-bids" : "client-order-detail");
-                })}
-                className={cls("el-press w-full rounded-[14px] border bg-card p-4 text-left", item.is_read ? "border-border" : "border-blue-200")}
-              >
-                <p className="text-[15px] font-semibold text-foreground">{item.title}</p>
-                <p className="mt-1 text-[13px] text-muted-foreground">{item.message ?? item.body}</p>
-              </button>
-            )) : <EmptyState icon={Bell} title="Hozircha bildirishnomalar yo'q" />}
+            {busy && !notifications.length ? <ListSkeleton /> : notifications.length ? notifications.map((item) => {
+              // N4: the server sends keys, not text; the words are chosen here, in the reader's language.
+              const body = inboxBody(item, translateDynamic);
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => void run(() => openInboxItem(item))}
+                  className={cls("el-press w-full rounded-[14px] border bg-card p-4 text-left", item.is_read ? "border-border" : "border-blue-200")}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-[15px] font-semibold text-foreground">{inboxTitle(item, translateDynamic)}</p>
+                    {!item.is_read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-destructive" aria-hidden="true" />}
+                  </div>
+                  {body && <p className="mt-1 text-[13px] text-muted-foreground">{body}</p>}
+                  <p className="mt-1 text-[12px] text-muted-foreground">{formatDateTime(item.created_at)}</p>
+                </button>
+              );
+            }) : <EmptyState icon={Bell} title={translate("notifications.empty")} />}
           </section>
           {inboxRole === "driver" && <BottomNav role={inboxRole} active={screen} go={go} unread={unreadNotifications} />}
         </main>
@@ -5971,7 +6744,7 @@ export function ConnectedApp() {
       const latestOrder = orders[0];
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Profil" back={() => go("client-home")} />
+          <TopBar title={translate("clientProfile.title")} back={() => go("client-home")} />
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
             <div className="rounded-[18px] border border-border bg-card p-4">
               <div className="flex items-center gap-4">
@@ -5979,19 +6752,19 @@ export function ConnectedApp() {
                   <User size={28} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[18px] font-bold text-foreground">{clientName || auth.user?.full_name || "Mijoz"}</p>
+                  <p className="truncate text-[18px] font-bold text-foreground">{clientName || auth.user?.full_name || translate("dispute.side.client")}</p>
                   <p className="mt-0.5 text-[13px] text-muted-foreground">{auth.user?.phone}</p>
                   <span className="mt-2 inline-flex rounded-full bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success">
-                    Mijoz akkaunti
+                    {translate("clientProfile.accountBadge")}
                   </span>
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                ["Jami", orders.length],
-                ["Faol", activeOrders],
-                ["Taklif", totalBids],
+                [translate("common.total"), orders.length],
+                [translate("clientProfile.statActive"), activeOrders],
+                [translate("clientProfile.statBids"), totalBids],
               ].map(([label, value]) => (
                 <div key={label as string} className="rounded-[12px] border border-border bg-card p-3 text-center">
                   <p className="text-[20px] font-bold text-foreground">{value}</p>
@@ -6000,36 +6773,37 @@ export function ConnectedApp() {
               ))}
             </div>
             <div className="rounded-[16px] border border-border bg-card p-4">
-              <p className="text-[13px] font-semibold text-muted-foreground">Buyurtmalar holati</p>
+              <p className="text-[13px] font-semibold text-muted-foreground">{translate("clientProfile.ordersTitle")}</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="rounded-[12px] bg-slate-50 p-3">
                   <p className="text-[17px] font-bold text-foreground">{completedOrders}</p>
-                  <p className="text-[12px] text-muted-foreground">Yakunlangan</p>
+                  <p className="text-[12px] text-muted-foreground">{translate("status.completed")}</p>
                 </div>
                 <div className="rounded-[12px] bg-slate-50 p-3">
                   <p className="text-[17px] font-bold text-foreground">{latestOrder ? statusLabel(latestOrder.status) : "-"}</p>
-                  <p className="text-[12px] text-muted-foreground">So'nggi buyurtma</p>
+                  <p className="text-[12px] text-muted-foreground">{translate("clientProfile.latestOrder")}</p>
                 </div>
               </div>
             </div>
             <div className="rounded-[16px] border border-border bg-card p-4">
-              <p className="text-[13px] font-semibold text-muted-foreground">Shaxsiy ma'lumotlar</p>
+              <p className="text-[13px] font-semibold text-muted-foreground">{translate("clientProfile.personalTitle")}</p>
               <div className="mt-3 space-y-3">
-                <Field label="Ism familiya" value={clientName} onChange={setClientName} placeholder="Masalan: Ali Valiyev" />
-                <PrimaryButton onClick={() => run(async () => { await updateClientProfile(clientName); await auth.refreshMe(); }, "Profil yangilandi")}>Saqlash</PrimaryButton>
+                <Field label={translate("clientProfile.fullName")} value={clientName} onChange={setClientName} placeholder={translate("clientProfile.fullNamePlaceholder")} />
+                <PrimaryButton onClick={() => run(async () => { await updateClientProfile(clientName); await auth.refreshMe(); }, translate("clientProfile.updated"))}>{translate("common.save")}</PrimaryButton>
               </div>
             </div>
             <div className="space-y-2">
-              <p className="px-1 text-[13px] font-semibold text-muted-foreground">Tezkor amallar</p>
-              <ProfileActionRow icon={Package} label="Buyurtmalarim" description="Yaratilgan buyurtmalar va holatlarni ko'rish" onClick={() => go("client-orders")} />
-              <ProfileActionRow icon={Truck} label="Takliflarim" description="Haydovchi e'lonlariga yuborgan narx takliflaringiz" onClick={() => go("client-proposals")} />
-              <ProfileActionRow icon={Tag} label="Bonuslar va taklif kodi" description="Chegirma huquqlari, taklif kodingiz va kampaniyalar" onClick={() => go("client-bonus")} />
-              <ProfileActionRow icon={Bell} label="Bildirishnomalar" description="Takliflar va buyurtma yangiliklari" onClick={() => go("client-notifications")} />
-              <ProfileActionRow icon={FileText} label="Nizolarim" description="Ochilgan nizolar, ularning holati va dalillar" onClick={() => go("my-disputes")} />
-              <ProfileActionRow icon={Headphones} label="Yordam" description="Savollar va operatorga murojaat" onClick={() => go("support")} />
-              <ProfileActionRow icon={Shield} label="Sozlamalar" description="Ko'rinish, maxfiylik va akkaunt" onClick={() => go("settings")} />
-              <ProfileActionRow icon={Home} label="Bosh sahifa" description="Yangi buyurtma yaratish oynasiga qaytish" onClick={() => go("client-home")} />
-              <ProfileActionRow danger icon={X} label="Chiqish" description="Akkauntdan xavfsiz chiqish" onClick={() => run(async () => { await auth.logout(); go("role"); })} />
+              <p className="px-1 text-[13px] font-semibold text-muted-foreground">{translate("clientProfile.quickActions")}</p>
+              <ProfileActionRow icon={Package} label={translate("clientProfile.myOrders")} description={translate("clientProfile.myOrdersHint")} onClick={() => go("client-orders")} />
+              <ProfileActionRow icon={Truck} label={translate("clientProfile.myProposals")} description={translate("clientProfile.myProposalsHint")} onClick={() => go("client-proposals")} />
+              <ProfileActionRow icon={Tag} label={translate("clientProfile.bonus")} description={translate("clientProfile.bonusHint")} onClick={() => go("client-bonus")} />
+              <ProfileActionRow icon={Bell} label={translate("notifications.title")} description={translate("clientProfile.notificationsHint")} onClick={() => go("client-notifications")} />
+              <ProfileActionRow icon={FileText} label={translate("clientProfile.myDisputes")} description={translate("clientProfile.myDisputesHint")} onClick={() => go("my-disputes")} />
+              <ProfileActionRow icon={Shield} label={translate("safety.centerTitle")} description={translate("safety.centerDescription")} onClick={() => go("safety-center")} />
+              <ProfileActionRow icon={Headphones} label={translate("clientProfile.help")} description={translate("clientProfile.helpHint")} onClick={() => go("support")} />
+              <ProfileActionRow icon={Shield} label={translate("clientProfile.settings")} description={translate("clientProfile.settingsHint")} onClick={() => go("settings")} />
+              <ProfileActionRow icon={Home} label={translate("clientProfile.home")} description={translate("clientProfile.homeHint")} onClick={() => go("client-home")} />
+              <ProfileActionRow danger icon={X} label={translate("clientProfile.logout")} description={translate("clientProfile.logoutHint")} onClick={() => run(async () => { await auth.logout(); go("role"); })} />
             </div>
           </section>
         </main>
@@ -6048,17 +6822,17 @@ export function ConnectedApp() {
                 onClick={() => go("driver-bonus")}
                 className="el-press w-full rounded-[14px] border border-primary/30 bg-accent px-4 py-3 text-left text-[13px] font-semibold text-primary"
               >
-                Taklif kodi saqlandi: {pendingCode()} — tasdiqlash uchun bosing
+                {translate("driverHome.pendingReferral", { code: pendingCode() ?? "" })}
               </button>
             )}
             <div className="flex items-start justify-between gap-3">
-              <h1 className="min-w-0 flex-1 text-[24px] font-bold text-foreground">{approved ? "Bosh sahifa" : "Profilni to'ldiring"}</h1>
+              <h1 className="min-w-0 flex-1 text-[24px] font-bold text-foreground">{approved ? translate("clientProfile.home") : translate("driverHome.completeProfileTitle")}</h1>
               {/* The driver's way into the inbox, with the unread count on it - the reference client's bell.
                   The nav bar already carries five tabs, and a sixth would be unreadable at this width. */}
               <button
                 type="button"
                 onClick={() => go("driver-notifications")}
-                aria-label={unreadNotifications > 0 ? `Bildirishnomalar, ${unreadNotifications} ta o'qilmagan` : "Bildirishnomalar"}
+                aria-label={unreadNotifications > 0 ? translate("driverHome.notificationsUnread", { count: unreadNotifications }) : translate("notifications.title")}
                 className="el-press relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-border bg-card"
               >
                 <Bell size={18} className="text-foreground" />
@@ -6074,9 +6848,9 @@ export function ConnectedApp() {
                 type="button"
                 onClick={() => go("driver-income")}
                 className="el-press shrink-0 rounded-[14px] border border-blue-100 bg-card px-3 py-2 text-right shadow-sm"
-                aria-label="Komissiya balansi"
+                aria-label={translate("driverHome.commissionBalance")}
               >
-                <span className="block text-[10px] font-semibold text-muted-foreground">Komissiya balansi</span>
+                <span className="block text-[10px] font-semibold text-muted-foreground">{translate("driverHome.commissionBalance")}</span>
                 <span className="mt-0.5 flex items-center justify-end gap-1 text-[13px] font-bold text-foreground">
                   {walletState ? formatUzs(walletState.available_minor / 100) : "-"}
                   <ChevronRight size={14} color="color-mix(in srgb, var(--foreground) 42%, var(--background))" />
@@ -6084,18 +6858,18 @@ export function ConnectedApp() {
               </button>
             </div>
             <div className="rounded-[16px] border border-border bg-card p-4">
-              <p className="text-[15px] font-semibold text-foreground">Tasdiqlash holati: {driverProfile?.verification_status ?? "new"}</p>
-              <p className="mt-2 text-[14px] leading-6 text-muted-foreground">{approved ? "Faol bo'lsangiz, yo'nalishingizga mos buyurtmalar ko'rinadi" : "Buyurtmalarni ko'rish uchun avval profil va hujjatlaringizni yuboring."}</p>
+              <p className="text-[15px] font-semibold text-foreground">{translate("driverHome.verificationStatus", { status: driverProfile?.verification_status ?? "new" })}</p>
+              <p className="mt-2 text-[14px] leading-6 text-muted-foreground">{approved ? translate("driverHome.approvedHint") : translate("driverHome.onboardingHint")}</p>
             </div>
             <div className="rounded-[16px] border border-border bg-card p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[15px] font-semibold text-foreground">Faollik holati</p>
-                  <p className="text-[13px] text-muted-foreground">{approved ? "Faolman" : "Tasdiqlanmaguncha faol bo'la olmaysiz"}</p>
+                  <p className="text-[15px] font-semibold text-foreground">{translate("driverHome.availabilityTitle")}</p>
+                  <p className="text-[13px] text-muted-foreground">{approved ? translate("driverHome.available") : translate("driverHome.availabilityLocked")}</p>
                 </div>
                 <button
                   disabled={!approved || busy}
-                  onClick={() => run(async () => { await setDriverAvailability(!driverProfile?.is_available); await loadDriverProfile(); }, "Faollik yangilandi")}
+                  onClick={() => run(async () => { await setDriverAvailability(!driverProfile?.is_available); await loadDriverProfile(); }, translate("driverHome.availabilityUpdated"))}
                   className={cls("el-press h-8 w-14 rounded-full p-1", driverProfile?.is_available ? "bg-primary" : "bg-slate-300", !approved && "opacity-60")}
                 >
                   <span className={cls("block h-6 w-6 rounded-full bg-card transition", driverProfile?.is_available && "translate-x-6")} />
@@ -6104,11 +6878,11 @@ export function ConnectedApp() {
             </div>
             {showOnboardingActions && (
               <>
-                <PrimaryButton onClick={() => go("driver-profile-form")}>Profilni to'ldirish</PrimaryButton>
-                <SecondaryButton onClick={() => go("driver-documents")}>Hujjatlarni yuklash</SecondaryButton>
+                <PrimaryButton onClick={() => go("driver-profile-form")}>{translate("driverHome.completeProfile")}</PrimaryButton>
+                <SecondaryButton onClick={() => go("driver-documents")}>{translate("driverHome.uploadDocuments")}</SecondaryButton>
               </>
             )}
-            {approved && <SecondaryButton onClick={() => go("driver-feed")}>Mos buyurtmalarni ko'rish</SecondaryButton>}
+            {approved && <SecondaryButton onClick={() => go("driver-feed")}>{translate("driverHome.viewMatchingOrders")}</SecondaryButton>}
           </section>
           <BottomNav role="driver" active={screen} go={go} />
         </main>
@@ -6121,47 +6895,46 @@ export function ConnectedApp() {
       // plate and be told no on save. The lock follows the saved profile, not the approval: a car swapped
       // while "pending" is just as invisible to the client.
       const vehicleLocked = Boolean(driverProfile?.plate_number);
-      const lockHint = vehicleLocked ? "O'zgartirish uchun operator yoki adminga murojaat qiling" : undefined;
+      const lockHint = vehicleLocked ? translate("driverProfileForm.vehicleLockedHint") : undefined;
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Haydovchi profili" back={() => go("driver-home")} />
+          <TopBar title={translate("driverProfileForm.title")} back={() => go("driver-home")} />
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
-            <Field label="Ism familiya" value={driverForm.full_name} onChange={(v) => setDriverForm({ ...driverForm, full_name: v })} />
+            <Field label={translate("driverProfileForm.fullName")} value={driverForm.full_name} onChange={(v) => setDriverForm({ ...driverForm, full_name: v })} />
             {vehicleLocked && (
               <div className="rounded-[14px] border border-border bg-background p-4">
-                <p className="text-[13px] font-semibold text-foreground">Avtomobil ma'lumotlari qulflangan</p>
+                <p className="text-[13px] font-semibold text-foreground">{translate("driverProfileForm.vehicleLockedTitle")}</p>
                 <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                  Avtomobil ma'lumotlari faqat bir marta kiritiladi. Model, rang yoki davlat raqamini
-                  o'zgartirish kerak bo'lsa, operator yoki adminga murojaat qiling.
+                  {translate("driverProfileForm.vehicleLockedBody")}
                 </p>
               </div>
             )}
             <Field
-              label="Avtomobil modeli"
+              label={translate("driverProfileForm.carModel")}
               value={driverForm.car_model}
-              placeholder="Masalan: Cobalt"
+              placeholder={translate("driverProfileForm.carModelPlaceholder")}
               disabled={vehicleLocked}
               hint={lockHint}
               onChange={(v) => setDriverForm({ ...driverForm, car_model: v })}
             />
             <Field
-              label="Avtomobil rangi"
+              label={translate("driverProfileForm.carColor")}
               value={driverForm.car_color}
-              placeholder="Masalan: Oq"
+              placeholder={translate("driverProfileForm.carColorPlaceholder")}
               disabled={vehicleLocked}
               hint={lockHint}
               onChange={(v) => setDriverForm({ ...driverForm, car_color: v })}
             />
             <Field
-              label="Davlat raqami"
+              label={translate("driverProfileForm.plateNumber")}
               value={driverForm.plate_number}
-              placeholder="Masalan: 01 A 123 AA"
+              placeholder={translate("driverProfileForm.plateNumberPlaceholder")}
               disabled={vehicleLocked}
               hint={lockHint}
               onChange={(v) => setDriverForm({ ...driverForm, plate_number: v })}
             />
             <Field
-              label="Yo'lovchi o'rinlari"
+              label={translate("driverProfileForm.passengerSeats")}
               type="number"
               value={String(driverSeats)}
               disabled={vehicleLocked}
@@ -6170,14 +6943,14 @@ export function ConnectedApp() {
             />
             <div className="grid grid-cols-2 gap-2">
               <Field
-                label="Yuk uchun joy (kg)"
+                label={translate("driverProfileForm.cargoKg")}
                 type="number"
                 value={driverCargoKg}
                 disabled={vehicleLocked}
                 onChange={setDriverCargoKg}
               />
               <Field
-                label="Yuk hajmi (litr)"
+                label={translate("driverProfileForm.cargoLitres")}
                 type="number"
                 value={driverCargoLitres}
                 disabled={vehicleLocked}
@@ -6186,14 +6959,14 @@ export function ConnectedApp() {
             </div>
             {vehicles.map((vehicle) => (
               <div key={vehicle.id} className="rounded-[14px] border border-border bg-card p-4">
-                <p className="text-[12px] text-muted-foreground">Avtomobil holati</p>
+                <p className="text-[12px] text-muted-foreground">{translate("driverProfileForm.vehicleStatus")}</p>
                 <p className="mt-1 text-[14px] font-medium text-foreground">
                   {vehicle.make_model} · {vehicle.plate_masked ?? vehicle.plate_number ?? "-"} · {vehicleStatusLabel(vehicle.verification_status)}
                 </p>
               </div>
             ))}
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Avtomobil hujjatlari tekshirilgunicha yo'nalish qo'sha olmaysiz.
+              {translate("driverProfileForm.routesAfterReview")}
             </p>
             <PrimaryButton
               onClick={() => run(async () => {
@@ -6219,9 +6992,9 @@ export function ConnectedApp() {
                 await loadDriverProfile();
                 await loadDriverTrips();
                 go("driver-home");
-              }, "Profil saqlandi")}
+              }, translate("driverProfileForm.saved"))}
             >
-              Saqlash
+              {translate("common.save")}
             </PrimaryButton>
           </section>
         </main>
@@ -6237,14 +7010,14 @@ export function ConnectedApp() {
       const submitted = DRIVER_DOCUMENT_TYPES.filter((type) => latestFor(type)).length;
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Hujjatlar" back={() => go("driver-home")} />
+          <TopBar title={translate("driverDocs.title")} back={() => go("driver-home")} />
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <div className="rounded-[14px] border border-border bg-card p-4">
               <p className="text-[14px] font-semibold text-foreground">
-                {submitted} / {DRIVER_DOCUMENT_TYPES.length} hujjat yuborilgan
+                {translate("driverDocs.submittedCount", { submitted, total: DRIVER_DOCUMENT_TYPES.length })}
               </p>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                Har bir bandni alohida yuklang — quyidagi nom qaysi hujjat kerakligini bildiradi.
+                {translate("driverDocs.intro")}
               </p>
             </div>
             {DRIVER_DOCUMENT_TYPES.map((type) => {
@@ -6269,12 +7042,12 @@ export function ConnectedApp() {
                     {/* A rejection without its reason sends the same photo back a second time. */}
                     {state === "rejected" && document?.rejection_reason && (
                       <span className="mt-1 block text-[12px] leading-5 text-destructive">
-                        Sabab: {document.rejection_reason}
+                        {translate("driverDocs.rejectionReason", { reason: document.rejection_reason })}
                       </span>
                     )}
                   </span>
                   <span className="shrink-0 text-[13px] font-semibold text-primary">
-                    {document ? "Qayta yuklash" : "Yuklash"}
+                    {document ? translate("driverDocs.reupload") : translate("driverDocs.upload")}
                   </span>
                   <input
                     type="file"
@@ -6289,7 +7062,7 @@ export function ConnectedApp() {
                         await loadDriverDocuments();
                         await loadDriverProfile();
                         // The toast names the slot: after five uploads "Hujjat yuborildi" says nothing.
-                      }, `${docTypeLabel(type)} ko'rib chiqishga yuborildi`);
+                      }, translate("driverDocs.uploadedForReview", { type: docTypeLabel(type) }));
                     }}
                   />
                 </label>
@@ -6307,7 +7080,7 @@ export function ConnectedApp() {
         return (
           <main className="flex flex-1 flex-col bg-background">
             <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
-              <h1 className="text-[24px] font-bold text-foreground">Yo'nalishlarim</h1>
+              <h1 className="text-[24px] font-bold text-foreground">{translate("driverRoutes.title")}</h1>
               <DriverVerificationGate
                 status={driverProfile?.verification_status}
                 onProfile={() => go("driver-profile-form")}
@@ -6323,11 +7096,12 @@ export function ConnectedApp() {
         <main className="flex flex-1 flex-col bg-background">
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
             <div className="flex items-center justify-between">
-              <h1 className="text-[24px] font-bold text-foreground">Yo'nalishlarim</h1>
+              <h1 className="text-[24px] font-bold text-foreground">{translate("driverRoutes.title")}</h1>
               <button
                 onClick={() => {
                   setTripForm({ vehicleId: "", corridorId: "", routeId: "", startAt: "", seats: 4, cargoKg: "20", cargoLitres: "100" });
                   setTripRoutes([]);
+                  setRouteStopFilter(null);
                   go("driver-add-route");
                 }}
                 className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
@@ -6339,13 +7113,26 @@ export function ConnectedApp() {
               const nextAction = tripNextAction(trip.status);
               return (
               <div key={trip.id} className="rounded-[14px] border border-border bg-card p-4">
-                <p className="text-[15px] font-semibold leading-6 text-foreground">
-                  {trip.stops[0]?.stop.name_uz ?? "-"} {"->"} {trip.stops[trip.stops.length - 1]?.stop.name_uz ?? "-"}
-                </p>
-                <p className="mt-1 text-[13px] text-muted-foreground">
-                  {shortDate(trip.planned_start_at)} · {trip.stops.length} bekat · {trip.seat_capacity} o'rin
-                </p>
-                <p className="mt-1 text-[13px] text-success">Status: {tripStatusLabel(trip.status)}</p>
+                <button
+                  type="button"
+                  aria-label={translate("trip.detailsTitle")}
+                  onClick={() => {
+                    setOpenTripId(trip.id);
+                    go("driver-trip-detail");
+                  }}
+                  className="el-press block w-full text-left"
+                >
+                  <span className="flex items-start justify-between gap-2">
+                    <span className="text-[15px] font-semibold leading-6 text-foreground">
+                      {trip.stops[0]?.stop.name_uz ?? "-"} {"->"} {trip.stops[trip.stops.length - 1]?.stop.name_uz ?? "-"}
+                    </span>
+                    <ChevronRight size={18} className="mt-1 shrink-0 text-muted-foreground" />
+                  </span>
+                  <span className="mt-1 block text-[13px] text-muted-foreground">
+                    {translate("driverRoutes.tripMeta", { date: shortDate(trip.planned_start_at), stops: trip.stops.length, seats: trip.seat_capacity })}
+                  </span>
+                </button>
+                <p className="mt-1 text-[13px] text-success">{translate("driverRoutes.status", { status: tripStatusLabel(trip.status) })}</p>
                 {nextAction && (
                   <button
                     type="button"
@@ -6353,7 +7140,7 @@ export function ConnectedApp() {
                     onClick={() => void run(async () => {
                       await tripAction(trip.id, nextAction[0], { expected_version: trip.version });
                       await loadDriverTrips();
-                    }, "Safar holati yangilandi")}
+                    }, translate("driverRoutes.tripStatusUpdated"))}
                     className="el-press mt-3 h-10 w-full rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
                   >
                     {nextAction[1]}
@@ -6361,7 +7148,7 @@ export function ConnectedApp() {
                 )}
                 {trip.status === "planned" && (
                   <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-                    Chiqish oynasi jo'nashdan 60 daqiqa oldin ochiladi.
+                    {translate("driverRoutes.boardingWindowHint")}
                   </p>
                 )}
                 {/* Q92: the driver is an author in this market, not only an answerer. A planned trip can be
@@ -6370,15 +7157,15 @@ export function ConnectedApp() {
                   <div key={offer.id} className="mt-2 rounded-[12px] bg-slate-50 px-3 py-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[13px] font-semibold text-foreground">
-                        {offer.service_type === "passenger" ? "Yo'lovchi e'loni" : "Yuk e'loni"}
+                        {offer.service_type === "passenger" ? translate("driverRoutes.passengerOffer") : translate("driverRoutes.parcelOffer")}
                       </span>
                       <span className="text-[13px] font-bold text-primary">
                         {formatUzs(offer.unit_price_minor / 100)}
-                        {offer.price_basis === "per_seat" ? " / o'rin" : ""}
+                        {offer.price_basis === "per_seat" ? translate("driverRoutes.perSeatSuffix") : ""}
                       </span>
                     </div>
                     <p className="mt-0.5 text-[12px] text-muted-foreground">
-                      {listingStatusLabel(offer.status)} · boshlang'ich narx, mijoz o'z narxini taklif qiladi
+                      {translate("driverRoutes.offerStatusLine", { status: listingStatusLabel(offer.status) })}
                     </p>
                     {/* Q98: published only - a draft nobody can open would always read "nobody has looked". */}
                     {offer.status === "published" && (
@@ -6391,10 +7178,10 @@ export function ConnectedApp() {
                         onClick={() => void run(async () => {
                           await publishListing(offer.id, offer.version);
                           await loadDriverTrips();
-                        }, "E'lon bozorga chiqarildi")}
+                        }, translate("driverRoutes.published"))}
                         className="el-press mt-2 h-9 w-full rounded-[10px] bg-primary text-[13px] font-semibold text-primary-foreground"
                       >
-                        Bozorga chiqarish
+                        {translate("driverRoutes.publish")}
                       </button>
                     )}
                     {offer.status === "published" && (
@@ -6404,9 +7191,12 @@ export function ConnectedApp() {
                         onClick={() => void run(() => openMatches(offer.id, offer.kind))}
                         className="el-press mt-2 h-9 w-full rounded-[10px] bg-accent text-[13px] font-semibold text-primary"
                       >
-                        Mos so'rovlarni ko'rish
+                        {translate("driverRoutes.viewMatches")}
                       </button>
                     )}
+                    <div className="mt-2">
+                      {renderListingOwnerControls(offer, "driver-routes", loadDriverTrips)}
+                    </div>
                   </div>
                 ))}
                 {trip.status === "planned" && availableOfferServices(trip.id).length > 0 && (
@@ -6428,14 +7218,48 @@ export function ConnectedApp() {
                     }}
                     className="el-press mt-3 h-10 w-full rounded-[10px] border border-primary text-[14px] font-semibold text-primary"
                   >
-                    {tripOffers(trip.id).length > 0 ? "Yana e'lon qo'shish" : "Narx bilan e'lon qilish"}
+                    {tripOffers(trip.id).length > 0 ? translate("driverRoutes.addAnotherOffer") : translate("driverRoutes.publishWithPrice")}
                   </button>
                 )}
               </div>
               );
-            }) : <EmptyState icon={Navigation} title="Hozircha yo'nalish qo'shilmagan" action="Yo'nalish qo'shish" onAction={() => go("driver-add-route")} />}
+            }) : <EmptyState icon={Navigation} title={translate("driverRoutes.empty")} action={translate("driverRoutes.addRoute")} onAction={() => go("driver-add-route")} />}
           </section>
           <BottomNav role="driver" active={screen} go={go} />
+        </main>
+      );
+    }
+
+    if (screen === "driver-trip-detail" && openTripId) {
+      // The trip's own view (availability, manifest), then O1 share links for the offers on it that are open.
+      const shareable = tripOffers(openTripId).filter((offer) => canShareListing(offer.status));
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title={translate("trip.detailsTitle")} back={() => go("driver-routes")} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
+            <DriverTripDetail tripId={openTripId} />
+            {shareable.map((offer) => (
+              <div key={offer.id} className="space-y-2">
+                <p className="px-1 text-[13px] font-semibold text-muted-foreground">
+                  {translate("listingShare.title")}: {offer.service_type === "passenger" ? translate("driverRoutes.passengerOffer") : translate("driverRoutes.parcelOffer")}
+                </p>
+                <ShareLinkPanel listingId={offer.id} />
+              </div>
+            ))}
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "safety-center") {
+      const back = () => go(auth.user?.role === "driver" ? "driver-profile" : "client-profile");
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title={translate("safety.centerTitle")} back={back} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
+            <BlockPanel />
+            <MyReportsList />
+          </section>
         </main>
       );
     }
@@ -6443,21 +7267,22 @@ export function ConnectedApp() {
     if (screen === "driver-add-route") {
       const approvedVehicles = vehicles.filter((vehicle) => vehicle.verification_status === "approved");
       const chosenRoute = tripRoutes.find((route) => route.id === tripForm.routeId);
+      const filteredTripRoutes = routesThroughStop(tripRoutes, routeStopFilter?.id);
       const tripReady = Boolean(
         tripForm.vehicleId && chosenRoute && tripForm.startAt && tripForm.seats > 0
         && Number(tripForm.cargoKg) > 0 && Number(tripForm.cargoLitres) > 0,
       );
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Yo'nalish qo'shish" back={() => go("driver-routes")} />
+          <TopBar title={translate("driverRoutes.addRoute")} back={() => go("driver-routes")} />
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
             <PickSelect
-              label="Avtomobil"
-              placeholder={approvedVehicles.length ? "Avtomobilni tanlang" : "Tasdiqlangan avtomobil yo'q"}
+              label={translate("addRoute.vehicle")}
+              placeholder={approvedVehicles.length ? translate("addRoute.vehiclePlaceholder") : translate("addRoute.noApprovedVehicle")}
               value={tripForm.vehicleId}
               options={approvedVehicles.map((vehicle) => [
                 vehicle.id,
-                vehicle.make_model + " · " + (vehicle.plate_masked ?? vehicle.plate_number ?? "-") + " · " + vehicle.seat_capacity + " o'rin",
+                translate("addRoute.vehicleOption", { model: vehicle.make_model, plate: vehicle.plate_masked ?? vehicle.plate_number ?? "-", seats: vehicle.seat_capacity }),
               ] as [string, string])}
               onChange={(value) => {
                 const picked = approvedVehicles.find((vehicle) => vehicle.id === value);
@@ -6472,65 +7297,100 @@ export function ConnectedApp() {
             />
             {approvedVehicles.length === 0 && (
               <p className="text-[12px] leading-5 text-destructive">
-                Avtomobil hujjatlari tekshirilgandan keyin safar rejalashtirish mumkin bo'ladi.
+                {translate("addRoute.vehicleNeedsReview")}
               </p>
             )}
             <PickSelect
-              label="Qayerdan - qayerga"
-              placeholder="Yo'nalishni tanlang"
+              label={translate("addRoute.corridor")}
+              placeholder={translate("addRoute.corridorPlaceholder")}
               value={tripForm.corridorId}
               options={corridors.map((corridor) => [corridor.id, corridor.name] as [string, string])}
               onChange={(value) => {
                 setTripForm({ ...tripForm, corridorId: value, routeId: "" });
                 setTripRoutes([]);
+                setRouteStopFilter(null);
                 if (value) void run(async () => setTripRoutes(await listCorridorRoutes(value)));
               }}
             />
+            {/* A corridor can have several approved routes; finding a stop by name shows which of them pass it.
+                The stops themselves stay the route's own (the trip is planned on an operator-approved route). */}
+            {tripRoutes.length > 1 && (
+              <div className="space-y-2 rounded-[14px] border border-border p-3">
+                {routeStopFilter ? (
+                  <>
+                    <p className="text-[13px] font-medium text-foreground">
+                      {translate("tripPlan.stopFilter", { name: routeStopFilter.name })}
+                    </p>
+                    {filteredTripRoutes.length === 0 && (
+                      <p className="text-[12px] leading-5 text-warning">
+                        {translate("tripPlan.stopFilterNone", { name: routeStopFilter.name })}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setRouteStopFilter(null)}
+                      className="el-press text-[13px] font-semibold text-primary"
+                    >
+                      {translate("tripPlan.stopFilterClear")}
+                    </button>
+                  </>
+                ) : (
+                  <StopSearch
+                    label={translate("tripPlan.stopSearchLabel")}
+                    onSelect={(stop) => {
+                      setRouteStopFilter({ id: stop.id, name: stop.name_uz });
+                      const through = routesThroughStop(tripRoutes, stop.id);
+                      const keep = through.some((route) => route.id === tripForm.routeId);
+                      setTripForm({ ...tripForm, routeId: keep ? tripForm.routeId : through.length === 1 ? through[0].id : "" });
+                    }}
+                  />
+                )}
+              </div>
+            )}
             <PickSelect
-              label="Marshrut"
-              placeholder={tripForm.corridorId ? "Marshrutni tanlang" : "Avval yo'nalishni tanlang"}
+              label={translate("addRoute.route")}
+              placeholder={tripForm.corridorId ? translate("addRoute.routePlaceholder") : translate("addRoute.pickCorridorFirst")}
               disabled={!tripForm.corridorId}
               value={tripForm.routeId}
-              options={tripRoutes.map((route) => [
+              options={filteredTripRoutes.map((route) => [
                 route.id,
-                route.stops.length + " bekat · " + Math.round(route.distance_m / 1000) + " km · " + Math.round(route.duration_s / 3600) + " soat",
+                translate("addRoute.routeOption", { stops: route.stops.length, km: Math.round(route.distance_m / 1000), hours: Math.round(route.duration_s / 3600) }),
               ] as [string, string])}
               onChange={(value) => setTripForm({ ...tripForm, routeId: value })}
             />
             {Boolean(tripForm.corridorId) && tripRoutes.length === 0 && (
               <p className="text-[12px] leading-5 text-destructive">
-                Bu yo'nalishda tasdiqlangan marshrut yo'q — operator marshrut qo'shishi kerak.
+                {translate("addRoute.noApprovedRoute")}
               </p>
             )}
             <Field
-              label="Jo'nash vaqti"
+              label={translate("addRoute.departureTime")}
               type="datetime-local"
               value={tripForm.startAt}
               onChange={(v) => setTripForm({ ...tripForm, startAt: v })}
             />
             <Field
-              label="Bo'sh o'rinlar"
+              label={translate("addRoute.freeSeats")}
               type="number"
               value={String(tripForm.seats)}
               onChange={(v) => setTripForm({ ...tripForm, seats: Math.max(1, Number(v) || 1) })}
             />
             <div className="grid grid-cols-2 gap-2">
               <Field
-                label="Yuk uchun joy (kg)"
+                label={translate("driverProfileForm.cargoKg")}
                 type="number"
                 value={tripForm.cargoKg}
                 onChange={(v) => setTripForm({ ...tripForm, cargoKg: v })}
               />
               <Field
-                label="Yuk hajmi (litr)"
+                label={translate("driverProfileForm.cargoLitres")}
                 type="number"
                 value={tripForm.cargoLitres}
                 onChange={(v) => setTripForm({ ...tripForm, cargoLitres: v })}
               />
             </div>
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Safar operator tasdiqlagan marshrut bo'yicha rejalashtiriladi. Yuk uchun joy ko'rsatilmasa,
-              posilka takliflari yuborilmaydi.
+              {translate("addRoute.plannedOnApprovedRoute")}
             </p>
             <PrimaryButton
               disabled={!tripReady || busy}
@@ -6558,9 +7418,9 @@ export function ConnectedApp() {
                 });
                 await loadDriverTrips();
                 go("driver-routes");
-              }, "Yo'nalish qo'shildi")}
+              }, translate("addRoute.added"))}
             >
-              Saqlash
+              {translate("common.save")}
             </PrimaryButton>
           </section>
         </main>
@@ -6571,7 +7431,7 @@ export function ConnectedApp() {
       if (!driverApproved) {
         return (
           <main className="flex flex-1 flex-col bg-card">
-            <TopBar title="Safar e'loni" back={() => go("driver-routes")} />
+            <TopBar title={translate("offerCreate.gateTitle")} back={() => go("driver-routes")} />
             <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
               <DriverVerificationGate
                 status={driverProfile?.verification_status}
@@ -6599,14 +7459,14 @@ export function ConnectedApp() {
       );
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Safarni e'lon qilish" back={() => go("driver-routes")} />
+          <TopBar title={translate("offerCreate.title")} back={() => go("driver-routes")} />
           <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
             <div className="rounded-[14px] bg-background p-4">
               <p className="font-semibold text-foreground">
                 {(trip?.stops[0]?.stop.name_uz ?? "-")} {"->"} {(trip?.stops[(trip?.stops.length ?? 1) - 1]?.stop.name_uz ?? "-")}
               </p>
               <p className="mt-1 text-[13px] text-muted-foreground">
-                {trip ? shortDate(trip.planned_start_at) : "-"} · {trip?.seat_capacity ?? 0} o'rin
+                {translate("offerCreate.tripMeta", { date: trip ? shortDate(trip.planned_start_at) : "-", seats: trip?.seat_capacity ?? 0 })}
               </p>
             </div>
 
@@ -6616,69 +7476,70 @@ export function ConnectedApp() {
             {offerableServices.length > 1 && (
               <SegmentedControl
                 value={offerForm.serviceType}
-                options={[["passenger", "Yo'lovchi"], ["parcel", "Yuk"]] as const}
+                options={[["passenger", translate("offerCreate.servicePassenger")], ["parcel", translate("offerCreate.serviceParcel")]] as const}
                 onChange={(value) => setOfferForm({ ...offerForm, serviceType: value })}
               />
             )}
             {alreadyOffered.length > 0 && (
               <p className="text-[12px] leading-5 text-muted-foreground">
-                Bu safar uchun {alreadyOffered.map((service) => (service === "passenger" ? "yo'lovchi" : "yuk")).join(" va ")}
-                {" "}e'loni allaqachon bor — bittasidan ortiq bo'lmaydi.
+                {translate("offerCreate.alreadyOffered", {
+                  services: alreadyOffered
+                    .map((service) => (service === "passenger" ? translate("offerCreate.servicePassengerLower") : translate("offerCreate.serviceParcelLower")))
+                    .join(translate("offerCreate.and")),
+                })}
               </p>
             )}
 
             <PickSelect
-              label="Qayerdan"
-              placeholder="Bekatni tanlang"
+              label={translate("offerCreate.from")}
+              placeholder={translate("offerCreate.stopPlaceholder")}
               value={offerForm.originStopId}
               options={stopOptions}
               onChange={(value) => setOfferForm({ ...offerForm, originStopId: value })}
             />
             <PickSelect
-              label="Qayerga"
-              placeholder="Bekatni tanlang"
+              label={translate("offerCreate.to")}
+              placeholder={translate("offerCreate.stopPlaceholder")}
               value={offerForm.destinationStopId}
               options={stopOptions}
               onChange={(value) => setOfferForm({ ...offerForm, destinationStopId: value })}
             />
             {offerForm.originStopId === offerForm.destinationStopId && offerForm.originStopId !== "" && (
-              <p className="text-[12px] leading-5 text-destructive">Ikki bekat bir xil bo'lishi mumkin emas.</p>
+              <p className="text-[12px] leading-5 text-destructive">{translate("offerCreate.sameStops")}</p>
             )}
             {window && (
               <div className="rounded-[14px] bg-accent px-4 py-3">
-                <p className="text-[12px] font-semibold text-primary">Chiqish vaqti</p>
+                <p className="text-[12px] font-semibold text-primary">{translate("offerCreate.departureWindow")}</p>
                 <p className="mt-0.5 text-[15px] font-semibold text-foreground">
                   {shortDate(window.start)} - {shortDate(window.end)}
                 </p>
                 <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                  Safar shu bekatga rejalashtirilgan vaqt atrofida. Mijoz shu oynada taklif yuboradi.
+                  {translate("offerCreate.windowHint")}
                 </p>
               </div>
             )}
 
             <Field
-              label={offerForm.serviceType === "passenger" ? "Bir o'rin narxi (so'm)" : "Yuk uchun narx (so'm)"}
+              label={offerForm.serviceType === "passenger" ? translate("offerCreate.pricePerSeat") : translate("offerCreate.priceParcel")}
               type="number"
               value={offerForm.price}
               onChange={(value) => setOfferForm({ ...offerForm, price: value })}
-              placeholder="Masalan: 200000"
+              placeholder={translate("offerCreate.pricePlaceholder")}
             />
             {offerForm.serviceType === "passenger" && priceSoum > 0 && (
               <p className="text-[12px] leading-5 text-muted-foreground">
-                {seatsOrOne} o'rin uchun jami: {formatUzs(priceSoum * seatsOrOne)}
+                {translate("offerCreate.totalForSeats", { seats: seatsOrOne, total: formatUzs(priceSoum * seatsOrOne) })}
               </p>
             )}
             {offerForm.serviceType === "parcel" && !hasCargoRoom && (
               <p className="text-[12px] leading-5 text-destructive">
-                Bu safarda yuk uchun joy ko'rsatilmagan — yuk e'lonini joylash uchun safarni yuk sig'imi bilan
-                rejalashtiring.
+                {translate("offerCreate.noCargoRoom")}
               </p>
             )}
             {/* §5.3 / Q90: this is a starting price in an auction, not a tariff. Saying so here is what keeps
                 the driver from reading the number back as a guaranteed fare. */}
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Bu — boshlang'ich narxingiz. Mijoz o'z narxini taklif qiladi, siz qarshi taklif yuborasiz. Bron
-              faqat ikkalangiz kelishgandan keyin yaratiladi; e'lon o'rin yoki balansni band qilmaydi.
+              {translate("offerCreate.startingPriceNote")}
             </p>
 
             <div className="mt-auto">
@@ -6704,9 +7565,9 @@ export function ConnectedApp() {
                   await publishListing(created.data.id, created.data.version);
                   await loadDriverTrips();
                   go("driver-routes");
-                }, "E'lon bozorga chiqarildi")}
+                }, translate("driverRoutes.published"))}
               >
-                E'lon qilish
+                {translate("offerCreate.submit")}
               </PrimaryButton>
             </div>
           </section>
@@ -6721,7 +7582,7 @@ export function ConnectedApp() {
         return (
           <main className="flex flex-1 flex-col bg-background">
             <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
-              <h1 className="text-[24px] font-bold text-foreground">Mos buyurtmalar</h1>
+              <h1 className="text-[24px] font-bold text-foreground">{translate("driverFeed.title")}</h1>
               <DriverVerificationGate
                 status={driverProfile?.verification_status}
                 onProfile={() => go("driver-profile-form")}
@@ -6780,7 +7641,7 @@ export function ConnectedApp() {
                     : "bg-primary text-primary-foreground",
                 )}
               >
-                Taklif yuborish
+                {translate("driverFeed.sendOffer")}
               </button>
             </div>
           </div>
@@ -6789,13 +7650,13 @@ export function ConnectedApp() {
       return (
         <main className="flex flex-1 flex-col bg-background">
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            <h1 className="text-[24px] font-bold text-foreground">Mos buyurtmalar</h1>
+            <h1 className="text-[24px] font-bold text-foreground">{translate("driverFeed.title")}</h1>
             {/* Q92: a client request exists for both services, so the driver's feed has to be askable for both.
                 Passenger stays behind its flag (Q91) - the model is never removed, only the way in is gated. */}
             {flags?.passenger_enabled && (
               <SegmentedControl
                 value={driverServiceMode}
-                options={[["passenger", "Taksi"], ["parcel", "Pochta"]] as const}
+                options={[["passenger", translate("driverFeed.modeTaxi")], ["parcel", translate("driverFeed.modeParcel")]] as const}
                 onChange={(value) => {
                   setDriverServiceMode(value);
                   void run(() => loadRequestFeed(value));
@@ -6804,7 +7665,7 @@ export function ConnectedApp() {
             )}
             <div className="overflow-hidden rounded-[18px] border border-border bg-card">
               <LocationPointRow
-                label="Qayerdan?"
+                label={translate("driverFeed.from")}
                 address={directionEndLabel(pickupEnd)}
                 hasPoint={Boolean(pickupEnd.district || pickupEnd.stop)}
                 onClick={() => openLocationSelector("pickup", "driver")}
@@ -6812,7 +7673,7 @@ export function ConnectedApp() {
               />
               <DirectionLink />
               <LocationPointRow
-                label="Qayerga?"
+                label={translate("driverFeed.to")}
                 address={directionEndLabel(dropoffEnd)}
                 hasPoint={Boolean(dropoffEnd.district || dropoffEnd.stop)}
                 onClick={() => openLocationSelector("dropoff", "driver")}
@@ -6820,14 +7681,14 @@ export function ConnectedApp() {
               />
             </div>
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Tuman tanlansa, shu tumandagi barcha tasdiqlangan bekatlarning e'lonlari ko'rinadi.
+              {translate("driverFeed.districtHint")}
             </p>
             <button
               type="button"
               onClick={() => go("driver-saved-searches")}
               className="el-press flex h-10 w-full items-center justify-center rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
             >
-              Saqlangan yo'nalishlar
+              {translate("driverFeed.savedSearches")}
             </button>
             {matchScope === "confirmed_stops" && requestFeed.length > 0 && (
               <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
@@ -6852,8 +7713,8 @@ export function ConnectedApp() {
             ) : (
               <EmptyState
                 icon={Package}
-                title="Hozircha mos buyurtmalar yo'q"
-                subtitle={pickupEnd.stop || pickupEnd.district ? "Boshqa yo'nalish yoki sanani tanlab ko'ring" : "Avval qayerdan va qayerga ekanini tanlang"}
+                title={translate("driverFeed.emptyTitle")}
+                subtitle={pickupEnd.stop || pickupEnd.district ? translate("driverFeed.emptyTryOther") : translate("driverFeed.emptyPickFirst")}
               />
             )}
           </section>
@@ -6866,7 +7727,7 @@ export function ConnectedApp() {
       return (
         <main className="flex flex-1 flex-col bg-background">
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            <h1 className="text-[24px] font-bold text-foreground">Buyurtmalar tarixi</h1>
+            <h1 className="text-[24px] font-bold text-foreground">{translate("driverOrders.title")}</h1>
             {busy && !driverBookings.length ? <ListSkeleton /> : driverBookings.length ? driverBookings.map((raw) => {
               const booking = raw as BookingDTO;
               return (
@@ -6889,7 +7750,7 @@ export function ConnectedApp() {
                   </div>
                 </button>
               );
-            }) : <EmptyState icon={Package} title="Buyurtmalar tarixi bo'sh" />}
+            }) : <EmptyState icon={Package} title={translate("driverOrders.empty")} />}
           </section>
           <BottomNav role="driver" active={screen} go={go} />
         </main>
@@ -6903,7 +7764,7 @@ export function ConnectedApp() {
       if (!driverApproved) {
         return (
           <main className="flex flex-1 flex-col bg-card">
-            <TopBar title="Narx taklif qiling" back={() => go("driver-feed")} />
+            <TopBar title={translate("driverBid.title")} back={() => go("driver-feed")} />
             <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
               <DriverVerificationGate
                 status={driverProfile?.verification_status}
@@ -6922,22 +7783,25 @@ export function ConnectedApp() {
       const pickupWindow = proposalPickupWindow(chosenTrip, request);
       return (
         <main className="flex flex-1 flex-col bg-card">
-          <TopBar title="Narx taklif qiling" back={() => go("driver-feed")} />
+          <TopBar title={translate("driverBid.title")} back={() => go("driver-feed")} />
           <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
             <div className="rounded-[14px] bg-background p-4">
               <p className="font-semibold text-foreground">
                 {endLabel(request.listing.origin_stop, request.listing.origin_point)} {"->"}{" "}
                 {endLabel(request.listing.destination_stop, request.listing.destination_point)}
               </p>
-              <p className="text-[13px] text-muted-foreground">Mijoz narxi: {formatUzs(request.listing.total_minor / 100)}</p>
+              <p className="text-[13px] text-muted-foreground">{translate("driverBid.clientPrice", { price: formatUzs(request.listing.total_minor / 100) })}</p>
               <p className="mt-1 text-[13px] text-muted-foreground">
-                Jo'nash: {shortDate(request.listing.departure_window_start)} - {shortDate(request.listing.departure_window_end)}
+                {translate("driverBid.departure", {
+                  start: shortDate(request.listing.departure_window_start),
+                  end: shortDate(request.listing.departure_window_end),
+                })}
               </p>
             </div>
             <RivalOfferBoard offers={rivalOffers} unavailable={rivalOffersError} />
             <PickSelect
-              label="Safar"
-              placeholder={plannedTrips.length ? "Safarni tanlang" : "Rejalashtirilgan safar yo'q"}
+              label={translate("driverBid.trip")}
+              placeholder={plannedTrips.length ? translate("driverBid.tripPlaceholder") : translate("driverBid.noPlannedTrips")}
               value={proposalTripId}
               options={plannedTrips.map((trip) => [
                 trip.id,
@@ -6947,25 +7811,42 @@ export function ConnectedApp() {
             />
             {plannedTrips.length === 0 && (
               <p className="text-[12px] leading-5 text-destructive">
-                Taklif yuborish uchun avval "Yo'nalishlar" bo'limida safar rejalashtiring.
+                {translate("driverBid.planTripFirst")}
               </p>
             )}
             {chosenTrip && !pickupWindow && (
               <p className="text-[12px] leading-5 text-destructive">
-                Bu safar mijoz so'ragan vaqtga to'g'ri kelmaydi — boshqa safarni tanlang yoki yangi safar rejalashtiring.
+                {translate("driverBid.tripWindowMismatch")}
               </p>
             )}
             {pickupWindow && (
               <div className="rounded-[14px] bg-accent px-4 py-3">
-                <p className="text-[12px] font-semibold text-primary">Olib ketish vaqti</p>
+                <p className="text-[12px] font-semibold text-primary">{translate("driverBid.pickupWindow")}</p>
                 <p className="mt-0.5 text-[15px] font-semibold text-foreground">
                   {shortDate(pickupWindow.start)} - {shortDate(pickupWindow.end)}
                 </p>
               </div>
             )}
-            <Field label="Taklif narxi" type="number" value={bidPrice} onChange={setBidPrice} placeholder="Masalan: 200000" />
+            <Field label={translate("driverBid.priceLabel")} type="number" value={bidPrice} onChange={setBidPrice} placeholder={translate("driverBid.pricePlaceholder")} />
+            {feeQuote && (
+              // W11: an estimate under today's policy, held only when a client accepts - never money received (§9).
+              <div className="rounded-[14px] border border-border bg-background p-4">
+                <p className="text-[13px] font-semibold text-foreground">{translate("commissionPreview.title")}</p>
+                <p className="mt-1 text-[14px] text-foreground">
+                  {translate("commissionPreview.line", {
+                    amount: formatUzs(feeQuote.quote.commission_minor / 100),
+                    percent: bpsPercent(feeQuote.quote.fee_bps),
+                    total: formatUzs(feeQuote.totalMinor / 100),
+                  })}
+                </p>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("commissionPreview.note")}</p>
+              </div>
+            )}
+            {feeQuoteFailed && (
+              <p className="text-[12px] leading-5 text-muted-foreground">{translate("commissionPreview.unavailable")}</p>
+            )}
             <p className="text-[12px] leading-5 text-muted-foreground">
-              Taklif o'rin yoki balansni band qilmaydi — mijoz qabul qilganda bron yaratiladi.
+              {translate("driverBid.noHoldNote")}
             </p>
             <div className="mt-auto">
               <PrimaryButton
@@ -6988,9 +7869,9 @@ export function ConnectedApp() {
                   );
                   await loadRequestFeed();
                   go("driver-feed");
-                }, "Taklif yuborildi")}
+                }, translate("driverBid.sent"))}
               >
-                Taklif yuborish
+                {translate("driverBid.send")}
               </PrimaryButton>
             </div>
           </section>
@@ -7003,15 +7884,15 @@ export function ConnectedApp() {
       // The order the parcel machine really takes (verified against the API, 17.09.2026):
       // confirmed -> arrive_at_pickup -> pick_up (code) -> start_transit -> deliver (code) -> client completes.
       const nextAction =
-        booking.service_status === "confirmed" ? ["arrive_at_pickup", "Yetib keldim deb belgilash"] :
-        booking.service_status === "awaiting_pickup" ? ["pick_up", "Olib ketildi deb belgilash"] :
-        booking.service_status === "picked_up" ? ["start_transit", "Yo'lga chiqdi deb belgilash"] :
-        booking.service_status === "in_transit" ? ["deliver", "Yetkazildi deb belgilash"] : null;
+        booking.service_status === "confirmed" ? ["arrive_at_pickup", translate("driverBooking.action.arrive")] :
+        booking.service_status === "awaiting_pickup" ? ["pick_up", translate("driverBooking.action.pickUp")] :
+        booking.service_status === "picked_up" ? ["start_transit", translate("driverBooking.action.startTransit")] :
+        booking.service_status === "in_transit" ? ["deliver", translate("driverBooking.action.deliver")] : null;
       // B5: pick-up and delivery both need the code the client holds.
       const needsCode = nextAction?.[0] === "pick_up" || nextAction?.[0] === "deliver";
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Buyurtma tafsilotlari" back={() => go("driver-orders")} />
+          <TopBar title={translate("driverBooking.title")} back={() => go("driver-orders")} />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
             <div className="rounded-[16px] border border-border bg-card p-4">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -7029,15 +7910,15 @@ export function ConnectedApp() {
             </div>
             <PromoMoneyCard promo={booking.promo} />
             {[
-              [endRowLabel(booking.pickup.stop, "Olib ketish bekati", "Olib ketish joyi"),
+              [endRowLabel(booking.pickup.stop, translate("driverBooking.pickupStop"), translate("driverBooking.pickupPoint")),
                endLabel(booking.pickup.stop, booking.pickup.point)],
-              [endRowLabel(booking.dropoff.stop, "Yetkazish bekati", "Yetkazish joyi"),
+              [endRowLabel(booking.dropoff.stop, translate("driverBooking.dropoffStop"), translate("driverBooking.dropoffPoint")),
                endLabel(booking.dropoff.stop, booking.dropoff.point)],
-              ["Mijoz", booking.client?.display_name ?? "Tanlangandan keyin ko'rinadi"],
+              [translate("dispute.side.client"), booking.client?.display_name ?? translate("driverBooking.clientHidden")],
               // Q44: the participant phones open when the service starts, not at accept.
-              ["Telefon", booking.client?.contact_phone ?? "Xizmat boshlanganda ochiladi"],
+              [translate("driverBooking.phone"), booking.client?.contact_phone ?? translate("driverBooking.phoneHidden")],
               // §9: the fare is cash between the two people; it never passes through ELCHI or the wallet.
-              ["Yo'lkira", `${formatUzs(cashDueMinor(booking) / 100)} — mijozdan naqd olinadi`],
+              [translate("driverBooking.fare"), translate("driverBooking.fareCash", { amount: formatUzs(cashDueMinor(booking) / 100) })],
             ].map(([label, value]) => (
               <div key={label} className="rounded-[14px] border border-border bg-card p-4">
                 <p className="text-[12px] text-muted-foreground">{label}</p>
@@ -7047,22 +7928,22 @@ export function ConnectedApp() {
             {booking.service_type === "parcel" && (
               <ParcelPhoto
                 photo={booking.parcel_photo}
-                label="Posilka rasmi"
+                label={translate("driverBooking.parcelPhoto")}
                 onRefresh={() => void run(() => openDriverBooking(booking.id))}
               />
             )}
             {needsCode && (
               <>
                 <Field
-                  label={nextAction?.[0] === "pick_up" ? "Topshirish kodi" : "Yetkazish kodi"}
+                  label={nextAction?.[0] === "pick_up" ? translate("driverBooking.handoverCode") : translate("driverBooking.deliveryCode")}
                   value={proofCode}
                   onChange={setProofCode}
-                  placeholder="6 xonali kod"
+                  placeholder={translate("driverBooking.codePlaceholder")}
                 />
                 <p className="text-[12px] leading-5 text-muted-foreground">
                   {nextAction?.[0] === "pick_up"
-                    ? "Kodni jo'natuvchidan oling."
-                    : "Kodni faqat qabul qiluvchidan oling — jo'natuvchidan emas."}
+                    ? translate("driverBooking.codeFromSender")
+                    : translate("driverBooking.codeFromRecipient")}
                 </p>
               </>
             )}
@@ -7073,9 +7954,9 @@ export function ConnectedApp() {
                 busy={busy}
                 amount={cashAmount}
                 onAmountChange={setCashAmount}
-                onReport={() => void run(() => reportCash(booking.id, "driver", booking.version), "Qayd saqlandi")}
+                onReport={() => void run(() => reportCash(booking.id, "driver", booking.version), translate("driverBooking.cashRecorded"))}
                 onDecide={(decision) =>
-                  booking.cash_receipt && void run(() => decideCash(booking.id, "driver", booking.cash_receipt!, decision), "Javob saqlandi")
+                  booking.cash_receipt && void run(() => decideCash(booking.id, "driver", booking.cash_receipt!, decision), translate("driverBooking.cashAnswered"))
                 }
               />
             )}
@@ -7085,20 +7966,35 @@ export function ConnectedApp() {
                 onClick={() => void run(() => openChat(booking.id, "driver"))}
                 className="el-press h-11 flex-1 rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
               >
-                Xabarlar
+                {translate("driverBooking.messages")}
               </button>
               <button
                 type="button"
                 onClick={() => void run(() => openTracking(booking.id, "driver"))}
                 className="el-press h-11 flex-1 rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
               >
-                Kuzatuv
+                {translate("driverBooking.tracking")}
               </button>
             </div>
             {AMENDABLE_STATUSES.includes(booking.service_status) && (
               <SecondaryButton onClick={() => void run(() => openAmendments(booking.id, "driver"))}>
-                Shartlarni o'zgartirish
+                {translate("driverBooking.amend")}
               </SecondaryButton>
+            )}
+            {canRate(booking.service_status) && (
+              <PrimaryButton disabled={busy} onClick={() => openRating(booking.id, "driver")}>
+                {translate("rating.rateClient")}
+              </PrimaryButton>
+            )}
+            {canOpenDispute(booking.service_status) && (
+              <SecondaryButton onClick={() => openDisputeForm(booking.id, "driver")}>
+                {translate("driverBooking.reportProblem")}
+              </SecondaryButton>
+            )}
+            {renderBookingDisputes(booking.id)}
+            {renderCancelControls(booking, "driver")}
+            {booking.service_status === "cancelled" && (
+              <div className="rounded-[14px] border border-border bg-card p-4">{renderCancelledNote(booking)}</div>
             )}
             {nextAction && (
               <PrimaryButton
@@ -7110,11 +8006,12 @@ export function ConnectedApp() {
                   });
                   await openDriverBooking(booking.id);
                   await loadDriverBookings();
-                }, "Status yangilandi")}
+                }, translate("driverBooking.statusUpdated"))}
               >
                 {nextAction[1]}
               </PrimaryButton>
             )}
+            {renderBookingSafety(booking, "driver")}
           </section>
         </main>
       );
@@ -7152,43 +8049,42 @@ export function ConnectedApp() {
       const chart = [...buckets].map(([label, value]) => ({ label, value }));
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title="Komissiya balansi" back={() => go("driver-home")} />
+          <TopBar title={translate("income.title")} back={() => go("driver-home")} />
           <section className="el-enter min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
             <div className="rounded-[18px] border border-border bg-card p-4">
-              <p className="text-[13px] font-semibold text-muted-foreground">Ishlatish mumkin</p>
+              <p className="text-[13px] font-semibold text-muted-foreground">{translate("income.available")}</p>
               <p className="mt-1 text-[30px] font-bold text-foreground">
                 {walletState ? formatUzs(walletState.available_minor / 100) : "-"}
               </p>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                ELCHI komissiyalarini to'lash uchun balans. Yo'lkira bu yerda hisoblanmaydi — uni mijoz
-                haydovchiga naqd to'laydi.
+                {translate("income.balanceNote")}
               </p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div className="rounded-[12px] bg-slate-50 p-3">
                   <p className="text-[15px] font-bold text-foreground">
                     {walletState ? formatUzs(walletState.held_minor / 100) : "-"}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Ushlab qolingan komissiya</p>
+                  <p className="text-[11px] text-muted-foreground">{translate("income.held")}</p>
                 </div>
                 <div className="rounded-[12px] bg-slate-50 p-3">
                   <p className="text-[15px] font-bold text-foreground">{formatUzs(reversedCommission / 100)}</p>
-                  <p className="text-[11px] text-muted-foreground">Qaytarilgan komissiya</p>
+                  <p className="text-[11px] text-muted-foreground">{translate("income.reversed")}</p>
                 </div>
                 <div className="rounded-[12px] bg-slate-50 p-3">
                   <p className="text-[15px] font-bold text-foreground">{formatUzs(approvedTopups / 100)}</p>
-                  <p className="text-[11px] text-muted-foreground">To'ldirishlar</p>
+                  <p className="text-[11px] text-muted-foreground">{translate("income.topups")}</p>
                 </div>
                 <div className="rounded-[12px] bg-slate-50 p-3">
                   <p className="text-[15px] font-bold text-foreground">
                     {walletState ? formatUzs(walletState.pending_topups_minor / 100) : "-"}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Tasdiqlanmagan so'rov</p>
+                  <p className="text-[11px] text-muted-foreground">{translate("income.pendingTopups")}</p>
                 </div>
               </div>
             </div>
             <div className="rounded-[18px] border border-border bg-card p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[15px] font-semibold text-foreground">Ushlangan komissiya</p>
+                <p className="text-[15px] font-semibold text-foreground">{translate("income.capturedTitle")}</p>
                 <div className="flex gap-1 rounded-lg bg-secondary p-0.5">
                   {(["daily", "monthly"] as const).map((period) => (
                     <button
@@ -7200,37 +8096,37 @@ export function ConnectedApp() {
                         incomePeriod === period ? "bg-card text-foreground" : "text-muted-foreground",
                       )}
                     >
-                      {period === "daily" ? "7 kun" : "6 oy"}
+                      {period === "daily" ? translate("income.period.daily") : translate("income.period.monthly")}
                     </button>
                   ))}
                 </div>
               </div>
-              <BarChart data={chart} formatValue={(value) => formatUzs(value / 100)} empty="Hali komissiya ushlanmagan" />
+              <BarChart data={chart} formatValue={(value) => formatUzs(value / 100)} empty={translate("income.chartEmpty")} />
               <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-                Bu ELCHI olgan komissiya. Yo'lkira mijozdan sizga naqd o'tadi va bu yerda ko'rinmaydi.
+                {translate("income.chartNote")}
               </p>
             </div>
             <div className="rounded-[18px] border border-border bg-card p-4">
-              <p className="text-[15px] font-semibold text-foreground">Balansni to'ldirish</p>
+              <p className="text-[15px] font-semibold text-foreground">{translate("income.topupTitle")}</p>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                So'rov moliya xodimi tasdiqlagandan keyin balansga qo'shiladi.
+                {translate("income.topupNote")}
               </p>
               <div className="mt-3 space-y-3">
-                <Field label="Summa (so'm)" type="number" value={topupAmount} placeholder="100000" onChange={setTopupAmount} />
+                <Field label={translate("income.amountLabel")} type="number" value={topupAmount} placeholder="100000" onChange={setTopupAmount} />
                 <PrimaryButton
                   disabled={busy || soumToMinor(topupAmount) <= 0}
                   onClick={() => void run(async () => {
                     await createTopup({ amount_minor: soumToMinor(topupAmount), method: "bank_transfer" }, newIdempotencyKey());
                     setTopupAmount("");
                     await loadWallet();
-                  }, "To'ldirish so'rovi yuborildi")}
+                  }, translate("income.topupSent"))}
                 >
-                  So'rov yuborish
+                  {translate("income.topupSend")}
                 </PrimaryButton>
               </div>
             </div>
             <div className="space-y-2">
-              <p className="px-1 text-[13px] font-semibold text-muted-foreground">To'ldirish so'rovlari</p>
+              <p className="px-1 text-[13px] font-semibold text-muted-foreground">{translate("income.requestsTitle")}</p>
               {topups.length ? topups.map((topup) => (
                 <div key={topup.id} className="flex items-center justify-between gap-3 rounded-[14px] border border-border bg-card p-4">
                   <span className="min-w-0 flex-1">
@@ -7240,7 +8136,7 @@ export function ConnectedApp() {
                   <StatusBadge status={topup.status} />
                 </div>
               )) : (
-                <EmptyState icon={Package} title="So'rov yo'q" subtitle="Balansni to'ldirish so'rovlari shu yerda ko'rinadi." />
+                <EmptyState icon={Package} title={translate("income.requestsEmpty")} subtitle={translate("income.requestsEmptyHint")} />
               )}
             </div>
           </section>
@@ -7250,11 +8146,11 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-profile") {
-      const vehicleInfo = [driverProfile?.car_model, driverProfile?.car_color, driverProfile?.plate_number].filter(Boolean).join(" / ") || "Avtomobil ma'lumoti kiritilmagan";
-      const verificationLabel = driverVerificationLabels[driverProfile?.verification_status ?? "new"] ?? driverProfile?.verification_status ?? "Yangi";
+      const vehicleInfo = [driverProfile?.car_model, driverProfile?.car_color, driverProfile?.plate_number].filter(Boolean).join(" / ") || translate("driverProfile.noVehicle");
+      const verificationLabel = driverVerificationLabels[driverProfile?.verification_status ?? "new"] ?? driverProfile?.verification_status ?? translate("driverProfile.statusNew");
       return (
         <main className="flex flex-1 flex-col bg-background">
-          <TopBar title="Profil" back={() => go("driver-home")} />
+          <TopBar title={translate("driverProfile.title")} back={() => go("driver-home")} />
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 pb-24 pt-5">
             <div className="rounded-[18px] border border-border bg-card p-4">
               <div className="flex items-center gap-4">
@@ -7262,7 +8158,7 @@ export function ConnectedApp() {
                   <Truck size={28} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[18px] font-bold text-foreground">{driverProfile?.full_name ?? driverProfile?.user?.full_name ?? "Haydovchi"}</p>
+                  <p className="truncate text-[18px] font-bold text-foreground">{driverProfile?.full_name ?? driverProfile?.user?.full_name ?? translate("dispute.side.driver")}</p>
                   <p className="mt-0.5 text-[13px] text-muted-foreground">{driverProfile?.user?.phone ?? auth.user?.phone}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span className={cls(
@@ -7275,7 +8171,7 @@ export function ConnectedApp() {
                       "rounded-full px-2.5 py-1 text-[11px] font-semibold",
                       driverProfile?.is_available ? "bg-accent text-primary" : "bg-muted text-muted-foreground",
                     )}>
-                      {driverProfile?.is_available ? "Faol" : "Faol emas"}
+                      {driverProfile?.is_available ? translate("driverProfile.active") : translate("driverProfile.inactive")}
                     </span>
                   </div>
                 </div>
@@ -7283,9 +8179,9 @@ export function ConnectedApp() {
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                ["Reyting", driverProfile?.rating ? Number(driverProfile.rating).toFixed(1) : "-"],
-                ["Bajarilgan", driverProfile?.completed_orders ?? 0],
-                ["Jami", driverProfile?.total_orders ?? 0],
+                [translate("driverProfile.rating"), driverProfile?.rating ? Number(driverProfile.rating).toFixed(1) : "-"],
+                [translate("driverProfile.completed"), driverProfile?.completed_orders ?? 0],
+                [translate("common.total"), driverProfile?.total_orders ?? 0],
               ].map(([label, value]) => (
                 <div key={label as string} className="rounded-[12px] border border-border bg-card p-3 text-center">
                   <p className="text-[20px] font-bold text-foreground">{value}</p>
@@ -7296,14 +8192,14 @@ export function ConnectedApp() {
             <div className="rounded-[16px] border border-border bg-card p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[15px] font-semibold text-foreground">Faollik holati</p>
+                  <p className="text-[15px] font-semibold text-foreground">{translate("driverProfile.availabilityTitle")}</p>
                   <p className="mt-1 text-[13px] text-muted-foreground">
-                    {driverProfile?.verification_status === "approved" ? (driverProfile?.is_available ? "Buyurtma qabul qilishga tayyor" : "Vaqtincha faol emas") : "Avval admin tasdiqlashi kerak"}
+                    {driverProfile?.verification_status === "approved" ? (driverProfile?.is_available ? translate("driverProfile.availabilityOn") : translate("driverProfile.availabilityOff")) : translate("driverProfile.availabilityNeedsApproval")}
                   </p>
                 </div>
                 <button
                   disabled={driverProfile?.verification_status !== "approved" || busy}
-                  onClick={() => run(async () => { await setDriverAvailability(!driverProfile?.is_available); await loadDriverProfile(); }, "Faollik yangilandi")}
+                  onClick={() => run(async () => { await setDriverAvailability(!driverProfile?.is_available); await loadDriverProfile(); }, translate("driverProfile.availabilityUpdated"))}
                   className={cls("el-press h-8 w-14 rounded-full p-1", driverProfile?.is_available ? "bg-primary" : "bg-slate-300", driverProfile?.verification_status !== "approved" && "opacity-60")}
                 >
                   <span className={cls("block h-6 w-6 rounded-full bg-card transition", driverProfile?.is_available && "translate-x-6")} />
@@ -7316,15 +8212,15 @@ export function ConnectedApp() {
                   <Truck size={19} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-muted-foreground">Avtomobil</p>
+                  <p className="text-[13px] font-semibold text-muted-foreground">{translate("driverProfile.vehicle")}</p>
                   <p className="mt-1 break-words text-[15px] font-semibold text-foreground">{vehicleInfo}</p>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {[
-                  ["Holat", verificationLabel],
-                  ["Yo'nalish", trips.length],
-                  ["Nizo", driverProfile?.dispute_count ?? 0],
+                  [translate("driverProfile.status"), verificationLabel],
+                  [translate("driverProfile.routes"), trips.length],
+                  [translate("dispute.detailTitle"), driverProfile?.dispute_count ?? 0],
                 ].map(([label, value]) => (
                   <div key={label as string} className="rounded-[12px] bg-slate-50 p-2.5 text-center">
                     <p className="break-words text-[13px] font-bold text-foreground">{value}</p>
@@ -7334,18 +8230,19 @@ export function ConnectedApp() {
               </div>
             </div>
             <div className="space-y-2">
-              <p className="px-1 text-[13px] font-semibold text-muted-foreground">Tezkor amallar</p>
-              <ProfileActionRow icon={User} label="Profilni tahrirlash" description="Ism, avtomobil va davlat raqamini yangilash" onClick={() => go("driver-profile-form")} />
-              <ProfileActionRow icon={FileText} label="Hujjatlar" description="Pasport, guvohnoma va avtomobil hujjatlari" onClick={() => go("driver-documents")} />
-              <ProfileActionRow icon={Navigation} label="Yo'nalishlarim" description="Qaysi yo'nalishlarda ishlashingizni boshqarish" onClick={() => go("driver-routes")} />
-              <ProfileActionRow icon={Package} label="Takliflarim" description="Yuborilgan takliflar va mijozning javoblari" onClick={() => go("driver-proposals")} />
-              <ProfileActionRow icon={Tag} label="Kredit va taklif kodi" description="Komissiya krediti, taklif kodingiz va kampaniyalar" onClick={() => go("driver-bonus")} />
-              <ProfileActionRow icon={Package} label="Buyurtmalarim" description="Qabul qilingan buyurtmalar tarixi" onClick={() => go("driver-orders")} />
-              <ProfileActionRow icon={FileText} label="Nizolarim" description="Ochilgan nizolar, ularning holati va dalillar" onClick={() => go("my-disputes")} />
-              <ProfileActionRow icon={Headphones} label="Yordam" description="Savollar va operatorga murojaat" onClick={() => go("support")} />
-              <ProfileActionRow icon={Shield} label="Sozlamalar" description="Ko'rinish, maxfiylik va akkaunt" onClick={() => go("settings")} />
-              <ProfileActionRow icon={Home} label="Bosh sahifa" description="Balans va mos buyurtmalar oynasiga qaytish" onClick={() => go("driver-home")} />
-              <ProfileActionRow danger icon={X} label="Chiqish" description="Akkauntdan xavfsiz chiqish" onClick={() => run(async () => { await auth.logout(); go("role"); })} />
+              <p className="px-1 text-[13px] font-semibold text-muted-foreground">{translate("driverProfile.quickActions")}</p>
+              <ProfileActionRow icon={User} label={translate("driverProfile.action.edit")} description={translate("driverProfile.action.editHint")} onClick={() => go("driver-profile-form")} />
+              <ProfileActionRow icon={FileText} label={translate("driverProfile.action.documents")} description={translate("driverProfile.action.documentsHint")} onClick={() => go("driver-documents")} />
+              <ProfileActionRow icon={Navigation} label={translate("driverProfile.action.routes")} description={translate("driverProfile.action.routesHint")} onClick={() => go("driver-routes")} />
+              <ProfileActionRow icon={Package} label={translate("driverProfile.action.proposals")} description={translate("driverProfile.action.proposalsHint")} onClick={() => go("driver-proposals")} />
+              <ProfileActionRow icon={Tag} label={translate("driverProfile.action.bonus")} description={translate("driverProfile.action.bonusHint")} onClick={() => go("driver-bonus")} />
+              <ProfileActionRow icon={Package} label={translate("driverProfile.action.orders")} description={translate("driverProfile.action.ordersHint")} onClick={() => go("driver-orders")} />
+              <ProfileActionRow icon={FileText} label={translate("driverProfile.action.disputes")} description={translate("driverProfile.action.disputesHint")} onClick={() => go("my-disputes")} />
+              <ProfileActionRow icon={Shield} label={translate("safety.centerTitle")} description={translate("safety.centerDescription")} onClick={() => go("safety-center")} />
+              <ProfileActionRow icon={Headphones} label={translate("driverProfile.action.support")} description={translate("driverProfile.action.supportHint")} onClick={() => go("support")} />
+              <ProfileActionRow icon={Shield} label={translate("driverProfile.action.settings")} description={translate("driverProfile.action.settingsHint")} onClick={() => go("settings")} />
+              <ProfileActionRow icon={Home} label={translate("driverProfile.action.home")} description={translate("driverProfile.action.homeHint")} onClick={() => go("driver-home")} />
+              <ProfileActionRow danger icon={X} label={translate("driverProfile.action.logout")} description={translate("driverProfile.action.logoutHint")} onClick={() => run(async () => { await auth.logout(); go("role"); })} />
             </div>
           </section>
           <BottomNav role="driver" active={screen} go={go} />
@@ -7353,7 +8250,7 @@ export function ConnectedApp() {
       );
     }
 
-    return <EmptyState icon={Package} title="Ma'lumot topilmadi" action="Orqaga" onAction={() => go(auth.user?.role === "driver" ? "driver-home" : "client-home")} />;
+    return <EmptyState icon={Package} title={translate("driverProfile.notFound")} action={translate("common.back")} onAction={() => go(auth.user?.role === "driver" ? "driver-home" : "client-home")} />;
   })();
 
   return (
@@ -7365,7 +8262,7 @@ export function ConnectedApp() {
         </div>
         {(message || error || busy) && (
           <div className={cls("px-5 py-2 text-[13px] font-medium", error ? "bg-destructive/10 text-destructive" : "bg-success/12 text-success")}>
-            {busy ? "Yuklanmoqda..." : error || message}
+            {busy ? translate("common.loading") : error || message}
           </div>
         )}
         <div className="flex min-h-0 flex-1 flex-col">{content}</div>
@@ -7429,7 +8326,7 @@ export function ConnectedApp() {
         )}
         {readOnlyMap && (
           <div className="absolute inset-0 z-50 flex flex-col bg-card">
-            <TopBar title="Xarita nuqtalari" back={() => setReadOnlyMap(null)} />
+            <TopBar title={translate("mapSheet.title")} back={() => setReadOnlyMap(null)} />
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
               <ReadOnlyOrderMap
                 pickupLat={readOnlyMap.pickupLat}
@@ -7444,7 +8341,7 @@ export function ConnectedApp() {
                   rel="noreferrer"
                   className="flex h-[48px] items-center justify-center rounded-[12px] bg-accent text-[14px] font-semibold text-primary"
                 >
-                  Olib ketish joyini Yandex Xaritada ochish
+                  {translate("mapSheet.openPickup")}
                 </a>
               )}
               {hasLocation(readOnlyMap.destinationLat, readOnlyMap.destinationLng) && (
@@ -7454,7 +8351,7 @@ export function ConnectedApp() {
                   rel="noreferrer"
                   className="flex h-[48px] items-center justify-center rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground"
                 >
-                  Yandex Xaritada ochish
+                  {translate("mapSheet.open")}
                 </a>
               )}
             </div>
@@ -7462,10 +8359,10 @@ export function ConnectedApp() {
         )}
         {intentEditPending && (
           <ConfirmSheet
-            title="Ochiq takliflar yopiladi"
+            title={translate("confirmDialog.intentEdit.title")}
             text={offersAffectedText(intentEditPending.openOffers)}
-            confirmText="Saqlash"
-            cancelText="Ortga"
+            confirmText={translate("common.save")}
+            cancelText={translate("confirmDialog.back")}
             onCancel={() => setIntentEditPending(null)}
             onConfirm={() => {
               const pending = intentEditPending;
@@ -7473,7 +8370,7 @@ export function ConnectedApp() {
               void run(async () => {
                 const saved = await sendIntentEdit({ ...pending.body, acknowledge_open_offers: true }, pending.then);
                 if (saved) go(pending.then);
-              }, "Talab yangilandi");
+              }, translate("confirmDialog.intentEdit.saved"));
             }}
           />
         )}
@@ -7481,25 +8378,25 @@ export function ConnectedApp() {
           <ConfirmSheet
             title={
               confirmAction.type === "select-driver"
-                ? "Haydovchini tanlaysizmi?"
+                ? translate("confirmDialog.selectDriver.title")
                 : confirmAction.type === "confirm-delivery"
-                  ? "Posilka yetib keldimi?"
-                  : "Buyurtmani bekor qilasizmi?"
+                  ? translate("confirmDialog.confirmDelivery.title")
+                  : translate("confirmDialog.cancelOrder.title")
             }
             text={
               confirmAction.type === "select-driver"
-                ? "Tanlaganingizdan keyin boshqa takliflar yopiladi."
+                ? translate("confirmDialog.selectDriver.text")
                 : confirmAction.type === "confirm-delivery"
-                  ? "Tasdiqlaganingizdan keyin buyurtma yakunlanadi."
+                  ? translate("confirmDialog.confirmDelivery.text")
                   : orderDetail?.status === "accepted"
-                    ? "Haydovchi tanlangan. Buyurtmani bekor qilmoqchimisiz?"
-                    : "Bu amalni ortga qaytarib bo'lmaydi."
+                    ? translate("confirmDialog.cancelOrder.acceptedText")
+                    : translate("confirmDialog.cancelOrder.text")
             }
-            confirmText={confirmAction.type === "select-driver" ? "Tanlash" : confirmAction.type === "confirm-delivery" ? "Tasdiqlash" : "Bekor qilish"}
-            cancelText={confirmAction.type === "cancel-order" ? "Ortga" : "Bekor qilish"}
+            confirmText={confirmAction.type === "select-driver" ? translate("confirmDialog.selectDriver.confirm") : confirmAction.type === "confirm-delivery" ? translate("common.confirm") : translate("common.cancel")}
+            cancelText={confirmAction.type === "cancel-order" ? translate("confirmDialog.back") : translate("common.cancel")}
             danger={confirmAction.type === "cancel-order"}
             onCancel={() => setConfirmAction(null)}
-            onConfirm={() => run(async () => runConfirmAction(confirmAction), confirmAction.type === "cancel-order" ? "Buyurtma bekor qilindi" : undefined)}
+            onConfirm={() => run(async () => runConfirmAction(confirmAction), confirmAction.type === "cancel-order" ? translate("confirmDialog.cancelOrder.done") : undefined)}
           />
         )}
         <div className="flex h-[34px] shrink-0 items-center justify-center bg-card">

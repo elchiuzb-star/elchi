@@ -11,13 +11,14 @@
  * The driver's seat is drawn because a cabin without one is not a cabin, and it is never selectable.
  */
 import { cls } from "../../app/ui/mobile";
+import { translate } from "../../i18n";
 
 /** Passenger seats in a normal sedan, in the order a person reads them. */
 const SEATS = [
-  { id: "front", label: "Oldinda", row: 1 },
-  { id: "rear-left", label: "Orqada, chap", row: 2 },
-  { id: "rear-middle", label: "Orqada, o'rta", row: 2 },
-  { id: "rear-right", label: "Orqada, o'ng", row: 2 },
+  { id: "front", get label() { return translate("seatPicker.front"); }, row: 1 },
+  { id: "rear-left", get label() { return translate("seatPicker.rearLeft"); }, row: 2 },
+  { id: "rear-middle", get label() { return translate("seatPicker.rearMiddle"); }, row: 2 },
+  { id: "rear-right", get label() { return translate("seatPicker.rearRight"); }, row: 2 },
 ] as const;
 
 export type SeatId = (typeof SEATS)[number]["id"];
@@ -72,7 +73,7 @@ function SeatButton({
 export function SeatPicker({
   selected,
   onChange,
-  label = "Necha kishi",
+  label = translate("seatPicker.howMany"),
 }: {
   selected: SeatId[];
   onChange: (seats: SeatId[]) => void;
@@ -92,7 +93,7 @@ export function SeatPicker({
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <span className="text-[13px] font-semibold text-muted-foreground">{label}</span>
-        <span className="text-[13px] font-semibold text-foreground">{selected.length} kishi</span>
+        <span className="text-[13px] font-semibold text-foreground">{translate("seatPicker.peopleCount", { count: selected.length })}</span>
       </div>
 
       <div className="rounded-[16px] border border-border bg-slate-50 p-3">
@@ -103,7 +104,7 @@ export function SeatPicker({
             aria-hidden="true"
           >
             <span className="block h-5 w-5 rounded-full border-2 border-slate-400" />
-            <span className="text-[9px] font-semibold text-slate-400">Haydovchi</span>
+            <span className="text-[9px] font-semibold text-slate-400">{translate("seatPicker.driver")}</span>
           </div>
           <div className="col-span-2" />
           <SeatButton
@@ -129,8 +130,9 @@ export function SeatPicker({
       </div>
 
       <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
-        Bron qilinadigan narsa — <span className="font-semibold text-foreground">o'rinlar soni</span>. Qaysi
-        o'rinda o'tirishni haydovchi bilan kelishasiz, ilova uni band qilmaydi.
+        {translate("seatPicker.bookedIs")}{" "}
+        <span className="font-semibold text-foreground">{translate("seatPicker.seatCount")}</span>
+        {translate("seatPicker.seatNotReserved")}
       </p>
     </div>
   );

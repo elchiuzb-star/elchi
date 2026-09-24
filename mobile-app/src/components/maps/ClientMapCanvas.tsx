@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { boundsOf, decodePolyline, type LatLng } from "../../utils/polyline";
 import { MapLine, MapMarker, YandexMap } from "./YandexMap";
 import { TASHKENT, readPoint } from "./yandex";
+import { translate } from "../../i18n";
 
 type ClientMapCanvasProps = {
   pickupLat?: number | string | null;
@@ -96,10 +97,10 @@ export function ClientMapCanvas({
             <div className="absolute inset-0 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--feruza)_16%,var(--card))_0%,var(--background)_45%,var(--accent)_100%)]" />
             <div className="absolute left-5 right-5 top-24 rounded-[18px] bg-card/90 p-4 shadow-lg">
               <p className="text-[15px] font-semibold text-foreground">
-                {status === "missing-key" ? "Xarita kaliti kiritilmagan" : "Xarita yuklanmadi"}
+                {status === "missing-key" ? translate("maps.keyMissing") : translate("maps.loadFailed")}
               </p>
               <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
-                Hudud va tumanni tanlab, manzilni qo'lda kiritib ham davom etish mumkin.
+                {translate("maps.manualFallbackHint")}
               </p>
             </div>
           </div>
@@ -107,8 +108,8 @@ export function ClientMapCanvas({
       }
     >
       {leg.length > 1 && <MapLine points={leg} />}
-      {pickup && <MapMarker point={pickup} label="A" title="Olib ketish joyi" />}
-      {dropoff && <MapMarker point={dropoff} label="B" title="Yetkazish joyi" />}
+      {pickup && <MapMarker point={pickup} label="A" title={translate("maps.pickupPlace")} />}
+      {dropoff && <MapMarker point={dropoff} label="B" title={translate("maps.dropoffPlace")} />}
     </YandexMap>
   );
 }

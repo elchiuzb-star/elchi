@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronRight, MapPin, Search } from "../../app/ui/icons";
 
 import { getDistricts } from "../../api/districts.api";
+import { translate } from "../../i18n";
 import type { City, District } from "../../types/city";
 
 type DistrictSelectorProps = {
@@ -42,7 +43,7 @@ export function DistrictSelector({ city, onSelectDistrict, onBack }: DistrictSel
         if (isActive) setDistricts(items);
       })
       .catch(() => {
-        if (isActive) setError("Tumanlarni yuklab bo'lmadi");
+        if (isActive) setError(translate("location.districtsLoadFailed"));
       })
       .finally(() => {
         if (isActive) setIsLoading(false);
@@ -60,12 +61,12 @@ export function DistrictSelector({ city, onSelectDistrict, onBack }: DistrictSel
         <button
           type="button"
           onClick={onBack}
-          aria-label="Orqaga"
+          aria-label={translate("common.back")}
           className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-muted"
         >
           <ArrowLeft size={18} />
         </button>
-        <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold text-foreground">Tumanni tanlang</h1>
+        <h1 className="min-w-0 flex-1 truncate text-[17px] font-bold text-foreground">{translate("location.pickDistrict")}</h1>
       </header>
       <section className="border-b border-border px-5 py-4">
         <p className="mb-2 truncate text-[13px] font-semibold text-muted-foreground">{city.name_uz}</p>
@@ -74,15 +75,15 @@ export function DistrictSelector({ city, onSelectDistrict, onBack }: DistrictSel
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tuman qidirish"
+            placeholder={translate("location.searchDistrict")}
             className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none"
           />
         </label>
-        <p className="mt-2 text-[12px] leading-5 text-muted-foreground">Keyin xaritada aniq manzilni belgilang.</p>
+        <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{translate("location.thenMarkOnMap")}</p>
       </section>
       <section className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Tumanlar yuklanmoqda...</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">{translate("location.districtsLoading")}</div>
         ) : error ? (
           <div className="px-5 py-8 text-center text-[14px] text-destructive">{error}</div>
         ) : visibleDistricts.length ? (
@@ -104,7 +105,7 @@ export function DistrictSelector({ city, onSelectDistrict, onBack }: DistrictSel
             </button>
           ))
         ) : (
-          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">Tuman topilmadi</div>
+          <div className="px-5 py-8 text-center text-[14px] text-muted-foreground">{translate("location.districtNotFound")}</div>
         )}
       </section>
     </main>

@@ -296,6 +296,25 @@
         "title": "AdminDriverReject",
         "type": "object"
       },
+      "AdminDriverUnblock": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /api/v1/admin/drivers/{driver_id}/unblock`` (additive endpoint).",
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "AdminDriverUnblock",
+        "type": "object"
+      },
       "AdminDriverVehicleUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -516,6 +535,228 @@
           "role"
         ],
         "title": "AdminUserCreate",
+        "type": "object"
+      },
+      "AdminVehicleDTO": {
+        "additionalProperties": false,
+        "description": "T3a: one row of the staff vehicle-verification queue (``ops.driver_eligibility_manage``).",
+        "properties": {
+          "baggage_capacity_ml": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baggage Capacity Ml"
+          },
+          "cargo_max_volume_ml": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cargo Max Volume Ml"
+          },
+          "cargo_max_weight_g": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cargo Max Weight G"
+          },
+          "color": {
+            "title": "Color",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_file_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Document File Ids",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "make_model": {
+            "title": "Make Model",
+            "type": "string"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/AdminVehicleOwnerDTO"
+          },
+          "plate_masked": {
+            "title": "Plate Masked",
+            "type": "string"
+          },
+          "plate_number": {
+            "title": "Plate Number",
+            "type": "string"
+          },
+          "seat_capacity": {
+            "title": "Seat Capacity",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "verification_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reason recorded with the last approve/reject decision.",
+            "title": "Verification Reason"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "plate_number",
+          "plate_masked",
+          "make_model",
+          "color",
+          "seat_capacity",
+          "baggage_capacity_ml",
+          "cargo_max_weight_g",
+          "cargo_max_volume_ml",
+          "document_file_ids",
+          "verification_status",
+          "version",
+          "created_at",
+          "verification_reason",
+          "verified_at",
+          "updated_at",
+          "owner"
+        ],
+        "title": "AdminVehicleDTO",
+        "type": "object"
+      },
+      "AdminVehicleOwnerDTO": {
+        "additionalProperties": false,
+        "description": "The owner as the verify screen needs it: who to act on and why they may still be ineligible.\n\nNo phone and no name: the staff queue decides about the car and the driver's eligibility block, and neither\nneeds contact data (the v1 driver card already shows it to the roles that need it).",
+        "properties": {
+          "account_active": {
+            "title": "Account Active",
+            "type": "boolean"
+          },
+          "active_trip_count": {
+            "title": "Active Trip Count",
+            "type": "integer"
+          },
+          "blocked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reason text of the active admin eligibility block, if any.",
+            "title": "Blocked Reason"
+          },
+          "driver_verification_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "v1 driver profile status; null: no profile row.",
+            "title": "Driver Verification Status"
+          },
+          "eligibility_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "expected_version for the eligibility command; null when the owner is not a driver.",
+            "title": "Eligibility Version"
+          },
+          "eligible": {
+            "description": "Driver may take new business right now (D16), computed on this read.",
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "is_driver": {
+            "description": "False when the account no longer has the driver role (no eligibility then).",
+            "title": "Is Driver",
+            "type": "boolean"
+          },
+          "reasons": {
+            "description": "Why not eligible (not_verified, eligibility_blocked, document_expired...).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "user_id": {
+            "description": "Opaque user id (usr_...); the target of /admin/drivers/{user_id}/eligibility.",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "is_driver",
+          "account_active",
+          "driver_verification_status",
+          "eligible",
+          "reasons",
+          "blocked_reason",
+          "eligibility_version",
+          "active_trip_count"
+        ],
+        "title": "AdminVehicleOwnerDTO",
         "type": "object"
       },
       "AmendmentAccept": {
@@ -10819,6 +11060,122 @@
           "data"
         ],
         "title": "Envelope[dict[str, Any]]",
+        "type": "object"
+      },
+      "Envelope_list_AdminStopDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdminStopDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[AdminStopDTO]]",
+        "type": "object"
+      },
+      "Envelope_list_AdminVehicleDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdminVehicleDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[AdminVehicleDTO]]",
         "type": "object"
       },
       "Envelope_list_AmendmentDTO__": {
@@ -28087,6 +28444,113 @@
       }
     },
     "/api/v2/admin/corridors/{corridor_id}/stops": {
+      "get": {
+        "description": "Every stop of a corridor for staff - inactive ones and draft corridors included, with the ``version`` a\n``PATCH /admin/stops/{id}`` needs and the Q27 evidence. The public list shows only active stops of open corridors.",
+        "operationId": "admin_list_corridor_stops_api_v2_admin_corridors__corridor_id__stops_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "corridor_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Corridor Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_AdminStopDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin List Corridor Stops",
+        "tags": [
+          "Geo v2"
+        ]
+      },
       "post": {
         "operationId": "admin_create_stop_api_v2_admin_corridors__corridor_id__stops_post",
         "parameters": [
@@ -36298,6 +36762,161 @@
         "summary": "Admin User Strikes",
         "tags": [
           "v2 Trust & support"
+        ]
+      }
+    },
+    "/api/v2/admin/vehicles": {
+      "get": {
+        "description": "T3a: vehicles awaiting (or past) a staff decision, oldest first. Same capability as T3 verify.",
+        "operationId": "list_vehicles_for_review_api_v2_admin_vehicles_get",
+        "parameters": [
+          {
+            "description": "Omit for every status.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "approved",
+                    "rejected",
+                    "blocked"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Omit for every status.",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_AdminVehicleDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Vehicles For Review",
+        "tags": [
+          "v2 Trips"
         ]
       }
     },

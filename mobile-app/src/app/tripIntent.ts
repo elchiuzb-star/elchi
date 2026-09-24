@@ -9,6 +9,7 @@
  * - a driver whose seats, time or stop do not match is shown as a difference, the request is never adapted to it.
  */
 import type { TripIntentDTO, TripIntentFitDTO } from "../api/v2/tripIntents.api";
+import { translate } from "../i18n";
 import { formatMinor } from "../utils/v2Format";
 
 const DISPLAY_TZ = "Asia/Tashkent";
@@ -16,7 +17,7 @@ const DISPLAY_TZ = "Asia/Tashkent";
 type End = TripIntentDTO["current_version"]["origin"];
 
 export function endName(end: End): string {
-  return end.stop?.name_uz ?? end.district?.name_uz ?? end.address ?? "Belgilangan joy";
+  return end.stop?.name_uz ?? end.district?.name_uz ?? end.address ?? translate("intentFit.markedPlace");
 }
 
 function dayKey(date: Date): string {
@@ -33,14 +34,14 @@ export function dayLabel(iso: string, now: Date = new Date()): string {
   const today = dayKey(now);
   const tomorrow = dayKey(new Date(now.getTime() + 24 * 3600 * 1000));
   const key = dayKey(date);
-  if (key === today) return "bugun";
-  if (key === tomorrow) return "ertaga";
+  if (key === today) return translate("intentFit.today");
+  if (key === tomorrow) return translate("intentFit.tomorrow");
   const [, month, day] = key.split("-");
   return `${day}.${month}`;
 }
 
 export function quantityLabel(intent: Pick<TripIntentDTO, "service_type" | "current_version">): string {
-  return intent.service_type === "passenger" ? `${intent.current_version.quantity} kishi` : "1 jo'natma";
+  return intent.service_type === "passenger" ? translate("intentFit.people", { count: intent.current_version.quantity }) : translate("intentFit.oneParcel");
 }
 
 /** "Toshkent → Qarshi · ertaga 12:00–14:00 · 3 kishi" */
@@ -60,12 +61,12 @@ export function isExpired(intent: Pick<TripIntentDTO, "current_version">, now: D
 }
 
 /** "3 kishi × 190 000 so'm = 570 000 so'm" - the unit is always said; a total price says it is the total. */
-export function priceLine(priceBasis: string, unitMinor: number, quantity: number, unitWord = "kishi"): string {
+export function priceLine(priceBasis: string, unitMinor: number, quantity: number, unitWord = translate("intentFit.personUnit")): string {
   if (priceBasis === "per_seat") {
     const total = unitMinor * quantity;
     return `${quantity} ${unitWord} × ${formatMinor(unitMinor)} = ${formatMinor(total)}`;
   }
-  return `${formatMinor(unitMinor)} (jami)`;
+  return translate("intentFit.priceLineTotal", { total: formatMinor(unitMinor) });
 }
 
 export type OfferLike = { price_basis: string; unit_price_minor: number; service_type: string };
@@ -106,34 +107,38 @@ export function prefillBid(intent: TripIntentDTO | null, offer: OfferLike): BidP
 export type FitNote = { tone: "warn" | "block"; text: string };
 
 function minutesText(minutes: number): string {
-  if (minutes < 60) return `${minutes} daqiqa`;
+  if (minutes < 60) return translate("intentFit.minutes", { minutes });
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return rest ? `${hours} soat ${rest} daqiqa` : `${hours} soat`;
+  return rest ? translate("intentFit.hoursMinutes", { hours, minutes: rest }) : translate("intentFit.hours", { hours });
 }
 
 /** Differences between the request and one driver's offer, in the client's words. Nothing is changed to fit. */
 export function fitNotes(fit: TripIntentFitDTO): FitNote[] {
   const notes: FitNote[] = [];
-  if (!fit.service_match) notes.push({ tone: "block", text: "Bu e'lon boshqa xizmat turi uchun." });
-  if (fit.expired) notes.push({ tone: "block", text: "Safar vaqti o'tib ketgan - avval talabni yangilang." });
+  if (!fit.service_match) notes.push({ tone: "block", text: translate("intentFit.otherService") });
+  if (fit.expired) notes.push({ tone: "block", text: translate("intentFit.expired") });
   if (fit.availability.status === "insufficient") {
     notes.push({
       tone: "block",
       text: fit.availability.available !== null && fit.availability.available !== undefined
-        ? `Haydovchida ${fit.availability.available} ta bo'sh o'rin bor, sizga ${fit.availability.requested} ta kerak.`
-        : "Haydovchida jo'natmangiz uchun joy yetmaydi.",
+        ? translate("intentFit.seatsShort", { available: fit.availability.available, requested: fit.availability.requested })
+        : translate("intentFit.parcelNoRoom"),
     });
   }
   if (fit.time.status === "outside") {
-    notes.push({ tone: "warn", text: `Haydovchi vaqti siz tanlagan oraliqdan ${minutesText(fit.time.minutes_outside)} farq qiladi.` });
+    notes.push({ tone: "warn", text: translate("intentFit.timeOutside", { difference: minutesText(fit.time.minutes_outside) }) });
   }
-  const endNote = (status: string, what: string) => {
-    if (status === "same_district") notes.push({ tone: "warn", text: `${what} shu tumanda, lekin boshqa bekatda.` });
-    if (status === "different") notes.push({ tone: "warn", text: `${what} siz tanlagan joydan boshqa.` });
+  const endNote = (status: string, end: "origin" | "destination") => {
+    if (status === "same_district") {
+      notes.push({ tone: "warn", text: end === "origin" ? translate("intentFit.originSameDistrict") : translate("intentFit.destinationSameDistrict") });
+    }
+    if (status === "different") {
+      notes.push({ tone: "warn", text: end === "origin" ? translate("intentFit.originDifferent") : translate("intentFit.destinationDifferent") });
+    }
   };
-  endNote(fit.origin.status, "Olib ketish joyi");
-  endNote(fit.destination.status, "Tushirish joyi");
+  endNote(fit.origin.status, "origin");
+  endNote(fit.destination.status, "destination");
   return notes;
 }
 
@@ -144,8 +149,8 @@ export function fitBlocks(fit: TripIntentFitDTO | null): boolean {
 /** What happens to open offers if the client saves this edit (the server decides; this only prepares the words). */
 export function offersAffectedText(openOffers: number): string {
   return openOffers === 1
-    ? "Yo'nalish, vaqt yoki odamlar soni o'zgaradi. Shu talab bo'yicha yuborilgan 1 ta ochiq taklif yopiladi."
-    : `Yo'nalish, vaqt yoki odamlar soni o'zgaradi. Shu talab bo'yicha yuborilgan ${openOffers} ta ochiq taklif yopiladi.`;
+    ? translate("intentFit.offersAffectedOne")
+    : translate("intentFit.offersAffected", { count: openOffers });
 }
 
 // --- which request is active, per signed-in person ------------------------------------------------------------

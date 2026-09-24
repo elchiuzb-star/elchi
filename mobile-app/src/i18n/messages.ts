@@ -11,12 +11,26 @@
  *     cash is never described as something ELCHI received.
  */
 
+import { appCoreMessages } from "./screens/appCore";
+import { entryMessages } from "./screens/entry";
+import { orderFlowMessages } from "./screens/orderFlow";
+import { bookingOpsMessages } from "./screens/bookingOps";
+import { bookingViewMessages } from "./screens/bookingView";
+import { driverSetupMessages } from "./screens/driverSetup";
+import { driverWorkMessages } from "./screens/driverWork";
+import { panelsAMessages } from "./screens/panelsA";
+import { panelsBMessages } from "./screens/panelsB";
+import { componentsMessages } from "./screens/components";
+import { promoHelpersMessages } from "./screens/promoHelpers";
+import { flowHelpersMessages } from "./screens/flowHelpers";
+
 export interface Message {
   uz: string;
   ru: string;
 }
 
-export const messages = {
+/** Shared vocabulary, codes and statuses: words more than one screen says. */
+const baseMessages = {
   // --- shared vocabulary ----------------------------------------------------------------------------------
   "common.back": { uz: "Orqaga", ru: "Назад" },
   "common.cancel": { uz: "Bekor qilish", ru: "Отмена" },
@@ -394,9 +408,259 @@ export const messages = {
   "vehicleClass.minivan": { uz: "Miniven", ru: "Минивэн" },
   "vehicleClass.minibus": { uz: "Mikroavtobus", ru: "Микроавтобус" },
 
+  // --- booking cancel (B3): the pilot has no penalty (Q45); a pending no-show review blocks it (Q7/Q19) -------
+  "bookingCancel.button": { uz: "Bronni bekor qilish", ru: "Отменить бронь" },
+  "bookingCancel.title": { uz: "Bronni bekor qilasizmi?", ru: "Отменить бронь?" },
+  "bookingCancel.body": {
+    uz: "Bron yopiladi va o'rin bo'shatiladi. Pilot davrida jarima yo'q. Ikkinchi tomonga xabar boradi.",
+    ru: "Бронь закроется, место освободится. В пилотный период штрафа нет. Другая сторона получит уведомление.",
+  },
+  "bookingCancel.reasonLabel": { uz: "Sabab", ru: "Причина" },
+  "bookingCancel.commentLabel": { uz: "Izoh (ixtiyoriy)", ru: "Комментарий (необязательно)" },
+  "bookingCancel.confirm": { uz: "Ha, bekor qilish", ru: "Да, отменить" },
+  "bookingCancel.keep": { uz: "Bronni saqlash", ru: "Оставить бронь" },
+  "bookingCancel.done": { uz: "Bron bekor qilindi", ru: "Бронь отменена" },
+  "bookingCancel.reviewPending": {
+    uz: "Operator «kelmadi» xabarini ko'rib chiqmoqda — shu vaqtda bronni faqat operator bekor qila oladi.",
+    ru: "Оператор рассматривает сообщение о неявке — в это время отменить бронь может только оператор.",
+  },
+  "bookingCancel.cancelledBy": { uz: "Bekor qilindi", ru: "Отменено" },
+  "bookingCancel.searchAgainHint": {
+    uz: "Bu bron saqlangan talabingizdan edi. Eski takliflar yopiq qoladi — qayta qidirishni o'zingiz boshlaysiz.",
+    ru: "Эта бронь была из вашего сохранённого запроса. Старые предложения остаются закрытыми — поиск запускаете вы сами.",
+  },
+  "bookingCancel.searchAgain": { uz: "Qayta qidirish", ru: "Искать снова" },
+  "bookingCancel.reason.plans_changed": { uz: "Rejalarim o'zgardi", ru: "Изменились планы" },
+  "bookingCancel.reason.found_other_option": { uz: "Boshqa yo'l topdim", ru: "Нашёл другой вариант" },
+  "bookingCancel.reason.driver_unreachable": { uz: "Haydovchi javob bermayapti", ru: "Водитель не отвечает" },
+  "bookingCancel.reason.trip_changed": { uz: "Safar rejasi o'zgardi", ru: "Изменился план поездки" },
+  "bookingCancel.reason.vehicle_problem": { uz: "Mashinada nosozlik", ru: "Неисправность машины" },
+  "bookingCancel.reason.client_unreachable": { uz: "Mijoz javob bermayapti", ru: "Клиент не отвечает" },
+  "bookingCancel.reason.other": { uz: "Boshqa sabab", ru: "Другая причина" },
+  "bookingCancel.refused.noShowPending": {
+    uz: "Bekor qilib bo'lmadi: operator «kelmadi» xabarini ko'rib chiqmoqda. Qaror chiqquncha bronni faqat operator bekor qiladi.",
+    ru: "Отменить нельзя: оператор рассматривает сообщение о неявке. До решения бронь отменяет только оператор.",
+  },
+  "bookingCancel.refused.custody": {
+    uz: "Yuk allaqachon haydovchida — bekor qilish o'rniga qaytarish jarayoni kerak. Qo'llab-quvvatlashga yozing.",
+    ru: "Груз уже у водителя — вместо отмены нужен возврат. Напишите в поддержку.",
+  },
+  "bookingCancel.refused.tooLate": {
+    uz: "Xizmat boshlangan — endi bronni bekor qilib bo'lmaydi. Muammo bo'lsa, nizo oching.",
+    ru: "Услуга уже началась — отменить бронь нельзя. Если есть проблема, откройте спор.",
+  },
+  "bookingCancel.refused.changed": {
+    uz: "Bron shu orada o'zgargan. Yangi holatini ko'rib, qayta urinib ko'ring.",
+    ru: "Бронь тем временем изменилась. Посмотрите новое состояние и попробуйте снова.",
+  },
+
+  // --- proof code reissue (B5a, Q75: 2 minutes apart, 3 per 24 hours) ----------------------------------------
+  "reissue.button": { uz: "Yangi kod olish", ru: "Получить новый код" },
+  "reissue.hint": {
+    uz: "Eski kod darhol ishlamay qoladi. Kunda 3 martagacha, har safar orasida 2 daqiqa.",
+    ru: "Старый код сразу перестанет работать. До 3 раз в сутки, с интервалом 2 минуты.",
+  },
+  "reissue.done": { uz: "Yangi kod tayyor — eski kod endi ishlamaydi", ru: "Новый код готов — старый больше не действует" },
+  "reissue.waitMinutes": {
+    uz: "Yangi kodni {minutes} daqiqa {seconds} soniyadan keyin olish mumkin.",
+    ru: "Новый код можно получить через {minutes} мин {seconds} сек.",
+  },
+  "reissue.waitHours": {
+    uz: "Bugungi chegara tugadi. Yangi kodni {hours} soat {minutes} daqiqadan keyin olish mumkin.",
+    ru: "Дневной лимит исчерпан. Новый код можно получить через {hours} ч {minutes} мин.",
+  },
+  "reissue.left": { uz: "Qolgan urinishlar: {count}", ru: "Осталось попыток: {count}" },
+
+  // --- rating / dispute from either side (S1, S3) ------------------------------------------------------------
+  "rating.titleDriver": { uz: "Haydovchini baholang", ru: "Оцените водителя" },
+  "rating.titleClient": { uz: "Mijozni baholang", ru: "Оцените клиента" },
+  "rating.rateDriver": { uz: "Haydovchini baholash", ru: "Оценить водителя" },
+  "rating.rateClient": { uz: "Mijozni baholash", ru: "Оценить клиента" },
+  "disputeType.commission": { uz: "Komissiya", ru: "Комиссия" },
+  "dispute.detailTitle": { uz: "Nizo", ru: "Спор" },
+  "dispute.openedBy": { uz: "Kim ochdi", ru: "Кто открыл" },
+  "dispute.side.client": { uz: "Mijoz", ru: "Клиент" },
+  "dispute.side.driver": { uz: "Haydovchi", ru: "Водитель" },
+  "dispute.side.operator": { uz: "Operator", ru: "Оператор" },
+  "dispute.escalated": { uz: "Katta xodimga yuborilgan", ru: "Передан старшему сотруднику" },
+  "dispute.details": { uz: "Batafsil", ru: "Подробнее" },
+  "dispute.refresh": { uz: "Yangilash", ru: "Обновить" },
+
+  // --- listing owner controls (L3/L5/L6, Q20) ----------------------------------------------------------------
+  "listingOwner.pause": { uz: "Vaqtincha to'xtatish", ru: "Приостановить" },
+  "listingOwner.pauseHint": {
+    uz: "E'lon lentadan yashiriladi; ochiq takliflar o'z holicha qoladi.",
+    ru: "Объявление скроется из ленты; открытые предложения останутся как есть.",
+  },
+  "listingOwner.resume": { uz: "Qayta ochish", ru: "Возобновить" },
+  "listingOwner.paused": { uz: "E'lon to'xtatildi", ru: "Объявление приостановлено" },
+  "listingOwner.resumed": { uz: "E'lon qayta ochildi", ru: "Объявление снова открыто" },
+  "listingOwner.edit": { uz: "Tahrirlash", ru: "Изменить" },
+  "listingOwner.editTitle": { uz: "E'lonni tahrirlash", ru: "Изменение объявления" },
+  "listingOwner.priceLabel": { uz: "Narx (so'm)", ru: "Цена (сум)" },
+  "listingOwner.commentLabel": { uz: "Izoh", ru: "Комментарий" },
+  "listingOwner.windowStart": { uz: "Jo'nash oynasi boshlanishi", ru: "Начало окна отправления" },
+  "listingOwner.windowEnd": { uz: "Jo'nash oynasi tugashi", ru: "Конец окна отправления" },
+  "listingOwner.windowFromTrip": {
+    uz: "Vaqt safaringiz jadvalidan olinadi — uni safarda o'zgartirasiz.",
+    ru: "Время берётся из расписания поездки — меняется в самой поездке.",
+  },
+  "listingOwner.nonMaterialNote": {
+    uz: "Narx va izohni o'zgartirish ochiq takliflarni yopmaydi.",
+    ru: "Изменение цены и комментария не закрывает открытые предложения.",
+  },
+  "listingOwner.materialWarning": {
+    uz: "Vaqt oynasini o'zgartirsangiz, bu e'londagi barcha ochiq takliflar yopiladi (muddati tugaydi). Haydovchilar yangi shartlarga qaytadan taklif yuboradi.",
+    ru: "Если изменить окно времени, все открытые предложения по объявлению закроются (истекут). Водители отправят новые предложения на новые условия.",
+  },
+  "listingOwner.openOffers": { uz: "Ochiq takliflar: {count} ta.", ru: "Открытых предложений: {count}." },
+  "listingOwner.materialConfirm": { uz: "Tushundim, saqlash", ru: "Понятно, сохранить" },
+  "listingOwner.saved": { uz: "E'lon yangilandi", ru: "Объявление обновлено" },
+  "listingOwner.invalid.price": { uz: "Narxni kiriting.", ru: "Укажите цену." },
+  "listingOwner.invalid.window_incomplete": {
+    uz: "Vaqt oynasini to'liq kiriting (kun, oy, yil va vaqt).",
+    ru: "Укажите окно полностью (день, месяц, год и время).",
+  },
+  "listingOwner.invalid.window_order": {
+    uz: "Tugash vaqti boshlanishdan keyin bo'lishi kerak.",
+    ru: "Время окончания должно быть позже начала.",
+  },
+  "listingOwner.invalid.window_past": {
+    uz: "Vaqt oynasi o'tib ketgan — kelajakdagi vaqtni tanlang.",
+    ru: "Окно уже прошло — выберите время в будущем.",
+  },
+
+  // --- driver commission estimate (W11): driver only (Q16), an estimate, not money (§9) -----------------------
+  "commissionPreview.title": { uz: "Taxminiy komissiya", ru: "Ориентировочная комиссия" },
+  "commissionPreview.line": {
+    uz: "{amount} ({percent}%) — jami {total} bo'yicha",
+    ru: "{amount} ({percent}%) — от суммы {total}",
+  },
+  "commissionPreview.note": {
+    uz: "Bu hisob-kitob, to'langan pul emas. Mijoz qabul qilganda shu summa komissiya balansingizda band qilinadi; yo'lkirani mijoz sizga naqd beradi.",
+    ru: "Это расчёт, а не полученные деньги. Когда клиент примет предложение, эта сумма будет удержана на балансе комиссии; плату за проезд клиент отдаёт вам наличными.",
+  },
+  "commissionPreview.unavailable": {
+    uz: "Komissiyani hozir hisoblab bo'lmadi — taklif yuborishga bu to'sqinlik qilmaydi.",
+    ru: "Сейчас не удалось рассчитать комиссию — это не мешает отправить предложение.",
+  },
+
+  // --- proposal reject / refresh (P7) -----------------------------------------------------------------------
+  "proposal.reject": { uz: "Rad etish", ru: "Отклонить" },
+  "proposal.rejected": { uz: "Taklif rad etildi", ru: "Предложение отклонено" },
+  "proposal.refresh": { uz: "Yangilash", ru: "Обновить" },
+
+  // --- v2 inbox (N4): the server sends keys, the words are chosen here ---------------------------------------
+  "notification.fallback.title": { uz: "Yangi bildirishnoma", ru: "Новое уведомление" },
+  "notification.listing.published.title": { uz: "E'lon bozorga chiqdi", ru: "Объявление опубликовано" },
+  "notification.listing.expired.title": { uz: "E'lon muddati tugadi", ru: "Срок объявления истёк" },
+  "notification.listing.cancelled.title": { uz: "E'lon bekor qilindi", ru: "Объявление отменено" },
+  "notification.proposal.created.title": { uz: "Yangi taklif", ru: "Новое предложение" },
+  "notification.proposal.superseded.title": { uz: "Qarshi taklif keldi", ru: "Пришло встречное предложение" },
+  "notification.proposal.withdrawn.title": { uz: "Taklif qaytarib olindi", ru: "Предложение отозвано" },
+  "notification.proposal.rejected.title": { uz: "Taklif rad etildi", ru: "Предложение отклонено" },
+  "notification.proposal.expired.title": { uz: "Taklif muddati tugadi", ru: "Срок предложения истёк" },
+  "notification.booking.accepted.title": { uz: "Kelishuv tuzildi", ru: "Сделка заключена" },
+  "notification.booking.accepted.body": {
+    uz: "Bron yaratildi — tafsilotlar va suhbat bron sahifasida.",
+    ru: "Бронь создана — детали и чат на странице брони.",
+  },
+  "notification.booking.cancelled.title": { uz: "Bron bekor qilindi", ru: "Бронь отменена" },
+  "notification.booking.started.title": { uz: "Xizmat boshlandi", ru: "Услуга началась" },
+  "notification.booking.status_changed.title": { uz: "Bron holati o'zgardi", ru: "Статус брони изменился" },
+  "notification.booking.completed.title": { uz: "Bron yakunlandi", ru: "Бронь завершена" },
+  "notification.booking.no_show_reported.title": { uz: "«Kelmadi» xabari yuborildi", ru: "Сообщение о неявке отправлено" },
+  "notification.booking.custody_case_opened.title": { uz: "Yuk bo'yicha holat ochildi", ru: "Открыт случай по грузу" },
+  "notification.booking.proof_code.reissued.title": { uz: "Kod yangilandi", ru: "Код обновлён" },
+  "notification.booking.driver_arrived.title": { uz: "Haydovchi yetib keldi", ru: "Водитель на месте" },
+  "notification.booking.amendment_requested.title": { uz: "Shartlarni o'zgartirish so'raldi", ru: "Запрошено изменение условий" },
+  "notification.booking.amendment_decided.title": { uz: "O'zgartirish bo'yicha javob", ru: "Ответ по изменению условий" },
+  "notification.booking.confirmation_overdue.title": { uz: "Yetkazilganini tasdiqlang", ru: "Подтвердите доставку" },
+  "notification.trip.status_changed.title": { uz: "Safar holati o'zgardi", ru: "Статус поездки изменился" },
+  "notification.chat.message.created.title": { uz: "Yangi xabar", ru: "Новое сообщение" },
+  "notification.tracking.window_opened.title": { uz: "Kuzatuv ochildi", ru: "Отслеживание доступно" },
+  "notification.tracking.stale.title": { uz: "Joylashuv yangilanmayapti", ru: "Местоположение не обновляется" },
+  "notification.saved_search.matched.title": { uz: "Saqlangan qidiruvga mos e'lon", ru: "Подходящее объявление по поиску" },
+  "notification.dispute.opened.title": { uz: "Nizo ochildi", ru: "Открыт спор" },
+  "notification.dispute.resolved.title": { uz: "Nizo bo'yicha qaror", ru: "Решение по спору" },
+  "notification.rating.published.title": { uz: "Baho e'lon qilindi", ru: "Оценка опубликована" },
+  "notification.support.ticket.status_changed.title": { uz: "Murojaatingiz holati o'zgardi", ru: "Статус обращения изменился" },
+  "notification.trust.warning_issued.title": { uz: "Ogohlantirish", ru: "Предупреждение" },
+  "notification.wallet.topup.approved.title": { uz: "To'ldirish tasdiqlandi", ru: "Пополнение подтверждено" },
+  "notification.wallet.hold.created.title": { uz: "Komissiya band qilindi", ru: "Комиссия удержана" },
+  "notification.wallet.hold.released.title": { uz: "Band qilingan komissiya bo'shatildi", ru: "Удержание комиссии снято" },
+  "notification.commission.captured.title": { uz: "Komissiya yechildi", ru: "Комиссия списана" },
+  "notification.commission.reversed.title": { uz: "Komissiya qaytarildi", ru: "Комиссия возвращена" },
+  "notification.promo.reward_granted.title": { uz: "Bonus berildi", ru: "Бонус начислен" },
+
+  // --- safety, sharing and reputation mounts ----------------------------------------------------------------
+  "safety.section": { uz: "Xavfsizlik", ru: "Безопасность" },
+  "safety.sectionHint": {
+    uz: "Muammo bo'lsa, shu bron bo'yicha shikoyat yuboring yoki bu odamni bloklang. Bron majburiyatlari va qo'llab-quvvatlash davom etadi.",
+    ru: "Если что-то не так, отправьте жалобу по этой брони или заблокируйте этого человека. Обязательства по брони и поддержка сохраняются.",
+  },
+  "safety.counterpartyMissing": {
+    uz: "Bronda ikkinchi tomon ko'rsatilmagan, shuning uchun bu yerda bloklab bo'lmaydi.",
+    ru: "В брони не указана вторая сторона, поэтому заблокировать здесь нельзя.",
+  },
+  "safety.centerTitle": { uz: "Bloklanganlar va shikoyatlarim", ru: "Блокировки и мои жалобы" },
+  "safety.centerDescription": {
+    uz: "Bloklagan odamlaringiz va yuborgan shikoyatlaringiz holati",
+    ru: "Кого вы заблокировали и статус ваших жалоб",
+  },
+  "safety.driverTitle": { uz: "Haydovchi", ru: "Водитель" },
+  "safety.clientTitle": { uz: "Mijoz", ru: "Клиент" },
+  "tracking.shareTitle": { uz: "Yaqinlaringiz bilan kuzatuv", ru: "Отслеживание для близких" },
+  "listingShare.title": { uz: "E'lonni ulashish", ru: "Поделиться объявлением" },
+  "trip.detailsTitle": { uz: "Safar tafsilotlari", ru: "Детали поездки" },
+  "tripPlan.stopSearchLabel": { uz: "Bekat nomi bo'yicha marshrut topish", ru: "Найти маршрут по названию остановки" },
+  "tripPlan.stopFilter": { uz: "{name} orqali o'tadigan marshrutlar", ru: "Маршруты через {name}" },
+  "tripPlan.stopFilterClear": { uz: "Filtrni olib tashlash", ru: "Сбросить фильтр" },
+  "tripPlan.stopFilterNone": {
+    uz: "Bu yo'nalishning tasdiqlangan marshrutlari {name} orqali o'tmaydi.",
+    ru: "Утверждённые маршруты этого направления не проходят через {name}.",
+  },
+
   // --- the language switch itself ---------------------------------------------------------------------------
   "settings.language": { uz: "Til", ru: "Язык" },
   "settings.languageHint": { uz: "Ilova tilini tanlang", ru: "Выберите язык приложения" },
+} as const satisfies Record<string, Message>;
+
+/**
+ * Screen text, one file per area of the app (`./screens/`), so a screen's words sit together and can be reviewed
+ * against that screen. Keys never repeat across sources - `messages.test.ts` checks it, because a spread would let
+ * a later file silently overwrite an earlier sentence.
+ */
+export const messageSources = {
+  base: baseMessages,
+  appCore: appCoreMessages,
+  entry: entryMessages,
+  orderFlow: orderFlowMessages,
+  bookingOps: bookingOpsMessages,
+  bookingView: bookingViewMessages,
+  driverSetup: driverSetupMessages,
+  driverWork: driverWorkMessages,
+  panelsA: panelsAMessages,
+  panelsB: panelsBMessages,
+  components: componentsMessages,
+  promoHelpers: promoHelpersMessages,
+  flowHelpers: flowHelpersMessages,
+} as const;
+
+export const messages = {
+  ...baseMessages,
+  ...appCoreMessages,
+  ...entryMessages,
+  ...orderFlowMessages,
+  ...bookingOpsMessages,
+  ...bookingViewMessages,
+  ...driverSetupMessages,
+  ...driverWorkMessages,
+  ...panelsAMessages,
+  ...panelsBMessages,
+  ...componentsMessages,
+  ...promoHelpersMessages,
+  ...flowHelpersMessages,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof messages;

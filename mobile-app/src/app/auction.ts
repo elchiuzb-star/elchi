@@ -10,6 +10,7 @@
  * buttons should be, so the rule can be tested directly instead of through a rendered screen.
  */
 import type { Schemas } from "../api/v2/http";
+import { translate } from "../i18n";
 
 export type ProposalThreadDTO = Schemas["ProposalThreadDTO"];
 export type ActorSide = "client" | "driver";
@@ -67,9 +68,9 @@ export function negotiationActions(thread: ProposalThreadDTO, mySide: ActorSide)
 
 /** The sentence under a thread: whose answer is being waited on. */
 export function turnLabel(actions: NegotiationActions, mySide: ActorSide): string {
-  if (!actions.open) return "Bu taklif yopilgan";
-  if (!actions.theirTurn) return "Sizning taklifingiz - javob kutilmoqda";
-  return mySide === "client" ? "Haydovchi qarshi taklif yubordi" : "Mijoz qarshi taklif yubordi";
+  if (!actions.open) return translate("negotiation.closed");
+  if (!actions.theirTurn) return translate("negotiation.waitingForAnswer");
+  return mySide === "client" ? translate("negotiation.driverCountered") : translate("negotiation.clientCountered");
 }
 
 /**

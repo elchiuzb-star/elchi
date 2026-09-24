@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { messages, type MessageKey } from "./messages";
+import { messageSources, messages, type MessageKey } from "./messages";
 import { getLocale, setLocale, translate, translateDynamic } from "./index";
 
 const entries = Object.entries(messages) as Array<[MessageKey, { uz: string; ru: string }]>;
@@ -34,6 +34,32 @@ describe("the dictionary", () => {
       .filter(([, value]) => JSON.stringify(placeholders(value.uz)) !== JSON.stringify(placeholders(value.ru)))
       .map(([key]) => key);
     expect(mismatched).toEqual([]);
+  });
+});
+
+describe("the screen dictionaries", () => {
+  it("never define the same key twice", () => {
+    // `messages` is a spread of every source: a repeated key would silently keep only the last sentence.
+    const seen = new Map<string, string>();
+    const repeated: string[] = [];
+    for (const [source, entries] of Object.entries(messageSources)) {
+      for (const key of Object.keys(entries)) {
+        const first = seen.get(key);
+        if (first) repeated.push(`${key} (${first}, ${source})`);
+        else seen.set(key, source);
+      }
+    }
+    expect(repeated).toEqual([]);
+    expect(Object.keys(messages)).toHaveLength(seen.size);
+  });
+
+  it("have a Russian sentence for every Uzbek one, in every source", () => {
+    const missing = Object.entries(messageSources).flatMap(([source, entries]) =>
+      Object.entries(entries as Record<string, { uz: string; ru: string }>)
+        .filter(([, value]) => !value.uz?.trim() || !value.ru?.trim() || (value.ru === value.uz && /\p{L}{3,}/u.test(value.uz)))
+        .map(([key]) => `${source}:${key}`),
+    );
+    expect(missing).toEqual([]);
   });
 });
 

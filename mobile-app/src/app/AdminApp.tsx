@@ -67,11 +67,16 @@ import {
 import { AdminSecurityPanel } from "./AdminSecurityPanel";
 import { AdminPriceBandsPanel } from "./AdminPriceBandsPanel";
 import { AdminPromoPanel } from "./AdminPromoPanel";
+import { AdminVehiclesPanel } from "./AdminVehiclesPanel";
+import { AdminFinancePanel } from "./AdminFinancePanel";
+import { AdminPlatformPanel } from "./AdminPlatformPanel";
+import { AdminTrustPanel } from "./AdminTrustPanel";
 
 type Section =
   | "overview" | "orders" | "drivers" | "clients" | "cities" | "tariffs" | "disputes"
   // Stage 2 (A9): the v2 marketplace sections. They read /api/v2 with this same staff session.
   | "opsQueues" | "disputesV2" | "support" | "metrics" | "legacyOrders" | "priceBands" | "promotions"
+  | "vehicles" | "finance" | "platform" | "trustOps"
   | "users" | "security" | "notifications" | "audit" | "profile";
 
 const sectionLabels: Record<Section, string> = {
@@ -88,6 +93,10 @@ const sectionLabels: Record<Section, string> = {
   metrics: "KPI / SLO",
   priceBands: "Narx referensi",
   promotions: "Referral va bonuslar",
+  vehicles: "Avtomobillar tasdig'i",
+  finance: "Moliya",
+  platform: "Platforma sozlamalari",
+  trustOps: "Ishonch va operatsiyalar",
   legacyOrders: "Legacy (v1) arxiv",
   users: "Xodimlar",
   security: "Xavfsizlik (MFA)",
@@ -110,6 +119,10 @@ const navItems: Array<{ id: Section; icon: typeof Activity }> = [
   { id: "metrics", icon: BarChart3 },
   { id: "priceBands", icon: SlidersHorizontal },
   { id: "promotions", icon: SlidersHorizontal },
+  { id: "vehicles", icon: Truck },
+  { id: "finance", icon: BarChart3 },
+  { id: "platform", icon: SlidersHorizontal },
+  { id: "trustOps", icon: Scale },
   { id: "legacyOrders", icon: Archive },
   { id: "users", icon: UserPlus },
   { id: "security", icon: ShieldCheck },
@@ -415,6 +428,10 @@ export default function AdminApp() {
       legacyOrders: [],  // the legacy archive filters server-side (O8), not through this client-side search
       priceBands: [],  // the panel reads one corridor at a time; there is nothing for the toolbar to filter
       promotions: [],
+      vehicles: [],  // each of these four panels reads its own /api/v2 queue; nothing for the toolbar to filter
+      finance: [],
+      platform: [],
+      trustOps: [],
 
       disputesV2: [],
       support: [],
@@ -587,6 +604,10 @@ export default function AdminApp() {
             {section === "metrics" && <AdminMetricsPanel />}
             {section === "priceBands" && <AdminPriceBandsPanel />}
             {section === "promotions" && <AdminPromoPanel />}
+            {section === "vehicles" && <AdminVehiclesPanel />}
+            {section === "finance" && <AdminFinancePanel />}
+            {section === "platform" && <AdminPlatformPanel />}
+            {section === "trustOps" && <AdminTrustPanel />}
             {section === "legacyOrders" && <AdminLegacyOrdersPanel />}
 
             {section === "audit" && (

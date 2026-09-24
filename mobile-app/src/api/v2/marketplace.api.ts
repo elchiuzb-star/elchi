@@ -123,6 +123,28 @@ export function publishListing(listingId: string, expectedVersion: number) {
   return v2Request<ListingDTO>(`/listings/${listingId}/publish`, { method: "POST", body, idempotencyKey: newIdempotencyKey() });
 }
 
+/** L5: take a published listing off the feed without cancelling it; open negotiations stay as they are. */
+export function pauseListing(listingId: string, expectedVersion: number) {
+  const body: ListingCommand = { expected_version: expectedVersion };
+  return v2Request<ListingDTO>(`/listings/${listingId}/pause`, { method: "POST", body, idempotencyKey: newIdempotencyKey() });
+}
+
+/** L6: back on the feed; the server re-runs the publish guards (corridor, eligibility, window). */
+export function resumeListing(listingId: string, expectedVersion: number) {
+  const body: ListingCommand = { expected_version: expectedVersion };
+  return v2Request<ListingDTO>(`/listings/${listingId}/resume`, { method: "POST", body, idempotencyKey: newIdempotencyKey() });
+}
+
+export type ListingPatch = Schemas["ListingPatch"];
+
+/**
+ * L3: versioned edit. Q20: a change of route, window, quantity or price basis on a live listing expires its open
+ * offers; unit price, comment and expiry do not. The envelope is returned for the masked-text warnings (Q43).
+ */
+export function patchListing(listingId: string, body: ListingPatch): Promise<V2Result<ListingDTO>> {
+  return v2RequestFull<ListingDTO>(`/listings/${listingId}`, { method: "PATCH", body });
+}
+
 /** `reason_code` is a required machine code (`^[a-z][a-z0-9_]{2,63}$`); the free text goes to `comment`. */
 export function cancelListing(listingId: string, expectedVersion: number, reasonCode: string, comment?: string) {
   const body: ListingCancel = { expected_version: expectedVersion, reason_code: reasonCode, comment: comment ?? null };

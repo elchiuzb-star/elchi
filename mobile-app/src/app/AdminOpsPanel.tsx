@@ -19,10 +19,11 @@ import {
   kpi as loadKpi,
   listDisputes,
   listLegacyOrders,
-  listTickets,
   listTrustReviews,
   opsQueue,
   slo as loadSlo,
+  ticketCommand,
+  trustReviewCommand,
   type CapabilitiesDTO,
   type DisputeDTO,
   type KpiDTO,
@@ -30,11 +31,12 @@ import {
   type OpsQueue,
   type OpsQueueItemDTO,
   type SloDTO,
-  type SupportTicketDTO,
   type TrustReviewDTO,
 } from "../api/v2/ops.api";
+import { listSupportTicketsAdmin, type SupportTicketAdminDTO } from "../api/v2/admin-trust.api";
 import { formatDateTime, formatMinor } from "../utils/v2Format";
 import { v2ErrorMessage } from "../utils/v2Errors";
+import { ConfirmButton } from "./AdminTrustPanel";
 
 const QUEUE_LABEL: Record<string, string> = {
   awaiting_confirmation: "Tasdiq kutilmoqda",
@@ -396,14 +398,280 @@ export function AdminDisputesV2Panel({ focusId }: { focusId?: string | null } = 
 
 // --- tickets and trust reviews -------------------------------------------------------------------------------
 
+const TICKET_STATUS_LABEL: Record<string, string> = {
+  open: "Ochiq",
+  acknowledged: "Qabul qilindi",
+  resolved: "Hal qilindi",
+};
+
+const TRUST_STATUS_LABEL: Record<string, string> = {
+  open: "Ochiq",
+  under_review: "Ko'rikda",
+  dismissed: "Rad etilgan",
+  actioned: "Chora ko'rilgan",
+};
+
+const TRUST_SIGNAL_LABEL: Record<string, string> = {
+  contact_filter_strikes: "Aloqa filtri strike'lari",
+  quick_cancel_after_chat: "Chatdan keyin tez bekor qilish",
+  repeated_pair_cancellations: "Bir juftlikning takroriy bekor qilishlari",
+};
+
+const TRUST_DECISION_LABEL: Record<string, string> = {
+  no_violation: "Qoidabuzarlik yo'q",
+  warning_issued: "Ogohlantirish berildi",
+  escalated_to_admin: "Adminga yuborildi",
+};
+
+/**
+ * S17. Acknowledging promises no response time (§16, Q87); resolving needs a written note. Both need
+ * `ops.trust_review`; without it the row is read-only.
+ */
+function TicketRow({ ticket, canAct, onDone }: { ticket: SupportTicketAdminDTO; canAct: boolean; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+
+  return (
+    <>
+      <tr className="hover:bg-slate-50">
+        <td className="px-4 py-3 font-mono text-xs text-secondary-foreground">{ticket.id}</td>
+        <td className="px-4 py-3">
+          {ticket.kind === "sos" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-destructive/25 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
+              <AlertTriangle size={12} /> SOS{(ticket.press_count ?? 1) > 1 ? ` × ${ticket.press_count}` : ""}
+            </span>
+          ) : (
+            "murojaat"
+          )}
+        </td>
+        <td className="px-4 py-3 text-secondary-foreground">{TICKET_STATUS_LABEL[ticket.status] ?? ticket.status}</td>
+        <td className="px-4 py-3 text-secondary-foreground">{ticket.message}</td>
+        <td className="px-4 py-3 text-secondary-foreground">{formatDateTime(ticket.created_at)}</td>
+        <td className="px-4 py-3">
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="el-press inline-flex h-8 items-center rounded-[10px] border border-border bg-card px-3 text-xs font-semibold text-secondary-foreground"
+          >
+            {open ? "Yopish" : "Ko'rish"}
+          </button>
+        </td>
+      </tr>
+      {open ? (
+        <tr className="bg-slate-50/60">
+          <td colSpan={6} className="px-4 py-4">
+            <div className="grid gap-3 text-sm">
+              <p className="text-secondary-foreground">
+                Foydalanuvchi: <span className="font-mono text-xs">{ticket.user_id}</span>
+                {ticket.booking_id ? (
+                  <>
+                    {" "}
+                    · bron: <span className="font-mono text-xs">{ticket.booking_id}</span>
+                  </>
+                ) : null}
+                {ticket.trip_id ? (
+                  <>
+                    {" "}
+                    · safar: <span className="font-mono text-xs">{ticket.trip_id}</span>
+                  </>
+                ) : null}
+              </p>
+              {ticket.live ? (
+                <p className="text-xs text-muted-foreground">
+                  Oxirgi joylashuv yangiligi: {ticket.live.freshness}
+                  {ticket.live.last_captured_at ? ` (${formatDateTime(ticket.live.last_captured_at)})` : ""}
+                </p>
+              ) : null}
+              {!canAct ? (
+                <p className="text-muted-foreground">Murojaatni qayta ishlash sizning rolingizda yo'q.</p>
+              ) : ticket.status === "resolved" ? null : (
+                <>
+                  <label className="grid gap-1 font-medium text-secondary-foreground">
+                    Hal qilish izohi (hal qilishda majburiy)
+                    <textarea
+                      aria-label="Murojaat izohi"
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                      className="h-20 rounded-[10px] border border-border bg-card px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {ticket.status === "open" ? (
+                      <ConfirmButton
+                        label="Qabul qilish"
+                        question="Murojaat qabul qilindi deb belgilanadi (javob vaqti va'da qilinmaydi). Davom etasizmi?"
+                        onConfirm={async () => {
+                          await ticketCommand(ticket.id, "acknowledge", {
+                            expected_version: ticket.version,
+                            note: note.trim() || null,
+                          });
+                          onDone();
+                        }}
+                      />
+                    ) : null}
+                    <ConfirmButton
+                      label="Hal qilish"
+                      tone="primary"
+                      disabled={!note.trim()}
+                      question="Murojaat hal qilindi deb yopiladi. Davom etasizmi?"
+                      onConfirm={async () => {
+                        await ticketCommand(ticket.id, "resolve", { expected_version: ticket.version, note: note.trim() });
+                        setNote("");
+                        onDone();
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * S19 (Q45). No automatic penalty: the operator starts a review, dismisses (no violation) or acts (a warning to
+ * the user, or an escalation to an admin who decides eligibility separately). Every command needs a note.
+ */
+function TrustReviewRow({ review, canAct, onDone }: { review: TrustReviewDTO; canAct: boolean; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [decision, setDecision] = useState<"warning_issued" | "escalated_to_admin">("warning_issued");
+  const terminal = review.status === "dismissed" || review.status === "actioned";
+
+  async function run(command: "start-review" | "dismiss" | "action") {
+    await trustReviewCommand(review.id, command, {
+      expected_version: review.version,
+      note: note.trim(),
+      decision: command === "action" ? decision : command === "dismiss" ? "no_violation" : null,
+    });
+    setNote("");
+    onDone();
+  }
+
+  return (
+    <>
+      <tr className="hover:bg-slate-50">
+        <td className="px-4 py-3 font-mono text-xs text-secondary-foreground">{review.id}</td>
+        <td className="px-4 py-3 text-secondary-foreground">{TRUST_SIGNAL_LABEL[review.signal_type] ?? review.signal_type}</td>
+        <td className="px-4 py-3 text-secondary-foreground">{review.signal_count}</td>
+        <td className="px-4 py-3 text-secondary-foreground">{TRUST_STATUS_LABEL[review.status] ?? review.status}</td>
+        <td className="px-4 py-3 text-secondary-foreground">{formatDateTime(review.last_signal_at)}</td>
+        <td className="px-4 py-3">
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="el-press inline-flex h-8 items-center rounded-[10px] border border-border bg-card px-3 text-xs font-semibold text-secondary-foreground"
+          >
+            {open ? "Yopish" : "Ko'rish"}
+          </button>
+        </td>
+      </tr>
+      {open ? (
+        <tr className="bg-slate-50/60">
+          <td colSpan={6} className="px-4 py-4">
+            <div className="grid gap-3 text-sm">
+              <p className="text-secondary-foreground">
+                Foydalanuvchi: <span className="font-mono text-xs">{review.subject_user_id}</span>
+                {review.decision ? ` · qaror: ${TRUST_DECISION_LABEL[review.decision] ?? review.decision}` : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Dalil:{" "}
+                {Object.entries(review.evidence ?? {})
+                  .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+                  .join(" · ") || "-"}
+              </p>
+              {!canAct ? (
+                <p className="text-muted-foreground">Ishonch navbatini qayta ishlash sizning rolingizda yo'q.</p>
+              ) : terminal ? null : (
+                <>
+                  <label className="grid gap-1 font-medium text-secondary-foreground">
+                    Izoh (majburiy, audit jurnaliga yoziladi)
+                    <textarea
+                      aria-label="Ko'rik izohi"
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                      className="h-20 rounded-[10px] border border-border bg-card px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-end gap-2">
+                    {review.status === "open" ? (
+                      <ConfirmButton
+                        label="Ko'rikka olish"
+                        disabled={!note.trim()}
+                        question="Signal ko'rikka olinadi. Davom etasizmi?"
+                        onConfirm={() => run("start-review")}
+                      />
+                    ) : null}
+                    <ConfirmButton
+                      label="Qoidabuzarlik yo'q"
+                      disabled={!note.trim()}
+                      question="Signal qoidabuzarliksiz yopiladi. Davom etasizmi?"
+                      onConfirm={() => run("dismiss")}
+                    />
+                    <label className="grid gap-1 text-xs font-medium text-secondary-foreground">
+                      Chora
+                      <select
+                        aria-label="Chora"
+                        value={decision}
+                        onChange={(event) => setDecision(event.target.value as "warning_issued" | "escalated_to_admin")}
+                        className="h-9 rounded-[10px] border border-border bg-card px-2 text-sm"
+                      >
+                        <option value="warning_issued">Ogohlantirish berish</option>
+                        <option value="escalated_to_admin">Adminga yuborish</option>
+                      </select>
+                    </label>
+                    <ConfirmButton
+                      label="Chora ko'rish"
+                      tone="primary"
+                      disabled={!note.trim()}
+                      question={
+                        decision === "warning_issued"
+                          ? "Foydalanuvchiga ogohlantirish yuboriladi (jarima yo'q). Davom etasizmi?"
+                          : "Signal adminga yuboriladi; blok qarorini admin alohida qabul qiladi. Davom etasizmi?"
+                      }
+                      onConfirm={() => run("action")}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
 export function AdminSupportPanel() {
-  const tickets = useLoader<SupportTicketDTO[]>(() => listTickets({ limit: 50 }), []);
-  const reviews = useLoader<TrustReviewDTO[]>(() => listTrustReviews({ status: "open", limit: 50 }), []);
+  const [reviewStatus, setReviewStatus] = useState("open");
+  const caps = useLoader<CapabilitiesDTO>(() => capabilities(), []);
+  const tickets = useLoader<SupportTicketAdminDTO[]>(() => listSupportTicketsAdmin({ limit: 50 }), []);
+  const reviews = useLoader<TrustReviewDTO[]>(
+    () => listTrustReviews({ status: reviewStatus || undefined, limit: 50 }),
+    [reviewStatus],
+  );
+  const canAct = Boolean(caps.data?.capabilities?.includes("ops.trust_review" as never));
 
   return (
     <section className="grid gap-6">
       <div className="grid gap-3">
-        <h2 className="text-lg font-bold text-foreground">Murojaatlar va SOS</h2>
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-foreground">Murojaatlar va SOS</h2>
+          <button
+            type="button"
+            onClick={tickets.reload}
+            className="el-press inline-flex h-9 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-sm font-semibold text-secondary-foreground"
+          >
+            <RefreshCw size={14} /> Yangilash
+          </button>
+        </header>
+        <p className="text-sm text-muted-foreground">
+          Qabul qilish javob vaqtini va'da qilmaydi; support faqat ilova ichida (Q87).
+        </p>
+        <ErrorLine error={caps.error} />
         <ErrorLine error={tickets.error} />
         <div className="overflow-hidden rounded-[12px] border border-border bg-card shadow-sm">
           <table className="w-full min-w-[720px] border-collapse text-left text-sm">
@@ -414,38 +682,25 @@ export function AdminSupportPanel() {
                 <th className="px-4 py-3 font-semibold">Holati</th>
                 <th className="px-4 py-3 font-semibold">Xabar</th>
                 <th className="px-4 py-3 font-semibold">Kelgan</th>
+                <th className="px-4 py-3 font-semibold" />
               </tr>
             </thead>
             <tbody className="divide-y divide-muted">
               {tickets.busy ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center">
+                  <td colSpan={6} className="px-4 py-8 text-center">
                     <Spinner />
                   </td>
                 </tr>
               ) : (tickets.data ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                     Murojaat yo'q
                   </td>
                 </tr>
               ) : (
                 (tickets.data ?? []).map((ticket) => (
-                  <tr key={ticket.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono text-xs text-secondary-foreground">{ticket.id}</td>
-                    <td className="px-4 py-3">
-                      {ticket.kind === "sos" ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-destructive/25 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
-                          <AlertTriangle size={12} /> SOS
-                        </span>
-                      ) : (
-                        "murojaat"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-secondary-foreground">{ticket.status}</td>
-                    <td className="px-4 py-3 text-secondary-foreground">{ticket.message}</td>
-                    <td className="px-4 py-3 text-secondary-foreground">{formatDateTime(ticket.created_at)}</td>
-                  </tr>
+                  <TicketRow key={ticket.id} ticket={ticket} canAct={canAct} onDone={tickets.reload} />
                 ))
               )}
             </tbody>
@@ -454,8 +709,25 @@ export function AdminSupportPanel() {
       </div>
 
       <div className="grid gap-3">
-        <h2 className="text-lg font-bold text-foreground">Ishonch navbati (Q45)</h2>
-        <p className="text-sm text-muted-foreground">Avtomatik jazo yo'q: operator ko'rib chiqadi.</p>
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Ishonch navbati (Q45)</h2>
+            <p className="text-sm text-muted-foreground">Avtomatik jazo yo'q: operator ko'rib chiqadi.</p>
+          </div>
+          <select
+            aria-label="Ishonch navbati holati"
+            value={reviewStatus}
+            onChange={(event) => setReviewStatus(event.target.value)}
+            className="h-9 rounded-[10px] border border-border bg-card px-3 text-sm"
+          >
+            <option value="">Barchasi</option>
+            {Object.entries(TRUST_STATUS_LABEL).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </header>
         <ErrorLine error={reviews.error} />
         <div className="overflow-hidden rounded-[12px] border border-border bg-card shadow-sm">
           <table className="w-full min-w-[720px] border-collapse text-left text-sm">
@@ -464,30 +736,27 @@ export function AdminSupportPanel() {
                 <th className="px-4 py-3 font-semibold">ID</th>
                 <th className="px-4 py-3 font-semibold">Signal</th>
                 <th className="px-4 py-3 font-semibold">Soni</th>
+                <th className="px-4 py-3 font-semibold">Holati</th>
                 <th className="px-4 py-3 font-semibold">Oxirgi signal</th>
+                <th className="px-4 py-3 font-semibold" />
               </tr>
             </thead>
             <tbody className="divide-y divide-muted">
               {reviews.busy ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center">
+                  <td colSpan={6} className="px-4 py-8 text-center">
                     <Spinner />
                   </td>
                 </tr>
               ) : (reviews.data ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                     Navbat bo'sh
                   </td>
                 </tr>
               ) : (
                 (reviews.data ?? []).map((review) => (
-                  <tr key={review.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono text-xs text-secondary-foreground">{review.id}</td>
-                    <td className="px-4 py-3 text-secondary-foreground">{review.signal_type}</td>
-                    <td className="px-4 py-3 text-secondary-foreground">{review.signal_count}</td>
-                    <td className="px-4 py-3 text-secondary-foreground">{formatDateTime(review.last_signal_at)}</td>
-                  </tr>
+                  <TrustReviewRow key={review.id} review={review} canAct={canAct} onDone={reviews.reload} />
                 ))
               )}
             </tbody>

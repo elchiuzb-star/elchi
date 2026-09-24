@@ -23,12 +23,13 @@ import {
   type ReferralCodeDTO,
 } from "../../api/v2/promo.api";
 import { newIdempotencyKey } from "../../api/v2/http";
+import { translate } from "../../i18n";
 import { formatUzs } from "../../utils/money";
 import { v2ErrorMessage } from "../../utils/v2Errors";
 import {
   ENROLLMENT_LABELS,
   INSTRUMENT_LABELS,
-  PARCEL_PAYER_RULE,
+  parcelPayerRule,
   QUALIFICATION_LABELS,
   actionKey,
   bucketRows,
@@ -81,7 +82,7 @@ function Lines({ lines }: { lines: MoneyLine[] }) {
 /** Money of a discounted booking or offer, in the reader's role. `null` promo -> nothing is rendered. */
 export function PromoMoneyCard({
   promo,
-  title = "Bonus bilan hisob",
+  title = translate("promoScreen.moneyTitle"),
   agreed = true,
 }: {
   promo: BookingPromoClientDTO | BookingPromoDriverDTO | ProposalPromoClientDTO | ProposalPromoDriverDTO | null | undefined;
@@ -97,13 +98,9 @@ export function PromoMoneyCard({
       </p>
       {promo.view === "client" ? <Lines lines={clientMoneyLines(promo, agreed)} /> : <Lines lines={driverMoneyLines(promo, agreed)} />}
       {promo.view === "client" ? (
-        <p className="text-[12px] leading-5 text-muted-foreground">
-          Chegirmani ELCHI qoplaydi. Haydovchiga faqat pastdagi naqd summani berasiz.
-        </p>
+        <p className="text-[12px] leading-5 text-muted-foreground">{translate("promoScreen.clientCovers")}</p>
       ) : (
-        <p className="text-[12px] leading-5 text-muted-foreground">
-          Mijoz chegirmasi sizning daromadingizdan olinmaydi: uni ELCHI komissiyasidan qoplaydi.
-        </p>
+        <p className="text-[12px] leading-5 text-muted-foreground">{translate("promoScreen.driverCovers")}</p>
       )}
     </Card>
   );
@@ -165,7 +162,7 @@ export function BonusConsentPanel({
   }, [listingId, unitPriceMinor, quantity, refreshToken]);
 
   if (loading && !choice.shown) return <SkeletonCard lines={2} />;
-  if (error) return <ErrorNote message={`Bonus hisobini olib bo'lmadi: ${error}`} />;
+  if (error) return <ErrorNote message={translate("promoScreen.quoteFailed", { error })} />;
   const shown = choice.shown;
   if (!shown) return <NoDiscountNote reason={reason} />; // the offer is sent without a bonus; say why, plainly
   return (
@@ -179,12 +176,13 @@ export function BonusConsentPanel({
           onChange={(event) => onChoice({ ...choice, useBonus: event.target.checked })}
         />
         <span>
-          {soum(shown.passenger_discount_minor)} bonusni ishlataman — haydovchiga {soum(shown.cash_due_minor)} naqd beraman
+          {translate("promoScreen.useBonusLine", {
+            bonus: soum(shown.passenger_discount_minor),
+            cash: soum(shown.cash_due_minor),
+          })}
         </span>
       </label>
-      <p className="text-[12px] leading-5 text-muted-foreground">
-        Belgilamasangiz bonus ishlatilmaydi. Haydovchi qabul qilganda summa o'zgarsa, sizdan qayta so'raladi.
-      </p>
+      <p className="text-[12px] leading-5 text-muted-foreground">{translate("promoScreen.consentNote")}</p>
     </Card>
   );
 }
@@ -214,7 +212,7 @@ export function AcceptConsentPanel({
           checked={choice.useBonus}
           onChange={(event) => onChoice({ ...choice, useBonus: event.target.checked })}
         />
-        <span>Bonusni ishlataman ({soum(quote.passenger_discount_minor)})</span>
+        <span>{translate("promoScreen.useBonusShort", { amount: soum(quote.passenger_discount_minor) })}</span>
       </label>
     </div>
   );
@@ -228,7 +226,7 @@ export function NoDiscountNote({ reason }: { reason: string | null | undefined }
     <p className="flex items-start gap-2 rounded-[12px] bg-muted px-3 py-2.5 text-[12px] leading-5 text-muted-foreground">
       <Info size={14} className="mt-0.5 shrink-0" />
       <span>
-        <span className="font-semibold text-secondary-foreground">Nega chegirma yo'q? </span>
+        <span className="font-semibold text-secondary-foreground">{translate("promoScreen.whyNoDiscount")}{" "}</span>
         {text}
       </span>
     </p>
@@ -264,15 +262,11 @@ export function StaleConfirmation({
   const scope = `promo-confirm:${threadId}:${version.id}`;
   return (
     <div className="rounded-[12px] border border-warning/40 bg-warning/5 p-3">
-      <p className="text-[13px] font-semibold text-foreground">Bonus shartlarini qayta tasdiqlang</p>
-      <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-        Avvalgi tasdig'ingiz boshqa kirish yoki ilova holatida berilgan edi. Taklifning o'zi o'zgarmaydi.
-      </p>
+      <p className="text-[13px] font-semibold text-foreground">{translate("promoScreen.staleTitle")}</p>
+      <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("promoScreen.staleNote")}</p>
       {clientQuote && <Lines lines={clientMoneyLines(clientQuote, false)} />}
       {!clientQuote && !isDriver && (
-        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-          Bonus bu narxda endi qo'llanmaydi: kelishuv bonusiz bo'lishi uchun bonussiz qarshi taklif yuboring.
-        </p>
+        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("promoScreen.staleNoBonus")}</p>
       )}
       <ErrorNote message={error} />
       {clientQuote || isDriver ? (
@@ -297,7 +291,7 @@ export function StaleConfirmation({
               .finally(() => setBusy(false));
           }}
         >
-          {clientQuote ? "Shu hisobga roziman" : "Tasdiqlash"}
+          {clientQuote ? translate("promoScreen.agreeQuote") : translate("common.confirm")}
         </PrimaryButton>
       ) : null}
     </div>
@@ -325,7 +319,7 @@ export function ReferralQr({ url, size = 184 }: { url: string; size?: number }) 
   return (
     <svg
       role="img"
-      aria-label="Taklif havolasining QR kodi"
+      aria-label={translate("promoScreen.qrAria")}
       width={size}
       height={size}
       viewBox={`0 0 ${cells.count} ${cells.count}`}
@@ -345,7 +339,7 @@ function ProgressBlock({ progress }: { progress: NonNullable<EnrollmentDTO["prog
         <div key={row.label} className="flex items-baseline justify-between gap-3">
           <span className="text-[12px] text-muted-foreground">
             {row.label}
-            {row.hint && row.label === "Tekshiruvda" && progress.in_review > 0 ? (
+            {row.hint && row.kind === "in_review" && progress.in_review > 0 ? (
               <span className="block text-[11px]">{row.hint}</span>
             ) : null}
           </span>
@@ -362,7 +356,9 @@ function ProgressBlock({ progress }: { progress: NonNullable<EnrollmentDTO["prog
                 (m.reached ? "bg-success/15 text-success" : "bg-card text-muted-foreground")
               }
             >
-              {m.threshold} safar {m.reached ? "— bajarildi" : ""}
+              {m.reached
+                ? translate("promoScreen.milestoneReached", { count: m.threshold })
+                : translate("promoScreen.milestone", { count: m.threshold })}
             </span>
           ))}
         </div>
@@ -385,7 +381,7 @@ function Offer({ offer, onJoined }: { offer: EnrollmentOfferDTO; onJoined: () =>
           const sentence = disclosureText(item);
           return sentence ? <li key={item.code}>{sentence}</li> : null;
         })}
-        {offer.parcel_sender_pays_only && <li>{PARCEL_PAYER_RULE}</li>}
+        {offer.parcel_sender_pays_only && <li>{parcelPayerRule()}</li>}
       </ul>
       <ErrorNote message={error} />
       <PrimaryButton
@@ -403,7 +399,7 @@ function Offer({ offer, onJoined }: { offer: EnrollmentOfferDTO; onJoined: () =>
             .finally(() => setBusy(false));
         }}
       >
-        Shartlarga roziman — qatnashaman
+        {translate("promoScreen.joinOffer")}
       </PrimaryButton>
     </Card>
   );
@@ -430,7 +426,7 @@ export function BonusScreen({ role, back }: { role: "client" | "driver"; back: (
       setCode(await myReferralCode(actionKey("referral-code", newIdempotencyKey)));
       finishAction("referral-code");
     } catch (cause) {
-      setCodeError(programOff(cause) ? "Taklif dasturi hozircha ishlamayapti." : v2ErrorMessage(cause));
+      setCodeError(programOff(cause) ? translate("promoScreen.programOff") : v2ErrorMessage(cause));
     }
   }
 
@@ -443,41 +439,41 @@ export function BonusScreen({ role, back }: { role: "client" | "driver"; back: (
       await attributeReferral(normalized, role, actionKey(scope, newIdempotencyKey));
       finishAction(scope);
       forgetCode();
-      setEnterDone("Kod qabul qilindi. Endi shartlarni ko'rib, kampaniyaga qo'shilishingiz mumkin.");
+      setEnterDone(translate("promoScreen.codeAccepted"));
       referrals.reload();
       offers.reload();
     } catch (cause) {
       finishAction(scope);
-      setEnterError(programOff(cause) ? "Taklif dasturi hozircha ishlamayapti." : v2ErrorMessage(cause));
+      setEnterError(programOff(cause) ? translate("promoScreen.programOff") : v2ErrorMessage(cause));
     } finally {
       setEnterBusy(false);
     }
   }
 
-  const title = role === "client" ? "Bonuslar va taklif kodi" : "Kredit va taklif kodi";
+  const title = role === "client" ? translate("promoScreen.titleClient") : translate("promoScreen.titleDriver");
   return (
     <main className="flex min-h-0 flex-1 flex-col bg-background">
       <TopBar title={title} back={back} />
       <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
         <WarningNote>
           {role === "client"
-            ? "Bonus — keyingi mos xizmatdagi chegirma huquqi. U pul emas: naqd qilib olinmaydi va boshqaga o'tkazilmaydi."
-            : "Kredit faqat komissiyangizni kamaytiradi. U pul emas: to'ldirilgan balansga qo'shilmaydi va yechib olinmaydi."}
+            ? translate("promoScreen.bonusNotMoney")
+            : translate("promoScreen.creditNotMoney")}
         </WarningNote>
 
-        <SectionLabel>Mening {role === "client" ? "bonuslarim" : "kreditim"}</SectionLabel>
+        <SectionLabel>{role === "client" ? translate("promoScreen.myBonuses") : translate("promoScreen.myCredit")}</SectionLabel>
         {balance.loading ? (
           <SkeletonCard lines={3} />
         ) : balance.error ? (
           <ErrorNote message={v2ErrorMessage(balance.error)} onRetry={balance.reload} />
         ) : (balance.data?.buckets ?? []).length === 0 ? (
-          <EmptyState icon={Tag} title="Hozircha bonus yo'q" subtitle="Bonus faqat kampaniya shartlari bajarilgandan keyin paydo bo'ladi." />
+          <EmptyState icon={Tag} title={translate("promoScreen.noBonusTitle")} subtitle={translate("promoScreen.noBonusSubtitle")} />
         ) : (
           balance.data!.buckets.map((bucket) => (
             <Card key={`${bucket.instrument}:${bucket.service_type}`}>
               <p className="text-[14px] font-semibold text-foreground">
                 {INSTRUMENT_LABELS[bucket.instrument] ?? bucket.instrument} ·{" "}
-                {bucket.service_type === "parcel" ? "pochta" : "yo'lovchi"}
+                {bucket.service_type === "parcel" ? translate("promoScreen.service.parcel") : translate("promoScreen.service.passenger")}
               </p>
               {bucketRows(bucket).map((row) => (
                 <div key={row.label} className="flex items-baseline justify-between gap-3">
@@ -490,14 +486,14 @@ export function BonusScreen({ role, back }: { role: "client" | "driver"; back: (
               ))}
               {bucket.next_expiry_at && (
                 <p className="text-[12px] text-muted-foreground">
-                  Eng yaqin muddat: {new Date(bucket.next_expiry_at).toLocaleDateString("uz-UZ")}
+                  {translate("promoScreen.nextExpiry", { date: new Date(bucket.next_expiry_at).toLocaleDateString("uz-UZ") })}
                 </p>
               )}
             </Card>
           ))
         )}
 
-        <SectionLabel>Taklif kodim</SectionLabel>
+        <SectionLabel>{translate("promoScreen.myCode")}</SectionLabel>
         <Card>
           {code ? (
             <>
@@ -508,13 +504,13 @@ export function BonusScreen({ role, back }: { role: "client" | "driver"; back: (
                   <p className="break-all text-center text-[13px] text-primary">{code.share_url}</p>
                   {role === "driver" && (
                     <p className="text-center text-[11px] leading-4 text-muted-foreground">
-                      QR shu havolaning o'zi. Skaner ishlamasa, kodni aytib bering — u ilovada qo'lda kiritiladi.
+                      {translate("promoScreen.qrNote")}
                     </p>
                   )}
                 </>
               ) : (
                 <p className="text-center text-[12px] leading-5 text-muted-foreground">
-                  Havola hali tayyor emas. Do'stingiz ilovada kodni qo'lda kiritadi.
+                  {translate("promoScreen.linkNotReady")}
                 </p>
               )}
               <InlineButton
@@ -522,17 +518,14 @@ export function BonusScreen({ role, back }: { role: "client" | "driver"; back: (
                   void navigator.clipboard?.writeText(code.share_url ?? code.code).then(() => setCopied(true));
                 }}
               >
-                {copied ? "Nusxa olindi" : "Nusxa olish"}
+                {copied ? translate("promoScreen.copied") : translate("promoScreen.copy")}
               </InlineButton>
-              <p className="text-[12px] leading-5 text-muted-foreground">
-                Kod orqali qo'shilgan odam uchun mukofot faqat u shartni bajargandan keyin beriladi — ro'yxatdan o'tishning
-                o'zi mukofot emas.
-              </p>
+              <p className="text-[12px] leading-5 text-muted-foreground">{translate("promoScreen.rewardNote")}</p>
             </>
           ) : (
             <>
               <ErrorNote message={codeError} />
-              <InlineButton onClick={() => void showCode()}>Kodimni ko'rsatish</InlineButton>
+              <InlineButton onClick={() => void showCode()}>{translate("promoScreen.showCode")}</InlineButton>
             </>
           )}
         </Card>
@@ -540,26 +533,28 @@ export function BonusScreen({ role, back }: { role: "client" | "driver"; back: (
         {enterDone && <p className="rounded-[12px] bg-success/10 px-3 py-2.5 text-[13px] text-success">{enterDone}</p>}
         {!hasAttribution && (
           <>
-            <SectionLabel>Taklif kodi kiritish</SectionLabel>
+            <SectionLabel>{translate("promoScreen.enterCode")}</SectionLabel>
             <Card>
-              <Field label="Do'stingiz bergan kod" value={entered} placeholder="Masalan: AB2CD3EF" onChange={setEntered} />
-              {entered && !normalized && <p className="text-[12px] text-destructive">Kod 8 ta harf va raqamdan iborat</p>}
+              <Field
+                label={translate("promoScreen.friendCode")}
+                value={entered}
+                placeholder={translate("promoScreen.codeExample")}
+                onChange={setEntered}
+              />
+              {entered && !normalized && <p className="text-[12px] text-destructive">{translate("promoScreen.codeFormat")}</p>}
               <ErrorNote message={enterError} />
               <PrimaryButton busy={enterBusy} disabled={!normalized || enterBusy} onClick={() => void submitCode()}>
-                Kodni tasdiqlash
+                {translate("promoScreen.confirmCode")}
               </PrimaryButton>
-              <p className="text-[12px] leading-5 text-muted-foreground">
-                Kod faqat bir marta qabul qilinadi va keyin almashtirilmaydi.
-              </p>
+              <p className="text-[12px] leading-5 text-muted-foreground">{translate("promoScreen.codeOnce")}</p>
             </Card>
           </>
         )}
 
-        {(offers.data ?? []).length > 0 && <SectionLabel>Qo'shilish mumkin bo'lgan kampaniyalar</SectionLabel>}
+        {(offers.data ?? []).length > 0 && <SectionLabel>{translate("promoScreen.availableCampaigns")}</SectionLabel>}
         {offers.error && programOff(offers.error) ? (
           <p className="flex items-start gap-2 rounded-[12px] bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">
-            <Info size={15} className="mt-0.5 shrink-0" /> Taklif dasturi hozircha ishlamayapti. Mavjud bonuslaringiz
-            yuqorida ko'rsatilgan.
+            <Info size={15} className="mt-0.5 shrink-0" /> {translate("promoScreen.programOffWithBalance")}
           </p>
         ) : offers.error ? (
           <ErrorNote message={v2ErrorMessage(offers.error)} onRetry={offers.reload} />
@@ -575,35 +570,37 @@ export function BonusScreen({ role, back }: { role: "client" | "driver"; back: (
           />
         ))}
 
-        <SectionLabel>Kampaniyalarim</SectionLabel>
+        <SectionLabel>{translate("promoScreen.myCampaigns")}</SectionLabel>
         {referrals.loading ? (
           <SkeletonCard lines={2} />
         ) : referrals.error ? (
           <ErrorNote message={v2ErrorMessage(referrals.error)} onRetry={referrals.reload} />
         ) : (referrals.data?.enrollments ?? []).length === 0 ? (
           <p className="flex items-start gap-2 text-[13px] text-muted-foreground">
-            <Info size={15} className="mt-0.5 shrink-0" /> Siz hali hech qaysi kampaniyada qatnashmayapsiz.
+            <Info size={15} className="mt-0.5 shrink-0" /> {translate("promoScreen.noCampaigns")}
           </p>
         ) : (
           referrals.data!.enrollments.map((item) => (
             <Card key={item.id}>
               <p className="text-[14px] font-semibold text-foreground">{item.campaign_name}</p>
               <p className="text-[13px] text-secondary-foreground">
-                {item.side === "referee" ? "Siz taklif qilingansiz" : "Siz taklif qilgansiz"} ·{" "}
+                {item.side === "referee" ? translate("promoScreen.youAreInvited") : translate("promoScreen.youInvited")} ·{" "}
                 {(item.qualification_status && QUALIFICATION_LABELS[item.qualification_status]) ??
                   ENROLLMENT_LABELS[item.status] ??
                   item.status}
               </p>
               {item.progress && <ProgressBlock progress={item.progress} />}
               <p className="text-[12px] text-muted-foreground">
-                Shart muddati: {new Date(item.qualification_deadline).toLocaleDateString("uz-UZ")}
+                {translate("promoScreen.deadline", { date: new Date(item.qualification_deadline).toLocaleDateString("uz-UZ") })}
               </p>
             </Card>
           ))
         )}
         {referrals.data && (
           <p className="text-[12px] text-muted-foreground">
-            Kodim orqali qo'shilganlar: {Object.values(referrals.data.invited).reduce((a, b) => a + b, 0)} ta
+            {translate("promoScreen.invitedCount", {
+              count: Object.values(referrals.data.invited).reduce((a, b) => a + b, 0),
+            })}
           </p>
         )}
       </section>

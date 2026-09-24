@@ -34,6 +34,27 @@ def app_source() -> str:
     return CONNECTED_APP.read_text(encoding="utf-8")
 
 
+def uzbek_text() -> dict[str, str]:
+    """Every dictionary key with its Uzbek sentence - the screen copy lives in `src/i18n/`, not in the JSX."""
+    found: dict[str, str] = {}
+    for path in (CLIENT / "i18n").rglob("*.ts"):
+        if path.name.endswith(".test.ts"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r'"([\w.]+)": \{\s*uz:\s*((?:"(?:[^"\\]|\\.)*"\s*\+?\s*)+),', text):
+            parts = re.findall(r'"((?:[^"\\]|\\.)*)"', match.group(2))
+            found[match.group(1)] = "".join(parts).replace('\\"', '"')
+    return found
+
+
+def label_of(uzbek: str, block: str) -> str:
+    """The source form of the `label=` in `block` whose Uzbek text is `uzbek`: `label={translate("key")}`."""
+    keys = [key for key, text in uzbek_text().items() if text == uzbek]
+    assert keys, f"no dictionary entry says {uzbek!r}"
+    labels = [f'label={{translate("{key}")}}' for key in keys]
+    return next((label for label in labels if label in block), labels[0])
+
+
 def render_block(screen: str) -> str:
     """The `if (screen === ...) { ... }` that *draws* the screen.
 
@@ -82,13 +103,19 @@ def test_the_vehicle_inputs_close_once_the_car_is_on_record() -> None:
     )
     form = render_block("driver-profile-form")
     # Every vehicle field, and only the name left open.
+    # The labels are dictionary keys since the screen copy moved to `src/i18n/`; the field is found by the key
+    # whose Uzbek text is the label the driver reads, so the guard still names the same four fields.
     for field in ("Avtomobil modeli", "Avtomobil rangi", "Davlat raqami", "Yo'lovchi o'rinlari"):
-        block = form.split(f'label="{field}"', 1)[1].split("/>", 1)[0]
+        label = label_of(field, form)
+        assert label in form, f"{field} is no longer a field of the profile form"
+        block = form.split(label, 1)[1].split("/>", 1)[0]
         assert "disabled={vehicleLocked}" in block, f"{field} stays editable after the first save"
-    assert 'label="Ism familiya"' in form and "disabled" not in form.split('label="Ism familiya"', 1)[1].split("/>", 1)[0], (
+    name = label_of("Ism familiya", form)
+    assert name in form and "disabled" not in form.split(name, 1)[1].split("/>", 1)[0], (
         "the name must stay editable - the lock is about the car"
     )
-    assert "operator yoki adminga murojaat qiling" in form, "a locked field has to say where to go"
+    where_to_go = [key for key, text in uzbek_text().items() if "operator yoki adminga murojaat qiling" in text]
+    assert any(f'translate("{key}"' in form for key in where_to_go), "a locked field has to say where to go"
 
 
 def test_a_locked_profile_sends_only_the_name() -> None:
@@ -141,7 +168,8 @@ def test_each_document_slot_names_itself_and_says_where_its_review_stands() -> N
     assert "docState." in body, "the driver cannot tell which slot is still missing"
     assert "rejection_reason" in body, "a rejection without its reason gets the same photo back"
     # The toast after the upload names the slot too; five identical toasts say nothing.
-    assert "${docTypeLabel(type)} ko'rib chiqishga yuborildi" in body
+    toast = [key for key, text in uzbek_text().items() if text == "{type} ko'rib chiqishga yuborildi"]
+    assert any(f'translate("{key}", {{ type: docTypeLabel(type) }})' in body for key in toast)
 
 
 def test_every_document_slot_has_a_name_and_a_hint_in_both_languages() -> None:
