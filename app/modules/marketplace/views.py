@@ -48,6 +48,8 @@ from app.modules.marketplace.schemas import (
     PriceRevisionsLeftDTO,
     ProposalDemandDTO,
     ProposalPartyDTO,
+    ProposalPromoClientDTO,
+    ProposalPromoDriverDTO,
     ProposalThreadDTO,
     ProposalVersionDTO,
 )
@@ -279,6 +281,9 @@ def _version_dto(
     viewer_side: ActorSide | None,
     stops: dict,
     policies: dict,
+    promo: dict | None = None,
+    promo_reason: str | None = None,
+    viewer_user_id: int | None = None,
 ) -> ProposalVersionDTO:
     fee_quote = None
     if viewer_side is ActorSide.DRIVER:
@@ -291,6 +296,15 @@ def _version_dto(
             net_minor=version.total_minor - version.commission_minor,
             valid_until=ensure_aware_utc(version.expires_at),
         )
+    promo_quote = None
+    if promo is not None:
+        # one object per role (Q16, Q103): the client's has no commission keys at all, not merely nulls
+        promo_quote = ProposalPromoClientDTO(**promo) if viewer_side is ActorSide.CLIENT else ProposalPromoDriverDTO(**promo)
+    confirmation = None
+    if viewer_user_id is not None and version.status == "active":
+        from app.modules.promotions.booking import version_confirmation_state
+
+        confirmation = version_confirmation_state(session, version=version, viewer_user_id=viewer_user_id)
     return ProposalVersionDTO(
         id=marketplace_service.version_public_id(version),
         revision=version.revision,
@@ -320,6 +334,9 @@ def _version_dto(
             parcel_height_cm=version.parcel_height_cm,
         ),
         fee_quote=fee_quote,
+        promo_quote=promo_quote,
+        promo_unavailable_reason=promo_reason,
+        promo_confirmation=confirmation,
         price_revisions_left=PriceRevisionsLeftDTO(
             client=MAX_PRICE_REVISIONS_PER_SIDE - thread.client_price_revisions,
             driver=MAX_PRICE_REVISIONS_PER_SIDE - thread.driver_price_revisions,
@@ -332,6 +349,33 @@ def _version_dto(
             else None
         ),
     )
+
+
+def _promo_preview(session: Session, thread: ProposalThread, version: ProposalVersion, listing: Listing,
+                   viewer_side: ActorSide | None) -> tuple[dict | None, str | None]:
+    """Referral stages 4-5: the promotions module's read-only preview of an open version's money terms for the
+    viewer, or - when the viewer holds a bonus/credit that does not apply - the plain reason why."""
+    if thread.state != marketplace_service.THREAD_OPEN or version.status != "active" or version.total_minor <= 0:
+        return None, None
+    from app.modules.geo import service as geo_service
+    from app.modules.promotions.booking import no_discount_reason, preview_version_quote
+
+    payer = None
+    if listing.service_type == ServiceType.PARCEL.value:
+        details = marketplace_service.get_parcel_details(session, listing.id) if listing.kind == "request" else None
+        payer = details.payer if details is not None and details.payer else "sender"
+    flags = geo_service.snapshot_flags(session, corridor_id=listing.corridor_id)
+    quote = preview_version_quote(
+        session, flags=flags, viewer_side=viewer_side,
+        service_type=listing.service_type, parcel_payer=payer, fare_minor=version.total_minor, fee_bps=version.fee_bps,
+        proposal_version_id=version.id, client_user_id=thread.client_user_id, driver_user_id=thread.driver_user_id)
+    if quote is not None or viewer_side not in (ActorSide.CLIENT, ActorSide.DRIVER):
+        return quote, None
+    holder = thread.client_user_id if viewer_side is ActorSide.CLIENT else thread.driver_user_id
+    reason = no_discount_reason(session, flags=flags, user_id=holder,
+                                instrument="passenger_bonus" if viewer_side is ActorSide.CLIENT else "driver_credit",
+                                service_type=listing.service_type, parcel_payer=payer, client_features=None)
+    return None, None if reason == "no_campaign" else reason  # holding nothing is not news on every offer
 
 
 def thread_dto(
@@ -366,10 +410,23 @@ def thread_dto(
         state=thread.state,
         client=party(ActorSide.CLIENT),
         driver=party(ActorSide.DRIVER),
-        current_version=_version_dto(session, thread, current, viewer_side, stops, policies) if current else None,
+        current_version=_version_dto(session, thread, current, viewer_side, stops, policies,
+                                     *_promo_preview(session, thread, current, listing, viewer_side),
+                                     viewer_user_id=viewer_user_id) if current else None,
         versions=[_version_dto(session, thread, v, viewer_side, stops, policies) for v in versions] if include_versions else None,
         booking_id=_booking_id(session, thread),
+        trip_intent_id=_trip_intent_id(session, thread) if viewer_side is ActorSide.CLIENT else None,
     )
+
+
+def _trip_intent_id(session: Session, thread: ProposalThread) -> str | None:
+    """ADR-0025: the client's private request - never shown to the driver side."""
+    if thread.trip_intent_id is None:
+        return None
+    from app.modules.marketplace.models import TripIntent
+
+    intent = session.get(TripIntent, thread.trip_intent_id)
+    return format_public_id(PublicIdPrefix.TRIP_INTENT, intent.public_id) if intent is not None else None
 
 
 def _booking_id(session: Session, thread: ProposalThread) -> str | None:

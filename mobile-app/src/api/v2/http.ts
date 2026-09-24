@@ -87,6 +87,9 @@ export async function v2RequestFull<T>(path: string, options: RequestOptions = {
   const headers = new Headers();
   if (body !== undefined) headers.set("Content-Type", "application/json");
   if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
+  // Q110: this client renders F_cash wherever a discounted booking shows money. A rendering capability the server
+  // uses to decide whether a promo deal may be shown here - never an authority, never MFA evidence.
+  if (audience === "client") headers.set("X-Elchi-Client-Features", "promo_cash_v1");
   if (auth) {
     const token = audience === "admin" ? getAdminAccessToken() : getAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);

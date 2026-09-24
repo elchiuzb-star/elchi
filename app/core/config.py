@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     otp_max_requests_per_ip: int = 15
     otp_ip_window_minutes: int = 60
     otp_global_daily_cap: int = 2000
+    # ── Referral stage 5 (ADR-0023 §16, Q107) ────────────────────────────────
+    # Host of the share link https://<host>/r/<code>. Unset -> the app shows the code for manual entry only.
+    # Setting it does NOT mean the link works: DNS, certificate, deploy and App Links are verified separately.
+    referral_link_host: str | None = None
+    # Pilot abuse limits (ADR-0023 §16 proposal; not production-approved values). Counted in promo_rate_events.
+    referral_code_checks_per_ip_per_minute: int = 30
+    referral_attributions_per_user_per_hour: int = 5
     dev_mock_otp: str = "1234"
     # ── App-store reviewer access ────────────────────────────────────────────
     # Google and Apple reviewers cannot receive an SMS to an Uzbek number, so

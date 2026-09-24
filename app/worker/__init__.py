@@ -270,10 +270,20 @@ class ServiceJob:
 
 # Q65: parcel `delivered` -> operator queue after state_machines.DELIVERED_OPERATOR_QUEUE_AFTER is part of
 # A4's emit_confirmation_overdue_signals (passenger `arrived` + parcel `delivered`); the B12 queue itself is a query.
+# referral stage 3 (ADR-0023): qualification/grant intake, rechecks, expiry, review escalation, identity purge.
+PROMOTIONS_INTERVAL_ENV = "ELCHI_WORKER_PROMOTIONS_INTERVAL_SECONDS"
+DEFAULT_PROMOTIONS_INTERVAL_SECONDS = 60.0
+PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV = "ELCHI_WORKER_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS"
+DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS = 300.0
+_PROMO = "app.modules.promotions.jobs"
+
 SERVICE_JOBS: tuple[ServiceJob, ...] = (
     ServiceJob("marketplace.expire_due_listings", "app.modules.marketplace.service", "expire_due_listings",
                EXPIRY_INTERVAL_ENV, DEFAULT_EXPIRY_INTERVAL_SECONDS),
     ServiceJob("marketplace.expire_due_proposals", "app.modules.marketplace.service", "expire_due_proposals",
+               EXPIRY_INTERVAL_ENV, DEFAULT_EXPIRY_INTERVAL_SECONDS),
+    # ADR-0025: offers of a booked/closed/changed saved request that a command skipped (SKIP LOCKED)
+    ServiceJob("marketplace.close_stale_intent_threads", "app.modules.marketplace.intents", "close_stale_intent_threads",
                EXPIRY_INTERVAL_ENV, DEFAULT_EXPIRY_INTERVAL_SECONDS),
     ServiceJob("bookings.expire_due_amendments", "app.modules.bookings.service", "expire_due_amendments",
                EXPIRY_INTERVAL_ENV, DEFAULT_EXPIRY_INTERVAL_SECONDS),
@@ -305,6 +315,23 @@ SERVICE_JOBS: tuple[ServiceJob, ...] = (
                KPI_INTERVAL_ENV, DEFAULT_KPI_INTERVAL_SECONDS, max_batches=1),
     ServiceJob("operations.expire_share_links", "app.modules.operations.jobs", "expire_share_links",
                SHARE_LINK_INTERVAL_ENV, DEFAULT_SHARE_LINK_INTERVAL_SECONDS),
+    # referral stage 3: before the outbox dispatch, so the events they enqueue leave in the same round
+    ServiceJob("promotions.process_qualifications", _PROMO, "process_qualifications",
+               PROMOTIONS_INTERVAL_ENV, DEFAULT_PROMOTIONS_INTERVAL_SECONDS),
+    ServiceJob("promotions.recheck_granted", _PROMO, "recheck_granted",
+               PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),
+    ServiceJob("promotions.expire_enrollments", _PROMO, "expire_enrollments",
+               PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),
+    ServiceJob("promotions.expire_lots", _PROMO, "expire_lots",
+               PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),
+    ServiceJob("promotions.pause_exhausted_campaigns", _PROMO, "pause_exhausted_campaigns",
+               PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),
+    ServiceJob("promotions.escalate_reviews", _PROMO, "escalate_reviews",
+               PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),
+    ServiceJob("promotions.purge_identity_digests", _PROMO, "purge_identity_digests",
+               PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, 3600.0, max_batches=1),
+    ServiceJob("promotions.purge_rate_events", _PROMO, "purge_rate_events",
+               PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, 3600.0, max_batches=1),
     # A7 claims at most OUTBOX_BATCH_LIMIT events per call, so the job keeps batching while the queue is full.
     ServiceJob("communications.dispatch_outbox", "app.modules.communications.service", "dispatch_outbox",
                OUTBOX_INTERVAL_ENV, DEFAULT_OUTBOX_INTERVAL_SECONDS, batch_limit=OUTBOX_BATCH_LIMIT),

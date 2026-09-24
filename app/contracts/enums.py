@@ -125,6 +125,12 @@ class Capability(StrEnum):
     FINANCE_ADJUSTMENT_APPROVE = "finance.adjustment_approve"
     # Wave 3 (A12/A7, Q45, §16): trust review queue decisions, chat moderation, support/SOS handling (operator+).
     OPS_TRUST_REVIEW = "ops.trust_review"
+    # Promotions (ADR-0023 §12, Q105). Operators review and comment; they never change budgets or reward amounts.
+    PROMO_CAMPAIGN_VIEW = "promo.campaign_view"
+    PROMO_CAMPAIGN_MANAGE = "promo.campaign_manage"  # create, version, activate, pause, close (super_admin)
+    PROMO_BUDGET_ALLOCATE = "promo.budget_allocate"  # allocate / reduce and second-approve large changes
+    PROMO_FRAUD_REVIEW = "promo.fraud_review"  # start a review, add a note
+    PROMO_FRAUD_DECIDE = "promo.fraud_decide"  # release / reject / reverse after review (admin+)
 
 
 # Requires current eligibility (approved driver / active account, not blocked,
@@ -157,10 +163,13 @@ _OPERATOR_CAPS = frozenset(
         Capability.OPS_DISPUTE_RESOLVE,
         Capability.FINANCE_COMMISSION_POLICY_VIEW,
         Capability.OPS_TRUST_REVIEW,
+        Capability.PROMO_CAMPAIGN_VIEW,
+        Capability.PROMO_FRAUD_REVIEW,
     }
 )
 _ADMIN_CAPS = _OPERATOR_CAPS | frozenset(
     {
+        Capability.PROMO_FRAUD_DECIDE,
         Capability.OPS_DISPUTE_DECIDE,
         Capability.OPS_BOOKING_CANCEL,
         Capability.OPS_CORRIDOR_MANAGE,
@@ -181,6 +190,8 @@ _FINANCE_CAPS = frozenset(
         Capability.FINANCE_FEE_FINALIZE,
         Capability.FINANCE_REPORTS,
         Capability.FINANCE_COMMISSION_POLICY_VIEW,
+        Capability.PROMO_CAMPAIGN_VIEW,
+        Capability.PROMO_BUDGET_ALLOCATE,
     }
 )
 # super_admin acts for finance until the finance role is wired (Q17).
@@ -190,6 +201,7 @@ _SUPER_ADMIN_CAPS = _ADMIN_CAPS | _FINANCE_CAPS | frozenset(
         Capability.STAFF_MANAGE,
         Capability.PLATFORM_POLICY_MANAGE,
         Capability.STAFF_MFA_APPROVE,
+        Capability.PROMO_CAMPAIGN_MANAGE,
     }
 )
 
@@ -481,6 +493,8 @@ class FeatureFlagKey(StrEnum):
     WALLET_REQUIRED = "wallet_required"
     TRACKING_ENABLED = "tracking_enabled"
     CARD_PAYMENTS_ENABLED = "card_payments_enabled"
+    # Q101/ADR-0023: referral bonuses and credits. OFF in production; never turns any other flag on.
+    PROMOTIONS_ENABLED = "promotions_enabled"
 
 
 class FlagScopeType(StrEnum):
@@ -587,6 +601,10 @@ class EventType(StrEnum):
     SUPPORT_TICKET_STATUS_CHANGED = "support.ticket.status_changed"  # A12, to the requester
     RATING_PUBLISHED = "rating.published"  # A12 (§17.2)
     DISPUTE_ESCALATION_DUE = "dispute.escalation_due"  # A12 (§9.5, 48 h), staff only
+    # referral stage 3 (ADR-0023): staff only until the stage-5 client shows rewards
+    PROMO_REWARD_GRANTED = "promo.reward_granted"
+    PROMO_REVIEW_OPENED = "promo.review_opened"
+    PROMO_REVIEW_ESCALATED = "promo.review_escalated"
 
 
 # Author role per listing kind (spec §5.1). Capability checks use this.
@@ -615,6 +633,7 @@ PRODUCTION_FLAG_DEFAULTS: dict[FeatureFlagKey, bool] = {
     FeatureFlagKey.WALLET_REQUIRED: True,
     FeatureFlagKey.TRACKING_ENABLED: False,
     FeatureFlagKey.CARD_PAYMENTS_ENABLED: False,
+    FeatureFlagKey.PROMOTIONS_ENABLED: False,
 }
 
 # Flags whose value is fixed in production; any scoped row with another value
@@ -626,7 +645,7 @@ FLAGS_LOCKED_IN_PRODUCTION: dict[FeatureFlagKey, bool] = {
 # Flags whose production enablement requires super_admin plus a recorded
 # legal/business approval reference (decision 5, K7, spec §17.7).
 FLAGS_REQUIRING_APPROVAL_REFERENCE: frozenset[FeatureFlagKey] = frozenset(
-    {FeatureFlagKey.PASSENGER_ENABLED, FeatureFlagKey.CARD_PAYMENTS_ENABLED}
+    {FeatureFlagKey.PASSENGER_ENABLED, FeatureFlagKey.CARD_PAYMENTS_ENABLED, FeatureFlagKey.PROMOTIONS_ENABLED}
 )
 
 # v2 service flags gated by Q48/Q56 and guarded by Q72 (mirrors app.modules.geo.service.V2_SERVICE_FLAGS and 0053).
@@ -963,3 +982,160 @@ class SupportTicketStatus(StrEnum):
     OPEN = "open"
     ACKNOWLEDGED = "acknowledged"
     RESOLVED = "resolved"
+
+
+# --- Promotions & referral (ADR-0023, Q101-Q110) ---------------------------------
+# Three kinds of value are never mixed: the driver's real prepaid balance (wallet
+# module, real money), Passenger Bonus and Driver Credit (promotions module, rights
+# to a discount - never cash, never transferable, never converted into real balance).
+
+
+class PromoInstrument(StrEnum):
+    PASSENGER_BONUS = "passenger_bonus"  # client's right to a cash-fare discount on a later eligible service
+    DRIVER_CREDIT = "driver_credit"  # driver's right to pay less commission on a later eligible booking
+
+
+class PromoCampaignKind(StrEnum):
+    """What a campaign rewards. Only ``PILOT_CAMPAIGN_KINDS`` may be activated in the pilot (ADR-0023 §2)."""
+
+    REFERRAL_CLIENT_CLIENT = "referral_client_client"
+    REFERRAL_DRIVER_DRIVER = "referral_driver_driver"
+    REFERRAL_DRIVER_CLIENT = "referral_driver_client"
+    # extension points: the structure exists, activation is refused until a later decision
+    CASHBACK = "cashback"
+    REACTIVATION = "reactivation"
+    CORRIDOR_BONUS = "corridor_bonus"
+    LOYALTY = "loyalty"
+
+
+PILOT_CAMPAIGN_KINDS: frozenset[PromoCampaignKind] = frozenset(
+    {
+        PromoCampaignKind.REFERRAL_CLIENT_CLIENT,
+        PromoCampaignKind.REFERRAL_DRIVER_DRIVER,
+        PromoCampaignKind.REFERRAL_DRIVER_CLIENT,
+    }
+)
+
+
+class PromoCampaignFamily(StrEnum):
+    """Uniqueness scope for acquisition rewards (Q106): one identity earns a family's reward once.
+
+    Passenger and parcel referral campaigns share ``CLIENT_ACQUISITION`` so a person is a "new client" once,
+    whichever service they start with. Reactivation is a separate family (it does not consume acquisition).
+    """
+
+    CLIENT_ACQUISITION = "client_acquisition"
+    DRIVER_ACQUISITION = "driver_acquisition"
+    REACTIVATION = "reactivation"
+    LOYALTY = "loyalty"
+
+
+class TripIntentStatus(StrEnum):
+    """ADR-0025: a client's private, reusable trip/parcel request (never a public listing, never sent by itself)."""
+
+    ACTIVE = "active"  # offers may be sent from it; at most one live booking can come out of it
+    BOOKED = "booked"  # one offer became a booking; the other offers of this request are closed
+    CLOSED = "closed"  # the client ended it; nothing is sent or accepted from it any more
+
+
+class PromoCampaignStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"  # accepts new enrollments
+    PAUSED = "paused"  # no new enrollments; existing promises and granted rewards are honoured
+    CLOSED = "closed"  # no new enrollments ever; existing promises and rewards are still honoured
+
+
+class ReferralAttributionStatus(StrEnum):
+    ATTRIBUTED = "attributed"
+    QUALIFYING = "qualifying"  # a candidate event exists; risk window / checks running
+    QUALIFIED = "qualified"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+
+
+class PromoEnrollmentStatus(StrEnum):
+    """The promise reserve for one attribution (both sides' maximum rewards)."""
+
+    PROMISED = "promised"
+    GRANTED = "granted"  # every reward of the promise became a grant (promise -> granted reserve)
+    RELEASED = "released"  # promise released back to the budget (expired / rejected / closed unmet)
+
+
+class PromoRewardStatus(StrEnum):
+    """One beneficiary's grant (a bonus lot). Referrer and referee rewards are separate rows."""
+
+    PENDING_REVIEW = "pending_review"
+    AVAILABLE = "available"
+    EXHAUSTED = "exhausted"  # fully consumed
+    EXPIRED = "expired"
+    REVERSED = "reversed"
+
+
+class PromoRedemptionStatus(StrEnum):
+    RESERVED = "reserved"  # held for one booking inside the accept transaction
+    CONSUMED = "consumed"  # the booking's commission was captured; counted as cost once
+    RELEASED = "released"  # booking cancelled / not captured; amount returns to the lot
+
+
+class PromoFault(StrEnum):
+    """Why a reservation was released, for fair restoration (ADR-0023 §7). Q129: the *cause*, not who pressed the
+    button - an operator cancel names its cause; each value holder is judged separately (``restored_expiry``)."""
+
+    CLIENT = "client"  # the client caused it (own cancel, a client no-show confirmed by an operator)
+    DRIVER = "driver"  # the driver caused it
+    PLATFORM = "platform"  # the platform caused it (system failure, service withdrawn) - a decided cause
+    NONE = "none"  # justified, nobody at fault (e.g. road closure recorded by an operator)
+    UNDETERMINED = "undetermined"  # cause not decided or disputed: nobody loses a right by it, a person reviews
+
+
+class PromoRiskSignal(StrEnum):
+    """Referral risk signals (ADR-0023 §10, Q113). Rules - source, reliability, consequence, correlation group -
+    live in the versioned ``promo.RISK_RULESET_*``; a signal is evidence for a person, not a verdict."""
+
+    SELF_REFERRAL = "self_referral"
+    SELF_DEALING = "self_dealing"
+    IDENTITY_KEY_MATCH = "identity_key_match"
+    KYC_REUSE = "kyc_reuse"
+    LINKED_REFERRAL_CLUSTER = "linked_referral_cluster"
+    GPS_TIME_CONFLICT = "gps_time_conflict"
+    SPLIT_SHIPMENT = "split_shipment"
+    SHARED_IP = "shared_ip"
+    SHARED_NETWORK = "shared_network"
+    SHARED_DEVICE = "shared_device"
+    FAMILY_VEHICLE = "family_vehicle"
+    RAPID_REREGISTRATION = "rapid_reregistration"
+    REPEATED_PAIR = "repeated_pair"
+    IMPLAUSIBLE_SERVICE = "implausible_service"
+    PRICE_INFLATION = "price_inflation"
+    EVENT_REPLAY = "event_replay"
+
+
+class PromoObligationStatus(StrEnum):
+    """One beneficiary's promised reward: the budget reserve, then the grant (Q115)."""
+
+    PROMISED = "promised"
+    GRANTED = "granted"
+    RELEASED = "released"
+
+
+class PromoLedgerKind(StrEnum):
+    """Immutable promo ledger movements between budget buckets (ADR-0023 §6, §8)."""
+
+    ALLOCATE = "allocate"  # funding -> allocated
+    REDUCE_ALLOCATION = "reduce_allocation"  # allocated -> funding; never below spent + obligations (G14, 0090)
+    FUNDING_LOSS = "funding_loss"  # external funding really gone: may create a shortfall; cancels nothing (G14)
+    PROMISE = "promise"  # available -> promised (both sides' maximum, before anything is promised)
+    RELEASE_PROMISE = "release_promise"  # promised -> released (expired / rejected / unused part of a grant)
+    GRANT = "grant"  # promised -> granted (a lot exists)
+    CONSUME = "consume"  # granted -> consumed (a redemption was captured; counted as cost once)
+    RELEASE_GRANTED = "release_granted"  # granted -> released (unspent lot value expired or reversed)
+    REINSTATE = "reinstate"  # available -> granted (fair restoration of expired value; needs budget room)
+
+
+class PromoBudgetRequestStatus(StrEnum):
+    """Large budget changes wait for a second, different finance approver (Q17 threshold, Q114)."""
+
+    PENDING = "pending"
+    POSTED = "posted"
+    REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"

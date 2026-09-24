@@ -248,10 +248,202 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
     `at_stop`, `clarify_stop`. `price_agreed` bron chatida **taklif qilinmaydi** — narx allaqachon kelishilgan,
     uni qayta tasdiqlash tugmasi savdolashishga taklif bo'lardi (va §16 bo'yicha shartni o'zgartirmaydi ham).
 
+**Referral 0-bosqich qarorlari (23.09.2026) — promotions & referral (ADR-0023):**
+- **Q101 (D1)** Referral/bonus/kredit — spec §9.2 dan tashqari yangi domen, ADR-0023 bilan (spec o‘zgartirilmaydi).
+  Bitta mexanizm yo‘lovchi va pochtaga xizmat qiladi, lekin kampaniya, qualification sharti va limitlar xizmat
+  turi bo‘yicha alohida. Referral qo‘shilishi hech bir mavjud xizmat yoki production flag’ini yoqmaydi; o‘z flag’i
+  `promotions_enabled` production’da `false`, kampaniyalar `draft`.
+- **Q102 (D2)** Modul `app/modules/promotions`; hisob — sof `app/contracts/promo.py` (DB/tarmoq/sozlama/soat yo‘q,
+  parametrlar aniq argument). Driver prepaid balance (real pul), Passenger Bonus va Driver Credit (chegirma
+  huquqi, pul emas, naqdlashtirilmaydi, o‘tkazilmaydi) alohida hisoblanadi; referral real ledger’ga yozmaydi.
+- **Q103 (D3, Q16 talqini)** Mijoz kelishilgan narx, qo‘llangan chegirma va yakuniy naqdni ko‘radi; stavka, C, H, O,
+  M va formula mijoz API/event’ida yo‘q. Haydovchi naqd olinadigan summa, undiriladigan komissiya va ishlatilgan
+  kreditni ko‘radi. Bu bevosita oshkor qilmaslik; taxmin qilib bo‘lmaslik kafolati berilmaydi; noto‘g‘ri narx yoki
+  chegirma ko‘rsatilmaydi.
+- **Q104 (D4)** Passenger Bonus faqat aniq oldindan rozilik bilan: taklif yuborishda yoki counter’ni qabul qilishda,
+  taklif versiyasi, F, P, F_cash va muddat bilan bog‘langan. Haydovchi mijozsiz accept qilsa aynan shu shartlar;
+  aks holda `PROMO_QUOTE_STALE` va yangi rozilik — naqd hech qachon yashirin oshmaydi. Amendment moliyaviy
+  shartlari qayta tasdiqlanadi. H accept’da avtomatik, umumiy limit yetmasa avval tasdiqlangan P saqlanadi.
+  Pochta pilotida bonus egasi = jo‘natuvchi = to‘lovchi; qabul qiluvchi to‘laydigan buyurtmada ishlatilmaydi.
+- **Q105 (D5)** Budjet ajratish — alohida moliyaviy capability (`promo.budget_allocate`, finance/super_admin, katta
+  summa ikki turli xodim); kampaniya aktivlashtirish — super_admin (`promo.campaign_manage`). Operator budjet yoki
+  mukofot summasini o‘zgartirmaydi. Hamma o‘zgarish audit’da. Tasdiqlanmagan parametr hech qachon nol emas
+  (`PROMO_PARAMETERS_UNSET`); summa/budjet/O/M simulyatsiyadan keyin. Va’da paytida ikkala tomon maksimal
+  majburiyati rezerv qilinadi; budjet tugashi faqat yangi ishtirokchilarni to‘xtatadi.
+- **Q106 (D6)** Attribution oynasi 72 soat — telefon tasdiqlangan birinchi ro‘yxatdan o‘tishdan, birinchi bron
+  accept’igacha, server vaqti. Birinchi attribution almashtirilmaydi; akkauntni qayta ochish oynani yangilamaydi.
+  Yo‘lovchi va pochta orqali “yangi mijoz” mukofoti bir marta (`client_acquisition` oilasi); reactivation alohida.
+  Mijozning haydovchiga aylanishi — driver onboarding’ga bog‘langan alohida attribution qoidasi.
+- **Q107 (D7)** Havola `elchigo.uz/r/<kod>`, domen konfiguratsiyada, PII’siz kod. Ilova yo‘q/App Links ishlamasa —
+  tushuntirish sahifasi va kodni qo‘lda kiritish. Domen, sertifikat, App Links tekshirilmaguncha “tayyor” emas;
+  `android-app` — faqat handoff.
+- **Q108 (D8)** Telefon HMAC mexanizmi tasdiqlangan; **24 oylik muddat tasdiqlanmagan** — muddat konfiguratsiya,
+  kodga doimiy qiymat kiritilmaydi. HMAC anonim emas — himoyalangan identifikator; maqsad, huquqiy asos, muddat,
+  o‘chirish va kalit boshqaruvi yoziladi (production yoqish sharti). Moslik akkaunt yoki xizmatni bloklamaydi —
+  faqat yangi foydalanuvchi mukofotini review’ga yuboradi.
+- **Q109 (D9)** Taklif qiluvchi xizmat ko‘rsatgan bron attribution’ni qualify qilmaydi (oddiy bron sifatida
+  taqiqlanmaydi); boshqa tasdiqlangan haydovchining xizmati hisoblanadi. Yo‘lovchi — 1 mos safar; pochta — 2 ta
+  mustaqil (alohida bron va trip) yetkazilgan jo‘natma, bitta bronning qutilari bitta jo‘natma. Mukofot o‘sha
+  xizmat kampaniyasidan va o‘sha xizmatda sarflanadi; xizmatlararo sarflash avtomatik yoqilmaydi.
+- **Q110 (D10)** Qualification: xizmat bajarilgan + naqd tasdiqlangan + real balansdan musbat C_net capture + ochiq
+  nizo yo‘q; 48 soatlik risk oynasi shu shartlarning eng oxirgisidan, grant oldidan qayta tekshiruv. 0% va
+  chegirma sabab C_net = 0 bronlar hisoblanmaydi; GPS yoki “bajarildi” yolg‘iz yetarli emas. `F_cash = F − P`,
+  `C_net = C − P − H`, haydovchida `F − C + H`; promo bronda `F_cash, C_net ≥ 0`, `C_net − O ≥ M`, P + H umumiy
+  limit ichida, float yo‘q. Real balansdan faqat C_net hold/capture; cash receipt F_cash bilan tekshiriladi;
+  Q55/Q48 avtomatik yopilgan hisoblanmaydi. `X-Elchi-Client-Features` xavfsizlik vakolati emas; mos kelmaydigan
+  klient yangi promo bitim tuzmaydi, mavjud chegirma olib tashlanmaydi. Bron marjasi qoidasi umumiy foyda kafolati
+  emas.
+
+**Referral 1-bosqich qarorlari (23.09.2026) — ADR-0023:**
+- **Q111** Promo qo‘llanadigan bronda `O ≥ 0`, `M > 0`, `C_net > 0` va `C_net − O ≥ M` (pilot). Oddiy va alohida
+  tasdiqlangan 0 % bronlar ishlashda davom etadi — ularga promo qo‘llanmaydi. M o‘ylab topilmaydi; belgilanmasa
+  kampaniya aktivlashtirilmaydi. Faqat chegirma **limitlari** pastga yaxlitlanadi; tasdiqlangan mijoz chegirmasi keyin
+  kamaytirilmaydi; ledger, ekran va kvitansiya bir xil `PromoQuote` summalarini ko‘rsatadi. Umumiy foyda kafolati emas.
+- **Q112** Taklif qiluvchi bajargan bron ikkala tomon qualification’iga hisoblanmaydi (pilot); shart qo‘shilishdan oldin
+  ko‘rsatiladi; mijoz o‘sha haydovchidan oddiy xizmat oladi. Bunday bron referral’ni yopmaydi — qualification muddati
+  ichida boshqa haydovchi orqali shart bajarilishi mumkin. Attribution oynasi va qualification muddati alohida.
+- **Q113** Mustaqil jo‘natma = alohida haqiqiy bron + o‘z qabul-topshirish qaydi + yetkazish dalili + komissiya
+  capture; bitta trip’dagi ikki mustaqil jo‘natma chiqarilmaydi; bitta bronning ikki qutisi — bitta. Sun’iy bo‘lish
+  shubhasi → review. Risk qoidalari versiyalangan (`promo.RISK_RULESET_*`): har signal — manba, ishonchlilik, oqibat,
+  korrelyatsiya guruhi; bog‘liq signallar (IP + shu IP tarmog‘i) bitta dalil; bitta umumiy IP bloklamaydi va review
+  qilmaydi; eligibility buzilishi (o‘zini taklif) alohida rad sababi. Review natijasi, sababi va xodim harakati
+  audit’da; SLA oshsa eskalatsiya, mukofot avtomatik yo‘qolmaydi va tekshiruvsiz berilmaydi. Risk oynasi 48 soat (Q110).
+- **Q114** Budjet ajratish/kamaytirish mavjud `TWO_PERSON_APPROVAL_THRESHOLD_MINOR` (tiyin, qat’iy katta bo‘lsa ikkinchi
+  tasdiq) va Q69 finance-approver qoidasi bilan; so‘rovchi o‘zining ikkinchi tasdiqlovchisi bo‘la olmaydi (DB CHECK +
+  trigger). Real-pul `ledger_adjustment_requests` ishlatilmaydi — o‘sha qoidalarni takrorlovchi `promo_budget_requests`.
+- **Q115** Va’da rezervi, berilgan bonus va sarflangan bonus — bitta majburiyat (`promo_obligations`) bosqichlari;
+  budjetda bir marta sanaladi. Promo ledger o‘zgarmas; tuzatish — yangi yozuv. Budjet keshi faqat ledger trigger’i
+  orqali yoziladi; unique, lock va deferred tekshiruvlar DB darajasida.
+- **Q116** Bron yaratilgandan keyin bonus oddiy qo‘shilmaydi. Tasdiqlangan amendment moliyaviy shartlarni qayta
+  hisoblaydi va qayta tasdiqlatadi: eski rezervni bo‘shatish, yangisini yaratish va rozilikni yangilash — bitta
+  tranzaksiya, xatoda avvalgi kelishuv buzilmaydi. Review SLA, tiklash grace va milestone qiymatlari — konfiguratsiya
+  (hozir sintetik, production qiymati tasdiqlanmagan); `elchigo.uz/r/<kod>` domen/DNS/sertifikat/deploy tekshiruvi va
+  HMAC muddati (Q108) ochiq — production’da ularga bog‘liq oqim tayyor deb belgilanmaydi.
+
+**Referral 2-bosqich qarorlari (23.09.2026) — ADR-0023:**
+- **Q117** Referral kodi — CSPRNG’dan olingan ochiq identifikator, DB’da unique, egasi o‘zgarmaydi; bekor qilish avvalgi
+  attribution va majburiyatlarga tegmaydi; kod tekshiruvi egasi haqida hech narsa oshkor qilmaydi. Attribution (kim
+  taklif qildi) `(referee, family)` bo‘yicha bitta, birinchisi yutadi, 72 soat server vaqti bilan, birinchi xizmatgacha;
+  va’da ham, rezerv ham emas. Enrollment (qaysi kampaniya versiyasi shartlari qabul qilindi) versiya, xizmat, shartlar
+  fingerprint’i, kirish vaqti va qualification muddatini mahkamlaydi va ikkala tomon majburiyatini bitta tranzaksiyada
+  rezerv qiladi; budjet yetmasa enrollment yaratilmaydi. Bir odam oila bo‘yicha bitta tirik enrollment; boshqa rol orqali
+  o‘zini taklif — self-referral; faol bo‘lmagan taklif qiluvchi bilan yangi enrollment yo‘q, eskilari saqlanadi.
+- **Q118** Bir xil idempotency kaliti boshqa mazmun bilan — konflikt. Telefon HMAC (normalizatsiya, versiyali kalit,
+  xotirada) — rotatsiyada tarix saqlanadi; Q108 saqlash muddati tasdiqlanmaguncha o‘chirilgan akkaunt digest’i
+  o‘chiriladi va production enrollment yopiq; identity kaliti yo‘q bo‘lsa enrollment hamma joyda yopiq (fallback yo‘q).
+  Digest mosligi akkaunt/xizmatni bloklamaydi — review.
+- **Q119** 1-bosqich dalillari: migratsiya toza bazada, oldingi head’dan va head’da no-op alohida tekshiriladi (stamp —
+  faqat idempotentlik). DB himoyasi haqiqiy application roli bilan tekshiriladi; DB application ulanishi ortidagi odamni
+  autentifikatsiya qila olmaydi — bu API (JWT, capability, MFA step-up) va o‘zgarmas audit chegarasi. Eskirgan chegirma
+  faqat joriy accept urinishini rad etadi va qayta hisoblashni talab qiladi.
+
+**Referral 3-bosqich talqinlari tasdig‘i (23.09.2026) — ADR-0023 §17:**
+- **Q120 (T1)** Qualification muddati ichida xizmat bajarilgan va mijozning o‘z to‘lov sharti (naqd tasdig‘i) bajarilgan bo‘lishi
+  shart; platforma/worker’ning kech capture’i diskvalifikatsiya qilmaydi. Haqiqiy musbat C_net capture bo‘lmaguncha grant yo‘q —
+  enrollment kutadi, muddat tugashi bilan rezervi avtomatik bo‘shatilmaydi. To‘lov vaqti tekshiriladigan manba yozuvidan;
+  foydalanuvchining tasdiqlanmagan eski sanasi eligibility ochmaydi; kech to‘lovning real vaqti aniqlab bo‘lmasa — review.
+  48 soat xizmat, ishonchli naqd tasdig‘i va real capture’ning eng oxirgisidan; ma’nosi «48 soatdan oldin emas».
+- **Q121 (T2)** Haydovchi milestone birligi `distinct_trip`; bitta trip’dagi ikki mustaqil jo‘natma hisoblanishi mumkin; 30 daqiqalik
+  split signali faqat sintetik konfiguratsiya (production default emas), review ochishi mumkin, avtomatik firibgarlik belgisi emas.
+- **Q122 (T3)** Avtonom review tranzaksiyasi chaqiruvchining bron/wallet/promo rezervlarini commit qilmaydi va lock kutishga
+  tushmaydi. Operator izoh yozadi, vakolatli admin qaror qiladi; qaror grant yaratmaydi va attribution’ni almashtirmaydi (API
+  auth/MFA — ochiq cheklov). Grant’dan keyingi review’da mukofotning hali rezerv qilinmagan qismi yangi sarfdan to‘xtatiladi;
+  tasdiqlangan bron chegirmasi jimgina bekor qilinmaydi; review/rezerv/sarf poygasi lot qatori lock’i bilan hal qilinadi.
+  Budjet yetmasa reinstate qisman bajarilmaydi; tasdiqlangan reinstate texnik rad bilan o‘chmaydi — bajarilmagan holat va
+  eskalatsiya qoladi. Ishlovni to‘xtatish mavjud bron narxini o‘zgartirmaydi, majburiyatni o‘chirmaydi, ikki marta undirmaydi.
+
+**Referral T4 qarorlari (23.09.2026) — ADR-0023 §18.1:**
+- **Q123 (T4a, cheklangan kombinatsiya)** Bitta bronda P va H birga ishlashi mumkin, lekin ixtiyoriy sondagi kampaniya emas:
+  P uchun bitta, H uchun bitta kampaniya manbasi (bitta kampaniyaning bir nechta loti mumkin). Ikki turli kampaniya faqat
+  aniq tasdiqlangan juftlik (`promo_campaign_combinations`, super_admin + MFA, audit) bilan uchrashadi; tasdiqlanmagan
+  juftlik avtomatik ruxsat etilmaydi (H shunchaki qo‘llanmaydi). Umumiy chegirma cap’lari — eng qat’iysi; P cap P
+  kampaniyasidan, H cap H kampaniyasidan. O va M: juftlik `shared` (bir xil bron, bir xil xarajat asosi) — kattasi;
+  `additive` (har kampaniyaning o‘z qo‘shimcha xarajati) — O qismlari qo‘shiladi, M kattasi; asos tanlanmasa kombinatsiya
+  yo‘q. Har chegirma o‘z kampaniyasi, loti va budjetiga bog‘lanadi (terms’da kampaniya id’lari, DB tekshiruvi). Tasdiqlangan
+  P ni qoidalar o‘zgartirishi kerak bo‘lsa — yashirin kamaytirish emas: P o‘zi mos kelmasa requote; H qo‘shilishi P ni
+  kamaytirsa H qo‘llanmaydi (P saqlanadi).
+  **Aniqlik (24.09.2026, foydalanuvchi tasdig‘i):** mijoz tasdiqlagan P ustuvor — bu qoida yangi hisob tayyorlanayotganda
+  ishlaydi. H “qolgan ruxsat etilgan imkoniyat” doirasida hisoblanadi: sig‘sa qisman qo‘llanadi (`partial`); juftlik
+  tasdiqlanmagan (`not_approved`) yoki P ni kamaytiradigan (`would_reduce_p`) holat — alohida, H umuman yo‘q. Haydovchi H
+  bor hisobni ko‘rib tasdiqlagan bo‘lsa (accept’da `promo_driver_ack`), H yashirincha olib tashlanmaydi va C_net
+  oshirilmaydi: yangi raqamlar bilan `PROMO_QUOTE_STALE (driver_terms_changed)`, qayta tasdiq kerak. Tasdiqlangan bron
+  snapshot’i o‘zgarmaydi.
+- **Q124 (T4b)** P = 0 va F_cash = F bo‘lgan faqat-H bitimda mijoz klientining promo imkoniyati talab qilinmaydi; eski mijoz
+  klientida narx, receipt va tasdiqlash semantikasi o‘zgarmaydi (mijoz DTO’sida promo yo‘q, cash buyruqlari F bilan).
+  Haydovchi klienti H va C_net ni ko‘rsatishi shart. Keyin P qo‘shiladigan oqim bu istisnodan foydalana olmaydi (amendment
+  P ni qo‘shmaydi, rozilik har doim capability talab qiladi).
+- **Q125 (T4c, pilot)** Amendment’da yangi lot tortilmaydi, avvalgi P va H dan ortiq bonus ishlatilmaydi — o‘zgarishsiz yoki
+  kamayadi. Bu avtomatik tasdiq emas: yangi F, P, F_cash mijozga ko‘rsatiladi va rozilik olinadi; haydovchining naqd yoki
+  komissiyasi o‘zgarsa uning ham tasdig‘i (`promo_driver_ack`) olinadi. Yangi kelishuv qabul qilinmaguncha eski kelishuv va
+  rezervlar saqlanadi. F kamayib F_cash nisbatan oshadigan holat klientda alohida tushuntiriladi.
+- **Q126 (T4d)** Muddatsiz capability tasdiqlanmadi. Har accept va moliyaviy buyruqda amalni bajarayotgan klient imkoniyati
+  shu so‘rovdan tekshiriladi; passiv tomon tayyorligi aniq login sessiyasi (`sid`), quote/proposal versiyasi (yoki
+  amendment) va uning muddati bilan bog‘lanadi (`promo_party_readiness`, rozilikda `session_ref`). Dalil eskirgan yoki
+  yo‘q — qayta tasdiq (`PROMO_QUOTE_STALE`, keyin `.../promo-confirmation`). Aniqlangan o‘zgarish (sessiya tugashi, boshqa
+  jonli login’dan e’lon, capability’siz e’lon) eski dalilni bekor qiladi. Capability autentifikatsiya yoki vakolat emas;
+  eski versiyaga qaytish har doim aniqlanadi deb da’vo qilinmaydi (token rotatsiyasi zanjiri yozilmaydi). Mavjud promo
+  bronning chegirmasi hech qachon olib tashlanmaydi.
+- **Q127 (T4e)** Komissiya reversal’i bonusni avtomatik tiklamaydi. Komissiya reversal’i, buyurtma refund’i, bonusni tiklash
+  va mijozga naqd qaytarish — alohida operatsiyalar. Bu "har refund’da bonus yo‘qoladi" degani emas: tiklash huquqi mavjud
+  tasdiqlangan siyosatdan (bekor qilishda adolatli tiklash, reinstate) aniqlanadi va o‘sha bog‘langan operatsiya bilan
+  bajariladi; umumiy "bonus berish" tugmasi yo‘q. Siyosat qamramagan holatlar (sarflangan bonus/kredit bor bronda
+  komissiya reversal’i yoki hal qilingan nizo) `restoration_uncovered` review sifatida alohida ko‘rsatiladi va avtomatik
+  egasi zarariga hal qilinmaydi.
+- **Q128 (T4f)** Muddati o‘tgan lotdan rezerv bo‘shatilganda summa oddiy mavjud bonusga aylanmaydi — expiry hisobiga o‘tadi;
+  tasdiqlangan grace yoki reinstate huquqi saqlanadi. Release, expiry va reinstate parallel kelganda summa bir marta
+  bo‘shatiladi va bir marta tiklanadi (lot qatori lock’i, ledger unique kalitlari; PG testi).
+- **Q129 (T4g, o‘zgartirilgan)** Bekor qilgan actor va sabab alohida. "Operator bekor qildi → platforma aybi" olib
+  tashlandi: operator sababni aniq belgilaydi (`cancel_fault_side`: client/driver/platform/none — sabab matni bilan,
+  booking’da yoziladi); belgilanmasa sabab `undetermined`. "Mijoz kelmadi" faqat operator tasdiqlagan mijoz no-show’ida
+  mijoz sababi; haydovchi kelmagani yoki bahsli holat mijozga yozilmaydi. Noaniq/nizoli sabab — huquq avtomatik
+  yo‘qolmaydi (grace vaqtincha beriladi) va har egaga alohida `cancel_fault` review; admin egasi aybdor deb qaror qilsa
+  faqat sarflanmagan uzaytma qaytariladi. Mijoz bonusi va haydovchi krediti har egaga nisbatan alohida baholanadi. Real pul
+  bo‘yicha bekor qilish siyosati o‘zgarmaydi (release, jarima yo‘q).
+
+**Referral 6-bosqich qarori (24.09.2026) — ADR-0023 §20.1:**
+- **Q130** Simulyatsiya pilot variantlari: **A** (faqat yo‘lovchi, mijoz → mijoz) — kelajakdagi yo‘lovchi pilotini baholash uchun
+  asosiy nomzod; uning summalari va 600 000 so‘m budjeti production uchun **tasdiqlanmagan**, yo‘lovchi xizmatining huquqiy va
+  texnik gate’lari (K7/Q5/Q89, Q48) saqlanadi. **B** (yo‘lovchi + pochta) hozirgi ko‘rinishida tasdiqlanmaydi; pochta alohida
+  baholanadi va umumiy musbat natija pochta bonusining kam ishlatilishini yashirmaydi. **C** (haydovchi taklifi + milestone)
+  keyingi baholashga qoldirildi. Bu qarorlar kampaniyani yoqish yoki mablag‘ ajratish ruxsati **emas**.
+
+**Referral yakuniy qarorlari (24.09.2026) — ADR-0023 §20.2; holat: lokal yakunlangan, production gate’lari yopilmagan:**
+- **Q131 (G20)** Pochta referral bonusi hozircha yoqilmaydi — **vaqtinchalik mahsulot qarori**: haqiqiy qayta buyurtma va bonusdan
+  foydalanish ma’lumotlari yo‘q. Simulyatsiyadagi ~9 % — model natijasi; “pochta bonusi foydasiz” deb yozilmaydi. Mexanizm kodda
+  saqlanadi, kampaniya o‘chiq. A varianti faqat kelajakdagi yo‘lovchi pilotiga nomzod (Q130); summa va budjet tasdiqlanmagan.
+- **Q132 (G14)** Oddiy `reduce_allocation` budjetni sarflangan summa va bajarilmagan majburiyatlardan pastga tushirmaydi:
+  `B ≥ S + L`, kamaytirish mumkin — `max(0, B − S − L)`. B — tasdiqlangan jami ajratma, S — hisobga olingan sof sarf, L — va’da
+  rezervi + berilgan sarflanmagan bonus (bronda band qilingan qism uning ichida, bir marta) + budjet joyini kutayotgan tasdiqlangan
+  tiklashlar; review yoki kech capture kutayotganlar L dan yashirincha chiqmaydi. S oddiy adjustment bilan kamaytirilmaydi; tuzatish —
+  asoslangan ledger operatsiyasi. Yangi hisobot davri eski sarf/majburiyatni o‘chirmaydi (davriy budjet — alohida ajratma). Tashqi
+  moliyalashtirish yo‘qolishi — alohida `funding_loss` (dalil bilan): kamomad qoldirishi mumkin, majburiyatni bekor qilmaydi, yangi
+  va’dalarni to‘xtatadi va eskalatsiya qilinadi. Servis va DB (0090) darajasida.
+- **Q133** Q108 (HMAC muddati, huquqiy asos) ochiq — mavjud production cheklovi saqlanadi; muddat simulyatsiya yoki texnik qulaylik
+  bilan tanlanmaydi. Mukofot, O, M, cap, muddatlar, budjet va mablag‘ manbai tasdiqlanmagan — haqiqiy pilot qarori bilan; sintetik
+  qiymat production standarti emas; yangi parametr variantlari qidirilmaydi. Rate-limit va review SLA — trafik, umumiy IP ortidagi
+  haqiqiy foydalanuvchilar, qayta urinishlar va review ish hajmi dalilisiz tasdiqlanmaydi. Q127: siyosatsiz erkin bonus berish va
+  umumiy “bonus berish” tugmasi yo‘q; qamralmagan holatda operator dalil yig‘adi, vakolatli admin ko‘rib chiqadi — adminning texnik
+  vakolati yangi kompensatsiya siyosati emas; haqiqiy pul qarzi avtomatik yaratilmaydi.
+- **Q134** Qo‘shimcha foydalanuvchini o‘lchash dizayni tasdiqlanmagan; koridor nazorati — variant (koridorlar talab, narx va haydovchi
+  ta’minotida farq qiladi — referral ta’siri bilan aralashadi). Pilotdan oldin dizayn tanlanadi; attribution soni qo‘shimcha
+  foydalanuvchi soni emas; nazorat berilgan va’dalarni buzmaydi.
+- **Q135** To‘xtatish mezonlari umumiy tasdiqlanmagan. Takroriy undirish, ruxsatsiz grant, ledger tafovuti yoki majburiyat chegarasi
+  buzilishi — incident: ta’sirlangan xavfli operatsiyalar cheklanadi, mavjud bron narxi o‘zgarmaydi, majburiyat o‘chmaydi. Review
+  navbati, CAC, refund ulushi kabi biznes chegaralari dalilga asoslangan alohida tasdiqni kutadi.
+
+**Saqlangan safar/jo‘natma talabi (24.09.2026) — ADR-0025:**
+- **Q136 (foydalanuvchi qarori)** Mijoz yo‘nalish, vaqt, odamlar soni/jo‘natma ma’lumotini bir marta kiritadi (`trip_intents`,
+  shaxsiy, e’lon emas, o‘zi hech kimga taklif yubormaydi); har haydovchi e’loniga taklif shu talabdan to‘ldiriladi, lekin har taklif
+  mustaqil kelishuv: o‘z narxi, promo quote’i va roziligi. Bitta talab — bitta bekor qilinmagan bron (servis + DB unique); parallel
+  accept’da yutqazgan sig‘im, promo yoki hold qoldirmaydi, qolgan takliflar texnik sabab bilan yopiladi (jarima/strike/reyting yo‘q).
+  Muhim tahrir ochiq takliflarni faqat mijoz roziligidan keyin yopadi; muddati o‘tgan sana surilmaydi; bekor qilingan bron eski
+  takliflarni qayta ochmaydi — «qayta qidirish» aniq amal. Talab yaratish referral attribution, “yangi mijoz” yoki birinchi bron
+  tarixiga tegmaydi. Avtomatik ommaviy taklif, yangi kampaniya yoki to‘lov usuli qo‘shilmaydi; production flag’lari o‘zgarmaydi.
+
 **Wave 3.1 dan keyin ham ochiq:** U6 `rating_bucket` chegaralari (hozir `null` — sun’iy reyting yo‘q), ADR-0021 staff MFA (**Proposed**), dalil fayllarini imzolangan havola bilan ko‘rsatish.
 
 ## 4. Kod tuzilishi
-- Yangi domen: `app/modules/<name>/` (`identity`, `marketplace`, `trips`, `bookings`, `geo`, `wallet`, `tracking`, `communications`, `trust_support`, `operations`, `platform`). Ichida: `models.py`, `service.py` (tashqi domen API), `schemas.py`, `api.py` (v2 router), `repository.py` (ixtiyoriy).
+- Yangi domen: `app/modules/<name>/` (`identity`, `marketplace`, `trips`, `bookings`, `geo`, `wallet`, `tracking`, `communications`, `trust_support`, `operations`, `platform`, `promotions` — Q102). Ichida: `models.py`, `service.py` (tashqi domen API), `schemas.py`, `api.py` (v2 router), `repository.py` (ixtiyoriy).
 - Modul boshqa modul jadvaliga to‘g‘ridan-to‘g‘ri yozmaydi — faqat uning `service.py` funksiyasi orqali. Bir DB session/tranzaksiya ulashiladi; domen funksiyasi `commit` qilmaydi.
 - v1 kodi v2 modul **servislarini** chaqirishi mumkin (ADR-0006: akkaunt o‘chirish read-only tekshiruvlari, settings adapteri), lekin v2 jadvallariga to‘g‘ridan-to‘g‘ri yozmaydi.
 - Pul/o‘rin/holat o‘zgartiradigan accept/cancel/amend tranzaksiyasi — faqat A4 orkestratori.
@@ -272,7 +464,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Sirlar:** `settings.secret_key` bevosita ishlatilmaydi — `crypto.derive_subkey(secret_key, purpose)`. Link/share token’lar `crypto.new_secret_token` (≥128 bit `secrets.token_bytes`), bazada faqat hash. uuid4 token emas (ADR-0018).
 - **API v2:** `/api/v2`, envelope `app.contracts.dto`, xato kodi `ErrorCode`, buyruqlarda `Idempotency-Key` (domen 4xx savepoint naqshi — ADR-0005), versiyali agregatda `expected_version`, cursor pagination. Har v2 endpoint `response_model` bilan.
 - **Holat:** har status yozuvi `state_machines.<MACHINE>.assert_transition(..., command=...)` orqali; DB’da CHECK.
-- **Global lock tartibi (ADR-0017):** `users → trips → listings → proposal_threads → bookings → booking bolalari (amendments, no_show_reviews, custody_cases, cash_receipts, disputes) → wallet_accounts → wallet_holds/topup_requests/ledger_adjustment_requests`; har guruh ichida id o‘sish tartibida. Bola id bilan kelgan buyruq avval lock’siz o‘qib ota id’larini topadi, keyin tartib bo‘yicha lock oladi va qayta tekshiradi.
+- **Global lock tartibi (ADR-0017):** `users → trips → listings → proposal_threads → trip_intents (ADR-0025) → bookings → booking bolalari (amendments, no_show_reviews, custody_cases, cash_receipts, disputes) → wallet_accounts → wallet_holds/topup_requests/ledger_adjustment_requests`; har guruh ichida id o‘sish tartibida. Bola id bilan kelgan buyruq avval lock’siz o‘qib ota id’larini topadi, keyin tartib bo‘yicha lock oladi va qayta tekshiradi.
 - **Lock rejimi:** `users`, `trips`, `listings`, `proposal_threads` (va boshqa FK ota qatorlari) `FOR NO KEY UPDATE` (`with_for_update(key_share=True)`) yoki `FOR SHARE` bilan; **oddiy `FOR UPDATE` emas** — FK insert’larining key-share lock’lari bilan deadlock bo‘ladi. Yagona istisno: unique ustun o‘zgarsa (`users.phone`/`username`, `driver_profiles.plate_number`) qator boshidanoq `FOR UPDATE`. Qator har doim boshidanoq yakuniy rejimda olinadi (kuchaytirish yo‘q). v1: `orders → users → driver_profiles → wallet`; akkaunt o‘chirish `users`/profil `FOR UPDATE`; token refresh `users FOR SHARE` → session `FOR UPDATE` (ADR-0017 §12–13).
 - **Retry:** har v2 buyrug‘i `platform.service.run_with_db_retry` ichida (deadlock/serialization, ≤3).
 - **Release kontrakti:** A4 `booking_allocations.active`ni trip lock ostida true→false o‘tkazadi va `trips.release`ni faqat shu o‘tishda chaqiradi (ikki marta release yo‘q).
@@ -285,6 +477,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Event auditoriyasi (N2, Q16):** yuborishdan oldin `events.payload_for_audience`; `wallet.*`/`commission.*` mijozga bormaydi, mijoz nusxasida komissiya maydonlari yo‘q.
 - **Production invariantlari (N1):** DB darajasida (trigger + muhit markeri, A3). Readiness 503 faqat DB yo‘q, DB head koddan orqada yoki noma’lum revision bo‘lsa (DB head kod head’ining ma’lum avlodi → 200 `degraded`, `migrations: ahead`, Q32); `/health/ready` faqat monitoring IP’lariga (Q33); Redis → `degraded`; invariant buzilishi → `production_invariants: fail` + alert, pul buyruqlari `503 PRODUCTION_INVARIANTS_FAILED`.
 - **Ledger manbasi (Q55):** har `ledger_transactions` qatori `source_type` + `source_id` bilan aniq bitta biznes manbaga bog‘lanadi (`topup_request`, `ledger_adjustment_request`, `wallet_hold`); xom ledger INSERT faqat to‘g‘ri manba bilan (DB commit’da rad etadi). Yangi top-up/adjustment qatori faqat pending holatda yaratiladi.
+- **Promo budjet (Q132):** oddiy `reduce_allocation` ≥ `S + L` (`BudgetPosition.reducible_minor`, trigger 0090); haqiqiy moliyalashtirish yo‘qolishi — faqat dalilli `funding_loss`; budjet keshi faqat ledger trigger’i orqali.
 - **Q48 gate (Q56):** `platform.service.q48_gate_status` / SQL `platform_q48_gate_passed()`; production’da v2 xizmat flag’larini yoqish va yangi pul biznesi (`hold_fee`) gate o‘tmaguncha rad (`503 PRODUCTION_INVARIANTS_FAILED`); `/health/ready` `notices` faqat ma’lumot (Q57).
 - **Kalit rotatsiyasi (N5):** proof kodlar `crypto.build_keyring` + `verify_proof_code` (oldingi kalit `KEY_ROTATION_VERIFICATION_WINDOW` davomida qabul).
 - **Tashqi API** (SMS, xarita, push) DB tranzaksiyasi ichida chaqirilmaydi.

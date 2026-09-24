@@ -66,11 +66,12 @@ import {
 } from "./AdminOpsPanel";
 import { AdminSecurityPanel } from "./AdminSecurityPanel";
 import { AdminPriceBandsPanel } from "./AdminPriceBandsPanel";
+import { AdminPromoPanel } from "./AdminPromoPanel";
 
 type Section =
   | "overview" | "orders" | "drivers" | "clients" | "cities" | "tariffs" | "disputes"
   // Stage 2 (A9): the v2 marketplace sections. They read /api/v2 with this same staff session.
-  | "opsQueues" | "disputesV2" | "support" | "metrics" | "legacyOrders" | "priceBands"
+  | "opsQueues" | "disputesV2" | "support" | "metrics" | "legacyOrders" | "priceBands" | "promotions"
   | "users" | "security" | "notifications" | "audit" | "profile";
 
 const sectionLabels: Record<Section, string> = {
@@ -86,6 +87,7 @@ const sectionLabels: Record<Section, string> = {
   support: "Murojaat va ishonch",
   metrics: "KPI / SLO",
   priceBands: "Narx referensi",
+  promotions: "Referral va bonuslar",
   legacyOrders: "Legacy (v1) arxiv",
   users: "Xodimlar",
   security: "Xavfsizlik (MFA)",
@@ -107,6 +109,7 @@ const navItems: Array<{ id: Section; icon: typeof Activity }> = [
   { id: "support", icon: LifeBuoy },
   { id: "metrics", icon: BarChart3 },
   { id: "priceBands", icon: SlidersHorizontal },
+  { id: "promotions", icon: SlidersHorizontal },
   { id: "legacyOrders", icon: Archive },
   { id: "users", icon: UserPlus },
   { id: "security", icon: ShieldCheck },
@@ -150,6 +153,11 @@ function statusTone(status: string): string {
 function Pill({ value }: { value: unknown }) {
   const text = String(value ?? "-");
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(text)}`}>{text}</span>;
+}
+
+/** Phone-width screen (below the md breakpoint). Safe where there is no window (tests, prerender). */
+function isNarrowScreen(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 767px)").matches;
 }
 
 function Button(props: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; tone?: "primary" | "danger" | "neutral" }) {
@@ -353,7 +361,8 @@ export default function AdminApp() {
   const [search, setQidirish] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // A 248 px menu next to a phone-width panel leaves ~140 px for the work: on narrow screens it starts folded.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => isNarrowScreen());
   const [focusDisputeId, setFocusDisputeId] = useState<string | null>(null);
 
   async function loadAll() {
@@ -405,6 +414,7 @@ export default function AdminApp() {
       opsQueues: [],
       legacyOrders: [],  // the legacy archive filters server-side (O8), not through this client-side search
       priceBands: [],  // the panel reads one corridor at a time; there is nothing for the toolbar to filter
+      promotions: [],
 
       disputesV2: [],
       support: [],
@@ -476,6 +486,7 @@ export default function AdminApp() {
                   onClick={() => {
                 setFocusDisputeId(null);
                 setSection(item.id);
+                if (isNarrowScreen()) setSidebarCollapsed(true); // the chosen panel gets the width back
               }}
                   title={sectionLabels[item.id]}
                   className={`el-press flex h-10 min-w-0 items-center rounded-[10px] text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "bg-card text-foreground" : "text-slate-300 hover:bg-foreground hover:text-primary-foreground"}`}
@@ -489,7 +500,7 @@ export default function AdminApp() {
         </aside>
 
         <section className="min-w-0 overflow-hidden">
-          <header className="flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 lg:px-6">
+          <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 lg:px-6">
             <div className="min-w-0">
               <h1 className="text-xl font-bold">{sectionLabels[section]}</h1>
               <p className="text-xs text-muted-foreground">{user.full_name || user.phone}</p>
@@ -575,6 +586,7 @@ export default function AdminApp() {
 
             {section === "metrics" && <AdminMetricsPanel />}
             {section === "priceBands" && <AdminPriceBandsPanel />}
+            {section === "promotions" && <AdminPromoPanel />}
             {section === "legacyOrders" && <AdminLegacyOrdersPanel />}
 
             {section === "audit" && (

@@ -25,17 +25,22 @@ from app.api.v2.web import (
     get_session,
     page_scope,
     run_command,
+    session_ref_of,
 )
 from app.api.v2.web import to_api_warnings
 from app.contracts.dto import MAX_PAGE_LIMIT, Envelope, PageMeta
 from app.contracts.enums import AdminBookingQueue, BookingAction, OperatorBookingCommand, ProofKind
 from app.contracts.errors import WarningCode
+from app.contracts.promo import CLIENT_FEATURES_HEADER, parse_client_features
 from app.modules.bookings import service as bookings_service
+from app.modules.promotions.booking import ConsentInput, DriverAck
 from app.modules.bookings.schemas import (
     AcceptRequest,
+    AmendmentAccept,
     AmendmentCreate,
     AmendmentDecision,
     AmendmentDTO,
+    AmendmentPromoConfirmation,
     BookingActionRequest,
     BookingCancel,
     BookingClientDTO,
@@ -71,6 +76,21 @@ def _delivery_code_warnings(codes: list) -> list:  # noqa: ANN001
     if any(kind is ProofKind.DELIVERY_CODE for kind, _ in codes):
         return to_api_warnings([{"code": WarningCode.DELIVERY_CODE_SHARE_WITH_RECEIVER_ONLY.value, "field": "codes.delivery_code"}])
     return []
+
+
+def _features(request: Request) -> frozenset[str]:
+    """X-Elchi-Client-Features: what this client can render (Q110). Never an authority; absent = none."""
+    return parse_client_features(request.headers.get(CLIENT_FEATURES_HEADER))
+
+
+def _consent(body) -> ConsentInput | None:  # noqa: ANN001 - any body with an optional promo_consent
+    consent = getattr(body, "promo_consent", None)
+    return None if consent is None else ConsentInput(consent.passenger_bonus_minor, consent.cash_due_minor)
+
+
+def _driver_ack(body) -> DriverAck | None:  # noqa: ANN001 - any body with an optional promo_driver_ack
+    ack = getattr(body, "promo_driver_ack", None)
+    return None if ack is None else DriverAck(ack.cash_to_collect_minor, ack.commission_charged_minor)
 
 
 def _role_of(session: Session, booking, user_id: int) -> str:  # noqa: ANN001
@@ -127,6 +147,10 @@ def accept_proposal(
             actor_user_id=user_id,
             proposal_version_public_id=body.proposal_version_id,
             expected_listing_version=body.terms_version,
+            client_features=_features(request),
+            promo_consent=_consent(body),
+            client_session=session_ref_of(request),
+            promo_driver_ack=_driver_ack(body),
         )
         return _view_for(session, booking, user_id)
 
@@ -278,6 +302,7 @@ def report_cash_receipt(
         booking, receipt = bookings_service.report_cash_receipt(
             session, booking_public_id_value=booking_id, actor_user_id=user_id, expected_version=body.expected_version,
             amount_minor=body.amount_minor, reported_at=body.reported_at, note=body.note,
+            client_features=_features(request), client_session=session_ref_of(request),
         )
         return cash_receipt_dto(receipt, booking)
 
@@ -292,7 +317,8 @@ def _cash_decision(decision: str, booking_id: str, receipt_id: str, body: CashRe
     def handler() -> CashReceiptDTO:
         booking, receipt = operation(
             session, booking_public_id_value=booking_id, receipt_public_id=receipt_id, actor_user_id=user_id,
-            expected_version=body.expected_version, comment=body.comment,
+            expected_version=body.expected_version, comment=body.comment, client_features=_features(request),
+            client_session=session_ref_of(request),
         )
         return cash_receipt_dto(receipt, booking)
 
@@ -333,7 +359,7 @@ def list_amendments(
         session, booking_public_id_value=booking_id, actor_user_id=user_id, limit=limit
     )
     role = _role_of(session, booking, user_id)
-    return Envelope[list[AmendmentDTO]](data=[amendment_dto(row, booking, viewer_role=role) for row in rows])
+    return Envelope[list[AmendmentDTO]](data=[amendment_dto(row, booking, viewer_role=role, session=session) for row in rows])
 
 
 @router.post("/bookings/{booking_id}/amendments", response_model=Envelope[AmendmentDTO], status_code=201, responses=ERROR_RESPONSES)
@@ -347,9 +373,11 @@ def create_amendment(
         amendment = bookings_service.create_amendment(
             session, booking_public_id_value=booking_id, actor_user_id=user_id, expected_version=body.expected_version,
             changes=body.changes.model_dump(mode="json", exclude_none=True), reason=body.reason, warnings=warnings,
+            client_features=_features(request), promo_consent=_consent(body), promo_driver_ack=_driver_ack(body),
+            client_session=session_ref_of(request),
         )
         booking = bookings_service.get_booking(session, amendment.booking_id)
-        return amendment_dto(amendment, booking, viewer_role=_role_of(session, booking, user_id)), warnings
+        return amendment_dto(amendment, booking, viewer_role=_role_of(session, booking, user_id), session=session), warnings
 
     return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, handler=handler,
                        success_status=201, resource_type="amendment")
@@ -357,18 +385,40 @@ def create_amendment(
 
 @router.post("/amendments/{amendment_id}/accept", response_model=Envelope[AnyBooking], responses=ERROR_RESPONSES)
 def accept_amendment(
-    amendment_id: str, body: AmendmentDecision, request: Request,
+    amendment_id: str, body: AmendmentAccept, request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
 ) -> JSONResponse:
     def handler() -> AnyBooking:
         booking = bookings_service.accept_amendment(
-            session, amendment_public_id=amendment_id, actor_user_id=user_id, expected_version=body.expected_version
+            session, amendment_public_id=amendment_id, actor_user_id=user_id, expected_version=body.expected_version,
+            client_features=_features(request), promo_consent=_consent(body), promo_driver_ack=_driver_ack(body),
+            client_session=session_ref_of(request),
         )
         return _view_for(session, booking, user_id)
 
     return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, handler=handler,
                        resource_type="booking")
+
+
+@router.post("/amendments/{amendment_id}/promo-confirmation", response_model=Envelope[AmendmentDTO],
+             responses=ERROR_RESPONSES)
+def confirm_amendment_promo(
+    amendment_id: str, body: AmendmentPromoConfirmation, request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Q126: the proposer renews its promo confirmation of an open amendment (after a stale-confirmation refusal)."""
+    def handler() -> AmendmentDTO:
+        amendment = bookings_service.confirm_amendment_promo(
+            session, amendment_public_id=amendment_id, actor_user_id=user_id, client_features=_features(request),
+            client_session=session_ref_of(request), promo_consent=_consent(body), promo_driver_ack=_driver_ack(body),
+        )
+        booking = bookings_service.get_booking(session, amendment.booking_id)
+        return amendment_dto(amendment, booking, viewer_role=_role_of(session, booking, user_id), session=session)
+
+    return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, handler=handler,
+                       resource_type="amendment")
 
 
 def _amendment_decision(decision: Literal["reject", "withdraw"], amendment_id: str, body: AmendmentDecision, request: Request,
@@ -378,7 +428,7 @@ def _amendment_decision(decision: Literal["reject", "withdraw"], amendment_id: s
             session, amendment_public_id=amendment_id, actor_user_id=user_id, expected_version=body.expected_version, decision=decision
         )
         booking = bookings_service.get_booking(session, amendment.booking_id)
-        return amendment_dto(amendment, booking, viewer_role=_role_of(session, booking, user_id))
+        return amendment_dto(amendment, booking, viewer_role=_role_of(session, booking, user_id), session=session)
 
     return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, handler=handler,
                        resource_type="amendment")
@@ -457,6 +507,7 @@ def operator_booking_command(
             session, booking_public_id_value=booking_id, actor_user_id=user_id, command=command,
             expected_version=body.expected_version, reason=body.reason, evidence_file_ids=tuple(body.evidence_file_ids),
             fee_mode=body.fee_decision.mode if body.fee_decision else None, proof_kind=body.proof_kind,
+            cancel_fault_side=body.cancel_fault_side,
         )
         return booking_view(session, booking, viewer_role=bookings_service.ViewerRole.STAFF)  # type: ignore[return-value]
 

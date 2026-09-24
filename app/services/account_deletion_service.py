@@ -271,6 +271,11 @@ def delete_own_account(db: Session, user: User) -> dict[str, Any] | JSONResponse
         user.is_phone_verified = False
         user.status = "deleted"
         db.add(user)
+        # Q108 (ADR-0023): detach the promotions identity; while no retention period is approved its protected
+        # phone digests are purged here, so no new durable anti-fraud data is kept from a deleted account.
+        from app.modules.promotions.service import on_account_deleted
+
+        on_account_deleted(db, user_id=user.id)
         if profile is not None:
             profile.is_available = False
             profile.car_model = None

@@ -57,6 +57,55 @@ export const messages = {
   },
   "error.FEATURE_DISABLED": { uz: "Bu xizmat shu yo'nalishda hali ochilmagan", ru: "Эта услуга на данном направлении пока не открыта" },
   "error.CLIENT_UPGRADE_REQUIRED": { uz: "Ilovani yangilang", ru: "Обновите приложение" },
+  "error.PROMO_QUOTE_STALE": {
+    uz: "Bonus summasi o'zgardi — yangi hisobni ko'rib, qayta tasdiqlang",
+    ru: "Сумма бонуса изменилась — посмотрите новый расчёт и подтвердите снова",
+  },
+  "error.PROMO_CONSENT_REQUIRED": {
+    uz: "Yangi naqd summani tasdiqlashingiz kerak",
+    ru: "Нужно подтвердить новую сумму наличных",
+  },
+  "promoNotice.driverAckRequired": {
+    uz: "O'zgarishdan keyingi hisobingizni ko'rib, tasdiqlang",
+    ru: "Посмотрите свой расчёт после изменения и подтвердите",
+  },
+  "promoNotice.counterpartyStale": {
+    uz: "Qarshi tomon bonus shartlarini o'z ilovasidan qayta tasdiqlashi kerak. Taklifning o'zi o'zgarmadi.",
+    ru: "Другая сторона должна заново подтвердить условия бонуса в своём приложении. Само предложение не изменилось.",
+  },
+  "error.PROMO_PARAMETERS_UNSET": { uz: "Kampaniya shartlari hali to'liq belgilanmagan", ru: "Условия кампании ещё не заданы полностью" },
+  "error.PROMO_BUDGET_EXHAUSTED": { uz: "Kampaniya byudjeti tugagan", ru: "Бюджет кампании исчерпан" },
+  "error.TRIP_INTENT_BOOKED": {
+    uz: "Bu safar talabi bo'yicha bron allaqachon tanlangan - boshqa takliflar yopilgan",
+    ru: "По этому запросу бронь уже выбрана - остальные предложения закрыты",
+  },
+  "error.TRIP_INTENT_CHANGED": {
+    uz: "Siz talabni o'zgartirgansiz - eski taklif qabul qilinmaydi, yangisini yuboring",
+    ru: "Вы изменили запрос - старое предложение не принимается, отправьте новое",
+  },
+  "error.TRIP_INTENT_OFFERS_AFFECTED": {
+    uz: "Bu o'zgarish ochiq takliflarni yopadi - tasdiqlang",
+    ru: "Это изменение закроет открытые предложения - подтвердите",
+  },
+  "error.TRIP_INTENT_EXPIRED": {
+    uz: "Safar vaqti o'tib ketgan - sanani yangilang",
+    ru: "Время поездки прошло - обновите дату",
+  },
+  "error.PROMO_BUDGET_BELOW_COMMITMENT": {
+    uz: "Byudjetni sarflangan summa va majburiyatlardan pastga kamaytirib bo'lmaydi",
+    ru: "Бюджет нельзя уменьшить ниже потраченного и обязательств",
+  },
+  "error.REFERRAL_CODE_INVALID": { uz: "Bunday taklif kodi topilmadi", ru: "Такой код приглашения не найден" },
+  "error.REFERRAL_SELF_REFERRAL": { uz: "O'zingizning kodingizni kiritib bo'lmaydi", ru: "Нельзя ввести собственный код" },
+  "error.REFERRAL_ALREADY_ATTRIBUTED": {
+    uz: "Sizda allaqachon taklif kodi bor — u almashtirilmaydi",
+    ru: "У вас уже есть код приглашения — он не заменяется",
+  },
+  "error.REFERRAL_WINDOW_CLOSED": {
+    uz: "Taklif kodini kiritish muddati o'tgan",
+    ru: "Срок для ввода кода приглашения истёк",
+  },
+  "error.REFERRAL_NOT_ELIGIBLE": { uz: "Bu taklif sizga to'g'ri kelmaydi", ru: "Это предложение вам не подходит" },
   "error.IDEMPOTENCY_KEY_REUSED": { uz: "Bu amal boshqa ma'lumot bilan yuborilgan", ru: "Это действие уже отправлено с другими данными" },
   "error.IDEMPOTENCY_IN_PROGRESS": { uz: "Oldingi so'rov hali bajarilmoqda — biroz kuting", ru: "Предыдущий запрос ещё выполняется — подождите" },
   "error.INVALID_STATE_TRANSITION": { uz: "Bu amalni hozirgi holatda bajarib bo'lmaydi", ru: "В текущем состоянии это действие недоступно" },
@@ -186,6 +235,8 @@ export const messages = {
   "status.pending": { uz: "Kutilmoqda", ru: "Ожидает" },
   "status.approved": { uz: "Tasdiqlangan", ru: "Подтверждено" },
   "status.rejected": { uz: "Rad etilgan", ru: "Отклонено" },
+  "status.proposed": { uz: "Javob kutilmoqda", ru: "Ожидает ответа" },
+  "status.withdrawn": { uz: "Qaytarib olingan", ru: "Отозвано" },
   "status.fulfilled": { uz: "Bajarilgan", ru: "Выполнено" },
   "status.expired": { uz: "Muddati tugagan", ru: "Срок истёк" },
   "status.completed": { uz: "Yakunlangan", ru: "Завершено" },

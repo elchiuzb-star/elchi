@@ -7,6 +7,7 @@ import App from "./app/App";
 import { PublicSharePage } from "./app/v2/PublicSharePage";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { startTheme } from "./app/ui/theme";
+import { codeFromPath, rememberCode } from "./app/promo";
 import "./styles/index.css";
 
 // Before the first render, so a person who chose dark never gets a white flash on launch.
@@ -18,6 +19,15 @@ const isAdminPanel = path.startsWith("/admin");
 const shareToken = path.startsWith("/e/") ? decodeURIComponent(path.slice(3)) : null;
 /** Reachable without a session, because a store listing and the settings screen both link straight to it. */
 const isPrivacy = path.startsWith("/privacy");
+/**
+ * Referral link `/r/<code>` (Q107): the code is kept through login and the person confirms it on the bonus screen.
+ * An existing attribution is never replaced (the server keeps the first one). The address bar goes back to `/`.
+ */
+const referralCode = codeFromPath(path);
+if (referralCode) {
+  rememberCode(referralCode);
+  window.history.replaceState(null, "", "/");
+}
 
 function Root() {
   if (isPrivacy) return <PrivacyPolicy />;

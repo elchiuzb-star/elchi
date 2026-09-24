@@ -12,7 +12,8 @@
 ledger_account_balances read-only   # 0047: balance writer is the SECURITY DEFINER ledger_entries trigger (Q48)
 bookings                app-marker  # 0056 Q60: amount columns change only if the accepted-amendment marker names a real accepted amendment with matching values
 booking_amendments      app-marker  # 0056 Q60: AFTER UPDATE trigger that appends the accepted amendment id to the marker (writer, not a guard)
-feature_flag_values     app-marker  # 0057 Q72: enabling a v2 flag needs the admin-API marker set by geo.service.set_flag_value
+feature_flag_values     app-marker  # 0057 Q72: enabling a v2 flag needs the admin-API marker set by geo.service.set_flag_value (0084 adds the same marker check for promotions_enabled)
+promo_budgets           read-only   # 0084 Q115: budget cache writer is the SECURITY DEFINER promo_ledger_transactions trigger
 #
 # Guards that are NOT detected, by design: they do not read session state, so SET cannot bypass them and the
 # app role keeps its normal grants:

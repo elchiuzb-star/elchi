@@ -764,6 +764,387 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/admin/promo/budget-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Budget Requests */
+        get: operations["list_budget_requests_api_v2_admin_promo_budget_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/budget-requests/{request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Budget Request Approve */
+        post: operations["budget_request_approve_api_v2_admin_promo_budget_requests__request_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/budget-requests/{request_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Budget Request Reject */
+        post: operations["budget_request_reject_api_v2_admin_promo_budget_requests__request_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/budget-requests/{request_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Budget Request Withdraw */
+        post: operations["budget_request_withdraw_api_v2_admin_promo_budget_requests__request_id__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Campaigns */
+        get: operations["list_campaigns_api_v2_admin_promo_campaigns_get"];
+        put?: never;
+        /** Create Campaign */
+        post: operations["create_campaign_api_v2_admin_promo_campaigns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Campaign */
+        get: operations["get_campaign_api_v2_admin_promo_campaigns__campaign_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Campaign Activate */
+        post: operations["campaign_activate_api_v2_admin_promo_campaigns__campaign_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/budget-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Budget
+         * @description Up to the two-person threshold it posts on the requester's authority; above it a *different* finance
+         *     approver must approve with their own session and step-up (Q17, Q114).
+         */
+        post: operations["request_budget_api_v2_admin_promo_campaigns__campaign_id__budget_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Campaign Close */
+        post: operations["campaign_close_api_v2_admin_promo_campaigns__campaign_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/combinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Combination
+         * @description Q123: allow two campaigns on one booking with an explicit cost basis (super_admin + real MFA step-up).
+         */
+        post: operations["approve_combination_api_v2_admin_promo_campaigns__campaign_id__combinations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Campaign Pause */
+        post: operations["campaign_pause_api_v2_admin_promo_campaigns__campaign_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/processing/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Processing Resume */
+        post: operations["processing_resume_api_v2_admin_promo_campaigns__campaign_id__processing_resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/processing/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Processing Suspend */
+        post: operations["processing_suspend_api_v2_admin_promo_campaigns__campaign_id__processing_suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Campaign Resume */
+        post: operations["campaign_resume_api_v2_admin_promo_campaigns__campaign_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/campaigns/{campaign_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Version */
+        post: operations["add_version_api_v2_admin_promo_campaigns__campaign_id__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/combinations/{combination_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Combination
+         * @description Q123: new bookings stop combining the pair; agreements already made keep their recorded cost basis.
+         */
+        post: operations["revoke_combination_api_v2_admin_promo_combinations__combination_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reconciliation
+         * @description Promo ledger vs budget vs obligations vs lots. Empty list = consistent.
+         */
+        get: operations["reconciliation_api_v2_admin_promo_reconciliation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Promo Report
+         * @description Operational aggregate (real rows only; the simulator is never served here). Read-only, at most 366 days,
+         *     bounded by a statement timeout. Needs campaign view **and** finance reports (money of the programme).
+         */
+        get: operations["promo_report_api_v2_admin_promo_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reviews */
+        get: operations["list_reviews_api_v2_admin_promo_reviews_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/reviews/{review_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Review
+         * @description Admin+ with a fresh step-up. Approval creates no reward and never changes an attribution (Q122).
+         */
+        post: operations["decide_review_api_v2_admin_promo_reviews__review_id__decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/promo/reviews/{review_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Review
+         * @description Operator: take the review and leave a note (audit). No decision.
+         */
+        post: operations["start_review_api_v2_admin_promo_reviews__review_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/admin/proposals/{thread_id}/messages": {
         parameters: {
             query?: never;
@@ -1057,6 +1438,26 @@ export interface paths {
         put?: never;
         /** Accept Amendment */
         post: operations["accept_amendment_api_v2_amendments__amendment_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/amendments/{amendment_id}/promo-confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Amendment Promo
+         * @description Q126: the proposer renews its promo confirmation of an open amendment (after a stale-confirmation refusal).
+         */
+        post: operations["confirm_amendment_promo_api_v2_amendments__amendment_id__promo_confirmation_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1794,6 +2195,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/listings/{listing_id}/promo-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Promo Preview
+         * @description Referral stage 5: before sending an offer or a counter, the client sees what its own bonus would do to the
+         *     price it is about to send - fare, discount, cash to hand over - or, when none applies, a plain reason. Reserves
+         *     nothing. Only the would-be client of this listing asks; the answer is about the caller's own bonus only.
+         */
+        get: operations["promo_preview_api_v2_listings__listing_id__promo_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/listings/{listing_id}/proposals": {
         parameters: {
             query?: never;
@@ -2032,6 +2455,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/me/promo-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Promo Balance
+         * @description The caller's own discount rights only. Available even with promotions off: nothing here can be spent then.
+         */
+        get: operations["my_promo_balance_api_v2_me_promo_balance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/me/proposals": {
         parameters: {
             query?: never;
@@ -2041,6 +2484,43 @@ export interface paths {
         };
         /** List My Proposals */
         get: operations["list_my_proposals_api_v2_me_proposals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/me/referral-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * My Referral Code
+         * @description The caller's own code, created on first use. The code is random; it says nothing about its owner.
+         */
+        post: operations["my_referral_code_api_v2_me_referral_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/me/referrals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Referrals */
+        get: operations["my_referrals_api_v2_me_referrals_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2111,6 +2591,106 @@ export interface paths {
         get: operations["list_my_tickets_api_v2_me_support_tickets_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/me/trip-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Trip Intents */
+        get: operations["list_trip_intents_api_v2_me_trip_intents_get"];
+        put?: never;
+        /**
+         * Create Trip Intent
+         * @description A private request: publishes nothing and sends nothing to any driver.
+         */
+        post: operations["create_trip_intent_api_v2_me_trip_intents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/me/trip-intents/{intent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Trip Intent */
+        get: operations["get_trip_intent_api_v2_me_trip_intents__intent_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit Trip Intent
+         * @description A new version. Route/time/quantity/parcel changes close the open offers made from it - repeat with
+         *     ``acknowledge_open_offers=true`` after 409 ``TRIP_INTENT_OFFERS_AFFECTED``. A booked request is not edited.
+         */
+        patch: operations["edit_trip_intent_api_v2_me_trip_intents__intent_id__patch"];
+        trace?: never;
+    };
+    "/api/v2/me/trip-intents/{intent_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Trip Intent */
+        post: operations["close_trip_intent_api_v2_me_trip_intents__intent_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/me/trip-intents/{intent_id}/fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trip Intent Fit
+         * @description Advisory: how one driver offer compares with the request. Reserves nothing.
+         */
+        get: operations["trip_intent_fit_api_v2_me_trip_intents__intent_id__fit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/me/trip-intents/{intent_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Trip Intent
+         * @description Explicit "search again" after the booking made from it was cancelled; old offers stay closed.
+         */
+        post: operations["reopen_trip_intent_api_v2_me_trip_intents__intent_id__reopen_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2276,6 +2856,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/proposals/{thread_id}/promo-confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Proposal Promo
+         * @description Q126: the author of the open version renews its promo confirmation from the current session (the other side's
+         *     accept said it was stale). The offer itself - price, places, times - does not change.
+         */
+        post: operations["confirm_proposal_promo_api_v2_proposals__thread_id__promo_confirmation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/proposals/{thread_id}/reject": {
         parameters: {
             query?: never;
@@ -2327,6 +2928,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/public/referral-codes/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Referral Code
+         * @description No authentication. Unknown, revoked and inactive-owner codes give the same answer. Rate limited per source.
+         */
+        get: operations["check_referral_code_api_v2_public_referral_codes__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/public/tracking/{token}": {
         parameters: {
             query?: never;
@@ -2339,6 +2960,63 @@ export interface paths {
          * @description K7: no auth; every failure is the same 404; no referrer, no caching, no analytics.
          */
         get: operations["get_public_tracking_api_v2_public_tracking__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/referrals/attribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attribute
+         * @description Attach the code to the *caller*. A refusal never blocks sign-up; the first attribution is never replaced.
+         */
+        post: operations["attribute_api_v2_referrals_attribution_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/referrals/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enroll
+         * @description Join a campaign under exactly the terms shown (fingerprint). Changed terms -> 409, show the new offer.
+         */
+        post: operations["enroll_api_v2_referrals_enrollments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/referrals/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Offers */
+        get: operations["offers_api_v2_referrals_offers_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2762,6 +3440,10 @@ export interface components {
              * @description Q54: the listing's terms_version the accepting party saw (ListingDTO.terms_version).
              */
             expected_listing_version?: number | null;
+            /** @description Referral stage 4: the client accepting a version confirms the passenger bonus it was shown. Needs a client declaring X-Elchi-Client-Features: promo_cash_v1. */
+            promo_consent?: components["schemas"]["PromoConsentInput"] | null;
+            /** @description Q123 (clarified): the driver accepting a version sends the cash to collect and the commission charged it was shown; a different server result (e.g. credit no longer fits) refuses this attempt with the new numbers (PROMO_QUOTE_STALE driver_terms_changed) instead of charging more behind its back. */
+            promo_driver_ack?: components["schemas"]["PromoDriverAckInput"] | null;
             /**
              * Proposal Version Id
              * @description prv_... id of the current version.
@@ -2903,6 +3585,18 @@ export interface components {
             /** Role */
             role: string;
         };
+        /** AmendmentAccept */
+        AmendmentAccept: {
+            /**
+             * Expected Version
+             * @description Version of the amendment.
+             */
+            expected_version: number;
+            /** @description Q116: a client accepting a change to a discounted booking confirms the new terms. */
+            promo_consent?: components["schemas"]["PromoConsentInput"] | null;
+            /** @description Q125: a driver accepting a change that moves its cash or commission confirms them. */
+            promo_driver_ack?: components["schemas"]["PromoDriverAckInput"] | null;
+        };
         /** AmendmentChanges */
         AmendmentChanges: {
             /** Dropoff Stop Id */
@@ -2923,6 +3617,10 @@ export interface components {
             changes: components["schemas"]["AmendmentChanges"];
             /** Expected Version */
             expected_version: number;
+            /** @description Q116: a client proposing a change to a discounted booking confirms the new terms. */
+            promo_consent?: components["schemas"]["PromoConsentInput"] | null;
+            /** @description Q125: a driver proposing a change that moves its cash or commission confirms them. */
+            promo_driver_ack?: components["schemas"]["PromoDriverAckInput"] | null;
             /** Reason */
             reason: string;
         };
@@ -2954,6 +3652,11 @@ export interface components {
             new_total_minor: number;
             /** New Unit Price Minor */
             new_unit_price_minor: number;
+            /**
+             * Promo
+             * @description Referral stage 4: discounted booking only.
+             */
+            promo?: (components["schemas"]["BookingPromoClientDTO"] | components["schemas"]["BookingPromoDriverDTO"]) | null;
             /** Status */
             status: string;
             /** Version */
@@ -2966,6 +3669,14 @@ export interface components {
              * @description Version of the amendment.
              */
             expected_version: number;
+        };
+        /**
+         * AmendmentPromoConfirmation
+         * @description Q126: the proposer of an open amendment confirms its promo terms again from its current session.
+         */
+        AmendmentPromoConfirmation: {
+            promo_consent?: components["schemas"]["PromoConsentInput"] | null;
+            promo_driver_ack?: components["schemas"]["PromoDriverAckInput"] | null;
         };
         /**
          * Amenity
@@ -2988,6 +3699,38 @@ export interface components {
             field?: string | null;
             /** Message */
             message: string;
+        };
+        /** AttributionDTO */
+        AttributionDTO: {
+            /**
+             * Attributed At
+             * Format: date-time
+             */
+            attributed_at: string;
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "client" | "driver";
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+            /**
+             * Window Ends At
+             * Format: date-time
+             */
+            window_ends_at: string;
+        };
+        /** AttributionRequest */
+        AttributionRequest: {
+            /**
+             * Audience
+             * @enum {string}
+             */
+            audience: "client" | "driver";
+            /** Code */
+            code: string;
         };
         /** AuthProfileUpdate */
         AuthProfileUpdate: {
@@ -3163,6 +3906,8 @@ export interface components {
             pickup: components["schemas"]["BookingStopDTO"];
             policy_versions: components["schemas"]["BookingPolicyVersionsDTO"];
             price_basis: components["schemas"]["PriceBasis"];
+            /** @description Referral stage 4: present only on a discounted booking. The client hands the driver cash_due_minor, not total_minor. */
+            promo?: components["schemas"]["BookingPromoClientDTO"] | null;
             /** Quantity */
             quantity: number;
             /** Service Status */
@@ -3264,6 +4009,8 @@ export interface components {
             pickup: components["schemas"]["BookingStopDTO"];
             policy_versions: components["schemas"]["BookingPolicyVersionsDTO"];
             price_basis: components["schemas"]["PriceBasis"];
+            /** @description Referral stage 4: present only on a discounted booking. Collect cash_to_collect_minor; the real balance is charged commission_charged_minor. */
+            promo?: components["schemas"]["BookingPromoDriverDTO"] | null;
             /** Quantity */
             quantity: number;
             /** Service Status */
@@ -3337,6 +4084,52 @@ export interface components {
             /** Listing Version */
             listing_version: number;
         };
+        /**
+         * BookingPromoClientDTO
+         * @description What the client pays on a discounted booking (Q103): no commission, credit, cost or formula.
+         */
+        BookingPromoClientDTO: {
+            /** Cash Due Minor */
+            cash_due_minor: number;
+            currency: components["schemas"]["Currency"];
+            /** Fare Minor */
+            fare_minor: number;
+            /** Passenger Discount Minor */
+            passenger_discount_minor: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            view: "client";
+        };
+        /**
+         * BookingPromoDriverDTO
+         * @description What the driver collects and is charged on a discounted booking (Q103).
+         */
+        BookingPromoDriverDTO: {
+            /** Base Commission Minor */
+            base_commission_minor: number;
+            /** Cash To Collect Minor */
+            cash_to_collect_minor: number;
+            /** Commission Charged Minor */
+            commission_charged_minor: number;
+            currency: components["schemas"]["Currency"];
+            /** Driver Credit Minor */
+            driver_credit_minor: number;
+            /** Driver Keeps Minor */
+            driver_keeps_minor: number;
+            /** Fare Minor */
+            fare_minor: number;
+            /** Passenger Discount Covered Minor */
+            passenger_discount_covered_minor: number;
+            /** Passenger Discount Minor */
+            passenger_discount_minor: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            view: "driver";
+        };
         /** BookingStopDTO */
         BookingStopDTO: {
             /** Occurrence Seq */
@@ -3399,6 +4192,233 @@ export interface components {
             seat_capacity: number;
             vehicle_class: components["schemas"]["VehicleClass"];
         };
+        /** BudgetDTO */
+        BudgetDTO: {
+            /** Allocated Minor */
+            allocated_minor: number;
+            /** Available For New Minor */
+            available_for_new_minor: number;
+            /** Consumed Minor */
+            consumed_minor: number;
+            /** @default UZS */
+            currency: components["schemas"]["Currency"];
+            /** Granted Minor */
+            granted_minor: number;
+            /**
+             * Pending Reinstatements Minor
+             * @description Approved reinstatements waiting for room (in L).
+             * @default 0
+             */
+            pending_reinstatements_minor: number;
+            /** Promised Minor */
+            promised_minor: number;
+            /**
+             * Reducible Minor
+             * @description max(0, B - S - L): the most a plain reduction may take (G14).
+             * @default 0
+             */
+            reducible_minor: number;
+            /** Released Minor */
+            released_minor: number;
+            /** Shortfall Minor */
+            shortfall_minor: number;
+        };
+        /** BudgetRequestCreate */
+        BudgetRequestCreate: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Evidence Reference */
+            evidence_reference?: string | null;
+            /**
+             * Kind
+             * @description reduce_allocation never goes below spent + outstanding obligations (B >= S + L, G14); funding_loss records external funding that is really gone - evidence_reference required, may leave a shortfall, pauses the campaign, cancels nothing.
+             * @enum {string}
+             */
+            kind: "allocate" | "reduce_allocation" | "funding_loss";
+            /** Reason */
+            reason: string;
+        };
+        /** BudgetRequestDTO */
+        BudgetRequestDTO: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Campaign Id */
+            campaign_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** @default UZS */
+            currency: components["schemas"]["Currency"];
+            /** Decided At */
+            decided_at?: string | null;
+            /** Evidence Reference */
+            evidence_reference?: string | null;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Needs Second Approver */
+            needs_second_approver: boolean;
+            /** Reason */
+            reason: string;
+            /** Requested By Me */
+            requested_by_me: boolean;
+            /** Status */
+            status: string;
+            /** Version */
+            version: number;
+        };
+        /** BudgetRequestDecision */
+        BudgetRequestDecision: {
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Reason
+             * @description Required to reject.
+             */
+            reason?: string | null;
+        };
+        /** CampaignCommand */
+        CampaignCommand: {
+            /** Expected Version */
+            expected_version: number;
+            /** Reason */
+            reason: string;
+            /**
+             * Version No
+             * @description activate: which version.
+             */
+            version_no?: number | null;
+        };
+        /** CampaignCreate */
+        CampaignCreate: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            service_type: components["schemas"]["ServiceType"];
+        };
+        /** CampaignDTO */
+        CampaignDTO: {
+            /** Active Version No */
+            active_version_no?: number | null;
+            budget: components["schemas"]["BudgetDTO"];
+            /** Combinations */
+            combinations?: components["schemas"]["CombinationDTO"][];
+            /** Family */
+            family: string;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Processing Suspend Reason */
+            processing_suspend_reason?: string | null;
+            /** Processing Suspended At */
+            processing_suspended_at?: string | null;
+            service_type: components["schemas"]["ServiceType"];
+            /** Status */
+            status: string;
+            /** Version */
+            version: number;
+            /** Versions */
+            versions?: components["schemas"]["CampaignVersionDTO"][];
+        };
+        /**
+         * CampaignVersionCreate
+         * @description Every value is a proposal by staff; ``null`` stays *not decided* and blocks activation (Q105).
+         */
+        CampaignVersionCreate: {
+            /** Approval Reference */
+            approval_reference?: string | null;
+            /** Driver Credit Max Per Booking Minor */
+            driver_credit_max_per_booking_minor?: number | null;
+            /** Enrollment Limit */
+            enrollment_limit?: number | null;
+            /** Max Discount Per Booking Minor */
+            max_discount_per_booking_minor?: number | null;
+            /** Max Discount Share Bps */
+            max_discount_share_bps?: number | null;
+            /** Milestone Thresholds */
+            milestone_thresholds?: number[] | null;
+            /** Min Distinct Clients */
+            min_distinct_clients?: number | null;
+            /** Min Margin Minor */
+            min_margin_minor?: number | null;
+            /** Note */
+            note?: string | null;
+            /** Passenger Bonus Max Per Booking Minor */
+            passenger_bonus_max_per_booking_minor?: number | null;
+            /** Qualification Window S */
+            qualification_window_s?: number | null;
+            referee_instrument?: components["schemas"]["PromoInstrument"] | null;
+            /** Referee Reward Minor */
+            referee_reward_minor?: number | null;
+            referrer_instrument?: components["schemas"]["PromoInstrument"] | null;
+            /** Referrer Reward Minor */
+            referrer_reward_minor?: number | null;
+            /** Restoration Grace S */
+            restoration_grace_s?: number | null;
+            /** Review Sla S */
+            review_sla_s?: number | null;
+            /** Reward Validity S */
+            reward_validity_s?: number | null;
+            /** Variable Cost Bps */
+            variable_cost_bps?: number | null;
+            /** Variable Cost Fixed Minor */
+            variable_cost_fixed_minor?: number | null;
+        };
+        /** CampaignVersionDTO */
+        CampaignVersionDTO: {
+            /** Approval Reference */
+            approval_reference?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Driver Credit Max Per Booking Minor */
+            driver_credit_max_per_booking_minor?: number | null;
+            /** Enrollment Limit */
+            enrollment_limit?: number | null;
+            /** Max Discount Per Booking Minor */
+            max_discount_per_booking_minor?: number | null;
+            /** Max Discount Share Bps */
+            max_discount_share_bps?: number | null;
+            /** Milestone Thresholds */
+            milestone_thresholds?: number[] | null;
+            /** Min Distinct Clients */
+            min_distinct_clients?: number | null;
+            /** Min Margin Minor */
+            min_margin_minor?: number | null;
+            /** Missing For Activation */
+            missing_for_activation: string[];
+            /** Passenger Bonus Max Per Booking Minor */
+            passenger_bonus_max_per_booking_minor?: number | null;
+            /** Qualification Window S */
+            qualification_window_s?: number | null;
+            referee_instrument?: components["schemas"]["PromoInstrument"] | null;
+            /** Referee Reward Minor */
+            referee_reward_minor?: number | null;
+            referrer_instrument?: components["schemas"]["PromoInstrument"] | null;
+            /** Referrer Reward Minor */
+            referrer_reward_minor?: number | null;
+            /** Restoration Grace S */
+            restoration_grace_s?: number | null;
+            /** Review Sla S */
+            review_sla_s?: number | null;
+            /** Reward Validity S */
+            reward_validity_s?: number | null;
+            /** Variable Cost Bps */
+            variable_cost_bps?: number | null;
+            /** Variable Cost Fixed Minor */
+            variable_cost_fixed_minor?: number | null;
+            /** Version No */
+            version_no: number;
+        };
         /** CapabilitiesDTO */
         CapabilitiesDTO: {
             /** Capabilities */
@@ -3413,7 +4433,7 @@ export interface components {
          * @description Server-computed permissions (ADR-0007). Never trusted from a token.
          * @enum {string}
          */
-        Capability: "listing.create_request" | "listing.create_trip_offer" | "proposal.submit_as_client" | "proposal.submit_as_driver" | "trip.create" | "trip.operate" | "tracking.publish" | "wallet.view_own" | "wallet.topup_request" | "ops.view" | "ops.booking_command" | "ops.booking_cancel" | "ops.dispute_resolve" | "ops.dispute_decide" | "ops.corridor_manage" | "ops.feature_flag_manage" | "ops.driver_eligibility_manage" | "finance.topup_approve" | "finance.adjustment" | "finance.reports" | "finance.commission_policy_view" | "finance.commission_policy_manage" | "staff.manage" | "platform.policy_manage" | "staff.mfa_approve" | "finance.fee_finalize" | "finance.adjustment_approve" | "ops.trust_review";
+        Capability: "listing.create_request" | "listing.create_trip_offer" | "proposal.submit_as_client" | "proposal.submit_as_driver" | "trip.create" | "trip.operate" | "tracking.publish" | "wallet.view_own" | "wallet.topup_request" | "ops.view" | "ops.booking_command" | "ops.booking_cancel" | "ops.dispute_resolve" | "ops.dispute_decide" | "ops.corridor_manage" | "ops.feature_flag_manage" | "ops.driver_eligibility_manage" | "finance.topup_approve" | "finance.adjustment" | "finance.reports" | "finance.commission_policy_view" | "finance.commission_policy_manage" | "staff.manage" | "platform.policy_manage" | "staff.mfa_approve" | "finance.fee_finalize" | "finance.adjustment_approve" | "ops.trust_review" | "promo.campaign_view" | "promo.campaign_manage" | "promo.budget_allocate" | "promo.fraud_review" | "promo.fraud_decide";
         /**
          * CashCollectionStatus
          * @enum {string}
@@ -3676,6 +4696,57 @@ export interface components {
         ClientProfileUpdate: {
             /** Full Name */
             full_name: string;
+        };
+        /** CombinationCreate */
+        CombinationCreate: {
+            /**
+             * Cost Basis
+             * @description shared: both O describe the same booking cost (the larger counts); additive: each campaign has its own extra cost (both count). Chosen explicitly - there is no default.
+             * @enum {string}
+             */
+            cost_basis: "shared" | "additive";
+            /** Other Campaign Id */
+            other_campaign_id: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * CombinationDTO
+         * @description Q123: an approved pairing of two campaigns on one booking (P from one, H from the other).
+         */
+        CombinationDTO: {
+            /** Campaign Ids */
+            campaign_ids: string[];
+            /**
+             * Cost Basis
+             * @enum {string}
+             */
+            cost_basis: "shared" | "additive";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Reason */
+            reason: string;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "revoked";
+            /** Version */
+            version: number;
+        };
+        /** CombinationRevoke */
+        CombinationRevoke: {
+            /** Expected Version */
+            expected_version: number;
+            /** Reason */
+            reason: string;
         };
         /** CommissionPolicyConfirm */
         CommissionPolicyConfirm: {
@@ -3973,6 +5044,16 @@ export interface components {
             /** Route Version Id */
             route_version_id: string;
         };
+        /**
+         * DisclosureDTO
+         * @description Conditions shown before joining (Q112). ``code`` is stable; the client renders the sentence.
+         */
+        DisclosureDTO: {
+            /** Code */
+            code: string;
+            /** Value */
+            value: unknown;
+        };
         /** DisputeCommand */
         DisputeCommand: {
             cash_outcome?: components["schemas"]["CashResolutionOutcome"] | null;
@@ -4264,6 +5345,72 @@ export interface components {
          * @description ``{}`` payload of a command whose answer is "done" (delete/revoke). Wave 4: owned by the contract.
          */
         EmptyDTO: Record<string, never>;
+        /** EnrollmentDTO */
+        EnrollmentDTO: {
+            /** Campaign Id */
+            campaign_id: string;
+            /** Campaign Name */
+            campaign_name: string;
+            /**
+             * Enrolled At
+             * Format: date-time
+             */
+            enrolled_at: string;
+            /** Id */
+            id: string;
+            /** @description Referee side only (the referrer never sees the other person's activity). */
+            progress?: components["schemas"]["ProgressDTO"] | null;
+            /**
+             * Qualification Deadline
+             * Format: date-time
+             */
+            qualification_deadline: string;
+            /**
+             * Qualification Status
+             * @description waiting | review | qualified | granted | rejected; null before the first qualifying service is seen.
+             */
+            qualification_status?: string | null;
+            service_type: components["schemas"]["ServiceType"];
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "referee" | "referrer";
+            /** Status */
+            status: string;
+        };
+        /** EnrollmentOfferDTO */
+        EnrollmentOfferDTO: {
+            /** Attribution Id */
+            attribution_id: string;
+            /** Campaign Id */
+            campaign_id: string;
+            /** Campaign Name */
+            campaign_name: string;
+            /** Disclosures */
+            disclosures: components["schemas"]["DisclosureDTO"][];
+            /**
+             * Parcel Sender Pays Only
+             * @description Parcel campaigns: the bonus is used only when the sender pays (Q104).
+             */
+            parcel_sender_pays_only: boolean;
+            service_type: components["schemas"]["ServiceType"];
+            /** Terms Fingerprint */
+            terms_fingerprint: string;
+            /** Version No */
+            version_no: number;
+        };
+        /** EnrollmentRequest */
+        EnrollmentRequest: {
+            /** Attribution Id */
+            attribution_id: string;
+            /** Campaign Id */
+            campaign_id: string;
+            /** Terms Fingerprint */
+            terms_fingerprint: string;
+            /** Version No */
+            version_no: number;
+        };
         /** Envelope[AccountDeletionDTO] */
         Envelope_AccountDeletionDTO_: {
             data: components["schemas"]["AccountDeletionDTO"];
@@ -4297,6 +5444,21 @@ export interface components {
         /** Envelope[AmendmentDTO] */
         Envelope_AmendmentDTO_: {
             data: components["schemas"]["AmendmentDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[AttributionDTO] */
+        Envelope_AttributionDTO_: {
+            data: components["schemas"]["AttributionDTO"];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -4357,6 +5519,36 @@ export interface components {
         /** Envelope[BookingTrackingDTO] */
         Envelope_BookingTrackingDTO_: {
             data: components["schemas"]["BookingTrackingDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[BudgetRequestDTO] */
+        Envelope_BudgetRequestDTO_: {
+            data: components["schemas"]["BudgetRequestDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[CampaignDTO] */
+        Envelope_CampaignDTO_: {
+            data: components["schemas"]["CampaignDTO"];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -4432,6 +5624,21 @@ export interface components {
         /** Envelope[ChatThreadDTO] */
         Envelope_ChatThreadDTO_: {
             data: components["schemas"]["ChatThreadDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[CombinationDTO] */
+        Envelope_CombinationDTO_: {
+            data: components["schemas"]["CombinationDTO"];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -4552,6 +5759,21 @@ export interface components {
         /** Envelope[EmptyDTO] */
         Envelope_EmptyDTO_: {
             data: components["schemas"]["EmptyDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[EnrollmentDTO] */
+        Envelope_EnrollmentDTO_: {
+            data: components["schemas"]["EnrollmentDTO"];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -4714,6 +5936,21 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[MyReferralsDTO] */
+        Envelope_MyReferralsDTO_: {
+            data: components["schemas"]["MyReferralsDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[NotificationDTO] */
         Envelope_NotificationDTO_: {
             data: components["schemas"]["NotificationDTO"];
@@ -4804,6 +6041,51 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[PromoBalanceDTO] */
+        Envelope_PromoBalanceDTO_: {
+            data: components["schemas"]["PromoBalanceDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[PromoPreviewDTO] */
+        Envelope_PromoPreviewDTO_: {
+            data: components["schemas"]["PromoPreviewDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[PromoReportDTO] */
+        Envelope_PromoReportDTO_: {
+            data: components["schemas"]["PromoReportDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[ProposalThreadDTO] */
         Envelope_ProposalThreadDTO_: {
             data: components["schemas"]["ProposalThreadDTO"];
@@ -4879,6 +6161,36 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[ReferralCodeCheckDTO] */
+        Envelope_ReferralCodeCheckDTO_: {
+            data: components["schemas"]["ReferralCodeCheckDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[ReferralCodeDTO] */
+        Envelope_ReferralCodeDTO_: {
+            data: components["schemas"]["ReferralCodeDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[ReportDTO] */
         Envelope_ReportDTO_: {
             data: components["schemas"]["ReportDTO"];
@@ -4897,6 +6209,21 @@ export interface components {
         /** Envelope[ReputationDTO] */
         Envelope_ReputationDTO_: {
             data: components["schemas"]["ReputationDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[ReviewDTO] */
+        Envelope_ReviewDTO_: {
+            data: components["schemas"]["ReviewDTO"];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -5194,6 +6521,36 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[TripIntentDTO] */
+        Envelope_TripIntentDTO_: {
+            data: components["schemas"]["TripIntentDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[TripIntentFitDTO] */
+        Envelope_TripIntentFitDTO_: {
+            data: components["schemas"]["TripIntentFitDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[TripManifestDTO] */
         Envelope_TripManifestDTO_: {
             data: components["schemas"]["TripManifestDTO"];
@@ -5398,6 +6755,38 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[list[BudgetRequestDTO]] */
+        Envelope_list_BudgetRequestDTO__: {
+            /** Data */
+            data: components["schemas"]["BudgetRequestDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[CampaignDTO]] */
+        Envelope_list_CampaignDTO__: {
+            /** Data */
+            data: components["schemas"]["CampaignDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[list[ChatMessageAdminDTO]] */
         Envelope_list_ChatMessageAdminDTO__: {
             /** Data */
@@ -5514,6 +6903,22 @@ export interface components {
         Envelope_list_DistrictDTO__: {
             /** Data */
             data: components["schemas"]["DistrictDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[EnrollmentOfferDTO]] */
+        Envelope_list_EnrollmentOfferDTO__: {
+            /** Data */
+            data: components["schemas"]["EnrollmentOfferDTO"][];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -5814,6 +7219,22 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[list[ReconciliationIssueDTO]] */
+        Envelope_list_ReconciliationIssueDTO__: {
+            /** Data */
+            data: components["schemas"]["ReconciliationIssueDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[list[RegionDTO]] */
         Envelope_list_RegionDTO__: {
             /** Data */
@@ -5834,6 +7255,22 @@ export interface components {
         Envelope_list_ReportDTO__: {
             /** Data */
             data: components["schemas"]["ReportDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[ReviewDTO]] */
+        Envelope_list_ReviewDTO__: {
+            /** Data */
+            data: components["schemas"]["ReviewDTO"][];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -5990,6 +7427,22 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[list[TripIntentDTO]] */
+        Envelope_list_TripIntentDTO__: {
+            /** Data */
+            data: components["schemas"]["TripIntentDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[list[TrustReviewDTO]] */
         Envelope_list_TrustReviewDTO__: {
             /** Data */
@@ -6087,6 +7540,12 @@ export interface components {
             };
         };
         /**
+         * FaultSide
+         * @description Who is at fault for a cancellation/no-show (spec §8.2 reliability stats, N3).
+         * @enum {string}
+         */
+        FaultSide: "client" | "driver" | "platform" | "none";
+        /**
          * FeatureFlagKey
          * @description Spec §20.3 flags.
          *
@@ -6094,7 +7553,7 @@ export interface components {
          *     of stage 2 (decision 4, ADR-0006).
          * @enum {string}
          */
-        FeatureFlagKey: "passenger_enabled" | "parcel_enabled" | "driver_listing_enabled" | "corridor_matching_enabled" | "wallet_required" | "tracking_enabled" | "card_payments_enabled";
+        FeatureFlagKey: "passenger_enabled" | "parcel_enabled" | "driver_listing_enabled" | "corridor_matching_enabled" | "wallet_required" | "tracking_enabled" | "card_payments_enabled" | "promotions_enabled";
         /** FeeDecision */
         FeeDecision: {
             /** Amount Minor */
@@ -6468,6 +7927,37 @@ export interface components {
             message: string;
             /** Success */
             success: boolean;
+        };
+        /**
+         * InvitedCountsDTO
+         * @description People who joined with my code, by status - counts only, never who.
+         */
+        InvitedCountsDTO: {
+            /**
+             * Attributed
+             * @default 0
+             */
+            attributed: number;
+            /**
+             * Expired
+             * @default 0
+             */
+            expired: number;
+            /**
+             * Qualified
+             * @default 0
+             */
+            qualified: number;
+            /**
+             * Qualifying
+             * @default 0
+             */
+            qualifying: number;
+            /**
+             * Rejected
+             * @default 0
+             */
+            rejected: number;
         };
         /** KpiDTO */
         KpiDTO: {
@@ -7167,6 +8657,21 @@ export interface components {
              */
             url: string;
         };
+        /** MilestoneDTO */
+        MilestoneDTO: {
+            /** Reached */
+            reached: boolean;
+            /** Threshold */
+            threshold: number;
+        };
+        /** MyReferralsDTO */
+        MyReferralsDTO: {
+            /** Attributions */
+            attributions: components["schemas"]["AttributionDTO"][];
+            /** Enrollments */
+            enrollments: components["schemas"]["EnrollmentDTO"][];
+            invited: components["schemas"]["InvitedCountsDTO"];
+        };
         /** NoShowReviewDTO */
         NoShowReviewDTO: {
             /** Decided At */
@@ -7221,6 +8726,8 @@ export interface components {
         OperatorBookingCommand: "confirm_no_show" | "reject_no_show" | "complete_with_evidence" | "drop_off" | "require_return" | "return_to_sender" | "resolve_custody_case" | "finalize_fee" | "cancel" | "reissue_proof_code";
         /** OperatorBookingCommandRequest */
         OperatorBookingCommandRequest: {
+            /** @description Q129, cancel only: the cause the operator decided (client, driver, platform, none = justified), with the reason as its basis. Absent: no fault is recorded and the promo cause stays undetermined (review). */
+            cancel_fault_side?: components["schemas"]["FaultSide"] | null;
             /** Evidence File Ids */
             evidence_file_ids?: string[];
             /** Expected Version */
@@ -7733,6 +9240,342 @@ export interface components {
             /** Driver */
             driver: number;
         };
+        /** ProcessingCommand */
+        ProcessingCommand: {
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * ProgressDTO
+         * @description Stage 5, the referee's own progress: services (or distinct trips) that fully count, those still being checked
+         *     (waiting for the commission capture, the 48 h window or a person) and what is left. A service being checked is
+         *     never counted as done. The numbers are the campaign version's own values.
+         */
+        ProgressDTO: {
+            /** Done */
+            done: number;
+            /** In Review */
+            in_review: number;
+            /** Milestones */
+            milestones?: components["schemas"]["MilestoneDTO"][];
+            /** Remaining */
+            remaining: number;
+            /** Required */
+            required: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "service" | "distinct_trip";
+        };
+        /** PromoBalanceDTO */
+        PromoBalanceDTO: {
+            /** Buckets */
+            buckets: components["schemas"]["PromoBucketDTO"][];
+            /** Lots */
+            lots: components["schemas"]["PromoLotDTO"][];
+        };
+        /**
+         * PromoBucketDTO
+         * @description One instrument on one service type. Not money: cannot be withdrawn, transferred or paid out.
+         */
+        PromoBucketDTO: {
+            /** Available Minor */
+            available_minor: number;
+            /** Consumed Minor */
+            consumed_minor: number;
+            /** @default UZS */
+            currency: components["schemas"]["Currency"];
+            /** Expired Minor */
+            expired_minor: number;
+            instrument: components["schemas"]["PromoInstrument"];
+            /** Next Expiry At */
+            next_expiry_at?: string | null;
+            /**
+             * Reserved Minor
+             * @description Held for a booking that is not finished yet.
+             */
+            reserved_minor: number;
+            /** Reversed Minor */
+            reversed_minor: number;
+            service_type: components["schemas"]["ServiceType"];
+            /**
+             * Under Review Minor
+             * @description Not spendable while a person checks it.
+             */
+            under_review_minor: number;
+        };
+        /**
+         * PromoConsentInput
+         * @description The client's explicit confirmation of the discount it was shown (Q104, ADR-0023 §18). The server recomputes
+         *     the terms; these numbers must match them exactly or the command is refused with ``PROMO_QUOTE_STALE``. They are
+         *     never used as amounts.
+         */
+        PromoConsentInput: {
+            /**
+             * Cash Due Minor
+             * @description F_cash - cash the client will hand the driver (F - P).
+             */
+            cash_due_minor: number;
+            /**
+             * Passenger Bonus Minor
+             * @description P - passenger bonus the client agrees to spend.
+             */
+            passenger_bonus_minor: number;
+        };
+        /**
+         * PromoDriverAckInput
+         * @description Q125: the driver confirms the new driver-side numbers of an amendment it was shown. Checked against the
+         *     server's recomputation (``PROMO_QUOTE_STALE`` otherwise); never used as amounts.
+         */
+        PromoDriverAckInput: {
+            /**
+             * Cash To Collect Minor
+             * @description F_cash - cash the driver will collect.
+             */
+            cash_to_collect_minor: number;
+            /**
+             * Commission Charged Minor
+             * @description C_net - commission charged from the balance.
+             */
+            commission_charged_minor: number;
+        };
+        /**
+         * PromoInstrument
+         * @enum {string}
+         */
+        PromoInstrument: "passenger_bonus" | "driver_credit";
+        /** PromoLotDTO */
+        PromoLotDTO: {
+            /** Amount Minor */
+            amount_minor: number;
+            /** Available From */
+            available_from?: string | null;
+            /** Available Minor */
+            available_minor: number;
+            /** Consumed Minor */
+            consumed_minor: number;
+            /** @default UZS */
+            currency: components["schemas"]["Currency"];
+            /** Expired Minor */
+            expired_minor: number;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Id */
+            id: string;
+            instrument: components["schemas"]["PromoInstrument"];
+            /** Reserved Minor */
+            reserved_minor: number;
+            service_type: components["schemas"]["ServiceType"];
+            /** Status */
+            status: string;
+        };
+        /**
+         * PromoPreviewDTO
+         * @description ``GET /listings/{id}/promo-preview``: the caller's own bonus on the price it is about to send, or why none.
+         */
+        PromoPreviewDTO: {
+            /** No Discount Reason */
+            no_discount_reason?: ("service_not_eligible" | "bonus_expired" | "bonus_reserved" | "bonus_on_hold" | "no_campaign" | "client_update_required" | "trip_terms") | null;
+            quote?: components["schemas"]["ProposalPromoClientDTO"] | null;
+        };
+        /** PromoReportBudgetDTO */
+        PromoReportBudgetDTO: {
+            /** Alerts */
+            alerts: "budget_shortfall"[];
+            /** Allocated Minor */
+            allocated_minor: number;
+            /** Available For New Minor */
+            available_for_new_minor: number;
+            /** Campaign Id */
+            campaign_id: string;
+            /** Committed Minor */
+            committed_minor: number;
+            /** Consumed Minor */
+            consumed_minor: number;
+            /** Funded Commitment Minor */
+            funded_commitment_minor: number;
+            /**
+             * Granted Unspent Minor
+             * @description Granted and not yet spent; includes reserved_on_bookings_minor.
+             */
+            granted_unspent_minor: number;
+            /** Kind */
+            kind: string;
+            /** Outstanding Liability Minor */
+            outstanding_liability_minor: number;
+            /** Pending Reinstatements Minor */
+            pending_reinstatements_minor: number;
+            /** Pending Review Minor */
+            pending_review_minor: number;
+            /** Promised Minor */
+            promised_minor: number;
+            /**
+             * Reducible Minor
+             * @description max(0, B - S - L): the most a plain reduction may take (G14).
+             */
+            reducible_minor: number;
+            /** Released Minor */
+            released_minor: number;
+            /** Reserved On Bookings Minor */
+            reserved_on_bookings_minor: number;
+            service_type: components["schemas"]["ServiceType"];
+            /** Shortfall Minor */
+            shortfall_minor: number;
+            /** Status */
+            status: string;
+        };
+        /** PromoReportCohortDTO */
+        PromoReportCohortDTO: {
+            /**
+             * Anchor
+             * @constant
+             */
+            anchor: "enrollment_week_asia_tashkent";
+            /**
+             * Matured D30
+             * @description Every enrollment of the week has been observed for 30 days.
+             */
+            matured_d30: boolean;
+            /** Matured D60 */
+            matured_d60: boolean;
+            /** Observed Days */
+            observed_days: number;
+            /** Week Start */
+            week_start: string;
+        };
+        /** PromoReportDTO */
+        PromoReportDTO: {
+            /**
+             * Amount Unit
+             * @default minor
+             * @constant
+             */
+            amount_unit: "minor";
+            /**
+             * Budgets
+             * @description State as of generated_at, whatever the period.
+             */
+            budgets: components["schemas"]["PromoReportBudgetDTO"][];
+            /** @default UZS */
+            currency: components["schemas"]["Currency"];
+            /**
+             * Data Source
+             * @description Real rows. Simulator results are never served here.
+             * @constant
+             */
+            data_source: "operational";
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /**
+             * Group By
+             * @enum {string}
+             */
+            group_by: "service" | "corridor" | "campaign_version" | "cohort";
+            period: components["schemas"]["PromoReportPeriodDTO"];
+            /** Period Basis */
+            period_basis: {
+                [key: string]: string;
+            };
+            /** Rows */
+            rows: components["schemas"]["PromoReportRowDTO"][];
+        };
+        /** PromoReportPeriodDTO */
+        PromoReportPeriodDTO: {
+            /**
+             * Day Bounds
+             * @default UTC
+             * @constant
+             */
+            day_bounds: "UTC";
+            /**
+             * End At
+             * Format: date-time
+             */
+            end_at: string;
+            /**
+             * End Exclusive
+             * @default true
+             */
+            end_exclusive: boolean;
+            /**
+             * Start At
+             * Format: date-time
+             */
+            start_at: string;
+        };
+        /** PromoReportRowDTO */
+        PromoReportRowDTO: {
+            cohort?: components["schemas"]["PromoReportCohortDTO"] | null;
+            /**
+             * Key
+             * @description service type, corridor id, campaign id/version, enrollment week or no_enrollment
+             */
+            key: string;
+            values: components["schemas"]["PromoReportValuesDTO"];
+        };
+        /**
+         * PromoReportValuesDTO
+         * @description ``None`` = the metric does not apply to this grouping (never "0").
+         */
+        PromoReportValuesDTO: {
+            /** Base Commission Minor */
+            base_commission_minor?: number | null;
+            /** Commission Reversed Minor */
+            commission_reversed_minor?: number | null;
+            /** Driver Credit Minor */
+            driver_credit_minor?: number | null;
+            /** Enrollments */
+            enrollments?: number | null;
+            /** Enrollments Granted */
+            enrollments_granted?: number | null;
+            /** Enrollments Open */
+            enrollments_open?: number | null;
+            /** Enrollments Released */
+            enrollments_released?: number | null;
+            /** Expired Minor */
+            expired_minor?: number | null;
+            /** Granted Driver Credit Minor */
+            granted_driver_credit_minor?: number | null;
+            /** Granted Passenger Bonus Minor */
+            granted_passenger_bonus_minor?: number | null;
+            /** Granted Unspent Minor */
+            granted_unspent_minor?: number | null;
+            /** Lots Pending Review Minor */
+            lots_pending_review_minor?: number | null;
+            /** Net Commission Agreed Minor */
+            net_commission_agreed_minor?: number | null;
+            /** Net Commission Captured Minor */
+            net_commission_captured_minor?: number | null;
+            /** Net Commission Kept Minor */
+            net_commission_kept_minor?: number | null;
+            /** Outstanding Liability Minor */
+            outstanding_liability_minor?: number | null;
+            /** Passenger Bonus Minor */
+            passenger_bonus_minor?: number | null;
+            /** Pending Review Minor */
+            pending_review_minor?: number | null;
+            /** Promised In Review Minor */
+            promised_in_review_minor?: number | null;
+            /** Promised Minor */
+            promised_minor?: number | null;
+            /** Promised Open Minor */
+            promised_open_minor?: number | null;
+            /** Promo Bookings */
+            promo_bookings?: number | null;
+            /** Reserved On Bookings Minor */
+            reserved_on_bookings_minor?: number | null;
+            /** Spent Driver Credit Minor */
+            spent_driver_credit_minor?: number | null;
+            /** Spent Passenger Bonus Minor */
+            spent_passenger_bonus_minor?: number | null;
+        };
         /**
          * ProofKind
          * @enum {string}
@@ -7783,6 +9626,7 @@ export interface components {
             pickup_window_end?: string | null;
             /** Pickup Window Start */
             pickup_window_start?: string | null;
+            promo_consent?: components["schemas"]["ProposalPromoConsent"] | null;
             /** Quantity */
             quantity?: number | null;
             /** Unit Price Minor */
@@ -7809,6 +9653,7 @@ export interface components {
              */
             pickup_window_start: string;
             price_basis: components["schemas"]["PriceBasis"];
+            promo_consent?: components["schemas"]["ProposalPromoConsent"] | null;
             /** Quantity */
             quantity: number;
             /**
@@ -7816,6 +9661,8 @@ export interface components {
              * @description Required when a driver answers a request.
              */
             trip_id?: string | null;
+            /** @description ADR-0025: the client's saved request this offer is made from. The server takes quantity and the parcel demand from it (a different body value is refused), remembers the link for good and lets at most one offer of the request become a booking. */
+            trip_intent?: components["schemas"]["TripIntentRef"] | null;
             /** Unit Price Minor */
             unit_price_minor: number;
         };
@@ -7886,6 +9733,77 @@ export interface components {
             side: components["schemas"]["ActorSide"];
         };
         /**
+         * ProposalPromoClientDTO
+         * @description Referral stage 4 preview for the client: what its bonus gives on this fare - the numbers it may consent to.
+         *     Reserves nothing. No commission, credit, cost or formula key exists in this object at all (Q16, Q103).
+         */
+        ProposalPromoClientDTO: {
+            /** Cash Due Minor */
+            cash_due_minor: number;
+            currency: components["schemas"]["Currency"];
+            /** Fare Minor */
+            fare_minor: number;
+            /** Passenger Discount Minor */
+            passenger_discount_minor: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            view: "client";
+        };
+        /**
+         * ProposalPromoConfirmation
+         * @description Q126: the author of the open version confirms again from its current session. The client repeats the exact
+         *     bonus numbers it was shown; the driver sends only the version id (its app declares the capability).
+         */
+        ProposalPromoConfirmation: {
+            promo_consent?: components["schemas"]["ProposalPromoConsent"] | null;
+            /** Proposal Version Id */
+            proposal_version_id: string;
+        };
+        /**
+         * ProposalPromoConsent
+         * @description Referral stage 5 (Q104): the client's explicit consent to spend passenger bonus on the version it is sending,
+         *     with the numbers it was shown (``GET /listings/{id}/promo-preview``). Recomputed on the server; any difference
+         *     refuses the whole command with ``PROMO_QUOTE_STALE`` so the client shows the new numbers and asks again. Never
+         *     pre-filled: omit it and no bonus is used.
+         */
+        ProposalPromoConsent: {
+            /** Cash Due Minor */
+            cash_due_minor: number;
+            /** Passenger Bonus Minor */
+            passenger_bonus_minor: number;
+        };
+        /**
+         * ProposalPromoDriverDTO
+         * @description Referral stage 4 preview for the driver, before accepting: cash to collect, credit used, commission charged
+         *     (with the client's recorded consent, if any). Reserves nothing; the accept re-quotes under locks.
+         */
+        ProposalPromoDriverDTO: {
+            /** Base Commission Minor */
+            base_commission_minor: number;
+            /** Cash To Collect Minor */
+            cash_to_collect_minor: number;
+            /** Commission Charged Minor */
+            commission_charged_minor: number;
+            currency: components["schemas"]["Currency"];
+            /** Driver Credit Minor */
+            driver_credit_minor: number;
+            /** Driver Keeps Minor */
+            driver_keeps_minor: number;
+            /** Fare Minor */
+            fare_minor: number;
+            /** Passenger Discount Covered Minor */
+            passenger_discount_covered_minor: number;
+            /** Passenger Discount Minor */
+            passenger_discount_minor: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            view: "driver";
+        };
+        /**
          * ProposalStatus
          * @description Status of one immutable proposal version.
          * @enum {string}
@@ -7909,6 +9827,11 @@ export interface components {
             state: string;
             /** Trip Id */
             trip_id: string | null;
+            /**
+             * Trip Intent Id
+             * @description ADR-0025: the client's saved request - shown to the client side only.
+             */
+            trip_intent_id?: string | null;
             /** Versions */
             versions?: components["schemas"]["ProposalVersionDTO"][] | null;
         };
@@ -7949,6 +9872,21 @@ export interface components {
             pickup_window_start: string;
             price_basis: components["schemas"]["PriceBasis"];
             price_revisions_left: components["schemas"]["PriceRevisionsLeftDTO"];
+            /**
+             * Promo Confirmation
+             * @description Q126, the version's author only: its promo confirmation holds (valid) or must be given again from the current session (stale). Null when nothing was confirmed.
+             */
+            promo_confirmation?: ("valid" | "stale") | null;
+            /**
+             * Promo Quote
+             * @description Referral stage 4: current version only, when a discount would apply (preview).
+             */
+            promo_quote?: (components["schemas"]["ProposalPromoClientDTO"] | components["schemas"]["ProposalPromoDriverDTO"]) | null;
+            /**
+             * Promo Unavailable Reason
+             * @description Stage 5: current version only - why the viewer's own bonus/credit does not apply here (a plain category). Null when a discount applies or the viewer holds none.
+             */
+            promo_unavailable_reason?: ("service_not_eligible" | "bonus_expired" | "bonus_reserved" | "bonus_on_hold" | "no_campaign" | "client_update_required" | "trip_terms") | null;
             /** Quantity */
             quantity: number;
             /** @description Trip-offer parcel receiver; only the client side sees it (Q43/Q44), never the driver. */
@@ -8193,6 +10131,38 @@ export interface components {
             /** Wallets Checked */
             wallets_checked: number;
         };
+        /** ReconciliationIssueDTO */
+        ReconciliationIssueDTO: {
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /** Kind */
+            kind: string;
+        };
+        /**
+         * ReferralCodeCheckDTO
+         * @description The only thing a public code check says (ADR-0023 §16): usable or not - never who owns it.
+         */
+        ReferralCodeCheckDTO: {
+            /** Valid */
+            valid: boolean;
+        };
+        /** ReferralCodeDTO */
+        ReferralCodeDTO: {
+            /** Code */
+            code: string;
+            /**
+             * Link Status
+             * @enum {string}
+             */
+            link_status: "not_configured" | "configured_unverified";
+            /**
+             * Share Url
+             * @description Only when a link host is configured. Even then the link may not work yet: DNS, certificate and App Links are verified separately (link_status).
+             */
+            share_url?: string | null;
+        };
         /** RefreshTokenRequest */
         RefreshTokenRequest: {
             /** Refresh Token */
@@ -8320,6 +10290,57 @@ export interface components {
          * @enum {string}
          */
         ReputationLabel: "new_verified" | "rated";
+        /** ReviewDTO */
+        ReviewDTO: {
+            /** Assigned To Me */
+            assigned_to_me: boolean;
+            /** Campaign Id */
+            campaign_id?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            /** Escalated At */
+            escalated_at?: string | null;
+            /** Evidence */
+            evidence: {
+                [key: string]: unknown;
+            }[];
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /** Reason Codes */
+            reason_codes: string[];
+            /** Status */
+            status: string;
+            /** Version */
+            version: number;
+        };
+        /** ReviewDecision */
+        ReviewDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approve" | "reject";
+            /** Expected Version */
+            expected_version: number;
+            /** Note */
+            note: string;
+        };
+        /** ReviewStart */
+        ReviewStart: {
+            /** Note */
+            note?: string | null;
+        };
         /**
          * Role
          * @description Stored roles (legacy ``users.role`` and new ``user_roles.role``).
@@ -9373,6 +11394,333 @@ export interface components {
             vehicle: components["schemas"]["TripVehicleDTO"];
             /** Version */
             version: number;
+        };
+        /** TripIntentCommand */
+        TripIntentCommand: {
+            /** Expected Version */
+            expected_version: number;
+        };
+        /** TripIntentCreate */
+        TripIntentCreate: {
+            destination: components["schemas"]["TripIntentEndInput"];
+            origin: components["schemas"]["TripIntentEndInput"];
+            parcel?: components["schemas"]["TripIntentParcelInput"] | null;
+            /** @description With unit_price_minor: the client's own price hint. */
+            price_basis?: components["schemas"]["PriceBasis"] | null;
+            /**
+             * Quantity
+             * @description People (passenger); a parcel is one shipment (D9): 1.
+             */
+            quantity: number;
+            service_type: components["schemas"]["ServiceType"];
+            /** Unit Price Minor */
+            unit_price_minor?: number | null;
+            /**
+             * Window End
+             * Format: date-time
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * Format: date-time
+             */
+            window_start: string;
+        };
+        /** TripIntentDTO */
+        TripIntentDTO: {
+            /**
+             * Booking Cancelled
+             * @default false
+             */
+            booking_cancelled: boolean;
+            /** Booking Id */
+            booking_id?: string | null;
+            /**
+             * Can Reopen
+             * @description Booked, and that booking was cancelled: search again explicitly.
+             * @default false
+             */
+            can_reopen: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            current_version: components["schemas"]["TripIntentVersionDTO"];
+            /**
+             * Expired
+             * @description The window has passed: the client must set a new one (never moved silently).
+             */
+            expired: boolean;
+            /** Id */
+            id: string;
+            /** Offers */
+            offers?: components["schemas"]["TripIntentOfferDTO"][];
+            /**
+             * Open Offers
+             * @default 0
+             */
+            open_offers: number;
+            service_type: components["schemas"]["ServiceType"];
+            status: components["schemas"]["TripIntentStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version */
+            version: number;
+        };
+        /** TripIntentEndDTO */
+        TripIntentEndDTO: {
+            /** Address */
+            address?: string | null;
+            district?: components["schemas"]["DistrictRefDTO"] | null;
+            /** Lat */
+            lat?: number | null;
+            /** Lng */
+            lng?: number | null;
+            stop?: components["schemas"]["StopRefDTO"] | null;
+        };
+        /**
+         * TripIntentEndInput
+         * @description One end: a verified stop, or a district with an optional marked place (Q88) - what the search used.
+         */
+        TripIntentEndInput: {
+            /** Address */
+            address?: string | null;
+            /** District Id */
+            district_id?: string | null;
+            /** Lat */
+            lat?: number | null;
+            /** Lng */
+            lng?: number | null;
+            /** Stop Id */
+            stop_id?: string | null;
+        };
+        /** TripIntentFitCapacityDTO */
+        TripIntentFitCapacityDTO: {
+            /**
+             * Available
+             * @description Free seats on the offer's span (passenger).
+             */
+            available?: number | null;
+            /** Requested */
+            requested: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "insufficient" | "unknown";
+        };
+        /**
+         * TripIntentFitDTO
+         * @description Advisory, read-only (nothing is reserved): how one driver offer compares with the saved request. The same
+         *     checks run again at submit and accept under the trip lock.
+         */
+        TripIntentFitDTO: {
+            availability: components["schemas"]["TripIntentFitCapacityDTO"];
+            /**
+             * Blockers
+             * @description An offer from this request is refused while any of these is present.
+             */
+            blockers?: ("service_mismatch" | "expired" | "capacity_insufficient" | "intent_not_active")[];
+            destination: components["schemas"]["TripIntentFitEndDTO"];
+            /** Expired */
+            expired: boolean;
+            /** Intent Version No */
+            intent_version_no: number;
+            /** Listing Id */
+            listing_id: string;
+            origin: components["schemas"]["TripIntentFitEndDTO"];
+            price: components["schemas"]["TripIntentFitPriceDTO"];
+            /** Service Match */
+            service_match: boolean;
+            time: components["schemas"]["TripIntentFitTimeDTO"];
+        };
+        /** TripIntentFitEndDTO */
+        TripIntentFitEndDTO: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "same_stop" | "same_district" | "different";
+        };
+        /** TripIntentFitPriceDTO */
+        TripIntentFitPriceDTO: {
+            /** @default UZS */
+            currency: components["schemas"]["Currency"];
+            intent_price_basis?: components["schemas"]["PriceBasis"] | null;
+            /** Intent Total Minor */
+            intent_total_minor?: number | null;
+            /** Intent Unit Price Minor */
+            intent_unit_price_minor?: number | null;
+            listing_price_basis: components["schemas"]["PriceBasis"];
+            /**
+             * Listing Total Minor
+             * @description The driver's advertised price for the request's quantity.
+             */
+            listing_total_minor: number;
+            /** Listing Unit Price Minor */
+            listing_unit_price_minor: number;
+            /** Quantity */
+            quantity: number;
+        };
+        /** TripIntentFitTimeDTO */
+        TripIntentFitTimeDTO: {
+            /**
+             * Minutes Outside
+             * @description 0 when the windows meet; else the gap in minutes.
+             */
+            minutes_outside: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "within" | "outside";
+        };
+        /**
+         * TripIntentOfferDTO
+         * @description An offer made from this request (the client's own view).
+         */
+        TripIntentOfferDTO: {
+            /** Booking Id */
+            booking_id?: string | null;
+            /** Closed Reason */
+            closed_reason?: string | null;
+            /** Listing Id */
+            listing_id: string;
+            /** State */
+            state: string;
+            /**
+             * Terms Current
+             * @description False once the request's route/time/quantity changed after it was made.
+             */
+            terms_current: boolean;
+            /** Thread Id */
+            thread_id: string;
+        };
+        /** TripIntentParcelDTO */
+        TripIntentParcelDTO: {
+            /** Height Cm */
+            height_cm?: number | null;
+            /** Length Cm */
+            length_cm?: number | null;
+            parcel_type?: components["schemas"]["ParcelType"] | null;
+            /** @description Owner-only. */
+            receiver?: components["schemas"]["ContactDetails"] | null;
+            /** Weight G */
+            weight_g?: number | null;
+            /** Width Cm */
+            width_cm?: number | null;
+        };
+        /**
+         * TripIntentParcelInput
+         * @description Reusable parcel data; may be completed later (on the first offer screen). Receiver: owner-only (Q43/Q44).
+         */
+        TripIntentParcelInput: {
+            /** Height Cm */
+            height_cm?: number | null;
+            /** Length Cm */
+            length_cm?: number | null;
+            parcel_type?: components["schemas"]["ParcelType"] | null;
+            receiver?: components["schemas"]["ContactDetails"] | null;
+            /** Weight G */
+            weight_g?: number | null;
+            /** Width Cm */
+            width_cm?: number | null;
+        };
+        /** TripIntentRef */
+        TripIntentRef: {
+            /**
+             * Id
+             * @description tin_...
+             */
+            id: string;
+            /**
+             * Version No
+             * @description The version the client's screen showed.
+             */
+            version_no: number;
+        };
+        /**
+         * TripIntentStatus
+         * @description ADR-0025: a client's private, reusable trip/parcel request (never a public listing, never sent by itself).
+         * @enum {string}
+         */
+        TripIntentStatus: "active" | "booked" | "closed";
+        /**
+         * TripIntentUpdate
+         * @description A full new version. Route, window, quantity or parcel changes close the request's open offers: send
+         *     ``acknowledge_open_offers=true`` after showing the client how many (else 409 TRIP_INTENT_OFFERS_AFFECTED).
+         */
+        TripIntentUpdate: {
+            /**
+             * Acknowledge Open Offers
+             * @default false
+             */
+            acknowledge_open_offers: boolean;
+            destination: components["schemas"]["TripIntentEndInput"];
+            /** Expected Version */
+            expected_version: number;
+            origin: components["schemas"]["TripIntentEndInput"];
+            parcel?: components["schemas"]["TripIntentParcelInput"] | null;
+            /** @description With unit_price_minor: the client's own price hint. */
+            price_basis?: components["schemas"]["PriceBasis"] | null;
+            /**
+             * Quantity
+             * @description People (passenger); a parcel is one shipment (D9): 1.
+             */
+            quantity: number;
+            /** Unit Price Minor */
+            unit_price_minor?: number | null;
+            /**
+             * Window End
+             * Format: date-time
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * Format: date-time
+             */
+            window_start: string;
+        };
+        /** TripIntentVersionDTO */
+        TripIntentVersionDTO: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** @default UZS */
+            currency: components["schemas"]["Currency"];
+            destination: components["schemas"]["TripIntentEndDTO"];
+            origin: components["schemas"]["TripIntentEndDTO"];
+            parcel?: components["schemas"]["TripIntentParcelDTO"] | null;
+            price_basis?: components["schemas"]["PriceBasis"] | null;
+            /** Quantity */
+            quantity: number;
+            /** Terms Version */
+            terms_version: number;
+            /**
+             * Total Minor
+             * @description quantity x unit (per_seat) or unit (total).
+             */
+            total_minor?: number | null;
+            /** Unit Price Minor */
+            unit_price_minor?: number | null;
+            /** Version No */
+            version_no: number;
+            /**
+             * Window End
+             * Format: date-time
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * Format: date-time
+             */
+            window_start: string;
         };
         /** TripListingRefDTO */
         TripListingRefDTO: {
@@ -13037,6 +15385,1950 @@ export interface operations {
             };
         };
     };
+    list_budget_requests_api_v2_admin_promo_budget_requests_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_BudgetRequestDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    budget_request_approve_api_v2_admin_promo_budget_requests__request_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BudgetRequestDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_BudgetRequestDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    budget_request_reject_api_v2_admin_promo_budget_requests__request_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BudgetRequestDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_BudgetRequestDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    budget_request_withdraw_api_v2_admin_promo_budget_requests__request_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BudgetRequestDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_BudgetRequestDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_campaigns_api_v2_admin_promo_campaigns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_CampaignDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_campaign_api_v2_admin_promo_campaigns_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_campaign_api_v2_admin_promo_campaigns__campaign_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    campaign_activate_api_v2_admin_promo_campaigns__campaign_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    request_budget_api_v2_admin_promo_campaigns__campaign_id__budget_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BudgetRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_BudgetRequestDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    campaign_close_api_v2_admin_promo_campaigns__campaign_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    approve_combination_api_v2_admin_promo_campaigns__campaign_id__combinations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CombinationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    campaign_pause_api_v2_admin_promo_campaigns__campaign_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    processing_resume_api_v2_admin_promo_campaigns__campaign_id__processing_resume_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    processing_suspend_api_v2_admin_promo_campaigns__campaign_id__processing_suspend_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessingCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    campaign_resume_api_v2_admin_promo_campaigns__campaign_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    add_version_api_v2_admin_promo_campaigns__campaign_id__versions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CampaignDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    revoke_combination_api_v2_admin_promo_combinations__combination_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                combination_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CombinationRevoke"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_CombinationDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reconciliation_api_v2_admin_promo_reconciliation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_ReconciliationIssueDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    promo_report_api_v2_admin_promo_report_get: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                group_by?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PromoReportDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_reviews_api_v2_admin_promo_reviews_get: {
+        parameters: {
+            query?: {
+                open_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_ReviewDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    decide_review_api_v2_admin_promo_reviews__review_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ReviewDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    start_review_api_v2_admin_promo_reviews__review_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewStart"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ReviewDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     admin_proposal_messages_api_v2_admin_proposals__thread_id__messages_get: {
         parameters: {
             query?: {
@@ -14311,7 +18603,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AmendmentDecision"];
+                "application/json": components["schemas"]["AmendmentAccept"];
             };
         };
         responses: {
@@ -14322,6 +18614,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_Union_BookingDTO__BookingClientDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    confirm_amendment_promo_api_v2_amendments__amendment_id__promo_confirmation_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                amendment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmendmentPromoConfirmation"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_AmendmentDTO_"];
                 };
             };
             /** @description Bad Request */
@@ -18171,6 +22554,94 @@ export interface operations {
             };
         };
     };
+    promo_preview_api_v2_listings__listing_id__promo_preview_get: {
+        parameters: {
+            query: {
+                unit_price_minor: number;
+                quantity?: number;
+            };
+            header?: never;
+            path: {
+                listing_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PromoPreviewDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_listing_proposals_api_v2_listings__listing_id__proposals_get: {
         parameters: {
             query?: {
@@ -19461,6 +23932,80 @@ export interface operations {
             };
         };
     };
+    my_promo_balance_api_v2_me_promo_balance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_PromoBalanceDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_my_proposals_api_v2_me_proposals_get: {
         parameters: {
             query?: {
@@ -19535,6 +24080,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    my_referral_code_api_v2_me_referral_code_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ReferralCodeDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    my_referrals_api_v2_me_referrals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_MyReferralsDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
             /** @description Too Many Requests */
@@ -19828,6 +24532,626 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_list_SupportTicketDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_trip_intents_api_v2_me_trip_intents_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_TripIntentDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_trip_intent_api_v2_me_trip_intents_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TripIntentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_TripIntentDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_trip_intent_api_v2_me_trip_intents__intent_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_TripIntentDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    edit_trip_intent_api_v2_me_trip_intents__intent_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TripIntentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_TripIntentDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    close_trip_intent_api_v2_me_trip_intents__intent_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TripIntentCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_TripIntentDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    trip_intent_fit_api_v2_me_trip_intents__intent_id__fit_get: {
+        parameters: {
+            query: {
+                listing_id: string;
+            };
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_TripIntentFitDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reopen_trip_intent_api_v2_me_trip_intents__intent_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TripIntentCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_TripIntentDTO_"];
                 };
             };
             /** @description Bad Request */
@@ -20748,6 +26072,97 @@ export interface operations {
             };
         };
     };
+    confirm_proposal_promo_api_v2_proposals__thread_id__promo_confirmation_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalPromoConfirmation"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ProposalThreadDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     reject_proposal_api_v2_proposals__thread_id__reject_post: {
         parameters: {
             query?: never;
@@ -21015,6 +26430,91 @@ export interface operations {
             };
         };
     };
+    check_referral_code_api_v2_public_referral_codes__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ReferralCodeCheckDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     get_public_tracking_api_v2_public_tracking__token__get: {
         parameters: {
             query?: never;
@@ -21033,6 +26533,269 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_PublicTrackingDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    attribute_api_v2_referrals_attribution_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_AttributionDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    enroll_api_v2_referrals_enrollments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_EnrollmentDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    offers_api_v2_referrals_offers_get: {
+        parameters: {
+            query: {
+                audience: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_EnrollmentOfferDTO__"];
                 };
             };
             /** @description Bad Request */

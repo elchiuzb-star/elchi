@@ -85,6 +85,20 @@ def current_user_id(
 
 
 
+def session_ref_of(request: Request) -> str | None:
+    """Referral Q126: the login session (``sid`` claim) behind the request's bearer token, or ``None`` (a token issued
+    before §17.6 has none). Read after ``current_user_id`` accepted the token; it is a reference, never an authority."""
+    from app.core.security import verify_token
+
+    header = request.headers.get("Authorization") or ""
+    scheme, _, token = header.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return None
+    payload = verify_token(token.strip()) or {}
+    sid = payload.get("sid")
+    return str(sid) if sid else None
+
+
 def optional_user_id(token: str | None = Depends(_optional_bearer), db: Session = Depends(get_db)) -> int | None:
     """Public endpoints that show more to an authenticated owner (L2, T8). A bad token is still 401."""
     if not token:

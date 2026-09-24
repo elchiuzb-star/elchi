@@ -5,7 +5,7 @@
  * the reader's language. An unknown code falls back to the server's own `message`, which at least carries the
  * reason, rather than to a generic "try again" that carries nothing.
  */
-import { ApiError } from "../types/api";
+import { ApiError, counterpartyStale } from "../types/api";
 import { translate, translateDynamic } from "../i18n";
 
 /** `true` when the request never reached the server (offline / DNS / CORS), so the UI can say exactly that. */
@@ -14,6 +14,14 @@ export function isOffline(error: unknown): boolean {
 }
 
 export function v2ErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.code === "PROMO_CONSENT_REQUIRED"
+      && (error.details as { party?: string } | undefined)?.party === "driver") {
+    return translate("promoNotice.driverAckRequired"); // Q125: the driver confirms its own numbers
+  }
+  if (error instanceof ApiError && counterpartyStale(error)) {
+    // Q126: the other side's confirmation went stale - requoting here would not help; say who has to act
+    return translate("promoNotice.counterpartyStale");
+  }
   if (error instanceof ApiError) {
     return translateDynamic(`error.${error.code}`) ?? error.message ?? translate("error.fallback");
   }

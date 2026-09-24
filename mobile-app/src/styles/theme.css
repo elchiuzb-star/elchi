@@ -25,6 +25,10 @@
 :root {
   --font-size: 16px;
 
+  /* A QR code must stay dark-on-light in both themes, or phone scanners miss it: not themed on purpose. */
+  --qr-light: #FFFFFF;
+  --qr-dark: #000000;
+
   --background: #F4F6FB;        /* cool blue-tinted porcelain */
   --foreground: #111726;        /* blue-ink near-black */
   --card: #FFFFFF;

@@ -64,6 +64,10 @@ STEP_UP_CAPABILITIES: frozenset[Capability] = frozenset(
         Capability.OPS_FEATURE_FLAG_MANAGE,
         Capability.PLATFORM_POLICY_MANAGE,
         Capability.STAFF_MANAGE,
+        # ADR-0023: promo budgets and campaign terms are money decisions too
+        Capability.PROMO_BUDGET_ALLOCATE,
+        Capability.PROMO_CAMPAIGN_MANAGE,
+        Capability.PROMO_FRAUD_DECIDE,
     }
 )
 

@@ -296,6 +296,7 @@ def test_detected_guarded_tables_match_the_committed_expected_list(roles: Roles,
         "bookings": "app-marker",
         "booking_amendments": "app-marker",
         "feature_flag_values": "app-marker",
+        "promo_budgets": "read-only",  # 0084 (ADR-0023): written only by the SECURITY DEFINER promo ledger trigger
     }
     # 0054/0055 guards read no session state: correctly not detected (not bypassable by SET).
     assert not {"trip_stop_occurrences", "trip_segment_resources", "topup_requests", "ledger_adjustment_requests"} & set(detected)

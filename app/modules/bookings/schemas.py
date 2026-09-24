@@ -8,7 +8,7 @@ the parcel sender's phone never reaches the driver; the receiver's only after pi
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, StrictInt, model_validator
 
@@ -18,6 +18,7 @@ from app.contracts.enums import (
     ActorSide,
     CashCollectionStatus,
     CommissionStatus,
+    FaultSide,
     Currency,
     PaymentMethod,
     PriceBasis,
@@ -29,12 +30,40 @@ from app.modules.trips.schemas import StopRefDTO
 # --- requests ---------------------------------------------------------------------------------------------------
 
 
+class PromoConsentInput(ContractModel):
+    """The client's explicit confirmation of the discount it was shown (Q104, ADR-0023 §18). The server recomputes
+    the terms; these numbers must match them exactly or the command is refused with ``PROMO_QUOTE_STALE``. They are
+    never used as amounts."""
+
+    passenger_bonus_minor: StrictInt = Field(ge=0, description="P - passenger bonus the client agrees to spend.")
+    cash_due_minor: StrictInt = Field(ge=0, description="F_cash - cash the client will hand the driver (F - P).")
+
+
+class PromoDriverAckInput(ContractModel):
+    """Q125: the driver confirms the new driver-side numbers of an amendment it was shown. Checked against the
+    server's recomputation (``PROMO_QUOTE_STALE`` otherwise); never used as amounts."""
+
+    cash_to_collect_minor: StrictInt = Field(ge=0, description="F_cash - cash the driver will collect.")
+    commission_charged_minor: StrictInt = Field(ge=0, description="C_net - commission charged from the balance.")
+
+
 class AcceptRequest(ContractModel):
     proposal_version_id: str = Field(min_length=4, max_length=64, description="prv_... id of the current version.")
     expected_listing_version: StrictInt | None = Field(
         default=None, ge=1, description="Q54: the listing's terms_version the accepting party saw (ListingDTO.terms_version)."
     )
     expected_listing_terms_version: StrictInt | None = Field(default=None, ge=1, description="Additive alias (Q54).")
+    promo_consent: PromoConsentInput | None = Field(
+        default=None,
+        description="Referral stage 4: the client accepting a version confirms the passenger bonus it was shown. "
+        "Needs a client declaring X-Elchi-Client-Features: promo_cash_v1.",
+    )
+    promo_driver_ack: PromoDriverAckInput | None = Field(
+        default=None,
+        description="Q123 (clarified): the driver accepting a version sends the cash to collect and the commission "
+        "charged it was shown; a different server result (e.g. credit no longer fits) refuses this attempt with the "
+        "new numbers (PROMO_QUOTE_STALE driver_terms_changed) instead of charging more behind its back.",
+    )
 
     @model_validator(mode="after")
     def _one_terms_version(self) -> "AcceptRequest":
@@ -76,6 +105,11 @@ class OperatorBookingCommandRequest(VersionedCommand):
     evidence_file_ids: list[str] = Field(default_factory=list, max_length=10)
     fee_decision: FeeDecision | None = None
     proof_kind: ProofKind | None = Field(default=None, description="Wave 2.1: required for reissue_proof_code.")
+    cancel_fault_side: FaultSide | None = Field(
+        default=None,
+        description="Q129, cancel only: the cause the operator decided (client, driver, platform, none = justified), "
+        "with the reason as its basis. Absent: no fault is recorded and the promo cause stays undetermined (review).",
+    )
 
 
 class ProofReissueRequest(ContractModel):
@@ -107,10 +141,32 @@ class AmendmentChanges(ContractModel):
 class AmendmentCreate(VersionedCommand):
     changes: AmendmentChanges
     reason: str = Field(min_length=1, max_length=500)
+    promo_consent: PromoConsentInput | None = Field(
+        default=None, description="Q116: a client proposing a change to a discounted booking confirms the new terms."
+    )
+    promo_driver_ack: PromoDriverAckInput | None = Field(
+        default=None, description="Q125: a driver proposing a change that moves its cash or commission confirms them."
+    )
 
 
 class AmendmentDecision(ContractModel):
     expected_version: StrictInt = Field(ge=1, description="Version of the amendment.")
+
+
+class AmendmentAccept(AmendmentDecision):
+    promo_consent: PromoConsentInput | None = Field(
+        default=None, description="Q116: a client accepting a change to a discounted booking confirms the new terms."
+    )
+    promo_driver_ack: PromoDriverAckInput | None = Field(
+        default=None, description="Q125: a driver accepting a change that moves its cash or commission confirms them."
+    )
+
+
+class AmendmentPromoConfirmation(ContractModel):
+    """Q126: the proposer of an open amendment confirms its promo terms again from its current session."""
+
+    promo_consent: PromoConsentInput | None = None
+    promo_driver_ack: PromoDriverAckInput | None = None
 
 
 class TripActionRequest(VersionedCommand):
@@ -170,6 +226,34 @@ class BookingFeeDTO(ContractModel):
     commission_minor: int
     net_minor: int
 
+
+class BookingPromoClientDTO(ContractModel):
+    """What the client pays on a discounted booking (Q103): no commission, credit, cost or formula."""
+
+    view: Literal["client"] = "client"
+    fare_minor: int
+    passenger_discount_minor: int
+    cash_due_minor: int
+    currency: Currency
+
+
+class BookingPromoDriverDTO(ContractModel):
+    """What the driver collects and is charged on a discounted booking (Q103)."""
+
+    view: Literal["driver"] = "driver"
+    fare_minor: int
+    passenger_discount_minor: int
+    cash_to_collect_minor: int
+    base_commission_minor: int
+    passenger_discount_covered_minor: int
+    driver_credit_minor: int
+    commission_charged_minor: int
+    driver_keeps_minor: int
+    currency: Currency
+
+
+# Money terms of an amendment to a discounted booking: the role's own object (Q16) - the client's has no commission keys.
+AmendmentPromoDTO = Annotated[BookingPromoClientDTO | BookingPromoDriverDTO, Field(discriminator="view")]
 
 class NoShowReviewDTO(ContractModel):
     status: str
@@ -245,6 +329,11 @@ class BookingClientDTO(ContractModel):
     policy_versions: BookingPolicyVersionsDTO
     cancellation_policy_summary: str
     cancelled: BookingCancelledDTO | None = None
+    promo: BookingPromoClientDTO | None = Field(
+        default=None,
+        description="Referral stage 4: present only on a discounted booking. The client hands the driver "
+        "cash_due_minor, not total_minor.",
+    )
     created_at: UtcDateTime
     updated_at: UtcDateTime
 
@@ -254,6 +343,11 @@ class BookingDTO(BookingClientDTO):
 
     commission_status: CommissionStatus
     fee: BookingFeeDTO
+    promo: BookingPromoDriverDTO | None = Field(  # type: ignore[assignment]
+        default=None,
+        description="Referral stage 4: present only on a discounted booking. Collect cash_to_collect_minor; the real "
+        "balance is charged commission_charged_minor.",
+    )
 
 
 class BookingCodeDTO(ContractModel):
@@ -291,6 +385,7 @@ class AmendmentDTO(ContractModel):
     new_unit_price_minor: int
     new_total_minor: int
     fee_delta_minor: int | None = Field(default=None, description="Driver and staff only (Q16).")
+    promo: AmendmentPromoDTO | None = Field(default=None, description="Referral stage 4: discounted booking only.")
     expires_at: UtcDateTime
     version: int
 

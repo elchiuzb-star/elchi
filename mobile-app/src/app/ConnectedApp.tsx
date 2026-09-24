@@ -24,6 +24,7 @@ import {
   Send,
   Shield,
   Star,
+  Tag,
   Truck,
   Upload,
   User,
@@ -66,6 +67,28 @@ import { AppSidebar, SidebarButton, clientSidebarItems } from "../components/nav
 import { SeatPicker, type SeatId } from "../components/passenger/SeatPicker";
 import { reverseGeocode } from "../api/geo.api";
 import { RouteMap } from "./v2/RouteMap";
+import {
+  AcceptConsentPanel,
+  BonusConsentPanel,
+  BonusScreen,
+  NoDiscountNote,
+  PromoMoneyCard,
+  StaleConfirmation,
+} from "./v2/PromoScreens";
+import { proofCodeHint } from "./proofCodes";
+import {
+  NO_CONSENT,
+  actionKey,
+  amendmentCashNote,
+  cashDueMinor,
+  consentBody,
+  driverAckRequested,
+  finishAction,
+  needsRequote,
+  pendingCode,
+  type ConsentChoice,
+} from "./promo";
+import { isOffline } from "../utils/v2Errors";
 import {
   acceptProposal,
   cancelListing,
@@ -113,6 +136,33 @@ import { translate, translateDynamic } from "../i18n";
 import { negotiationActions, turnLabel, type ActorSide } from "./auction";
 import { alternativeReason, splitFeedGroups } from "./feedGroups";
 import { offerableServices, type OfferService } from "./tripOffers";
+import { TripIntentEditor, TripIntentFitNotes, TripIntentSummary, type IntentEditForm } from "./v2/TripIntentPanel";
+import {
+  closeTripIntent,
+  createTripIntent,
+  editTripIntent,
+  listTripIntents,
+  reopenTripIntent,
+  tripIntentFit,
+  type TripIntentCreate,
+  type TripIntentDTO,
+  type TripIntentFitDTO,
+  type TripIntentUpdate,
+} from "../api/v2/tripIntents.api";
+import {
+  fitBlocks,
+  intentSummary,
+  isExpired,
+  offersAffectedText,
+  parcelDiffers,
+  parcelInput,
+  pickActive,
+  prefillBid,
+  priceLine,
+  readActiveIntentId,
+  updateBody,
+  writeActiveIntentId,
+} from "./tripIntent";
 import {
   createTrip,
   createVehicle,
@@ -151,6 +201,7 @@ import {
 } from "../api/v2/client-extras.api";
 import {
   acceptAmendment,
+  confirmAmendmentPromo,
   decideAmendment,
   decideCashReceipt,
   getBooking,
@@ -226,7 +277,10 @@ type Screen =
   | "client-orders"
   | "client-offers"
   | "client-offer-bid"
+  | "client-intent-edit"
   | "client-proposals"
+  | "client-bonus"
+  | "driver-bonus"
   | "client-order-detail"
   | "client-listing-detail"
   | "client-listing-bids"
@@ -445,6 +499,22 @@ function localInputToIso(value: string): string {
 }
 
 /** Soum in, minor units out (1 so'm = 100 tiyin). Anything that is not a positive number is 0, never NaN. */
+/** P8 accept body; `promo_consent` only when the person explicitly ticked the bonus (Q104). */
+function acceptBody(
+  versionId: string,
+  termsVersion: number,
+  promo: { passenger_bonus_minor: number; cash_due_minor: number } | undefined,
+  driverAck?: { cash_to_collect_minor: number; commission_charged_minor: number },
+) {
+  // Q123: the accepting driver sends the numbers its card showed; a different server result is refused, never applied
+  return {
+    proposal_version_id: versionId,
+    expected_listing_terms_version: termsVersion,
+    ...(promo ? { promo_consent: promo } : {}),
+    ...(driverAck ? { promo_driver_ack: driverAck } : {}),
+  };
+}
+
 function soumToMinor(value: string): number {
   const parsed = Number(value.replace(/\s/g, ""));
   return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) * 100 : 0;
@@ -512,6 +582,14 @@ function alternativeReasonLabel(reasons: readonly string[]): string | null {
 function vehicleStatusLabel(value: string): string {
   return translateDynamic(`vehicleStatus.${value}`) ?? value;
 }
+
+/** The server takes an amendment only before the service starts (bookings.rules.PRE_SERVICE_STATUSES). */
+/** An amount inside a sentence never breaks between its digits ("76 000 so'm" stays one piece). */
+function nbsp(text: string): string {
+  return text.replace(/ /g, " ");
+}
+
+const AMENDABLE_STATUSES = ["confirmed", "awaiting_pickup"];
 
 function proofCodeLabel(value: string): string {
   return translateDynamic(`proofCode.${value}`) ?? value;
@@ -1202,7 +1280,8 @@ function CashAcknowledgement({
   onReport,
   onDecide,
 }: {
-  booking: { cash_status: string; total_minor: number; currency: string; version: number; cash_receipt?: CashReceiptDTO | null };
+  booking: { cash_status: string; total_minor: number; currency: string; version: number; cash_receipt?: CashReceiptDTO | null;
+    promo?: Parameters<typeof cashDueMinor>[0]["promo"] };
   side: "client" | "driver";
   busy: boolean;
   amount: string;
@@ -1219,7 +1298,8 @@ function CashAcknowledgement({
         Yo'lkira haydovchiga naqd beriladi. Bu yerda faqat qayd qoladi — ELCHI bu pulni qabul qilmaydi.
       </p>
       <p className="mt-2 text-[13px] text-muted-foreground">
-        Kelishilgan summa: <span className="font-semibold text-foreground">{formatUzs(booking.total_minor / 100)}</span>
+        {booking.promo ? "Naqd to'lanadigan summa" : "Kelishilgan summa"}:{" "}
+        <span className="font-semibold text-foreground">{formatUzs(cashDueMinor(booking) / 100)}</span>
       </p>
 
       {booking.cash_status === "unpaid" && (
@@ -1228,7 +1308,7 @@ function CashAcknowledgement({
             label={side === "driver" ? "Olingan summa (so'm)" : "Berilgan summa (so'm)"}
             type="number"
             value={amount}
-            placeholder={String(Math.round(booking.total_minor / 100))}
+            placeholder={String(Math.round(cashDueMinor(booking) / 100))}
             onChange={onAmountChange}
           />
           <PrimaryButton disabled={busy || !Number(amount)} onClick={onReport}>
@@ -1609,6 +1689,7 @@ export function ConnectedApp() {
   const [offerBid, setOfferBid] = useState({
     price: "",
     seats: 1,
+    parcelType: "box",
     weightKg: "",
     lengthCm: "",
     widthCm: "",
@@ -1616,6 +1697,19 @@ export function ConnectedApp() {
     receiverName: "",
     receiverPhone: "",
   });
+  // ADR-0025: the saved request that fills every driver's offer screen. Private to this account, never published.
+  const [activeIntent, setActiveIntent] = useState<TripIntentDTO | null>(null);
+  const [myIntents, setMyIntents] = useState<TripIntentDTO[]>([]);
+  const [intentLoading, setIntentLoading] = useState(false);
+  const [intentError, setIntentError] = useState<string | null>(null);
+  const [intentFit, setIntentFit] = useState<TripIntentFitDTO | null>(null);
+  const [intentFitLoading, setIntentFitLoading] = useState(false);
+  /** "new" makes the route summary start another request; "edit" sends its places into the active one. */
+  const [intentDraftMode, setIntentDraftMode] = useState<"new" | "edit">("new");
+  /** A material edit waiting for the client to accept that N open offers close (409 TRIP_INTENT_OFFERS_AFFECTED). */
+  const [intentEditPending, setIntentEditPending] = useState<
+    { body: Record<string, unknown>; openOffers: number; then: Screen } | null
+  >(null);
   const [driverBookings, setDriverBookings] = useState<AnyBooking[]>([]);
   const [driverBooking, setDriverBooking] = useState<BookingDTO | null>(null);
   const [proofCode, setProofCode] = useState("");
@@ -1658,6 +1752,15 @@ export function ConnectedApp() {
   const [counterFor, setCounterFor] = useState<string | null>(null);
   const [counterPrice, setCounterPrice] = useState("");
   const [counterPending, setCounterPending] = useState(false);
+  /** Referral stage 5: the person's explicit bonus choice for the counter / offer being written (never pre-ticked). */
+  const [counterConsent, setCounterConsent] = useState<ConsentChoice>(NO_CONSENT);
+  const [offerConsent, setOfferConsent] = useState<ConsentChoice>(NO_CONSENT);
+  const [consentRefresh, setConsentRefresh] = useState(0);
+  const [acceptConsent, setAcceptConsent] = useState<Record<string, ConsentChoice>>({});
+  /** A client-authored change to a discounted booking: the server's new numbers, waiting for an explicit yes. */
+  const [amendConsentAsk, setAmendConsentAsk] = useState<{ passenger_discount_minor: number; cash_due_minor: number; fare_minor?: number } | null>(null);
+  // Q125: the driver's own new cash/commission, shown and confirmed before its change is sent
+  const [amendAckAsk, setAmendAckAsk] = useState<{ cash_to_collect_minor: number; commission_charged_minor: number } | null>(null);
   const [myProposals, setMyProposals] = useState<ProposalThreadDTO[]>([]);
   const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
@@ -1698,6 +1801,38 @@ export function ConnectedApp() {
     setMessage("");
     setScreen(next);
   };
+
+  /**
+   * Referral stage 5: a money-bearing action keeps one Idempotency-Key until it definitively succeeds or fails, so a
+   * retry after a timeout, a second tap or reopening the app replays the first answer instead of acting twice.
+   */
+  async function oncePerAction<T>(scope: string, work: (key: string) => Promise<T>): Promise<T> {
+    const key = actionKey(scope, newIdempotencyKey);
+    try {
+      const result = await work(key);
+      finishAction(scope);
+      return result;
+    } catch (cause) {
+      if (!isOffline(cause)) finishAction(scope); // an answer came back: the next try is a new action
+      throw cause;
+    }
+  }
+
+  /** A bonus refusal re-reads the numbers and asks again (Q104): the old tick is not reused. */
+  function requoteOn(cause: unknown): void {
+    if (needsRequote(cause as { code?: string })) {
+      setCounterConsent((choice) => ({ ...choice, useBonus: false }));
+      setOfferConsent((choice) => ({ ...choice, useBonus: false }));
+      setAcceptConsent({});
+      setConsentRefresh((n) => n + 1);
+    }
+  }
+
+  /** Rethrows after re-asking for the bonus consent when the server refused the numbers (Q104). */
+  function requoteAndThrow(cause: unknown): never {
+    requoteOn(cause);
+    throw cause;
+  }
 
   const run = async (work: () => Promise<void>, success?: string) => {
     setBusy(true);
@@ -1756,6 +1891,17 @@ export function ConnectedApp() {
       go(auth.user?.role === "driver" ? "driver-home" : "client-home");
     }
   }, [auth.isAuthenticated, auth.isLoading, auth.user?.role, screen]);
+
+  // ADR-0025: on every sign-in the saved request is re-read for *this* account; nothing of the previous one stays.
+  useEffect(() => {
+    setActiveIntent(null);
+    setMyIntents([]);
+    setIntentFit(null);
+    setIntentError(null);
+    if (auth.user?.role !== "client" || !auth.user?.id) return;
+    void loadIntents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.user?.id, auth.user?.role]);
 
   useEffect(() => {
     if (auth.user?.role !== "client" || !auth.user.phone || orderForm.sender_phone) return;
@@ -2341,15 +2487,26 @@ export function ConnectedApp() {
    * PROPOSAL_CHANGED and the screen re-reads rather than writing over a revision it never saw. Nothing is
    * applied optimistically - the thread on screen is always the one the server confirmed.
    */
-  async function sendCounter(threadId: string, revision: number, reload: () => Promise<void>) {
+  async function sendCounter(threadId: string, revision: number, reload: () => Promise<void>, withBonus = false) {
     if (counterPending) return;
     setCounterPending(true);
     try {
-      await counterProposal(threadId, { expected_revision: revision, unit_price_minor: soumToMinor(counterPrice) });
+      const promo = withBonus ? consentBody(counterConsent) : undefined;
+      await counterProposal(threadId, {
+        expected_revision: revision,
+        unit_price_minor: soumToMinor(counterPrice),
+        ...(promo ? { promo_consent: promo } : {}),
+      });
       setCounterFor(null);
       setCounterPrice("");
+      setCounterConsent(NO_CONSENT);
       await reload();
     } catch (error) {
+      if (needsRequote(error as { code?: string })) {
+        // the bonus changed under the person: keep the form open with the new numbers and ask again
+        requoteOn(error);
+        throw error;
+      }
       // A refused counter usually means the other side moved first: show what is on the server now, not the
       // stale card the person was looking at, and let the error message explain why nothing was sent.
       setCounterFor(null);
@@ -2523,7 +2680,206 @@ export function ConnectedApp() {
    * Seats matter for a passenger offer: a per-seat price is only comparable for the number of seats asked for,
    * and an offer with fewer seats left than that is not a match at all.
    */
-  async function loadOfferFeed(mode: "parcel" | "passenger" = serviceMode) {
+  // --- ADR-0025: the saved trip/parcel request ------------------------------------------------------------------
+
+  function rememberIntent(intent: TripIntentDTO | null) {
+    setActiveIntent(intent);
+    writeActiveIntentId(auth.user?.id, intent?.id ?? null);
+    if (intent) setMyIntents((list) => [intent, ...list.filter((item) => item.id !== intent.id)]);
+  }
+
+  async function loadIntents(): Promise<TripIntentDTO | null> {
+    setIntentLoading(true);
+    setIntentError(null);
+    try {
+      // Live ones only, asked for by status so a long history of closed requests never pushes them off the page.
+      const [active, booked] = await Promise.all([listTripIntents("active"), listTripIntents("booked")]);
+      const live = [...active, ...booked];
+      const chosen = pickActive(live, readActiveIntentId(auth.user?.id));
+      setMyIntents(live);
+      setActiveIntent(chosen);
+      writeActiveIntentId(auth.user?.id, chosen?.id ?? null);
+      return chosen;
+    } catch (cause) {
+      setIntentError(getErrorMessage(cause));
+      return null;
+    } finally {
+      setIntentLoading(false);
+    }
+  }
+
+  /** One end as the request stores it: a verified stop by id, a marked place by its district and point (Q88). */
+  function intentEnd(end: DirectionEnd) {
+    if (end.point && end.district) {
+      return { district_id: end.district.id, lat: end.point.lat, lng: end.point.lng, address: end.point.address ?? null };
+    }
+    return { stop_id: end.stop?.id ?? null };
+  }
+
+  /** What the route summary says, as request terms. The price is optional - it is only the client's own hint. */
+  function intentTermsFromHome() {
+    const passenger = serviceMode === "passenger";
+    return {
+      origin: intentEnd(pickupEnd),
+      destination: intentEnd(dropoffEnd),
+      window_start: localInputToIso(listingForm.windowStart),
+      window_end: localInputToIso(listingForm.windowEnd),
+      quantity: passenger ? seatCount : 1,
+      price_basis: listingUnitMinor > 0 ? (passenger ? "per_seat" : "total") : null,
+      unit_price_minor: listingUnitMinor > 0 ? listingUnitMinor : null,
+    };
+  }
+
+  /**
+   * PATCH the active request. A material change with open offers answers 409 first; the client is then shown how
+   * many offers close and the same body is resent with `acknowledge_open_offers` only after they agree.
+   */
+  async function sendIntentEdit(body: Record<string, unknown>, then: Screen): Promise<TripIntentDTO | null> {
+    if (!activeIntent) return null;
+    try {
+      const result = await editTripIntent(activeIntent.id, body as unknown as TripIntentUpdate);
+      rememberIntent(result.data);
+      return result.data;
+    } catch (cause) {
+      const failure = cause as { code?: string; details?: { open_offers?: number } };
+      if (failure.code === "TRIP_INTENT_OFFERS_AFFECTED") {
+        setIntentEditPending({ body, openOffers: failure.details?.open_offers ?? activeIntent.open_offers, then });
+        return null;
+      }
+      if (failure.code?.startsWith("TRIP_INTENT") || failure.code === "VERSION_CONFLICT") void loadIntents();
+      throw cause;
+    }
+  }
+
+  async function saveIntentFromHome() {
+    const terms = intentTermsFromHome();
+    const editing = intentDraftMode === "edit" && activeIntent?.status === "active"
+      && activeIntent.service_type === serviceMode;
+    if (editing && activeIntent) {
+      if (!(await sendIntentEdit(updateBody(activeIntent, terms), "client-offers"))) return;
+    } else {
+      const created = await createTripIntent({
+        service_type: serviceMode,
+        ...terms,
+        parcel: serviceMode === "parcel" ? { parcel_type: listingForm.parcelType } : null,
+      } as unknown as TripIntentCreate);
+      rememberIntent(created.data);
+    }
+    setIntentDraftMode("new");
+    go("client-offers");
+  }
+
+  function saveIntentEdit(form: IntentEditForm) {
+    if (!activeIntent) return;
+    const passenger = activeIntent.service_type === "passenger";
+    const priceMinor = soumToMinor(form.price);
+    const body = updateBody(activeIntent, {
+      window_start: localInputToIso(form.windowStart),
+      window_end: localInputToIso(form.windowEnd),
+      quantity: passenger ? form.quantity : 1,
+      price_basis: priceMinor > 0 ? (passenger ? "per_seat" : "total") : null,
+      unit_price_minor: priceMinor > 0 ? priceMinor : null,
+      parcel: passenger ? null : parcelInput(form),
+    });
+    void run(async () => {
+      if (await sendIntentEdit(body, "client-offers")) go("client-offers");
+    }, "Talab yangilandi");
+  }
+
+  function closeActiveIntent() {
+    if (!activeIntent) return;
+    const intent = activeIntent;
+    void run(async () => {
+      await closeTripIntent(intent.id, intent.version);
+      const next = await loadIntents();
+      go("client-offers");
+      await loadOfferFeed(serviceMode, next);
+    }, "Talab yopildi");
+  }
+
+  /** Explicit "search again" after a cancelled booking; the old offers stay closed (ADR-0025). */
+  function reopenActiveIntent() {
+    if (!activeIntent) return;
+    const intent = activeIntent;
+    void run(async () => {
+      const next = await reopenTripIntent(intent.id, intent.version);
+      rememberIntent(next);
+      await loadOfferFeed(serviceMode, next);
+    }, "Qidiruv qayta boshlandi");
+  }
+
+  function startNewIntent() {
+    setIntentDraftMode("new");
+    go("client-home");
+  }
+
+  function editIntentRoute() {
+    if (!activeIntent) return;
+    setIntentDraftMode("edit");
+    setServiceMode(activeIntent.service_type as "parcel" | "passenger");
+    go("client-home");
+  }
+
+  function selectIntent(intent: TripIntentDTO) {
+    rememberIntent(intent);
+    void run(() => loadOfferFeed(serviceMode, intent));
+  }
+
+  /** The request the offer screen works with: live, and of the same service as this driver's offer. */
+  function intentFor(offer: { service_type: string } | null | undefined): TripIntentDTO | null {
+    return activeIntent && offer && activeIntent.status === "active" && activeIntent.service_type === offer.service_type
+      ? activeIntent
+      : null;
+  }
+
+  /** A driver's offer opens already filled from the request; the differences are fetched, nothing is reserved. */
+  function openOfferBid(item: FeedItemDTO) {
+    const intent = intentFor(item.listing);
+    setSelectedOffer(item);
+    setIntentFit(null);
+    if (intent) {
+      const fill = prefillBid(intent, item.listing);
+      setOfferBid({
+        price: fill.price,
+        seats: fill.seats,
+        parcelType: intent.current_version.parcel?.parcel_type ?? "box",
+        weightKg: fill.weightKg,
+        lengthCm: fill.lengthCm,
+        widthCm: fill.widthCm,
+        heightCm: fill.heightCm,
+        receiverName: fill.receiverName,
+        receiverPhone: fill.receiverPhone,
+      });
+      setIntentFitLoading(true);
+      void tripIntentFit(intent.id, item.listing.id)
+        .then(setIntentFit)
+        .catch(() => setIntentFit(null))
+        .finally(() => setIntentFitLoading(false));
+    } else {
+      setOfferBid({ ...offerBid, price: String(Math.round(item.listing.unit_price_minor / 100)), seats: 1 });
+    }
+    go("client-offer-bid");
+  }
+
+  async function loadOfferFeed(mode: "parcel" | "passenger" = serviceMode, intentOverride?: TripIntentDTO | null) {
+    // ADR-0025: with a live saved request the feed answers for it, so the list matches the summary above it and
+    // survives a restart; without one it reads the places marked on the home sheet, as before.
+    const intent = intentOverride !== undefined ? intentOverride : activeIntent;
+    if (intent && intent.status === "active") {
+      const v = intent.current_version;
+      const result = await offersFeed({
+        service_type: intent.service_type,
+        origin_district_id: v.origin.district?.id,
+        origin_stop_id: v.origin.district ? undefined : v.origin.stop?.id,
+        destination_district_id: v.destination.district?.id,
+        destination_stop_id: v.destination.district ? undefined : v.destination.stop?.id,
+        seats: intent.service_type === "passenger" ? v.quantity : undefined,
+        limit: 30,
+      });
+      setOfferFeed(result.data);
+      setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
+      return;
+    }
     if (!pickupEnd.stop && !pickupEnd.district) {
       setOfferFeed([]);
       return;
@@ -3165,6 +3521,15 @@ export function ConnectedApp() {
             {/* Q89: the passenger service is built but stays behind its flag (K7). With the flag off there is
                 no toggle at all - not a disabled one that invites a support call - and then the heading has to
                 name the mode, because nothing else does. */}
+            {pendingCode() && (
+              <button
+                type="button"
+                onClick={() => go("client-bonus")}
+                className="el-press mb-3 w-full rounded-[14px] border border-primary/30 bg-accent px-4 py-3 text-left text-[13px] font-semibold text-primary"
+              >
+                Taklif kodi saqlandi: {pendingCode()} — tasdiqlash uchun bosing
+              </button>
+            )}
             {flags?.passenger_enabled ? (
               <div className="mb-4">
                 <SegmentedControl
@@ -3310,15 +3675,7 @@ export function ConnectedApp() {
             </p>
             <button
               type="button"
-              onClick={() => {
-                setSelectedOffer(item);
-                setOfferBid({
-                  ...offerBid,
-                  price: String(Math.round(item.listing.unit_price_minor / 100)),
-                  seats: 1,
-                });
-                go("client-offer-bid");
-              }}
+              onClick={() => openOfferBid(item)}
               className={cls(
                 "el-press mt-3 h-10 w-full rounded-[10px] text-[14px] font-semibold",
                 isAlternative ? "border border-primary text-primary" : "bg-primary text-primary-foreground",
@@ -3333,8 +3690,20 @@ export function ConnectedApp() {
         <main className="flex flex-1 flex-col bg-background">
           <TopBar title="Haydovchi e'lonlari" back={() => go("client-home")} />
           <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
+            <TripIntentSummary
+              intent={activeIntent}
+              others={myIntents}
+              loading={intentLoading}
+              error={intentError}
+              busy={busy}
+              onEdit={() => go("client-intent-edit")}
+              onNew={startNewIntent}
+              onReopen={reopenActiveIntent}
+              onRetry={() => void loadIntents()}
+              onSelect={selectIntent}
+            />
             <p className="text-[13px] leading-5 text-muted-foreground">
-              {serviceMode === "passenger"
+              {(activeIntent?.status === "active" ? activeIntent.service_type : serviceMode) === "passenger"
                 ? "Shu yo'nalishda safar e'lon qilgan haydovchilar. Narxi to'g'ri kelmasa, o'z narxingizni taklif qiling."
                 : "Shu yo'nalishda yuk oladigan haydovchilar. Narxi to'g'ri kelmasa, o'z narxingizni taklif qiling."}
             </p>
@@ -3373,8 +3742,13 @@ export function ConnectedApp() {
     if (screen === "client-offer-bid" && selectedOffer) {
       const offer = selectedOffer.listing;
       const perSeat = offer.price_basis === "per_seat";
-      const seats = perSeat ? Math.max(1, offerBid.seats) : 1;
+      // ADR-0025: with a saved request the number of people is the request's, the same for every driver.
+      const bidIntent = intentFor(offer);
+      const intentExpired = bidIntent ? bidIntent.expired || isExpired(bidIntent) : false;
+      const seats = bidIntent ? bidIntent.current_version.quantity : perSeat ? Math.max(1, offerBid.seats) : 1;
       const priceSoum = Math.round(Number(offerBid.price));
+      const requestPrice = bidIntent?.current_version.unit_price_minor ? bidIntent.current_version : null;
+      const priceFromRequest = bidIntent ? prefillBid(bidIntent, offer).priceFromRequest : false;
       const parcelNeeded = offer.service_type === "parcel";
       const parcelReady = !parcelNeeded || Boolean(
         Number(offerBid.weightKg) > 0 && Number(offerBid.lengthCm) > 0 && Number(offerBid.widthCm) > 0
@@ -3384,19 +3758,48 @@ export function ConnectedApp() {
         <main className="flex flex-1 flex-col bg-card">
           <TopBar title="Narxingizni taklif qiling" back={() => go("client-offers")} />
           <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+            {bidIntent && (
+              <div className="rounded-[14px] border border-primary/30 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">Talabingiz</p>
+                <p className="mt-0.5 text-[14px] font-semibold leading-5 text-foreground">{intentSummary(bidIntent)}</p>
+                <div className="mt-1.5 flex gap-4">
+                  <button type="button" onClick={() => go("client-intent-edit")} className="el-press text-[13px] font-semibold text-primary">
+                    Tahrirlash
+                  </button>
+                  <button type="button" onClick={startNewIntent} className="el-press text-[13px] font-semibold text-muted-foreground">
+                    Yangi safar/jo'natma
+                  </button>
+                </div>
+              </div>
+            )}
+            {bidIntent && intentExpired && (
+              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
+                Talabingizdagi vaqt o'tib ketgan. Sana avtomatik o'zgartirilmaydi - avval vaqtni yangilang.
+              </p>
+            )}
+            {bidIntent && <TripIntentFitNotes fit={intentFit} loading={intentFitLoading} />}
             <div className="rounded-[14px] bg-background p-4">
               <p className="font-semibold text-foreground">
                 {endLabel(offer.origin_stop, offer.origin_point)} {"->"} {endLabel(offer.destination_stop, offer.destination_point)}
               </p>
+              {/* The driver's advertised price and the client's own offer are two lines, never one number. */}
               <p className="mt-1 text-[13px] text-muted-foreground">
-                Haydovchi narxi: {formatUzs(offer.unit_price_minor / 100)}{perSeat ? " / o'rin" : ""}
+                Haydovchi narxi: {bidIntent
+                  ? priceLine(offer.price_basis, offer.unit_price_minor, seats)
+                  : `${formatUzs(offer.unit_price_minor / 100)}${perSeat ? " / o'rin" : ""}`}
               </p>
               <p className="mt-1 text-[13px] text-muted-foreground">
                 Chiqish: {shortDate(offer.departure_window_start)} - {shortDate(offer.departure_window_end)}
               </p>
             </div>
 
-            {perSeat && (
+            {bidIntent && bidIntent.service_type === "passenger" && (
+              <p className="text-[13px] text-secondary-foreground">
+                Odamlar soni: <span className="font-semibold">{seats} kishi</span> (talabingizdan; o'zgartirish uchun
+                "Tahrirlash")
+              </p>
+            )}
+            {perSeat && !bidIntent && (
               <Field
                 label="Nechta o'rin"
                 type="number"
@@ -3411,9 +3814,24 @@ export function ConnectedApp() {
               onChange={(value) => setOfferBid({ ...offerBid, price: value })}
               placeholder="Masalan: 180000"
             />
-            {perSeat && priceSoum > 0 && (
+            {bidIntent && priceSoum > 0 ? (
+              <p className="text-[13px] font-semibold leading-5 text-foreground">
+                Sizning taklifingiz: {priceLine(offer.price_basis, priceSoum * 100, seats)}
+              </p>
+            ) : perSeat && priceSoum > 0 ? (
               <p className="text-[12px] leading-5 text-muted-foreground">
                 {seats} o'rin uchun jami: {formatUzs(priceSoum * seats)}
+              </p>
+            ) : null}
+            {bidIntent && requestPrice && !priceFromRequest && (
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                Talabingizdagi narx ({priceLine(requestPrice.price_basis ?? "total", requestPrice.unit_price_minor ?? 0, seats)})
+                boshqa birlikda, shuning uchun maydon haydovchi narxidan boshlandi.
+              </p>
+            )}
+            {bidIntent && (
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                Bu narx faqat shu haydovchiga yuboriladi; saqlangan talabingiz o'zgarmaydi.
               </p>
             )}
 
@@ -3432,6 +3850,15 @@ export function ConnectedApp() {
               </>
             )}
 
+            <BonusConsentPanel
+              listingId={offer.id}
+              unitPriceMinor={priceSoum * 100}
+              quantity={seats}
+              choice={offerConsent}
+              onChoice={setOfferConsent}
+              refreshToken={consentRefresh}
+            />
+
             {/* Section 5.3: an offer reserves nothing. Saying so here is what stops "men taklif berdim" from
                 reading as "joy band qilindi". */}
             <p className="text-[12px] leading-5 text-muted-foreground">
@@ -3441,9 +3868,19 @@ export function ConnectedApp() {
 
             <div className="mt-auto">
               <PrimaryButton
-                disabled={priceSoum <= 0 || !parcelReady || !offer.origin_stop || !offer.destination_stop || busy}
+                disabled={priceSoum <= 0 || !parcelReady || !offer.origin_stop || !offer.destination_stop || busy
+                  || intentExpired || fitBlocks(bidIntent ? intentFit : null)}
                 onClick={() => void run(async () => {
                   if (!offer.origin_stop || !offer.destination_stop) return;
+                  // ADR-0025: parcel data typed here belongs to the request, so it is saved there first and every
+                  // later driver's screen starts with it. A material change with open offers asks before closing them.
+                  let intent = bidIntent;
+                  if (intent && parcelNeeded && parcelDiffers(intent, offerBid)) {
+                    intent = await sendIntentEdit(updateBody(intent, { parcel: parcelInput(offerBid) }), "client-offer-bid");
+                    if (!intent) return;
+                  }
+                  const intentParcel = intent?.current_version.parcel ?? null;
+                  const promo = consentBody(offerConsent);
                   await submitProposal(
                     offer.id,
                     {
@@ -3458,17 +3895,34 @@ export function ConnectedApp() {
                       quantity: seats,
                       unit_price_minor: priceSoum * 100,
                       parcel: parcelNeeded
-                        ? {
-                            weight_g: Math.round(Number(offerBid.weightKg) * 1000),
-                            length_cm: Math.round(Number(offerBid.lengthCm)),
-                            width_cm: Math.round(Number(offerBid.widthCm)),
-                            height_cm: Math.round(Number(offerBid.heightCm)),
-                            receiver: { name: offerBid.receiverName.trim(), phone: offerBid.receiverPhone.trim() },
-                          }
+                        ? intentParcel
+                          ? {
+                              parcel_type: intentParcel.parcel_type ?? null,
+                              weight_g: intentParcel.weight_g ?? 0,
+                              length_cm: intentParcel.length_cm ?? 0,
+                              width_cm: intentParcel.width_cm ?? 0,
+                              height_cm: intentParcel.height_cm ?? 0,
+                              receiver: intentParcel.receiver ?? null,
+                            }
+                          : {
+                              weight_g: Math.round(Number(offerBid.weightKg) * 1000),
+                              length_cm: Math.round(Number(offerBid.lengthCm)),
+                              width_cm: Math.round(Number(offerBid.widthCm)),
+                              height_cm: Math.round(Number(offerBid.heightCm)),
+                              receiver: { name: offerBid.receiverName.trim(), phone: offerBid.receiverPhone.trim() },
+                            }
                         : null,
+                      ...(intent ? { trip_intent: { id: intent.id, version_no: intent.current_version.version_no } } : {}),
+                      ...(promo ? { promo_consent: promo } : {}),
                     },
                     newIdempotencyKey(),
-                  );
+                  ).catch((cause) => {
+                    requoteOn(cause);
+                    if ((cause as { code?: string }).code?.startsWith("TRIP_INTENT")) void loadIntents();
+                    throw cause;
+                  });
+                  if (intent) rememberIntent({ ...intent, open_offers: intent.open_offers + 1 });
+                  setOfferConsent(NO_CONSENT);
                   await loadOfferFeed();
                   go("client-proposals");
                 }, "Taklifingiz yuborildi")}
@@ -3477,6 +3931,29 @@ export function ConnectedApp() {
               </PrimaryButton>
             </div>
           </section>
+        </main>
+      );
+    }
+
+    if (screen === "client-intent-edit") {
+      return (
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar
+            title={activeIntent?.service_type === "parcel" ? "Jo'natma talabi" : "Safar talabi"}
+            back={() => go("client-offers")}
+          />
+          {activeIntent ? (
+            <TripIntentEditor
+              key={`${activeIntent.id}:${activeIntent.version}`}
+              intent={activeIntent}
+              busy={busy}
+              onSave={saveIntentEdit}
+              onChangeRoute={editIntentRoute}
+              onClose={closeActiveIntent}
+            />
+          ) : (
+            <EmptyState icon={MapPin} title="Saqlangan talab yo'q" action="Yangi safar/jo'natma" onAction={startNewIntent} />
+          )}
         </main>
       );
     }
@@ -3638,6 +4115,18 @@ export function ConnectedApp() {
               >
                 Saqlash
               </PrimaryButton>
+              {/* ADR-0025: the same answers, kept privately as a request that fills each driver's offer screen. It
+                  is not published and sends nothing by itself; the price is optional here. */}
+              <div className="mt-2">
+                <SecondaryButton
+                  disabled={busy || saveBlockers.some((problem) => problem !== "Narxni kiriting.")}
+                  onClick={() => void run(saveIntentFromHome)}
+                >
+                  {intentDraftMode === "edit" && activeIntent?.status === "active" && activeIntent.service_type === serviceMode
+                    ? "Talabni yangilash"
+                    : "Haydovchi e'lonlarini ko'rish"}
+                </SecondaryButton>
+              </div>
               {saveBlockers.length > 0 && (
                 <ul className="mt-2 space-y-1">
                   {saveBlockers.map((problem) => (
@@ -4046,10 +4535,11 @@ export function ConnectedApp() {
                 <span className="font-semibold text-foreground">{formatUzs(booking.total_minor / 100)}</span>
               </div>
             </div>
+            <PromoMoneyCard promo={booking.promo} />
             <div className="rounded-[14px] border border-border bg-card p-4">
               <p className="text-[12px] text-muted-foreground">Yo'lkira</p>
               <p className="mt-1 text-[14px] font-medium text-foreground">
-                {formatUzs(booking.total_minor / 100)} — haydovchiga naqd to'lanadi
+                {formatUzs(cashDueMinor(booking) / 100)} — haydovchiga naqd to'lanadi
               </p>
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
                 To'lov ilova orqali o'tmaydi; ELCHI bu summani qabul qilmaydi.
@@ -4067,9 +4557,7 @@ export function ConnectedApp() {
                 <p className="text-[12px] text-muted-foreground">{proofCodeLabel(code.kind)}</p>
                 <p className="mt-1 text-[22px] font-bold tracking-[0.2em] text-foreground">{code.code}</p>
                 <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                  {code.kind === "delivery_code"
-                    ? "Bu kodni faqat qabul qiluvchiga bering."
-                    : "Bu kodni haydovchiga posilkani topshirayotganda ayting."}
+                  {proofCodeHint(code.kind)}
                 </p>
               </div>
             ))}
@@ -4102,7 +4590,7 @@ export function ConnectedApp() {
                 Kuzatuv
               </button>
             </div>
-            {["awaiting_pickup", "boarding", "picked_up", "in_transit"].includes(booking.service_status) && (
+            {AMENDABLE_STATUSES.includes(booking.service_status) && (
               <SecondaryButton onClick={() => void run(() => openAmendments(booking.id, "client"))}>
                 Shartlarni o'zgartirish
               </SecondaryButton>
@@ -4182,6 +4670,12 @@ export function ConnectedApp() {
                     </p>
                   )}
 
+                  {open && version && (
+                    <div className="mt-3 empty:hidden">
+                      <StaleConfirmation threadId={thread.id} side={mySide} version={version} onDone={() => void loadMyProposals()} />
+                    </div>
+                  )}
+
                   {open && version && counterFor === thread.id && (
                     <div className="mt-3 space-y-3">
                       <Field
@@ -4191,11 +4685,21 @@ export function ConnectedApp() {
                         placeholder={String(Math.round(version.total_minor / 100))}
                         onChange={setCounterPrice}
                       />
+                      {mySide === "client" && (
+                        <BonusConsentPanel
+                          listingId={thread.listing_id}
+                          unitPriceMinor={soumToMinor(counterPrice)}
+                          quantity={version.quantity}
+                          choice={counterConsent}
+                          onChoice={setCounterConsent}
+                          refreshToken={consentRefresh}
+                        />
+                      )}
                       <div className="flex gap-2">
                         <button
                           type="button"
                           disabled={counterPending || busy || soumToMinor(counterPrice) <= 0}
-                          onClick={() => void run(() => sendCounter(thread.id, version.revision, loadMyProposals), "Qarshi taklif yuborildi")}
+                          onClick={() => void run(() => sendCounter(thread.id, version.revision, loadMyProposals, mySide === "client"), "Qarshi taklif yuborildi")}
                           className="h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
                         >
                           {counterPending ? "Yuborilmoqda..." : "Yuborish"}
@@ -4213,16 +4717,34 @@ export function ConnectedApp() {
 
                   {open && version && counterFor !== thread.id && (
                     <div className="mt-3 space-y-2">
+                      {actions.canAccept && version.promo_quote?.view === "driver" && (
+                        // the driver reads the cash to collect, the credit used and the commission before agreeing
+                        <PromoMoneyCard promo={version.promo_quote} title="Qabul qilsangiz" agreed={false} />
+                      )}
+                      {actions.canAccept && mySide === "client" && (
+                        <AcceptConsentPanel
+                          quote={version.promo_quote?.view === "client" ? version.promo_quote : null}
+                          choice={acceptConsent[thread.id] ?? NO_CONSENT}
+                          onChoice={(choice) => setAcceptConsent((all) => ({ ...all, [thread.id]: choice }))}
+                        />
+                      )}
+                      {actions.canAccept && !version.promo_quote && <NoDiscountNote reason={version.promo_unavailable_reason} />}
                       {actions.canAccept && (
                         <PrimaryButton
                           disabled={busy}
                           onClick={() => void run(async () => {
                             const listing = await getListing(thread.listing_id);
-                            const booking = await acceptProposal(
-                              thread.id,
-                              { proposal_version_id: version.id, expected_listing_terms_version: listing.terms_version },
-                              newIdempotencyKey(),
-                            );
+                            const promo = mySide === "client" ? consentBody(acceptConsent[thread.id] ?? NO_CONSENT) : undefined;
+                            const shown = mySide === "driver" && version.promo_quote?.view === "driver" ? version.promo_quote : null;
+                            const body = acceptBody(version.id, listing.terms_version, promo, shown
+                              ? { cash_to_collect_minor: shown.cash_to_collect_minor, commission_charged_minor: shown.commission_charged_minor }
+                              : undefined);
+                            const booking = await oncePerAction(`accept:${thread.id}:${version.id}`,
+                              (key) => acceptProposal(thread.id, body, key)).catch(async (cause) => {
+                                // the server's numbers changed: show the new card before anyone confirms again
+                                if (needsRequote(cause as { code?: string })) await loadMyProposals().catch(() => undefined);
+                                return requoteAndThrow(cause);
+                              });
                             await loadMyProposals();
                             if (mySide === "client") await loadMyListings();
                             else await loadDriverBookings();
@@ -4277,6 +4799,14 @@ export function ConnectedApp() {
           </section>
         </main>
       );
+    }
+
+    if (screen === "client-bonus") {
+      return <BonusScreen role="client" back={() => go("client-profile")} />;
+    }
+
+    if (screen === "driver-bonus") {
+      return <BonusScreen role="driver" back={() => go("driver-profile")} />;
     }
 
     if (screen === "booking-rating" && clientBooking) {
@@ -4417,22 +4947,64 @@ export function ConnectedApp() {
                     Yangi jami: {formatUzs(newTotal / 100)}
                   </p>
                 )}
+                {amendConsentAsk && (
+                  // Q116/Q125: on a discounted booking the client confirms the new cash amount the server computed
+                  <div className="rounded-[12px] border border-warning/30 bg-warning/8 p-3 text-[13px] leading-5 text-foreground">
+                    Yangi hisob: bonus chegirmasi {nbsp(formatUzs(amendConsentAsk.passenger_discount_minor / 100))}, haydovchiga
+                    naqd {nbsp(formatUzs(amendConsentAsk.cash_due_minor / 100))}. Rozi bo'lsangiz, qayta yuboring.
+                    {booking.promo?.view === "client" && amendConsentAsk.fare_minor !== undefined && (() => {
+                      const note = amendmentCashNote(booking.promo, {
+                        fare_minor: amendConsentAsk.fare_minor,
+                        passenger_discount_minor: amendConsentAsk.passenger_discount_minor,
+                        cash_due_minor: amendConsentAsk.cash_due_minor,
+                      });
+                      return note ? <span className="mt-1.5 block font-semibold">{note}</span> : null;
+                    })()}
+                  </div>
+                )}
+                {amendAckAsk && side === "driver" && (
+                  <p className="rounded-[12px] border border-warning/30 bg-warning/8 p-3 text-[13px] leading-5 text-foreground">
+                    O'zgarishdan keyin: mijozdan naqd {nbsp(formatUzs(amendAckAsk.cash_to_collect_minor / 100))}, balansingizdan
+                    yechiladi {nbsp(formatUzs(amendAckAsk.commission_charged_minor / 100))}. Rozi bo'lsangiz, qayta yuboring.
+                  </p>
+                )}
                 <PrimaryButton
                   disabled={busy || !changed || unitMinor <= 0 || amendmentForm.reason.trim().length < 3}
                   onClick={() => void run(async () => {
-                    await proposeAmendment(
-                      booking.id,
-                      {
-                        expected_version: booking.version,
-                        changes: { quantity, unit_price_minor: unitMinor },
-                        reason: amendmentForm.reason.trim(),
-                      },
-                      newIdempotencyKey(),
-                    );
+                    try {
+                      await proposeAmendment(
+                        booking.id,
+                        {
+                          expected_version: booking.version,
+                          changes: { quantity, unit_price_minor: unitMinor },
+                          reason: amendmentForm.reason.trim(),
+                          ...(amendConsentAsk && side === "client"
+                            ? { promo_consent: { passenger_bonus_minor: amendConsentAsk.passenger_discount_minor, cash_due_minor: amendConsentAsk.cash_due_minor } }
+                            : {}),
+                          ...(amendAckAsk && side === "driver" ? { promo_driver_ack: amendAckAsk } : {}),
+                        },
+                        newIdempotencyKey(),
+                      );
+                      setAmendConsentAsk(null);
+                      setAmendAckAsk(null);
+                    } catch (cause) {
+                      const details = (cause as { code?: string; details?: { passenger_discount_minor?: number; cash_due_minor?: number; fare_minor?: number; party?: string } });
+                      const ack = driverAckRequested(cause as { code?: string; details?: Record<string, unknown> });
+                      if (ack) {
+                        setAmendAckAsk(ack);
+                      } else if (needsRequote(details) && typeof details.details?.cash_due_minor === "number") {
+                        setAmendConsentAsk({
+                          passenger_discount_minor: details.details.passenger_discount_minor ?? 0,
+                          cash_due_minor: details.details.cash_due_minor,
+                          fare_minor: details.details.fare_minor,
+                        });
+                      }
+                      throw cause;
+                    }
                     await loadAmendments(booking.id);
                   }, "Taklif yuborildi")}
                 >
-                  Taklif yuborish
+                  {amendConsentAsk ? "Yangi naqd summaga roziman — yuborish" : amendAckAsk && side === "driver" ? "Shu hisobga roziman — yuborish" : "Taklif yuborish"}
                 </PrimaryButton>
               </div>
             )}
@@ -4459,12 +5031,32 @@ export function ConnectedApp() {
                         <StatusBadge status={item.status} />
                       </div>
                     </div>
+                    <PromoMoneyCard promo={item.promo} title="O'zgarishdan keyingi hisob" agreed={item.status === "accepted"} />
+                    {pending && side === "client" && item.promo?.view === "client" && booking.promo?.view === "client" && (() => {
+                      // Q125: a lower fare that still raises the cash is said out loud, not left to be noticed
+                      const note = amendmentCashNote(booking.promo, item.promo);
+                      return note ? <p className="mt-2 text-[12px] font-semibold leading-5 text-warning">{note}</p> : null;
+                    })()}
                     {pending && !mine && (
                       <div className="mt-3 space-y-2">
+                        {side === "client" && item.promo?.view === "client" && (
+                          <AcceptConsentPanel
+                            quote={item.promo}
+                            choice={acceptConsent[item.id] ?? NO_CONSENT}
+                            onChoice={(choice) => setAcceptConsent((all) => ({ ...all, [item.id]: choice }))}
+                          />
+                        )}
                         <PrimaryButton
-                          disabled={busy}
+                          disabled={busy || (side === "client" && item.promo?.view === "client" && !(acceptConsent[item.id]?.useBonus))}
                           onClick={() => void run(async () => {
-                            await acceptAmendment(item.id, item.version);
+                            const promo = side === "client" && item.promo?.view === "client"
+                              ? { passenger_bonus_minor: item.promo.passenger_discount_minor, cash_due_minor: item.promo.cash_due_minor }
+                              : undefined;
+                            // Q125: the driver accepts exactly the cash and commission shown on this card
+                            const ack = side === "driver" && item.promo?.view === "driver"
+                              ? { cash_to_collect_minor: item.promo.cash_to_collect_minor, commission_charged_minor: item.promo.commission_charged_minor }
+                              : undefined;
+                            await acceptAmendment(item.id, item.version, promo, ack);
                             // Re-open rather than only reloading the list: accepting changes the booking's
                             // terms *and* its version, and the next amendment is proposed against that version.
                             await openAmendments(booking.id, side);
@@ -4484,7 +5076,23 @@ export function ConnectedApp() {
                       </div>
                     )}
                     {pending && mine && (
-                      <div className="mt-3">
+                      <div className="mt-3 space-y-2">
+                        {item.promo && (
+                          // Q126: if the other side is told my confirmation went stale, I renew it from this session
+                          <SecondaryButton
+                            onClick={() => void run(async () => {
+                              const promo = item.promo;
+                              await confirmAmendmentPromo(item.id, promo?.view === "client"
+                                ? { promo_consent: { passenger_bonus_minor: promo.passenger_discount_minor, cash_due_minor: promo.cash_due_minor } }
+                                : promo?.view === "driver"
+                                  ? { promo_driver_ack: { cash_to_collect_minor: promo.cash_to_collect_minor, commission_charged_minor: promo.commission_charged_minor } }
+                                  : {});
+                              await loadAmendments(booking.id);
+                            }, "Bonus shartlari qayta tasdiqlandi")}
+                          >
+                            Bonus shartlarini qayta tasdiqlash
+                          </SecondaryButton>
+                        )}
                         <SecondaryButton
                           onClick={() => void run(async () => {
                             await decideAmendment(item.id, "withdraw", item.version);
@@ -5110,6 +5718,16 @@ export function ConnectedApp() {
                     <p className="text-[17px] font-bold text-primary">{version ? formatUzs(version.total_minor / 100) : "-"}</p>
                   </div>
                   {version?.message && <p className="mt-2 text-[13px] leading-5 text-secondary-foreground">{version.message}</p>}
+                  {version && version.status === "active" && (
+                    <div className="mt-3 empty:hidden">
+                      <StaleConfirmation
+                        threadId={thread.id}
+                        side="client"
+                        version={version}
+                        onDone={() => void listListingProposals(listing.id).then(setListingThreads)}
+                      />
+                    </div>
+                  )}
                   {version && version.status === "active" && version.author_side === "driver" && (
                     <div className="mt-3">
                       {counterFor === thread.id ? (
@@ -5121,11 +5739,19 @@ export function ConnectedApp() {
                             placeholder={String(Math.round(version.total_minor / 100))}
                             onChange={setCounterPrice}
                           />
+                          <BonusConsentPanel
+                            listingId={listing.id}
+                            unitPriceMinor={soumToMinor(counterPrice)}
+                            quantity={version.quantity}
+                            choice={counterConsent}
+                            onChoice={setCounterConsent}
+                            refreshToken={consentRefresh}
+                          />
                           <div className="flex gap-2">
                             <button
                               type="button"
                               disabled={counterPending || busy || soumToMinor(counterPrice) <= 0}
-                              onClick={() => void run(() => sendCounter(thread.id, version.revision, () => openListing(listing.id, "client-listing-bids")), "Qarshi taklif yuborildi")}
+                              onClick={() => void run(() => sendCounter(thread.id, version.revision, () => openListing(listing.id, "client-listing-bids"), true), "Qarshi taklif yuborildi")}
                               className="h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
                             >
                               {counterPending ? "Yuborilmoqda..." : "Yuborish"}
@@ -5159,17 +5785,22 @@ export function ConnectedApp() {
                       Sizning qarshi taklifingiz yuborildi — haydovchining javobi kutilmoqda.
                     </p>
                   )}
-                  {version && version.status === "active" && version.author_side === "driver" && (
-                    <div className="mt-3">
+                  {version && version.status === "active" && version.author_side === "driver" && counterFor !== thread.id && (
+                    <div className="mt-3 space-y-2">
+                      <AcceptConsentPanel
+                        quote={version.promo_quote?.view === "client" ? version.promo_quote : null}
+                        choice={acceptConsent[thread.id] ?? NO_CONSENT}
+                        onChoice={(choice) => setAcceptConsent((all) => ({ ...all, [thread.id]: choice }))}
+                      />
+                      {!version.promo_quote && <NoDiscountNote reason={version.promo_unavailable_reason} />}
                       <PrimaryButton
                         disabled={busy}
                         onClick={() =>
                           void run(async () => {
-                            const accepted = await acceptProposal(
-                              thread.id,
-                              { proposal_version_id: version.id, expected_listing_terms_version: listing.terms_version },
-                              newIdempotencyKey(),
-                            );
+                            const promo = consentBody(acceptConsent[thread.id] ?? NO_CONSENT);
+                            const body = acceptBody(version.id, listing.terms_version, promo);
+                            const accepted = await oncePerAction(`accept:${thread.id}:${version.id}`,
+                              (key) => acceptProposal(thread.id, body, key)).catch(requoteAndThrow);
                             await openListing(listing.id);
                             // "Driver chosen" is the moment the two of them need to talk, so the chat is
                             // where this lands rather than back on a list - with the booking behind it, so
@@ -5392,6 +6023,7 @@ export function ConnectedApp() {
               <p className="px-1 text-[13px] font-semibold text-muted-foreground">Tezkor amallar</p>
               <ProfileActionRow icon={Package} label="Buyurtmalarim" description="Yaratilgan buyurtmalar va holatlarni ko'rish" onClick={() => go("client-orders")} />
               <ProfileActionRow icon={Truck} label="Takliflarim" description="Haydovchi e'lonlariga yuborgan narx takliflaringiz" onClick={() => go("client-proposals")} />
+              <ProfileActionRow icon={Tag} label="Bonuslar va taklif kodi" description="Chegirma huquqlari, taklif kodingiz va kampaniyalar" onClick={() => go("client-bonus")} />
               <ProfileActionRow icon={Bell} label="Bildirishnomalar" description="Takliflar va buyurtma yangiliklari" onClick={() => go("client-notifications")} />
               <ProfileActionRow icon={FileText} label="Nizolarim" description="Ochilgan nizolar, ularning holati va dalillar" onClick={() => go("my-disputes")} />
               <ProfileActionRow icon={Headphones} label="Yordam" description="Savollar va operatorga murojaat" onClick={() => go("support")} />
@@ -5410,6 +6042,15 @@ export function ConnectedApp() {
       return (
         <main className="flex flex-1 flex-col bg-background">
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
+            {pendingCode() && (
+              <button
+                type="button"
+                onClick={() => go("driver-bonus")}
+                className="el-press w-full rounded-[14px] border border-primary/30 bg-accent px-4 py-3 text-left text-[13px] font-semibold text-primary"
+              >
+                Taklif kodi saqlandi: {pendingCode()} — tasdiqlash uchun bosing
+              </button>
+            )}
             <div className="flex items-start justify-between gap-3">
               <h1 className="min-w-0 flex-1 text-[24px] font-bold text-foreground">{approved ? "Bosh sahifa" : "Profilni to'ldiring"}</h1>
               {/* The driver's way into the inbox, with the unread count on it - the reference client's bell.
@@ -6386,6 +7027,7 @@ export function ConnectedApp() {
                 <span className="font-semibold text-foreground">{formatUzs(booking.total_minor / 100)}</span>
               </div>
             </div>
+            <PromoMoneyCard promo={booking.promo} />
             {[
               [endRowLabel(booking.pickup.stop, "Olib ketish bekati", "Olib ketish joyi"),
                endLabel(booking.pickup.stop, booking.pickup.point)],
@@ -6395,7 +7037,7 @@ export function ConnectedApp() {
               // Q44: the participant phones open when the service starts, not at accept.
               ["Telefon", booking.client?.contact_phone ?? "Xizmat boshlanganda ochiladi"],
               // §9: the fare is cash between the two people; it never passes through ELCHI or the wallet.
-              ["Yo'lkira", `${formatUzs(booking.total_minor / 100)} — haydovchiga naqd to'lanadi`],
+              ["Yo'lkira", `${formatUzs(cashDueMinor(booking) / 100)} — mijozdan naqd olinadi`],
             ].map(([label, value]) => (
               <div key={label} className="rounded-[14px] border border-border bg-card p-4">
                 <p className="text-[12px] text-muted-foreground">{label}</p>
@@ -6453,7 +7095,7 @@ export function ConnectedApp() {
                 Kuzatuv
               </button>
             </div>
-            {["awaiting_pickup", "boarding", "picked_up", "in_transit"].includes(booking.service_status) && (
+            {AMENDABLE_STATUSES.includes(booking.service_status) && (
               <SecondaryButton onClick={() => void run(() => openAmendments(booking.id, "driver"))}>
                 Shartlarni o'zgartirish
               </SecondaryButton>
@@ -6697,6 +7339,7 @@ export function ConnectedApp() {
               <ProfileActionRow icon={FileText} label="Hujjatlar" description="Pasport, guvohnoma va avtomobil hujjatlari" onClick={() => go("driver-documents")} />
               <ProfileActionRow icon={Navigation} label="Yo'nalishlarim" description="Qaysi yo'nalishlarda ishlashingizni boshqarish" onClick={() => go("driver-routes")} />
               <ProfileActionRow icon={Package} label="Takliflarim" description="Yuborilgan takliflar va mijozning javoblari" onClick={() => go("driver-proposals")} />
+              <ProfileActionRow icon={Tag} label="Kredit va taklif kodi" description="Komissiya krediti, taklif kodingiz va kampaniyalar" onClick={() => go("driver-bonus")} />
               <ProfileActionRow icon={Package} label="Buyurtmalarim" description="Qabul qilingan buyurtmalar tarixi" onClick={() => go("driver-orders")} />
               <ProfileActionRow icon={FileText} label="Nizolarim" description="Ochilgan nizolar, ularning holati va dalillar" onClick={() => go("my-disputes")} />
               <ProfileActionRow icon={Headphones} label="Yordam" description="Savollar va operatorga murojaat" onClick={() => go("support")} />
@@ -6816,6 +7459,23 @@ export function ConnectedApp() {
               )}
             </div>
           </div>
+        )}
+        {intentEditPending && (
+          <ConfirmSheet
+            title="Ochiq takliflar yopiladi"
+            text={offersAffectedText(intentEditPending.openOffers)}
+            confirmText="Saqlash"
+            cancelText="Ortga"
+            onCancel={() => setIntentEditPending(null)}
+            onConfirm={() => {
+              const pending = intentEditPending;
+              setIntentEditPending(null);
+              void run(async () => {
+                const saved = await sendIntentEdit({ ...pending.body, acknowledge_open_offers: true }, pending.then);
+                if (saved) go(pending.then);
+              }, "Talab yangilandi");
+            }}
+          />
         )}
         {confirmAction && (
           <ConfirmSheet

@@ -105,6 +105,21 @@ class ErrorCode(StrEnum):
     TRACKING_SESSION_CLOSED = "TRACKING_SESSION_CLOSED"
     CHAT_CLOSED = "CHAT_CLOSED"
     SAVED_SEARCH_LIMIT_REACHED = "SAVED_SEARCH_LIMIT_REACHED"
+    # promotions & referral (ADR-0023, Q101-Q110)
+    PROMO_CONSENT_REQUIRED = "PROMO_CONSENT_REQUIRED"
+    PROMO_QUOTE_STALE = "PROMO_QUOTE_STALE"
+    PROMO_PARAMETERS_UNSET = "PROMO_PARAMETERS_UNSET"
+    PROMO_BUDGET_EXHAUSTED = "PROMO_BUDGET_EXHAUSTED"
+    PROMO_BUDGET_BELOW_COMMITMENT = "PROMO_BUDGET_BELOW_COMMITMENT"
+    REFERRAL_SELF_REFERRAL = "REFERRAL_SELF_REFERRAL"
+    REFERRAL_ALREADY_ATTRIBUTED = "REFERRAL_ALREADY_ATTRIBUTED"
+    REFERRAL_WINDOW_CLOSED = "REFERRAL_WINDOW_CLOSED"
+    TRIP_INTENT_BOOKED = "TRIP_INTENT_BOOKED"
+    TRIP_INTENT_CHANGED = "TRIP_INTENT_CHANGED"
+    TRIP_INTENT_OFFERS_AFFECTED = "TRIP_INTENT_OFFERS_AFFECTED"
+    TRIP_INTENT_EXPIRED = "TRIP_INTENT_EXPIRED"
+    REFERRAL_CODE_INVALID = "REFERRAL_CODE_INVALID"
+    REFERRAL_NOT_ELIGIBLE = "REFERRAL_NOT_ELIGIBLE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,6 +234,51 @@ ERROR_CATALOGUE: dict[ErrorCode, ErrorSpec] = {
     ),
     ErrorCode.SAVED_SEARCH_LIMIT_REACHED: ErrorSpec(
         409, "Saved search limit per user reached; details {limit} (app.contracts.feed.SAVED_SEARCH_MAX_PER_USER)."
+    ),
+    ErrorCode.PROMO_CONSENT_REQUIRED: ErrorSpec(
+        409, "A discount would change the client's cash amount without the client's recorded consent (Q104)."
+    ),
+    ErrorCode.PROMO_QUOTE_STALE: ErrorSpec(
+        409, "Only this accept attempt is refused: the consented promo quote expired or no longer matches. The user, "
+        "listing and proposal stay as they are; re-quote and ask for consent again."
+    ),
+    ErrorCode.PROMO_PARAMETERS_UNSET: ErrorSpec(
+        409, "A campaign financial parameter is unset; unset is never read as zero and the campaign cannot activate."
+    ),
+    ErrorCode.PROMO_BUDGET_EXHAUSTED: ErrorSpec(
+        409, "The campaign budget cannot cover the maximum promise of a new enrollment; existing promises are kept."
+    ),
+    ErrorCode.PROMO_BUDGET_BELOW_COMMITMENT: ErrorSpec(
+        409, "A budget reduction would take the allocation below spent + outstanding obligations (B >= S + L); details "
+        "{reducible_minor}. A real loss of external funding is recorded as funding_loss with evidence, not as a reduction."
+    ),
+    ErrorCode.REFERRAL_SELF_REFERRAL: ErrorSpec(409, "A person cannot be attributed to their own referral code."),
+    ErrorCode.REFERRAL_ALREADY_ATTRIBUTED: ErrorSpec(
+        409, "The account already has a confirmed referral attribution; a later link never replaces it (Q106)."
+    ),
+    ErrorCode.TRIP_INTENT_BOOKED: ErrorSpec(
+        409, "This saved trip/parcel request already has a booking (or was closed): no other offer made from it can be "
+        "sent, countered or accepted. The client's other requests are unaffected (ADR-0025)."
+    ),
+    ErrorCode.TRIP_INTENT_CHANGED: ErrorSpec(
+        409, "The client changed the route, time, quantity or parcel of this saved request after the offer was made; "
+        "the old offer cannot be accepted - send a new one from the current request (ADR-0025)."
+    ),
+    ErrorCode.TRIP_INTENT_OFFERS_AFFECTED: ErrorSpec(
+        409, "This change closes the request's open offers (details {open_offers}); repeat it with "
+        "acknowledge_open_offers=true to confirm (ADR-0025)."
+    ),
+    ErrorCode.TRIP_INTENT_EXPIRED: ErrorSpec(
+        409, "The saved request's time window has passed; the client must set a new date - it is never moved silently."
+    ),
+    ErrorCode.REFERRAL_WINDOW_CLOSED: ErrorSpec(
+        409, "The attribution window (72 h from first phone verification, before the first booking) has closed."
+    ),
+    ErrorCode.REFERRAL_CODE_INVALID: ErrorSpec(
+        404, "The referral code is unknown or cannot be used; registration and ordinary service are unaffected."
+    ),
+    ErrorCode.REFERRAL_NOT_ELIGIBLE: ErrorSpec(
+        409, "This account or campaign does not qualify for a referral enrollment; ordinary service is unaffected."
     ),
 }
 

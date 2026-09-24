@@ -33,6 +33,8 @@ from app.modules.bookings.schemas import (
     BookingDTO,
     BookingFeeDTO,
     BookingListingIdsDTO,
+    BookingPromoClientDTO,
+    BookingPromoDriverDTO,
     BookingPolicyVersionsDTO,
     BookingStopDTO,
     BookingVehicleDTO,
@@ -49,6 +51,7 @@ from app.modules.marketplace import service as marketplace_service
 from app.modules.marketplace import views as marketplace_views
 from app.utils.file_access import media_ref
 from app.modules.marketplace.models import Listing, ProposalVersion
+from app.modules.promotions import booking as promo_booking
 from app.modules.trips import service as trips_service
 from app.modules.trips.models import Trip
 from app.modules.trips.ports import get_geo_port
@@ -101,7 +104,8 @@ def _fee_block(session: Session, booking: Booking) -> BookingFeeDTO:
         policy_kind=row.kind,
         fee_bps=booking.fee_bps,
         commission_minor=booking.commission_minor,
-        net_minor=booking.total_minor - booking.commission_minor,
+        # what the driver keeps: F - C, plus the Driver Credit on a discounted booking (F - C + H)
+        net_minor=promo_booking.terms_for_booking(session, booking).driver_keeps_minor,
     )
 
 
@@ -235,8 +239,11 @@ def booking_view(
         updated_at=ensure_aware_utc(booking.updated_at),
     )
     if viewer_role == ViewerRole.CLIENT:
-        return BookingClientDTO(**common)
-    return BookingDTO(**common, commission_status=CommissionStatus(booking.commission_status), fee=_fee_block(session, booking))
+        client_promo = promo_booking.client_promo_view(session, booking)
+        return BookingClientDTO(**common, promo=BookingPromoClientDTO(**client_promo) if client_promo else None)
+    driver_promo = promo_booking.driver_promo_view(session, booking)
+    return BookingDTO(**common, commission_status=CommissionStatus(booking.commission_status), fee=_fee_block(session, booking),
+                      promo=BookingPromoDriverDTO(**driver_promo) if driver_promo else None)
 
 
 def staff_contact_fields(dto: BookingDTO | BookingClientDTO) -> list[str]:
@@ -273,7 +280,13 @@ def cash_receipt_dto(receipt: CashReceipt, booking: Booking) -> CashReceiptDTO:
     )
 
 
-def amendment_dto(amendment: BookingAmendment, booking: Booking, *, viewer_role: str) -> AmendmentDTO:
+def amendment_dto(amendment: BookingAmendment, booking: Booking, *, viewer_role: str,
+                  session: Session | None = None) -> AmendmentDTO:
+    promo = None
+    if session is not None:
+        view = promo_booking.amendment_promo_view(session, booking, amendment, viewer_role=viewer_role)
+        if view is not None:
+            promo = BookingPromoClientDTO(**view) if viewer_role == ViewerRole.CLIENT else BookingPromoDriverDTO(**view)
     return AmendmentDTO(
         id=format_public_id(PublicIdPrefix.AMENDMENT, amendment.public_id),
         booking_id=bookings_service.booking_public_id(booking),
@@ -284,6 +297,7 @@ def amendment_dto(amendment: BookingAmendment, booking: Booking, *, viewer_role:
         new_unit_price_minor=amendment.new_unit_price_minor,
         new_total_minor=amendment.new_total_minor,
         fee_delta_minor=None if viewer_role == ViewerRole.CLIENT else amendment.fee_delta_minor,
+        promo=promo,
         expires_at=ensure_aware_utc(amendment.expires_at),
         version=amendment.version,
     )

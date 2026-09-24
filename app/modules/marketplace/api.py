@@ -38,8 +38,17 @@ from app.modules.identity.web import (
     run_command,
     run_versioned,
 )
+from app.modules.marketplace import intents as marketplace_intents
 from app.modules.marketplace import service as marketplace_service
 from app.modules.marketplace.schemas import (
+    TripIntentCommand,
+    TripIntentCreate,
+    TripIntentDTO,
+    TripIntentFitDTO,
+    TripIntentUpdate,
+    ProposalPromoClientDTO,
+    ProposalPromoConfirmation,
+    PromoPreviewDTO,
     DirectionPreviewDTO,
     ListingCancel,
     ListingCommand,
@@ -54,7 +63,7 @@ from app.modules.marketplace.schemas import (
     ProposalDecision,
     ProposalThreadDTO,
 )
-from app.api.v2.web import to_api_warnings
+from app.api.v2.web import session_ref_of, to_api_warnings
 from app.modules.marketplace.models import ParcelPolicyItem, ParcelPolicyVersion
 from app.modules.marketplace.views import (
     direction_preview_dto,
@@ -364,6 +373,35 @@ def list_my_listings(
 # --- proposals ------------------------------------------------------------------------------------
 
 
+def _with_consent(request: Request, session: Session, user_id: int, thread, consent):  # noqa: ANN001, ANN202
+    """Referral stage 5 (Q104): record the client's explicit bonus consent for the version it just sent, in the same
+    transaction. A stale or unmatched consent refuses the whole command (the version is rolled back with it)."""
+    if consent is None:
+        return thread
+    from app.contracts.promo import CLIENT_FEATURES_HEADER, parse_client_features
+    from app.modules.promotions.booking import ConsentInput, record_consent_for_current_version
+
+    record_consent_for_current_version(
+        session, thread=thread, actor_user_id=user_id,
+        client_features=parse_client_features(request.headers.get(CLIENT_FEATURES_HEADER)),
+        consent=ConsentInput(consent.passenger_bonus_minor, consent.cash_due_minor), session_ref=session_ref_of(request))
+    return thread
+
+
+def _noting_features(request: Request, session: Session, user_id: int, thread):  # noqa: ANN001, ANN202
+    """Referral Q126: the author's readiness for *this* version (its app, its login session, the version's expiry) -
+    what a later accept by the other side relies on - then the last declaration, which only detects a later change.
+    Last writes of the transaction."""
+    from app.contracts.promo import CLIENT_FEATURES_HEADER, parse_client_features
+    from app.modules.promotions.booking import note_client_features, note_version_readiness
+
+    features = parse_client_features(request.headers.get(CLIENT_FEATURES_HEADER))
+    session_ref = session_ref_of(request)
+    note_version_readiness(session, thread=thread, actor_user_id=user_id, features=features, session_ref=session_ref)
+    note_client_features(session, user_id=user_id, features=features, session_ref=session_ref)
+    return thread
+
+
 @router.post(
     "/listings/{listing_id}/proposals", response_model=Envelope[ProposalThreadDTO], status_code=201, responses=ERROR_RESPONSES
 )
@@ -386,9 +424,9 @@ def submit_proposal(
         handler=lambda: _with_warnings(
             lambda warnings: thread_dto(
                 session,
-                marketplace_service.submit_proposal(
+                _noting_features(request, session, user_id, _with_consent(request, session, user_id, marketplace_service.submit_proposal(
                     session, listing_public_id=listing_id, actor_user_id=user_id, data=body, warnings=warnings, filter_hits=_current_hits()
-                ),
+                ), body.promo_consent)),
                 viewer_user_id=user_id,
             )
         ),
@@ -450,6 +488,62 @@ def list_my_proposals(
     return _thread_page(session, threads, limit, scope, user_id)
 
 
+@router.get("/listings/{listing_id}/promo-preview", response_model=Envelope[PromoPreviewDTO],
+            responses=ERROR_RESPONSES)
+def promo_preview(
+    listing_id: str,
+    request: Request,
+    unit_price_minor: int = Query(gt=0),
+    quantity: int = Query(default=1, ge=1, le=60),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[PromoPreviewDTO]:
+    """Referral stage 5: before sending an offer or a counter, the client sees what its own bonus would do to the
+    price it is about to send - fare, discount, cash to hand over - or, when none applies, a plain reason. Reserves
+    nothing. Only the would-be client of this listing asks; the answer is about the caller's own bonus only."""
+    from app.contracts.promo import CLIENT_FEATURES_HEADER, parse_client_features
+    from app.modules.promotions.booking import preview_for_listing
+
+    view, reason = preview_for_listing(
+        session, listing_public_id=listing_id, client_user_id=user_id, unit_price_minor=unit_price_minor,
+        quantity=quantity, client_features=parse_client_features(request.headers.get(CLIENT_FEATURES_HEADER)))
+    return Envelope[PromoPreviewDTO](data=PromoPreviewDTO(
+        quote=ProposalPromoClientDTO(**view) if view else None, no_discount_reason=reason))
+
+
+@router.post("/proposals/{thread_id}/promo-confirmation", response_model=Envelope[ProposalThreadDTO],
+             responses=ERROR_RESPONSES)
+def confirm_proposal_promo(
+    thread_id: str,
+    body: ProposalPromoConfirmation,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Q126: the author of the open version renews its promo confirmation from the current session (the other side's
+    accept said it was stale). The offer itself - price, places, times - does not change."""
+    from app.contracts.promo import CLIENT_FEATURES_HEADER, parse_client_features
+    from app.modules.promotions.booking import ConsentInput, confirm_current_version, note_client_features
+
+    def handler() -> ProposalThreadDTO:
+        thread = marketplace_service.get_thread_for_party(session, thread_id, user_id)
+        version = marketplace_service.current_version(session, thread)
+        if version is None or marketplace_service.version_public_id(version) != body.proposal_version_id:
+            raise DomainError(ErrorCode.PROPOSAL_CHANGED, details={"reason": "not_the_current_version"})
+        features = parse_client_features(request.headers.get(CLIENT_FEATURES_HEADER))
+        consent = body.promo_consent
+        confirm_current_version(
+            session, thread=thread, actor_user_id=user_id, proposal_version_id=version.id, client_features=features,
+            session_ref=session_ref_of(request),
+            consent=None if consent is None else ConsentInput(consent.passenger_bonus_minor, consent.cash_due_minor))
+        note_client_features(session, user_id=user_id, features=features, session_ref=session_ref_of(request))
+        return thread_dto(session, thread, viewer_user_id=user_id)
+
+    return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body,
+                       handler=handler, resource_type="proposal_thread")
+
+
 @router.post("/proposals/{thread_id}/counter", response_model=Envelope[ProposalThreadDTO], responses=ERROR_RESPONSES)
 def counter_proposal(
     thread_id: str,
@@ -470,9 +564,9 @@ def counter_proposal(
         handler=lambda: _with_warnings(
             lambda warnings: thread_dto(
                 session,
-                marketplace_service.counter_proposal(
+                _noting_features(request, session, user_id, _with_consent(request, session, user_id, marketplace_service.counter_proposal(
                     session, thread_public_id_value=thread_id, actor_user_id=user_id, data=body, warnings=warnings, filter_hits=_current_hits()
-                ),
+                ), body.promo_consent)),
                 viewer_user_id=user_id,
             )
         ),
@@ -656,3 +750,114 @@ def _policy_version_dto(session: Session, version: ParcelPolicyVersion) -> Parce
         effective_from=ensure_aware_utc(version.effective_from) if version.effective_from else None,
         version=version.version,
     )
+
+
+# --- ADR-0025: saved trip/parcel requests (owner only; the owner comes from the session) ----------------------------
+
+
+def _intent_dto(session: Session, intent) -> TripIntentDTO:  # noqa: ANN001
+    return TripIntentDTO.model_validate(marketplace_intents.intent_dto(session, intent))
+
+
+@router.post("/me/trip-intents", response_model=Envelope[TripIntentDTO], status_code=201, responses=ERROR_RESPONSES)
+def create_trip_intent(
+    body: TripIntentCreate,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """A private request: publishes nothing and sends nothing to any driver."""
+    return run_command(
+        request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body,
+        handler=lambda: _intent_dto(session, marketplace_intents.create_intent(session, owner_user_id=user_id, data=body)),
+        success_status=201, resource_type="trip_intent",
+    )
+
+
+@router.get("/me/trip-intents", response_model=Envelope[list[TripIntentDTO]], responses=ERROR_RESPONSES)
+def list_trip_intents(
+    status: str | None = Query(default=None, pattern="^(active|booked|closed)$"),
+    limit: int = Query(default=20, ge=1, le=MAX_PAGE_LIMIT),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[list[TripIntentDTO]]:
+    rows = marketplace_intents.list_own_intents(session, user_id, status=status, limit=limit)
+    return Envelope[list[TripIntentDTO]](data=[_intent_dto(session, row) for row in rows])
+
+
+@router.get("/me/trip-intents/{intent_id}", response_model=Envelope[TripIntentDTO], responses=ERROR_RESPONSES)
+def get_trip_intent(
+    intent_id: str, user_id: int = Depends(current_user_id), session: Session = Depends(get_session)
+) -> Envelope[TripIntentDTO]:
+    return Envelope[TripIntentDTO](data=_intent_dto(session, marketplace_intents.get_own_intent(session, intent_id, user_id)))
+
+
+@router.patch("/me/trip-intents/{intent_id}", response_model=Envelope[TripIntentDTO], responses=ERROR_RESPONSES)
+def edit_trip_intent(
+    intent_id: str,
+    body: TripIntentUpdate,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """A new version. Route/time/quantity/parcel changes close the open offers made from it - repeat with
+    ``acknowledge_open_offers=true`` after 409 ``TRIP_INTENT_OFFERS_AFFECTED``. A booked request is not edited."""
+    return run_command(
+        request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body,
+        handler=lambda: _intent_dto(session, marketplace_intents.edit_intent(
+            session, intent_public_id=intent_id, owner_user_id=user_id, data=body)),
+        resource_type="trip_intent",
+    )
+
+
+def _intent_command(action: str, intent_id: str, body: TripIntentCommand, request: Request, idempotency_key: str | None,
+                    user_id: int, session: Session) -> JSONResponse:
+    command = {"close": marketplace_intents.close_intent, "reopen": marketplace_intents.reopen_intent}[action]
+    return run_command(
+        request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body,
+        handler=lambda: _intent_dto(session, command(
+            session, intent_public_id=intent_id, owner_user_id=user_id, expected_version=body.expected_version)),
+        resource_type="trip_intent",
+    )
+
+
+@router.post("/me/trip-intents/{intent_id}/close", response_model=Envelope[TripIntentDTO], responses=ERROR_RESPONSES)
+def close_trip_intent(
+    intent_id: str,
+    body: TripIntentCommand,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    return _intent_command("close", intent_id, body, request, idempotency_key, user_id, session)
+
+
+@router.post("/me/trip-intents/{intent_id}/reopen", response_model=Envelope[TripIntentDTO], responses=ERROR_RESPONSES)
+def reopen_trip_intent(
+    intent_id: str,
+    body: TripIntentCommand,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Explicit "search again" after the booking made from it was cancelled; old offers stay closed."""
+    return _intent_command("reopen", intent_id, body, request, idempotency_key, user_id, session)
+
+
+@router.get("/me/trip-intents/{intent_id}/fit", response_model=Envelope[TripIntentFitDTO], responses=ERROR_RESPONSES)
+def trip_intent_fit(
+    intent_id: str,
+    listing_id: str = Query(min_length=1, max_length=64),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[TripIntentFitDTO]:
+    """Advisory: how one driver offer compares with the request. Reserves nothing."""
+    intent = marketplace_intents.get_own_intent(session, intent_id, user_id)
+    listing = marketplace_service.get_listing_by_public_id(session, listing_id)
+    if listing.status == ListingStatus.DRAFT.value and listing.owner_user_id != user_id:
+        raise DomainError(ErrorCode.NOT_FOUND)
+    return Envelope[TripIntentFitDTO](data=TripIntentFitDTO.model_validate(marketplace_intents.fit(session, intent, listing)))

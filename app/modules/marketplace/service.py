@@ -30,7 +30,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import exists, func, or_, select, text, update
+from sqlalchemy import and_, exists, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -1114,15 +1114,29 @@ def _assert_publishable(session: Session, listing: Listing, now: datetime) -> No
             )
         if not has_resource:
             raise DomainError(ErrorCode.CAPACITY_UNAVAILABLE, details={"reason": "trip_has_no_remaining_capacity"})
+    # The same end means the same stop, or - for a place marked on the map (Q88) - the same point. Comparing the stop
+    # ids alone made every two point-ended listings "equal" (both NULL), so any open listing of the person whose
+    # window overlapped blocked a request to a different place.
+    this = aliased(Listing)
+
+    def same_end(prefix: str):
+        stop, point = f"{prefix}_stop_id", f"{prefix}_point"
+        return or_(
+            and_(getattr(this, stop).is_not(None), getattr(Listing, stop) == getattr(this, stop)),
+            and_(getattr(this, point).is_not(None), getattr(Listing, point).is_not(None),
+                 func.ST_Equals(getattr(Listing, point), getattr(this, point))),
+        )
+
     duplicate = session.execute(
         select(Listing.public_id)
+        .join(this, this.id == listing.id)
         .where(
             Listing.id != listing.id,
             Listing.owner_user_id == listing.owner_user_id,
             Listing.kind == listing.kind,
             Listing.service_type == listing.service_type,
-            Listing.origin_stop_id == listing.origin_stop_id,
-            Listing.destination_stop_id == listing.destination_stop_id,
+            same_end("origin"),
+            same_end("destination"),
             Listing.status.in_(DUPLICATE_CHECK_STATUSES),
             Listing.departure_window_start < listing.departure_window_end,
             Listing.departure_window_end > listing.departure_window_start,
@@ -2089,6 +2103,11 @@ def _quote(session: Session, listing: Listing, total: int, now: datetime) -> Fee
     return quote
 
 
+def quote_fee_for_listing(session: Session, listing: Listing, total_minor: int, now: datetime | None = None) -> FeeQuote:
+    """The fee quote a proposal of ``total_minor`` on ``listing`` would freeze now (read-only; referral preview)."""
+    return _quote(session, listing, total_minor, _now(now))
+
+
 def _insert_version(
     session: Session,
     *,
@@ -2224,6 +2243,15 @@ def submit_proposal(
         identity_service.get_capabilities(session, actor_user_id, now=now), PROPOSAL_CAPABILITY[side]
     )
     _require_service_flags(session, listing, include_driver_listing=False)
+    # ADR-0025: an offer made from the client's saved request - checked before anything is written
+    intent = intent_version = None
+    if data.trip_intent is not None:
+        if side is not ActorSide.CLIENT:
+            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "trip_intent", "reason": "client_offers_only"})
+        from app.modules.marketplace import intents
+
+        intent, intent_version = intents.prepare_for_proposal(
+            session, ref=data.trip_intent, owner_user_id=actor_user_id, listing=listing, data=data, now=now)
 
     if kind is ListingKind.REQUEST:
         if not data.trip_id:
@@ -2335,12 +2363,18 @@ def submit_proposal(
         client_price_revisions=0,
         driver_price_revisions=0,
         version=1,
+        trip_intent_id=intent.id if intent is not None else None,
+        trip_intent_terms_version=intent_version.terms_version if intent_version is not None else None,
     )
     session.add(thread)
     _flush_or_translate(
         session,
         {OPEN_THREAD_INDEX: lambda: DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"reason": "open_thread_exists"})},
     )
+    if intent is not None:  # threads -> trip_intents: re-checked under a shared lock (a concurrent edit or accept)
+        from app.modules.marketplace import intents
+
+        intents.verify_thread_intent(session, thread, for_accept=False)
     version = _insert_version(
         session,
         thread=thread,
@@ -2404,6 +2438,11 @@ def counter_proposal(
         raise DomainError(ErrorCode.NOT_PROPOSAL_RECIPIENT)
     if ensure_aware_utc(current.expires_at) <= now:
         raise DomainError(ErrorCode.PROPOSAL_EXPIRED)
+    if thread.trip_intent_id is not None:  # ADR-0025: still the request's current terms; price and time only
+        from app.modules.marketplace import intents
+
+        intents.verify_thread_intent(session, thread, for_accept=False)
+        intents.assert_counter_keeps_request(thread, data, current.quantity)
     _listing_open_for_proposals(listing, now)
     identity_service.require_capability(
         identity_service.get_capabilities(session, actor_user_id, now=now), PROPOSAL_CAPABILITY[side]

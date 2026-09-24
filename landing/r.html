@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Elchi — taklif kodi</title>
+<meta name="description" content="Do'stingiz sizni Elchi'ga taklif qildi. Kodni ilovada kiriting.">
+<link rel="stylesheet" href="/styles.css">
+<style>
+	.invite { max-width: 560px; margin: 0 auto; padding: 48px var(--gutter) 64px; }
+	.invite__code {
+		font-family: var(--mono); font-size: clamp(28px, 8vw, 40px); letter-spacing: .18em; text-align: center;
+		border: 1px dashed var(--rule); border-radius: 14px; padding: 18px 12px; margin: 20px 0 12px; background: var(--wash);
+		word-break: break-all;
+	}
+	.invite__copy { display: block; width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--road);
+		color: #fff; font: 600 16px var(--body); cursor: pointer; }
+	.invite ol { padding-left: 1.2em; }
+	.invite__note { color: var(--muted); font-size: 14px; }
+	.invite__bad { color: #b42318; }
+</style>
+</head>
+<body>
+<main class="invite">
+	<p class="eyebrow">Taklif</p>
+	<h1>Do'stingiz sizni Elchi'ga taklif qildi</h1>
+
+	<div id="valid" hidden>
+		<p>Taklif kodi:</p>
+		<p class="invite__code" id="code"></p>
+		<button type="button" class="invite__copy" id="copy">Kodni nusxalash</button>
+		<h2>Qanday ishlatiladi</h2>
+		<ol>
+			<li>Elchi ilovasini oching va telefon raqamingiz bilan kiring.</li>
+			<li>Profil → «Bonuslar va taklif kodi» (haydovchi uchun «Kredit va taklif kodi») bo'limiga o'ting.</li>
+			<li>Kodni kiriting va tasdiqlang.</li>
+		</ol>
+		<p class="invite__note">
+			Ro'yxatdan o'tishning o'zi mukofot emas. Bonus — faqat kampaniya shartlariga mos xizmat bajarilgandan
+			keyin beriladigan chegirma huquqi; u pul emas, naqdga aylantirilmaydi. Shartlarni qo'shilishdan oldin
+			ilovada ko'rasiz. Taklif kodi bir marta qabul qilinadi va keyin almashtirilmaydi.
+		</p>
+	</div>
+
+	<div id="invalid" hidden>
+		<p class="invite__bad">Havola noto'g'ri ko'rinadi. Do'stingizdan 8 belgili kodni qayta so'rang va uni ilovada qo'lda kiriting.</p>
+	</div>
+
+	<p class="invite__note"><a href="/">Elchi haqida</a> · <a href="/privacy">Maxfiylik</a></p>
+</main>
+<script>
+	// The code is read from the address only for display; nothing is sent anywhere from this page. The same
+	// normalisation as the server (8 characters, no 0/O/1/I/L). textContent only - never inserted as HTML.
+	(function () {
+		var raw = decodeURIComponent((location.pathname.split("/r/")[1] || "").split(/[/?#]/)[0]);
+		var code = raw.replace(/[\s-]/g, "").toUpperCase();
+		var ok = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/.test(code);
+		document.getElementById(ok ? "valid" : "invalid").hidden = false;
+		if (!ok) return;
+		document.getElementById("code").textContent = code;
+		document.getElementById("copy").addEventListener("click", function () {
+			var button = this;
+			if (!navigator.clipboard) { button.textContent = code; return; }
+			navigator.clipboard.writeText(code).then(function () { button.textContent = "Nusxa olindi"; });
+		});
+	})();
+</script>
+</body>
+</html>

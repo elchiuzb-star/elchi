@@ -35,11 +35,18 @@ from app.contracts.enums import (
     NoShowReviewStatus,
     ParcelBookingStatus,
     PassengerBookingStatus,
+    PromoCampaignStatus,
+    PromoEnrollmentStatus,
+    PromoObligationStatus,
+    PromoRedemptionStatus,
+    PromoRewardStatus,
     ProposalStatus,
+    ReferralAttributionStatus,
     ServiceType,
     SupportTicketStatus,
     TopupStatus,
     TrackingSessionStatus,
+    TripIntentStatus,
     TripStatus,
     TrustReviewStatus,
 )
@@ -352,6 +359,123 @@ SUPPORT_TICKET = StateMachine(
     ),
 )
 
+# --- promotions & referral (ADR-0023) ---------------------------------------------------------------
+# Four separate lifecycles: attribution (who brought whom), enrollment (the budget promise), reward (one
+# beneficiary's lot) and redemption (one lot on one booking). None of them writes a booking or commission status.
+
+PCS = PromoCampaignStatus
+PROMO_CAMPAIGN = StateMachine(
+    name="promo_campaign",
+    states=PromoCampaignStatus,
+    initial=frozenset({PCS.DRAFT.value}),
+    transitions=(
+        _t(PCS.DRAFT, PCS.ACTIVE, "activate"),  # super_admin, complete terms only (Q105)
+        _t(PCS.DRAFT, PCS.CLOSED, "discard"),
+        _t(PCS.ACTIVE, PCS.PAUSED, "pause"),
+        _t(PCS.ACTIVE, PCS.PAUSED, "budget_exhausted"),  # system: no room for a new maximum promise
+        _t(PCS.ACTIVE, PCS.PAUSED, "funding_loss"),  # G14: external funding lost -> no new promise, escalated
+        _t(PCS.PAUSED, PCS.ACTIVE, "resume"),
+        _t(PCS.ACTIVE, PCS.ACTIVE, "switch_version"),  # new terms for new enrollments; old ones keep theirs
+        _t(PCS.ACTIVE, PCS.CLOSED, "close"),
+        _t(PCS.PAUSED, PCS.CLOSED, "close"),
+    ),
+)
+
+RA = ReferralAttributionStatus
+REFERRAL_ATTRIBUTION = StateMachine(
+    name="referral_attribution",
+    states=ReferralAttributionStatus,
+    initial=frozenset({RA.ATTRIBUTED.value}),
+    transitions=(
+        _t(RA.ATTRIBUTED, RA.QUALIFYING, "candidate_event"),
+        _t(RA.QUALIFYING, RA.ATTRIBUTED, "candidate_voided"),  # cancelled / disputed / refunded before grant
+        _t(RA.QUALIFYING, RA.QUALIFIED, "qualify"),
+        _t(RA.QUALIFYING, RA.REJECTED, "reject"),  # admin+ after review (never automatic on a weak signal)
+        _t(RA.ATTRIBUTED, RA.REJECTED, "reject"),
+        _t(RA.ATTRIBUTED, RA.EXPIRED, "expire"),  # qualification window over without a candidate
+        _t(RA.REJECTED, RA.ATTRIBUTED, "reinstate_on_appeal"),
+    ),
+)
+
+PE = PromoEnrollmentStatus
+PROMO_ENROLLMENT = StateMachine(
+    name="promo_enrollment",
+    states=PromoEnrollmentStatus,
+    initial=frozenset({PE.PROMISED.value}),
+    transitions=(
+        _t(PE.PROMISED, PE.PROMISED, "grant_step"),  # a milestone moved part of the promise to granted
+        _t(PE.PROMISED, PE.GRANTED, "grant"),
+        _t(PE.PROMISED, PE.RELEASED, "release"),
+    ),
+)
+
+PO = PromoObligationStatus
+PROMO_OBLIGATION = StateMachine(
+    name="promo_obligation",
+    states=PromoObligationStatus,
+    # One beneficiary's reward. Its budget promise, its grant (lot) and its spending are stages of one
+    # obligation, never separate costs (Q115).
+    initial=frozenset({PO.PROMISED.value}),
+    transitions=(
+        _t(PO.PROMISED, PO.GRANTED, "grant"),
+        _t(PO.PROMISED, PO.RELEASED, "release"),
+    ),
+)
+
+PR = PromoRewardStatus
+PROMO_REWARD = StateMachine(
+    name="promo_reward",
+    states=PromoRewardStatus,
+    initial=frozenset({PR.PENDING_REVIEW.value}),
+    transitions=(
+        _t(PR.PENDING_REVIEW, PR.AVAILABLE, "release_to_holder"),
+        _t(PR.PENDING_REVIEW, PR.REVERSED, "reverse"),
+        _t(PR.AVAILABLE, PR.AVAILABLE, "reserve"),
+        _t(PR.AVAILABLE, PR.AVAILABLE, "release_reservation"),
+        _t(PR.AVAILABLE, PR.AVAILABLE, "consume_partial"),
+        _t(PR.AVAILABLE, PR.EXHAUSTED, "consume"),
+        _t(PR.AVAILABLE, PR.PENDING_REVIEW, "flag_for_review"),
+        _t(PR.AVAILABLE, PR.EXPIRED, "expire"),
+        _t(PR.AVAILABLE, PR.REVERSED, "reverse"),
+        _t(PR.EXPIRED, PR.AVAILABLE, "reinstate"),  # fair restoration after a driver/platform-fault release
+    ),
+)
+
+PRD = PromoRedemptionStatus
+PROMO_REDEMPTION = StateMachine(
+    name="promo_redemption",
+    states=PromoRedemptionStatus,
+    initial=frozenset({PRD.RESERVED.value}),
+    transitions=(
+        _t(PRD.RESERVED, PRD.CONSUMED, "consume"),  # with the booking's commission capture, once
+        _t(PRD.RESERVED, PRD.RELEASED, "release"),  # with the booking's hold release
+    ),
+)
+
+PROMO_MACHINES: tuple[StateMachine, ...] = (
+    PROMO_CAMPAIGN,
+    REFERRAL_ATTRIBUTION,
+    PROMO_ENROLLMENT,
+    PROMO_OBLIGATION,
+    PROMO_REWARD,
+    PROMO_REDEMPTION,
+)
+
+# ADR-0025: a client's saved trip/parcel request.
+TIS = TripIntentStatus
+TRIP_INTENT = StateMachine(
+    name="trip_intent",
+    states=TripIntentStatus,
+    initial=frozenset({TIS.ACTIVE.value}),
+    transitions=(
+        _t(TIS.ACTIVE, TIS.ACTIVE, "edit"),  # a new immutable version (material edits close the open offers)
+        _t(TIS.ACTIVE, TIS.BOOKED, "book"),  # accept of one of its offers, in the accept transaction
+        _t(TIS.BOOKED, TIS.ACTIVE, "reopen"),  # explicit client action after the booking was cancelled
+        _t(TIS.ACTIVE, TIS.CLOSED, "close"),
+        _t(TIS.BOOKED, TIS.CLOSED, "close"),
+    ),
+)
+
 ALL_MACHINES: tuple[StateMachine, ...] = (
     CORRIDOR_ROLLOUT,
     LISTING,
@@ -369,6 +493,8 @@ ALL_MACHINES: tuple[StateMachine, ...] = (
     TRACKING_SESSION,
     TRUST_REVIEW,
     SUPPORT_TICKET,
+    TRIP_INTENT,
+    *PROMO_MACHINES,
 )
 
 

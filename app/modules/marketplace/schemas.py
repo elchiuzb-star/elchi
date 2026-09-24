@@ -5,7 +5,7 @@ Money is integer minor units; the server computes every total (spec §14.1).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
@@ -24,6 +24,7 @@ from app.contracts.enums import (
     ProposalStatus,
     RatingBucket,
     ServiceType,
+    TripIntentStatus,
 )
 from app.modules.marketplace.rules import LISTING_TIMEZONE, PROPOSAL_MESSAGE_MAX_LENGTH
 from app.modules.trips.schemas import StopRefDTO
@@ -351,6 +352,16 @@ def _one_demand_kind(baggage: ProposalBaggage | None, parcel: ProposalParcel | N
         raise ValueError("send either baggage (passenger) or parcel, not both")
 
 
+class ProposalPromoConsent(ContractModel):
+    """Referral stage 5 (Q104): the client's explicit consent to spend passenger bonus on the version it is sending,
+    with the numbers it was shown (``GET /listings/{id}/promo-preview``). Recomputed on the server; any difference
+    refuses the whole command with ``PROMO_QUOTE_STALE`` so the client shows the new numbers and asks again. Never
+    pre-filled: omit it and no bonus is used."""
+
+    passenger_bonus_minor: StrictInt = Field(gt=0)
+    cash_due_minor: StrictInt = Field(ge=0)
+
+
 class ProposalCreate(ContractModel):
     trip_id: str | None = Field(default=None, description="Required when a driver answers a request.")
     # Q88: omitted when the listing's ends are map points - the proposal inherits them. A driver cannot move
@@ -365,6 +376,13 @@ class ProposalCreate(ContractModel):
     message: str | None = Field(default=None, max_length=PROPOSAL_MESSAGE_MAX_LENGTH)
     baggage: ProposalBaggage | None = None
     parcel: ProposalParcel | None = None
+    promo_consent: ProposalPromoConsent | None = None
+    trip_intent: TripIntentRef | None = Field(
+        default=None,
+        description="ADR-0025: the client's saved request this offer is made from. The server takes quantity and the "
+        "parcel demand from it (a different body value is refused), remembers the link for good and lets at most one "
+        "offer of the request become a booking.",
+    )
 
     @model_validator(mode="after")
     def _shape(self) -> ProposalCreate:
@@ -389,6 +407,7 @@ class ProposalCounter(ContractModel):
     message: str | None = Field(default=None, max_length=PROPOSAL_MESSAGE_MAX_LENGTH)
     baggage: ProposalBaggage | None = None
     parcel: ProposalParcel | None = None
+    promo_consent: ProposalPromoConsent | None = None
 
     @model_validator(mode="after")
     def _has_change(self) -> ProposalCounter:
@@ -440,6 +459,55 @@ class PriceRevisionsLeftDTO(ContractModel):
     driver: int
 
 
+class ProposalPromoClientDTO(ContractModel):
+    """Referral stage 4 preview for the client: what its bonus gives on this fare - the numbers it may consent to.
+    Reserves nothing. No commission, credit, cost or formula key exists in this object at all (Q16, Q103)."""
+
+    view: Literal["client"] = "client"
+    fare_minor: int
+    passenger_discount_minor: int
+    cash_due_minor: int
+    currency: Currency
+
+
+class ProposalPromoDriverDTO(ContractModel):
+    """Referral stage 4 preview for the driver, before accepting: cash to collect, credit used, commission charged
+    (with the client's recorded consent, if any). Reserves nothing; the accept re-quotes under locks."""
+
+    view: Literal["driver"] = "driver"
+    fare_minor: int
+    passenger_discount_minor: int
+    cash_to_collect_minor: int
+    base_commission_minor: int
+    passenger_discount_covered_minor: int
+    driver_credit_minor: int
+    commission_charged_minor: int
+    driver_keeps_minor: int
+    currency: Currency
+
+
+ProposalPromoQuoteDTO = Annotated[ProposalPromoClientDTO | ProposalPromoDriverDTO, Field(discriminator="view")]
+
+# Stage 5 "why no discount here": plain categories only - never a rate, a limit, a formula or a risk signal (Q103).
+PromoUnavailableReason = Literal["service_not_eligible", "bonus_expired", "bonus_reserved", "bonus_on_hold",
+                                 "no_campaign", "client_update_required", "trip_terms"]
+
+
+class PromoPreviewDTO(ContractModel):
+    """``GET /listings/{id}/promo-preview``: the caller's own bonus on the price it is about to send, or why none."""
+
+    quote: ProposalPromoClientDTO | None = None
+    no_discount_reason: PromoUnavailableReason | None = None
+
+
+class ProposalPromoConfirmation(ContractModel):
+    """Q126: the author of the open version confirms again from its current session. The client repeats the exact
+    bonus numbers it was shown; the driver sends only the version id (its app declares the capability)."""
+
+    proposal_version_id: str = Field(min_length=4, max_length=64)
+    promo_consent: ProposalPromoConsent | None = None
+
+
 class ProposalVersionDTO(ContractModel):
     id: str
     revision: int
@@ -463,6 +531,17 @@ class ProposalVersionDTO(ContractModel):
     message: str | None
     demand: ProposalDemandDTO
     fee_quote: FeeQuoteDTO | None = Field(default=None, description="Only shown to the driver side.")
+    promo_quote: ProposalPromoQuoteDTO | None = Field(
+        default=None, description="Referral stage 4: current version only, when a discount would apply (preview)."
+    )
+    promo_unavailable_reason: PromoUnavailableReason | None = Field(
+        default=None, description="Stage 5: current version only - why the viewer's own bonus/credit does not apply "
+        "here (a plain category). Null when a discount applies or the viewer holds none."
+    )
+    promo_confirmation: Literal["valid", "stale"] | None = Field(
+        default=None, description="Q126, the version's author only: its promo confirmation holds (valid) or must be "
+        "given again from the current session (stale). Null when nothing was confirmed."
+    )
     price_revisions_left: PriceRevisionsLeftDTO
     receiver: ContactDetails | None = Field(
         default=None, description="Trip-offer parcel receiver; only the client side sees it (Q43/Q44), never the driver."
@@ -490,6 +569,8 @@ class ProposalThreadDTO(ContractModel):
     current_version: ProposalVersionDTO | None
     versions: list[ProposalVersionDTO] | None = None
     booking_id: str | None = Field(default=None, description="Set by the bookings module (A4) after accept.")
+    trip_intent_id: str | None = Field(
+        default=None, description="ADR-0025: the client's saved request - shown to the client side only.")
 
 
 class ListingOfferDTO(ContractModel):
@@ -530,3 +611,178 @@ class ListingOfferDTO(ContractModel):
     )
     completed_bookings: int | None = Field(default=None, description="Completed bookings behind the bucket.")
     updated_at: UtcDateTime
+
+
+# --- ADR-0025: saved trip/parcel request (trip intent) ---------------------------------------------------------------
+
+
+class TripIntentRef(ContractModel):
+    id: str = Field(min_length=1, max_length=64, description="tin_...")
+    version_no: StrictInt = Field(ge=1, description="The version the client's screen showed.")
+
+
+class TripIntentEndInput(ContractModel):
+    """One end: a verified stop, or a district with an optional marked place (Q88) - what the search used."""
+
+    stop_id: str | None = Field(default=None, max_length=64)
+    district_id: str | None = Field(default=None, max_length=64)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    address: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _shape(self) -> TripIntentEndInput:
+        if self.stop_id is None and self.district_id is None:
+            raise ValueError("an end needs a stop_id or a district_id")
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("send lat and lng together")
+        return self
+
+
+class TripIntentParcelInput(ContractModel):
+    """Reusable parcel data; may be completed later (on the first offer screen). Receiver: owner-only (Q43/Q44)."""
+
+    parcel_type: ParcelType | None = None
+    weight_g: StrictInt | None = Field(default=None, gt=0, le=1_000_000)
+    length_cm: StrictInt | None = Field(default=None, gt=0, le=500)
+    width_cm: StrictInt | None = Field(default=None, gt=0, le=500)
+    height_cm: StrictInt | None = Field(default=None, gt=0, le=500)
+    receiver: ContactDetails | None = None
+
+
+class _TripIntentTerms(ContractModel):
+    origin: TripIntentEndInput
+    destination: TripIntentEndInput
+    window_start: UtcDateTime
+    window_end: UtcDateTime
+    quantity: StrictInt = Field(ge=1, le=60, description="People (passenger); a parcel is one shipment (D9): 1.")
+    price_basis: PriceBasis | None = Field(default=None, description="With unit_price_minor: the client's own price hint.")
+    unit_price_minor: StrictInt | None = Field(default=None, gt=0)
+    parcel: TripIntentParcelInput | None = None
+
+    @model_validator(mode="after")
+    def _terms(self) -> _TripIntentTerms:
+        if self.window_end <= self.window_start:
+            raise ValueError("window_end must be after window_start")
+        if (self.price_basis is None) != (self.unit_price_minor is None):
+            raise ValueError("send price_basis and unit_price_minor together")
+        return self
+
+
+class TripIntentCreate(_TripIntentTerms):
+    service_type: ServiceType
+
+
+class TripIntentUpdate(_TripIntentTerms):
+    """A full new version. Route, window, quantity or parcel changes close the request's open offers: send
+    ``acknowledge_open_offers=true`` after showing the client how many (else 409 TRIP_INTENT_OFFERS_AFFECTED)."""
+
+    expected_version: StrictInt = Field(ge=1)
+    acknowledge_open_offers: StrictBool = False
+
+
+class TripIntentCommand(ContractModel):
+    expected_version: StrictInt = Field(ge=1)
+
+
+class TripIntentEndDTO(ContractModel):
+    stop: StopRefDTO | None = None
+    district: DistrictRefDTO | None = None
+    lat: float | None = None
+    lng: float | None = None
+    address: str | None = None
+
+
+class TripIntentParcelDTO(ContractModel):
+    parcel_type: ParcelType | None = None
+    weight_g: int | None = None
+    length_cm: int | None = None
+    width_cm: int | None = None
+    height_cm: int | None = None
+    receiver: ContactDetails | None = Field(default=None, description="Owner-only.")
+
+
+class TripIntentVersionDTO(ContractModel):
+    version_no: int
+    terms_version: int
+    origin: TripIntentEndDTO
+    destination: TripIntentEndDTO
+    window_start: UtcDateTime
+    window_end: UtcDateTime
+    quantity: int
+    price_basis: PriceBasis | None = None
+    unit_price_minor: int | None = None
+    total_minor: int | None = Field(default=None, description="quantity x unit (per_seat) or unit (total).")
+    currency: Currency = Currency.UZS
+    parcel: TripIntentParcelDTO | None = None
+    created_at: UtcDateTime
+
+
+class TripIntentOfferDTO(ContractModel):
+    """An offer made from this request (the client's own view)."""
+
+    thread_id: str
+    listing_id: str
+    state: str
+    closed_reason: str | None = None
+    terms_current: bool = Field(description="False once the request's route/time/quantity changed after it was made.")
+    booking_id: str | None = None
+
+
+class TripIntentDTO(ContractModel):
+    id: str
+    service_type: ServiceType
+    status: TripIntentStatus
+    version: int
+    expired: bool = Field(description="The window has passed: the client must set a new one (never moved silently).")
+    current_version: TripIntentVersionDTO
+    booking_id: str | None = None
+    booking_cancelled: bool = False
+    can_reopen: bool = Field(default=False, description="Booked, and that booking was cancelled: search again explicitly.")
+    open_offers: int = 0
+    offers: list[TripIntentOfferDTO] = Field(default_factory=list)
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
+
+
+class TripIntentFitTimeDTO(ContractModel):
+    status: Literal["within", "outside"]
+    minutes_outside: int = Field(description="0 when the windows meet; else the gap in minutes.")
+
+
+class TripIntentFitCapacityDTO(ContractModel):
+    status: Literal["ok", "insufficient", "unknown"]
+    requested: int
+    available: int | None = Field(default=None, description="Free seats on the offer's span (passenger).")
+
+
+class TripIntentFitEndDTO(ContractModel):
+    status: Literal["same_stop", "same_district", "different"]
+
+
+class TripIntentFitPriceDTO(ContractModel):
+    listing_price_basis: PriceBasis
+    listing_unit_price_minor: int
+    listing_total_minor: int = Field(description="The driver's advertised price for the request's quantity.")
+    quantity: int
+    intent_price_basis: PriceBasis | None = None
+    intent_unit_price_minor: int | None = None
+    intent_total_minor: int | None = None
+    currency: Currency = Currency.UZS
+
+
+class TripIntentFitDTO(ContractModel):
+    """Advisory, read-only (nothing is reserved): how one driver offer compares with the saved request. The same
+    checks run again at submit and accept under the trip lock."""
+
+    listing_id: str
+    intent_version_no: int
+    service_match: bool
+    expired: bool
+    time: TripIntentFitTimeDTO
+    availability: TripIntentFitCapacityDTO
+    origin: TripIntentFitEndDTO
+    destination: TripIntentFitEndDTO
+    price: TripIntentFitPriceDTO
+    blockers: list[Literal["service_mismatch", "expired", "capacity_insufficient", "intent_not_active"]] = Field(
+        default_factory=list, description="An offer from this request is refused while any of these is present.")

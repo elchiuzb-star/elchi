@@ -406,6 +406,16 @@ def _emit_dispute_event(session: Session, booking: Booking, dispute: DisputeV2, 
         payload.update(status=dispute.status, resolution_code=dispute.resolution_code)
     _emit(session, event_type, aggregate_type="booking", aggregate_public_id=payload["booking_id"],
           aggregate_version=booking.version, payload=payload, now=now, aggregate_id=booking.id)
+    # referral stage 4: a dispute opening or closing re-checks a promo qualification (same transaction)
+    from app.modules.promotions.booking import record_event_if_enrolled
+
+    record_event_if_enrolled(session, booking_id=booking.id, client_user_id=booking.client_user_id,
+                             driver_user_id=booking.driver_user_id, kind="dispute_changed", occurred_at=now, now=now)
+    if event_type is EventType.DISPUTE_RESOLVED:
+        # Q127: spent bonus/credit on a decided booking has no approved restoration rule - shown to a person
+        from app.modules.promotions.booking import note_dispute_resolved
+
+        note_dispute_resolved(session, booking_id=booking.id, now=now)
 
 
 def _active_dispute(session: Session, booking_id: int, dispute_type: str, *, lock: bool) -> DisputeV2 | None:

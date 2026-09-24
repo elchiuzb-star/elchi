@@ -70,9 +70,32 @@ export function listAmendments(bookingId: string, params: { limit?: number } = {
 }
 
 /** B10/B11: answer a proposed change. `accept` returns the changed booking, the others the closed amendment. */
-export function acceptAmendment(amendmentId: string, expectedVersion: number) {
-  const body: Schemas["AmendmentDecision"] = { expected_version: expectedVersion };
+export type PromoConsentBody = { passenger_bonus_minor: number; cash_due_minor: number };
+export type DriverAckBody = { cash_to_collect_minor: number; commission_charged_minor: number };
+
+export function acceptAmendment(
+  amendmentId: string,
+  expectedVersion: number,
+  promoConsent?: PromoConsentBody,
+  driverAck?: DriverAckBody,
+) {
+  // Q116/Q125: on a discounted booking the client confirms the new cash it was shown, the driver its new cash to
+  // collect and commission (the server re-checks both; neither is ever used as an amount)
+  const body: Schemas["AmendmentAccept"] = {
+    expected_version: expectedVersion,
+    ...(promoConsent ? { promo_consent: promoConsent } : {}),
+    ...(driverAck ? { promo_driver_ack: driverAck } : {}),
+  };
   return v2Request<AnyBooking>(`/amendments/${amendmentId}/accept`, { method: "POST", body, idempotencyKey: newIdempotencyKey() });
+}
+
+/** Q126: the proposer of an open amendment confirms its promo numbers again from this session. */
+export function confirmAmendmentPromo(amendmentId: string, body: { promo_consent?: PromoConsentBody; promo_driver_ack?: DriverAckBody }) {
+  return v2Request<AmendmentDTO>(`/amendments/${amendmentId}/promo-confirmation`, {
+    method: "POST",
+    body,
+    idempotencyKey: newIdempotencyKey(),
+  });
 }
 
 export function decideAmendment(amendmentId: string, decision: "reject" | "withdraw", expectedVersion: number) {

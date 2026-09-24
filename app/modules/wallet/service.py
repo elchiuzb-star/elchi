@@ -813,6 +813,12 @@ def _hold_by_booking(session: Session, booking_id: int, *, lock: bool = False) -
     return session.execute(query).scalar_one_or_none()
 
 
+def booking_hold_wallet_id(session: Session, booking_id: int) -> int | None:
+    """The wallet of a booking's commission hold (unlocked read; the wallet id of a hold never changes)."""
+    hold = _hold_by_booking(session, booking_id)
+    return None if hold is None else hold.wallet_id
+
+
 def _lock_wallet_and_hold(session: Session, booking_id: int) -> tuple[WalletAccount, WalletHold]:
     unlocked = _hold_by_booking(session, booking_id)
     if unlocked is None:
@@ -838,19 +844,22 @@ def hold_fee(
     corridor_id: int | None = None,
     wallet_required: bool | None = None,
     fee_policy_id: int | None = None,
+    net_commission_minor: int | None = None,
     now: datetime | None = None,
 ) -> HoldResult:
     """``∅ -> held`` (STATE_MACHINES §7). A 0 bps snapshot is ``exempt``: do not call (D3).
 
     ``fee_policy_id`` is the booking's snapshotted policy (internal id). It must match ``fee_bps``;
     in production it is required and an unconfirmed migration seed is refused (decision 28).
+
+    ``net_commission_minor`` (referral stage 4, ADR-0023 §6): a promo booking holds only **C_net = C - P - H** from the
+    real balance - never C followed by a fake refund of P or H. ``0 < C_net <= C``; the deferred promo check ties it
+    to the booking's promo terms at commit.
     """
     validate_fee_bps(fee_bps)
     if fee_bps == 0:
         raise ValueError("0 bps snapshot is exempt: no hold, no ledger (D3)")
-    amount = commission_minor(total_minor, fee_bps)
-    if amount <= 0:
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"reason": "commission_rounds_to_zero"})
+    amount = _hold_amount(total_minor, fee_bps, net_commission_minor)
     report = require_money_invariants(session, new_business=True)
     check_balance = _balance_check_required(session, report, corridor_id, wallet_required)
     if fee_policy_id is None:
@@ -896,6 +905,16 @@ def hold_fee(
     return HoldResult(hold.id, wallet.id, booking_id, amount, amount, HOLD_ACTIVE, CommissionStatus.HELD, True)
 
 
+def _hold_amount(total_minor: int, fee_bps: int, net_commission_minor: int | None) -> int:
+    base = commission_minor(total_minor, fee_bps)
+    amount = base if net_commission_minor is None else net_commission_minor
+    if amount <= 0:
+        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"reason": "commission_rounds_to_zero"})
+    if amount > base:
+        raise ValueError("a hold never exceeds the booking's base commission C")
+    return amount
+
+
 def adjust_hold(
     session: Session,
     *,
@@ -904,16 +923,18 @@ def adjust_hold(
     fee_bps: int,
     corridor_id: int | None = None,
     wallet_required: bool | None = None,
+    net_commission_minor: int | None = None,
 ) -> HoldResult:
-    """``held -> held`` on amendment accept (D10): same single hold, snapshot bps unchanged."""
+    """``held -> held`` on amendment accept (D10): same single hold, snapshot bps unchanged.
+
+    A promo booking passes its new C_net (``promotions.booking``); a plain one leaves it ``None`` (hold = C).
+    """
     report = require_money_invariants(session)
     wallet, hold = _lock_wallet_and_hold(session, booking_id)
     COMMISSION.assert_transition(_commission_status_of(hold).value, CommissionStatus.HELD.value, "adjust_hold")
     if hold.fee_bps != fee_bps:
         raise DomainError(ErrorCode.AMENDMENT_CONFLICT, details={"reason": "fee_bps_snapshot_mismatch"})
-    new_amount = commission_minor(new_total_minor, hold.fee_bps)
-    if new_amount <= 0:
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"reason": "commission_rounds_to_zero"})
+    new_amount = _hold_amount(new_total_minor, hold.fee_bps, net_commission_minor)
     delta = hold_adjustment_minor(hold.amount_minor, new_amount)
     if delta == 0:
         return HoldResult(hold.id, wallet.id, booking_id, hold.amount_minor, 0, hold.status, CommissionStatus.HELD, False)
@@ -1076,6 +1097,11 @@ def reverse_fee(
     _wallet_event(session, wallet, EventType.COMMISSION_REVERSED,
                   {"booking_id": hold.booking_public_id or str(booking_id), "amount_minor": amount_minor,
                    "currency": wallet.currency, "reversal_kind": "full" if target is CommissionStatus.REVERSED else "partial"})
+    # referral (Q127): a reversal is its own operation - it restores no bonus and is no cash refund to the client. The
+    # promotions module re-checks a granted referral and shows spent promo value to a person (review), nothing more.
+    from app.modules.promotions.booking import after_commission_reversal
+
+    after_commission_reversal(session, booking_id=booking_id)
     return ReversalResult(transaction, new_reversed, hold.captured_minor - new_reversed, target)
 
 

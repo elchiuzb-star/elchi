@@ -25,6 +25,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -287,6 +288,14 @@ class ProposalThread(Base):
         Index("ix_proposal_threads_client_user_id", "client_user_id", "id"),
         Index("ix_proposal_threads_driver_user_id", "driver_user_id", "id"),
         Index("ix_proposal_threads_trip_id", "trip_id"),
+        # ADR-0025 (0091): offers made from one saved request
+        Index(
+            "ix_proposal_threads_trip_intent",
+            "trip_intent_id",
+            "state",
+            postgresql_where=text("trip_intent_id IS NOT NULL"),
+            sqlite_where=text("trip_intent_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
@@ -312,6 +321,11 @@ class ProposalThread(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # ADR-0025 (0091): the saved request this offer was made from; both or neither, frozen once written (trigger)
+    trip_intent_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("trip_intents.id", name="fk_proposal_threads_trip_intent")
+    )
+    trip_intent_terms_version: Mapped[int | None] = mapped_column(Integer)
 
 
 class ProposalVersion(Base):
@@ -524,3 +538,74 @@ class ParcelPolicyItem(Base):
     source_ref: Mapped[str | None] = mapped_column(Text)
     source_checked_on: Mapped[date | None] = mapped_column(Date)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("100"))
+
+
+class TripIntent(Base):
+    """ADR-0025: a client's private, reusable trip/parcel request (never a public listing; nothing is sent by itself).
+
+    ``terms_version`` moves only with a material edit (ends, window, quantity, parcel, receiver); offers remember it and
+    are accepted only while it is unchanged. ``status = booked`` exactly while ``booking_id`` is set (CHECK)."""
+
+    __tablename__ = "trip_intents"
+    __table_args__ = (
+        UniqueConstraint("public_id", name="uq_trip_intents_public_id"),
+        Index("ix_trip_intents_owner_status", "owner_user_id", "status", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    owner_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", name="fk_trip_intents_owner"), nullable=False)
+    service_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'active'"))
+    current_version_no: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    terms_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    booking_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("bookings.id", name="fk_trip_intents_booking"))
+    closed_reason: Mapped[str | None] = mapped_column(String(32))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class TripIntentVersion(Base):
+    """ADR-0025: one immutable version of a saved request's terms (append-only trigger)."""
+
+    __tablename__ = "trip_intent_versions"
+    __table_args__ = (UniqueConstraint("intent_id", "version_no", name="uq_trip_intent_versions_no"),)
+
+    id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
+    intent_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("trip_intents.id", name="fk_trip_intent_versions_intent"), nullable=False
+    )
+    version_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    terms_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    origin_stop_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("corridor_stops.id", name="fk_trip_intent_versions_origin_stop")
+    )
+    origin_district_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("geo_districts.id", name="fk_trip_intent_versions_origin_district")
+    )
+    origin_lat: Mapped[Any | None] = mapped_column(Numeric(10, 7))
+    origin_lng: Mapped[Any | None] = mapped_column(Numeric(10, 7))
+    origin_address: Mapped[str | None] = mapped_column(String(500))
+    destination_stop_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("corridor_stops.id", name="fk_trip_intent_versions_destination_stop")
+    )
+    destination_district_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("geo_districts.id", name="fk_trip_intent_versions_destination_district")
+    )
+    destination_lat: Mapped[Any | None] = mapped_column(Numeric(10, 7))
+    destination_lng: Mapped[Any | None] = mapped_column(Numeric(10, 7))
+    destination_address: Mapped[str | None] = mapped_column(String(500))
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    quantity: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    price_basis: Mapped[str | None] = mapped_column(String(16))
+    unit_price_minor: Mapped[int | None] = mapped_column(BigInteger)
+    parcel_type: Mapped[str | None] = mapped_column(String(32))
+    weight_g: Mapped[int | None] = mapped_column(Integer)
+    length_cm: Mapped[int | None] = mapped_column(Integer)
+    width_cm: Mapped[int | None] = mapped_column(Integer)
+    height_cm: Mapped[int | None] = mapped_column(Integer)
+    receiver_name: Mapped[str | None] = mapped_column(String(120))
+    receiver_phone: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

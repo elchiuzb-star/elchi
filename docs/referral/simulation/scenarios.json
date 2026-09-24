@@ -1,0 +1,683 @@
+{
+  "about": "SYNTHETIC SCENARIOS - referral stage 6 (ADR-0023 §20). Every number is an assumption for comparison, not an approved or measured value; nothing here may be copied into a production campaign. Money in minor units (UZS tiyin: 100 = 1 so'm).",
+  "defaults": {
+    "synthetic": true,
+    "seed": 20260924,
+    "days": 90,
+    "snapshots": [
+      30,
+      60,
+      90
+    ],
+    "referral_enabled": true,
+    "variable_cost": {
+      "fixed_minor": 100000,
+      "bps": 0
+    },
+    "fixed_costs_per_30_days_minor": null,
+    "extra_marketing_minor": 0,
+    "reinstate_prob": 0.05,
+    "cohort": {
+      "min_matured_observations": 20,
+      "lot_maturity_days": 30
+    },
+    "corridors": [
+      {
+        "id": "pilot_A",
+        "traffic_share": 0.6,
+        "driver_availability": 0.93
+      },
+      {
+        "id": "pilot_B",
+        "traffic_share": 0.4,
+        "driver_availability": 0.85
+      }
+    ],
+    "services": {
+      "passenger": {
+        "fee_bps": 1000,
+        "price_buckets": [
+          {
+            "label": "low",
+            "fare_minor": 6000000,
+            "weight": 0.3
+          },
+          {
+            "label": "mid",
+            "fare_minor": 12000000,
+            "weight": 0.5
+          },
+          {
+            "label": "high",
+            "fare_minor": 20000000,
+            "weight": 0.2
+          }
+        ],
+        "base_new_per_day": 12,
+        "attributed_share_of_base": 0.15,
+        "incremental_new_per_day": 3,
+        "enrollment_rate": 0.7,
+        "first_order_prob": 0.6,
+        "first_order_delay_days": [
+          0,
+          14
+        ],
+        "repeat_prob": 0.35,
+        "repeat_interval_days": [
+          7,
+          30
+        ],
+        "max_orders": 6,
+        "cancel_prob": 0.08,
+        "cancel_fault": {
+          "client": 0.6,
+          "driver": 0.25,
+          "platform": 0.05,
+          "none": 0.05,
+          "undetermined": 0.05
+        },
+        "dispute_prob": 0.03,
+        "dispute_release_prob": 0.4,
+        "reversal_prob": 0.02,
+        "reversal_share_bps": 5000,
+        "capture_delay_days": [
+          0,
+          3
+        ],
+        "review_prob": 0.08,
+        "review_delay_days": [
+          1,
+          5
+        ],
+        "review_reject_prob": 0.2,
+        "post_grant_fraud_prob": 0.02,
+        "referrer_serves_prob": 0.3,
+        "bonus_use_prob": 0.85
+      },
+      "parcel": {
+        "fee_bps": 1000,
+        "price_buckets": [
+          {
+            "label": "low",
+            "fare_minor": 1500000,
+            "weight": 0.4
+          },
+          {
+            "label": "mid",
+            "fare_minor": 3000000,
+            "weight": 0.45
+          },
+          {
+            "label": "high",
+            "fare_minor": 6000000,
+            "weight": 0.15
+          }
+        ],
+        "base_new_per_day": 8,
+        "attributed_share_of_base": 0.1,
+        "incremental_new_per_day": 2,
+        "enrollment_rate": 0.6,
+        "first_order_prob": 0.5,
+        "first_order_delay_days": [
+          0,
+          10
+        ],
+        "repeat_prob": 0.4,
+        "repeat_interval_days": [
+          5,
+          21
+        ],
+        "max_orders": 8,
+        "cancel_prob": 0.05,
+        "cancel_fault": {
+          "client": 0.6,
+          "driver": 0.25,
+          "platform": 0.05,
+          "none": 0.05,
+          "undetermined": 0.05
+        },
+        "dispute_prob": 0.02,
+        "dispute_release_prob": 0.4,
+        "reversal_prob": 0.02,
+        "reversal_share_bps": 5000,
+        "capture_delay_days": [
+          0,
+          3
+        ],
+        "review_prob": 0.08,
+        "review_delay_days": [
+          1,
+          5
+        ],
+        "review_reject_prob": 0.2,
+        "post_grant_fraud_prob": 0.02,
+        "referrer_serves_prob": 0.3,
+        "bonus_use_prob": 0.85,
+        "sender_pays_share": 0.75
+      }
+    },
+    "campaigns": [
+      {
+        "id": 1,
+        "kind": "referral_client_client",
+        "service": "passenger",
+        "referrer_reward_minor": 300000,
+        "referee_reward_minor": 300000,
+        "referrer_instrument": "passenger_bonus",
+        "referee_instrument": "passenger_bonus",
+        "milestones": [],
+        "qualification_days": 30,
+        "validity_days": 60,
+        "grace_days": 7,
+        "review_sla_hours": 72,
+        "policy": {
+          "max_discount_share_bps": 5000,
+          "max_discount_per_booking_minor": 1500000,
+          "passenger_bonus_max_per_booking_minor": 1000000,
+          "driver_credit_max_per_booking_minor": 1000000,
+          "variable_cost_fixed_minor": 100000,
+          "variable_cost_bps": 0,
+          "min_margin_minor": 100000
+        },
+        "budget_minor": 150000000,
+        "budget_source": "SYNTHETIC marketing allocation (no approved source)",
+        "invite_share": 0.7
+      },
+      {
+        "id": 2,
+        "kind": "referral_client_client",
+        "service": "parcel",
+        "referrer_reward_minor": 200000,
+        "referee_reward_minor": 200000,
+        "referrer_instrument": "passenger_bonus",
+        "referee_instrument": "passenger_bonus",
+        "milestones": [],
+        "qualification_days": 30,
+        "validity_days": 60,
+        "grace_days": 7,
+        "review_sla_hours": 72,
+        "policy": {
+          "max_discount_share_bps": 5000,
+          "max_discount_per_booking_minor": 1500000,
+          "passenger_bonus_max_per_booking_minor": 1000000,
+          "driver_credit_max_per_booking_minor": 1000000,
+          "variable_cost_fixed_minor": 100000,
+          "variable_cost_bps": 0,
+          "min_margin_minor": 100000
+        },
+        "budget_minor": 50000000,
+        "budget_source": "SYNTHETIC marketing allocation (no approved source)",
+        "invite_share": 1.0
+      },
+      {
+        "id": 3,
+        "kind": "referral_driver_client",
+        "service": "passenger",
+        "referrer_reward_minor": 300000,
+        "referee_reward_minor": 300000,
+        "referrer_instrument": "driver_credit",
+        "referee_instrument": "passenger_bonus",
+        "milestones": [],
+        "qualification_days": 30,
+        "validity_days": 60,
+        "grace_days": 7,
+        "review_sla_hours": 72,
+        "policy": {
+          "max_discount_share_bps": 5000,
+          "max_discount_per_booking_minor": 1500000,
+          "passenger_bonus_max_per_booking_minor": 1000000,
+          "driver_credit_max_per_booking_minor": 1000000,
+          "variable_cost_fixed_minor": 100000,
+          "variable_cost_bps": 0,
+          "min_margin_minor": 100000
+        },
+        "budget_minor": 100000000,
+        "budget_source": "SYNTHETIC marketing allocation (no approved source)",
+        "invite_share": 0.3
+      },
+      {
+        "id": 4,
+        "kind": "referral_driver_driver",
+        "service": "passenger",
+        "referrer_reward_minor": 200000,
+        "referee_reward_minor": 200000,
+        "referrer_instrument": "driver_credit",
+        "referee_instrument": "driver_credit",
+        "milestones": [
+          5,
+          10
+        ],
+        "min_distinct_clients": 3,
+        "qualification_days": 45,
+        "validity_days": 60,
+        "grace_days": 7,
+        "review_sla_hours": 72,
+        "policy": {
+          "max_discount_share_bps": 5000,
+          "max_discount_per_booking_minor": 1500000,
+          "passenger_bonus_max_per_booking_minor": 1000000,
+          "driver_credit_max_per_booking_minor": 1000000,
+          "variable_cost_fixed_minor": 100000,
+          "variable_cost_bps": 0,
+          "min_margin_minor": 100000
+        },
+        "budget_minor": 50000000,
+        "budget_source": "SYNTHETIC marketing allocation (no approved source)",
+        "invite_share": 1.0
+      }
+    ],
+    "combinations": [
+      [
+        1,
+        3,
+        "shared"
+      ],
+      [
+        1,
+        4,
+        "shared"
+      ],
+      [
+        3,
+        4,
+        "shared"
+      ]
+    ],
+    "drivers": {
+      "pool_size": 40,
+      "referred_per_day": 0.3,
+      "enrollment_rate": 0.8,
+      "linked_client_prob": 0.05,
+      "capable_app_share": 0.9
+    }
+  },
+  "scenarios": [
+    {
+      "name": "control",
+      "title": "Nazorat: referral va bonuslarsiz",
+      "referral_enabled": false
+    },
+    {
+      "name": "conservative",
+      "title": "Kichik budjetli konservativ pilot",
+      "campaign_ids": [
+        1,
+        2
+      ],
+      "campaign_overrides": {
+        "1": {
+          "referrer_reward_minor": 200000,
+          "referee_reward_minor": 200000,
+          "budget_minor": 40000000
+        },
+        "2": {
+          "referrer_reward_minor": 100000,
+          "referee_reward_minor": 100000,
+          "budget_minor": 15000000
+        }
+      },
+      "services": {
+        "passenger": {
+          "incremental_new_per_day": 1.5
+        },
+        "parcel": {
+          "incremental_new_per_day": 1
+        }
+      }
+    },
+    {
+      "name": "medium",
+      "title": "O'rtacha foydalanish"
+    },
+    {
+      "name": "adverse",
+      "title": "Yuqori bonus sarfi, past takroriy buyurtma, yuqori nizolar",
+      "services": {
+        "passenger": {
+          "bonus_use_prob": 1.0,
+          "repeat_prob": 0.15,
+          "dispute_prob": 0.12,
+          "reversal_prob": 0.08,
+          "review_reject_prob": 0.3,
+          "post_grant_fraud_prob": 0.08,
+          "cancel_prob": 0.15
+        },
+        "parcel": {
+          "bonus_use_prob": 1.0,
+          "repeat_prob": 0.15,
+          "dispute_prob": 0.1,
+          "reversal_prob": 0.08,
+          "review_reject_prob": 0.3,
+          "post_grant_fraud_prob": 0.08,
+          "cancel_prob": 0.12
+        }
+      }
+    },
+    {
+      "name": "stress_full_redemption",
+      "title": "Stress: berilgan har bir bonus to'liq ishlatiladi",
+      "full_redemption": true,
+      "services": {
+        "passenger": {
+          "bonus_use_prob": 1.0,
+          "repeat_prob": 0.6
+        },
+        "parcel": {
+          "bonus_use_prob": 1.0,
+          "repeat_prob": 0.7
+        }
+      }
+    },
+    {
+      "name": "ops_delay_shortage",
+      "title": "Review/finance kechikishi va koridorda haydovchi yetishmasligi",
+      "corridors": [
+        {
+          "id": "pilot_A",
+          "traffic_share": 0.6,
+          "driver_availability": 0.6
+        },
+        {
+          "id": "pilot_B",
+          "traffic_share": 0.4,
+          "driver_availability": 0.45
+        }
+      ],
+      "services": {
+        "passenger": {
+          "capture_delay_days": [
+            3,
+            20
+          ],
+          "review_prob": 0.25,
+          "review_delay_days": [
+            5,
+            20
+          ]
+        },
+        "parcel": {
+          "capture_delay_days": [
+            3,
+            20
+          ],
+          "review_prob": 0.25,
+          "review_delay_days": [
+            5,
+            20
+          ]
+        }
+      }
+    },
+    {
+      "name": "zero_budget",
+      "title": "Boshlang'ich budjet nol",
+      "campaign_overrides": {
+        "1": {
+          "budget_minor": 0
+        },
+        "2": {
+          "budget_minor": 0
+        },
+        "3": {
+          "budget_minor": 0
+        },
+        "4": {
+          "budget_minor": 0
+        }
+      }
+    },
+    {
+      "name": "budget_cut",
+      "title": "Budjet 30-kunda kamaytiriladi (oddiy reduce): faqat max(0, B − S − L) gacha, qolgani rad etiladi",
+      "budget_cuts": {
+        "1": {
+          "day": 30,
+          "amount_minor": 150000000,
+          "kind": "reduce"
+        },
+        "3": {
+          "day": 30,
+          "amount_minor": 100000000,
+          "kind": "reduce"
+        }
+      }
+    },
+    {
+      "name": "funding_loss",
+      "title": "30-kunda tashqi moliyalashtirish yo'qoladi (funding_loss): kamomad, yangi va'da to'xtaydi, eskilari qoladi",
+      "budget_cuts": {
+        "1": {
+          "day": 30,
+          "amount_minor": 150000000,
+          "kind": "funding_loss"
+        },
+        "3": {
+          "day": 30,
+          "amount_minor": 100000000,
+          "kind": "funding_loss"
+        }
+      }
+    },
+    {
+      "name": "variant_A",
+      "title": "Variant A: faqat yo'lovchi, mijoz -> mijoz, kichik mukofot",
+      "pilot_variant": true,
+      "campaign_ids": [
+        1
+      ],
+      "campaign_overrides": {
+        "1": {
+          "referrer_reward_minor": 250000,
+          "referee_reward_minor": 250000,
+          "budget_minor": 60000000,
+          "invite_share": 1.0
+        }
+      },
+      "services": {
+        "parcel": {
+          "incremental_new_per_day": 0
+        }
+      },
+      "notes": [
+        "Foydalanuvchi qarori 24.09.2026: kelajakdagi yo'lovchi pilotini baholash uchun asosiy nomzod. Summalar va 600 000 so'mlik budjet production uchun TASDIQLANMAGAN; yo'lovchi xizmatining huquqiy/texnik gate'lari saqlanadi."
+      ]
+    },
+    {
+      "name": "variant_B",
+      "title": "Variant B: yo'lovchi + pochta, alohida budjetlar",
+      "pilot_variant": false,
+      "campaign_ids": [
+        1,
+        2
+      ],
+      "campaign_overrides": {
+        "1": {
+          "referrer_reward_minor": 250000,
+          "referee_reward_minor": 250000,
+          "budget_minor": 60000000,
+          "invite_share": 1.0
+        },
+        "2": {
+          "referrer_reward_minor": 100000,
+          "referee_reward_minor": 100000,
+          "budget_minor": 30000000
+        }
+      },
+      "notes": [
+        "Foydalanuvchi qarori 24.09.2026: hozirgi ko'rinishida tasdiqlanmaydi; pochta qismi alohida baholanadi (parcel_* tajribalari)."
+      ]
+    },
+    {
+      "name": "variant_C",
+      "title": "Variant C: haydovchi taklif qiladi (mijozga bonus, haydovchiga kredit) + haydovchi milestone",
+      "pilot_variant": false,
+      "campaign_ids": [
+        3,
+        4
+      ],
+      "campaign_overrides": {
+        "3": {
+          "referrer_reward_minor": 300000,
+          "referee_reward_minor": 200000,
+          "budget_minor": 60000000,
+          "invite_share": 1.0
+        },
+        "4": {
+          "budget_minor": 30000000
+        }
+      },
+      "services": {
+        "parcel": {
+          "incremental_new_per_day": 0
+        }
+      },
+      "notes": [
+        "Foydalanuvchi qarori 24.09.2026: keyingi baholashga qoldirildi (haydovchi milestone va qo'shimcha kampaniyalar hozir yo'q)."
+      ]
+    },
+    {
+      "name": "parcel_base",
+      "title": "Pochta: B dagi pochta qismi (1 000 + 1 000 so'm, 60 kun)",
+      "experiment": "pochta_sintetik_tajriba",
+      "campaign_ids": [
+        2
+      ],
+      "campaign_overrides": {
+        "2": {
+          "referrer_reward_minor": 100000,
+          "referee_reward_minor": 100000,
+          "budget_minor": 30000000
+        }
+      },
+      "services": {
+        "passenger": {
+          "incremental_new_per_day": 0
+        }
+      }
+    },
+    {
+      "name": "parcel_small_reward",
+      "title": "Pochta: kichikroq mukofot (500 + 500 so'm)",
+      "experiment": "pochta_sintetik_tajriba",
+      "campaign_ids": [
+        2
+      ],
+      "campaign_overrides": {
+        "2": {
+          "referrer_reward_minor": 50000,
+          "referee_reward_minor": 50000,
+          "budget_minor": 30000000
+        }
+      },
+      "services": {
+        "passenger": {
+          "incremental_new_per_day": 0
+        }
+      }
+    },
+    {
+      "name": "parcel_long_validity",
+      "title": "Pochta: bonus amal muddati 120 kun",
+      "experiment": "pochta_sintetik_tajriba",
+      "campaign_ids": [
+        2
+      ],
+      "campaign_overrides": {
+        "2": {
+          "referrer_reward_minor": 100000,
+          "referee_reward_minor": 100000,
+          "budget_minor": 30000000,
+          "validity_days": 120
+        }
+      },
+      "services": {
+        "passenger": {
+          "incremental_new_per_day": 0
+        }
+      }
+    },
+    {
+      "name": "parcel_more_orders",
+      "title": "Pochta: takroriy jo'natmalar ko'proq (taxmin: repeat 0.6)",
+      "experiment": "pochta_sintetik_tajriba",
+      "campaign_ids": [
+        2
+      ],
+      "campaign_overrides": {
+        "2": {
+          "referrer_reward_minor": 100000,
+          "referee_reward_minor": 100000,
+          "budget_minor": 30000000
+        }
+      },
+      "services": {
+        "passenger": {
+          "incremental_new_per_day": 0
+        },
+        "parcel": {
+          "repeat_prob": 0.6
+        }
+      }
+    },
+    {
+      "name": "parcel_richer_mix",
+      "title": "Pochta: o'rta/yuqori narxli jo'natmalar ko'proq (taxmin: 20/50/30)",
+      "experiment": "pochta_sintetik_tajriba",
+      "campaign_ids": [
+        2
+      ],
+      "campaign_overrides": {
+        "2": {
+          "referrer_reward_minor": 100000,
+          "referee_reward_minor": 100000,
+          "budget_minor": 30000000
+        }
+      },
+      "services": {
+        "passenger": {
+          "incremental_new_per_day": 0
+        },
+        "parcel": {
+          "price_buckets": [
+            {
+              "label": "low",
+              "fare_minor": 1500000,
+              "weight": 0.2
+            },
+            {
+              "label": "mid",
+              "fare_minor": 3000000,
+              "weight": 0.5
+            },
+            {
+              "label": "high",
+              "fare_minor": 6000000,
+              "weight": 0.3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "parcel_small_long",
+      "title": "Pochta: 500 + 500 so'm va 120 kun",
+      "experiment": "pochta_sintetik_tajriba",
+      "campaign_ids": [
+        2
+      ],
+      "campaign_overrides": {
+        "2": {
+          "referrer_reward_minor": 50000,
+          "referee_reward_minor": 50000,
+          "budget_minor": 30000000,
+          "validity_days": 120
+        }
+      },
+      "services": {
+        "passenger": {
+          "incremental_new_per_day": 0
+        }
+      }
+    }
+  ]
+}

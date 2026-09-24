@@ -336,3 +336,27 @@ def test_a_stop_ended_listing_still_works_exactly_as_before(bw: BW) -> None:
     assert listing_id
     assert row.origin_stop_id is not None
     assert row.origin_point is None and row.origin_district_id is None
+
+
+# ------------------------------------------------------------------------- duplicate check on points
+
+
+def _publish_point(bw: BW, **overrides) -> str:  # noqa: ANN003
+    return publish_listing(bw, bw.w.client_id, ListingCreate.model_validate(point_body(bw, **overrides)))
+
+
+def test_the_same_marked_places_at_an_overlapping_time_are_a_duplicate(bw: BW) -> None:
+    first = _publish_point(bw)
+    with pytest.raises(DomainError) as info:
+        _publish_point(bw)
+    assert info.value.code is ErrorCode.DUPLICATE_LISTING
+    assert info.value.details["existing_listing_id"] == first
+
+
+def test_a_different_marked_place_is_not_a_duplicate_of_an_overlapping_listing(bw: BW) -> None:
+    """Regression: both point ends have no stop id, and comparing stop ids alone made any two overlapping point
+    listings of one person "the same" - a request to another place was refused as DUPLICATE_LISTING."""
+    first = _publish_point(bw)
+    second = _publish_point(bw, origin=(40.11, 67.90))  # ~0.5 km from the first pickup, same road
+    third = publish_listing(bw, bw.w.client_id, passenger_request_body(bw, seats=1))  # stop ends, same time
+    assert len({first, second, third}) == 3

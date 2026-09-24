@@ -53,6 +53,23 @@ CONSTRAINT_RULES: dict[str, DbErrorRule] = {
     "append_only_violation": _R(ErrorCode.INTEGRITY_CONFLICT, "append_only_violation"),
     # wave 5 (A10b 0065, Q4): INSTEAD OF trigger on every legacy_*_v projection refuses writes for any role.
     "legacy_object_read_only": _R(ErrorCode.LEGACY_OBJECT_READ_ONLY, "legacy_object_read_only"),
+    # referral stage 1 (0084, ADR-0023): promotions budget, ledger and state guards.
+    "promo_budget_exhausted": _R(ErrorCode.PROMO_BUDGET_EXHAUSTED, "promo_budget_exhausted"),
+    "uq_bookings_trip_intent_binding": _R(ErrorCode.TRIP_INTENT_BOOKED, "trip_intent_already_booked"),  # 0091
+    "booking_trip_intent_mismatch": _R(ErrorCode.INTEGRITY_CONFLICT, "booking_trip_intent_mismatch"),  # 0091
+    "trip_intent_link_frozen": _R(ErrorCode.INTEGRITY_CONFLICT, "trip_intent_link_frozen"),  # 0091
+    "trip_intent_invalid_transition": _R(ErrorCode.INVALID_STATE_TRANSITION, "trip_intent_invalid_transition"),  # 0091
+    "promo_budget_below_commitment": _R(ErrorCode.PROMO_BUDGET_BELOW_COMMITMENT, "promo_budget_below_commitment"),  # 0090
+    "promo_funding_loss_evidence": _R(ErrorCode.VALIDATION_ERROR, "promo_funding_loss_evidence"),  # 0090
+    "promo_budget_writer_refused": _R(ErrorCode.INTEGRITY_CONFLICT, "promo_budget_writer_refused"),
+    "promo_budget_cache_mismatch": _R(ErrorCode.INTEGRITY_CONFLICT, "promo_budget_cache_mismatch"),
+    "promo_second_approver_required": _R(ErrorCode.SECOND_APPROVER_REQUIRED, "promo_second_approver_required"),
+    "promo_activation_incomplete": _R(ErrorCode.PROMO_PARAMETERS_UNSET, "promo_activation_incomplete"),
+    "promo_invalid_transition": _R(ErrorCode.INVALID_STATE_TRANSITION, "promo_invalid_transition"),
+    "promo_lot_balance_mismatch": _R(ErrorCode.INTEGRITY_CONFLICT, "promo_lot_balance_mismatch"),
+    "promo_flag_enable_refused": _R(ErrorCode.PRODUCTION_INVARIANTS_FAILED, "gate_failed"),
+    "promo_reinstate_invalid": _R(ErrorCode.INVALID_STATE_TRANSITION, "promo_reinstate_invalid"),  # 0086
+    "promo_booking_terms_mismatch": _R(ErrorCode.INTEGRITY_CONFLICT, "promo_booking_terms_mismatch"),  # 0087
 }
 
 # Existing (wave 1-2) trigger messages without a constraint name; matched with ``str.startswith``.

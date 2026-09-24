@@ -47,6 +47,7 @@ def test_default_jobs_catalogue() -> None:
     assert names == [
         "marketplace.expire_due_listings",
         "marketplace.expire_due_proposals",
+        "marketplace.close_stale_intent_threads",
         "bookings.expire_due_amendments",
         "bookings.emit_confirmation_overdue_signals",
         "bookings.emit_hold_escalation_signals",
@@ -63,6 +64,15 @@ def test_default_jobs_catalogue() -> None:
         # wave 4
         "operations.refresh_kpi_daily",
         "operations.expire_share_links",
+        # referral stage 3 (ADR-0023)
+        "promotions.process_qualifications",
+        "promotions.recheck_granted",
+        "promotions.expire_enrollments",
+        "promotions.expire_lots",
+        "promotions.pause_exhausted_campaigns",
+        "promotions.escalate_reviews",
+        "promotions.purge_identity_digests",
+        "promotions.purge_rate_events",
         "communications.dispatch_outbox",
     ]
     assert names[-1] == "communications.dispatch_outbox", "dispatch runs after the jobs that enqueue events"

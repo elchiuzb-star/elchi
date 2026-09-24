@@ -40,3 +40,10 @@ export type Paginated<T> = {
     total_pages: number;
   };
 };
+
+/** Referral Q126: a PROMO_QUOTE_STALE whose cause is the *other* side's confirmation (it must confirm again). */
+export function counterpartyStale(error: ApiError): boolean {
+  if (error.code !== "PROMO_QUOTE_STALE") return false;
+  const reasons = (error.details as { reasons?: unknown } | undefined)?.reasons;
+  return Array.isArray(reasons) && reasons.some((r) => r === "counterparty_confirmation_stale" || r === "counterparty_client_outdated");
+}

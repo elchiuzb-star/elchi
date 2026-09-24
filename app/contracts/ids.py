@@ -63,6 +63,18 @@ class PublicIdPrefix(StrEnum):
     # Wave 7 (additive): §5.2 parcel policy versions.
     PARCEL_POLICY = "ppv"
     STAFF_MFA_FACTOR = "mfa"
+    # referral stage 3 (additive)
+    PROMO_ENROLLMENT = "pen"
+    PROMO_LOT = "plt"
+    PROMO_REVIEW = "prw"
+    # referral stage 5 (additive): HTTP identifiers
+    PROMO_CAMPAIGN = "pcm"
+    REFERRAL_ATTRIBUTION = "rfa"
+    PROMO_BUDGET_REQUEST = "pbr"
+    # referral Q123 (additive): approved campaign combinations
+    PROMO_COMBINATION = "pcb"
+    # ADR-0025 (additive): a client's saved trip/parcel request
+    TRIP_INTENT = "tin"
 
 
 def new_public_uuid() -> uuid.UUID:

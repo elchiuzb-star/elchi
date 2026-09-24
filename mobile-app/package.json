@@ -15,6 +15,7 @@
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",
     "@vitejs/plugin-react": "^5.0.4",
+    "qrcode-generator": "2.0.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^6.2.3"

@@ -224,6 +224,32 @@ DTO: `FeedQuery {service_type, side: requests|offers, origin_stop_id|origin_regi
 
 DTO: `ProposalCreate {trip_id? (driver’da majburiy), pickup_stop_id, dropoff_stop_id, pickup_window_start/end, quantity (passenger request’da = seat_count; parcel = 1; trip_offer’da ≤ qolgan o‘rin), price_basis, unit_price_minor, message? (≤500), parcel? {weight_g, length_cm, width_cm, height_cm, volume_ml?}}` — **wave 1.5 (A1, implementatsiya qilingan):** `ProposalCreate` va `ProposalCounter` ixtiyoriy `baggage {pieces?, total_weight_g?, total_volume_ml?}` va `parcel {weight_g, length_cm, width_cm, height_cm, volume_ml?}` qabul qiladi; `ProposalVersionDTO.demand {baggage_ml, cargo_weight_g, cargo_volume_ml, parcel_length_cm?, parcel_width_cm?, parcel_height_cm?}` (DB: `proposal_versions`, 0044). A4 accept’da shu snapshot’dan rezerv qiladi (AC12). A1 domen API: `version_demand`, `expire_threads_for_trip`, `assert_trip_offers_on_trip`; `ProposalCounter {expected_revision, pickup_stop_id?, dropoff_stop_id?, pickup_window_*?, quantity?, unit_price_minor?, message?}`; `ProposalDecision {expected_revision, reason_code?}`; `AcceptRequest {proposal_version_id (prv_), expected_listing_version}`; `ProposalThreadDTO {id (prp_), listing_id, trip_id?, state, client, driver {id, display_name, reputation}, current_version, versions[]?, booking_id?}`; `ProposalVersionDTO {id (prv_), revision, author_side, status, status_reason?, pickup_stop, dropoff_stop, pickup_window_*, quantity, price_basis, unit_price_minor, total_minor, currency, expires_at, created_at, fee_quote? (faqat driver tomoniga), price_revisions_left {client, driver}}`; `FeeQuoteDTO {policy_id (cmp_), policy_kind, fee_bps, commission_minor, net_minor, valid_until (= version.expires_at)}`.
 
+### 7a. Saqlangan safar/jo‘natma talabi (ADR-0025, 24.09.2026)
+
+Egasi — sessiyadagi foydalanuvchi (body’da egasi yo‘q); begona yoki noma’lum id → `404 NOT_FOUND`. Talab e’lon emas: feed’da
+ko‘rinmaydi, hech kimga taklif yubormaydi. Barcha buyruqlar `Idempotency-Key` bilan.
+
+| # | Method / path | Auth | Request | Response | Idem | Ver | Xatolar |
+|---|---|---|---|---|---|---|---|
+| TI1 | `POST /me/trip-intents` | `proposal.submit_as_client` | `TripIntentCreate` | `TripIntentDTO` (201) | Y | — | `TRIP_INTENT_EXPIRED`, `QUANTITY_MISMATCH` (pochta = 1), `VALIDATION_ERROR` |
+| TI2 | `GET /me/trip-intents` | Auth (o‘zi) | `?status&limit` | `list[TripIntentDTO]` | — | — | — |
+| TI3 | `GET /me/trip-intents/{id}` | Egasi | — | `TripIntentDTO` | — | — | `NOT_FOUND` |
+| TI4 | `PATCH /me/trip-intents/{id}` | Egasi | `TripIntentUpdate` | `TripIntentDTO` | Y | `expected_version` | `TRIP_INTENT_OFFERS_AFFECTED` (`details.open_offers`), `TRIP_INTENT_BOOKED`, `TRIP_INTENT_EXPIRED`, `VERSION_CONFLICT` |
+| TI5 | `POST /me/trip-intents/{id}/close` | Egasi | `TripIntentCommand` | `TripIntentDTO` | Y | `expected_version` | `INVALID_STATE_TRANSITION` |
+| TI6 | `POST /me/trip-intents/{id}/reopen` | Egasi | `TripIntentCommand` | `TripIntentDTO` | Y | `expected_version` | `INVALID_STATE_TRANSITION` (bron bekor qilinmagan) |
+| TI7 | `GET /me/trip-intents/{id}/fit?listing_id=` | Egasi | — | `TripIntentFitDTO` | — | — | `NOT_FOUND` |
+
+- **P1 qo‘shimchasi (additiv):** `ProposalCreate.trip_intent: {id, version_no} | null` — faqat mijoz tomoni. `quantity`, `price_basis`
+  va pochta talabi (tur, o‘lcham, qabul qiluvchi) talab versiyasiniki bo‘lishi shart (`VALIDATION_ERROR reason=trip_intent_*_mismatch`);
+  eskirgan versiya → `409 TRIP_INTENT_CHANGED`, band talab → `409 TRIP_INTENT_BOOKED`, muddati o‘tgan → `409 TRIP_INTENT_EXPIRED`.
+  Narx va oyna haydovchiga xos, talabga yozilmaydi. `ProposalThreadDTO.trip_intent_id` — faqat mijoz ko‘rinishida.
+- **P5/P8:** talab bilan bog‘langan thread’da counter `quantity`/pochta talabini o‘zgartirmaydi; accept talab lock’i ostida
+  `active` va `terms_version`ni qayta tekshiradi; talab bo‘yicha bitta bekor qilinmagan bron (`uq_bookings_trip_intent_binding`).
+- **Eski klientlar:** `trip_intent` yubormaydigan klient (shu jumladan muzlatilgan Android v1 — u v2 ishlatmaydi) avvalgidek
+  ishlaydi; ularning takliflari talab himoyasisiz. Tarixiy thread/bronlar guruhlanmaydi.
+- **Ishchi vazifa:** `marketplace.close_stale_intent_threads` — `SKIP LOCKED` sababli o‘tkazib yuborilgan ochiq takliflarni yopadi
+  (accept/counter ularni baribir rad etadi).
+
 ## 8. Bookings (egasi A4)
 
 | # | Method / path | Auth / capability | Request | Response | Idem | Ver | Xatolar | AC |

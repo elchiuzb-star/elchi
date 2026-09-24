@@ -83,6 +83,10 @@ EVENT_PAYLOAD_ALLOWLIST: dict[EventType, frozenset[str]] = {
     E.SUPPORT_TICKET_STATUS_CHANGED: frozenset({"ticket_id", "kind", "from_status", "to_status"}),
     E.RATING_PUBLISHED: frozenset({"booking_id", "service_type", "subject_side"}),
     E.DISPUTE_ESCALATION_DUE: frozenset({"booking_id", "dispute_type", "escalate_at"}),
+    # no phone, name or code; amounts are reward values, never commission
+    E.PROMO_REWARD_GRANTED: frozenset({"enrollment_id", "instrument", "reward_amount_minor", "currency", "milestone", "side"}),
+    E.PROMO_REVIEW_OPENED: frozenset({"review_kind", "reason_codes", "due_at"}),
+    E.PROMO_REVIEW_ESCALATED: frozenset({"review_kind", "due_at"}),
 }
 
 class EventAudience(StrEnum):
@@ -155,6 +159,9 @@ EVENT_AUDIENCES: dict[EventType, frozenset[EventAudience]] = {
     E.SUPPORT_TICKET_STATUS_CHANGED: _ALL,
     E.RATING_PUBLISHED: _ALL,
     E.DISPUTE_ESCALATION_DUE: _STAFF,
+    E.PROMO_REWARD_GRANTED: _STAFF,
+    E.PROMO_REVIEW_OPENED: _STAFF,
+    E.PROMO_REVIEW_ESCALATED: _STAFF,
 }
 
 # Keys removed from every client copy: they reveal commission (Q16).

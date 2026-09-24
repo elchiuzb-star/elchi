@@ -161,6 +161,7 @@
 | R-15.2 | Tashqi SMS/xarita/push DB tranzaksiyasi ichida chaqirilmaydi (§15) | `COVERED` | AGENTS §6; `communications` outbox |
 | R-15.3 | Outbox `FOR UPDATE SKIP LOCKED` + retry/backoff (§15) | `COVERED` | AC33 |
 | R-15.4 | Push payload'ida telefon/pasport/manzil yo'q (§15) | `COVERED` | `EVENT_PAYLOAD_ALLOWLIST` |
+| R-15.5 | Saqlangan safar/jo'natma talabi: bitta talab — bitta tirik bron, parallel accept'da yutqazgan hech narsa band qilmaydi (ADR-0025, 24.09.2026) | `COVERED` | Qabul matritsasi ADR-0025 oxirida; `tests/pg/marketplace/test_trip_intents_pg.py`, `tests/pg/marketplace/test_trip_intents_migration_pg.py`, `tests/pg/promotions/test_trip_intents_promo_pg.py`, vitest `tripIntent.test.ts`, `TripIntentPanel.test.tsx` |
 
 ## §16 Qulayliklar (UX)
 

@@ -72,6 +72,7 @@ from app.contracts.enums import (
     ParcelBookingStatus,
     ParcelPayer,
     PassengerBookingStatus,
+    PromoFault,
     ProofKind,
     ServiceType,
     TripStatus,
@@ -80,6 +81,8 @@ from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.events import EventEnvelope
 from app.contracts.ids import PublicIdPrefix, format_public_id, new_public_uuid, parse_public_id
 from app.contracts.money import commission_minor, initial_commission_status, total_minor as money_total_minor
+from app.contracts.promo import PROMO_CASH_FEATURE, PROMO_SNAPSHOT_KEY, booking_promo_marker, cash_receipt_matches
+from app.contracts.promo import promo_booking_command_allowed as promo_cash_command_allowed
 from app.contracts.state_machines import (
     AMENDMENT,
     CASH_COLLECTION,
@@ -111,10 +114,12 @@ from app.modules.bookings.models import (
     NoShowReview,
 )
 from app.modules.identity import service as identity_service
+from app.modules.marketplace import intents as marketplace_intents
 from app.modules.marketplace import service as marketplace_service
 from app.modules.marketplace.models import Listing, ProposalThread, ProposalVersion
 from app.modules.marketplace.rules import check_proposal_quantity
 from app.modules.platform import service as platform_service
+from app.modules.promotions import booking as promo_booking
 from app.modules.trips import service as trips_service
 from app.modules.trips.models import Trip
 from app.modules.trips.rules import ResourceDemand
@@ -171,6 +176,7 @@ __all__ = [
 ]
 
 REQUEST_BINDING_INDEX = "uq_bookings_request_listing_binding"
+TRIP_INTENT_BINDING_INDEX = "uq_bookings_trip_intent_binding"  # ADR-0025: one live booking per saved request
 ACCEPTED_VERSION_UNIQUE = "uq_bookings_accepted_proposal_version"
 PENDING_REVIEW_INDEX = "uq_no_show_reviews_pending"
 OPEN_CUSTODY_INDEX = "uq_custody_cases_open"
@@ -620,8 +626,18 @@ def accept_proposal(
     proposal_version_public_id: str,
     expected_listing_version: int,
     now: datetime | None = None,
+    client_features: frozenset[str] | None = None,
+    promo_consent: promo_booking.ConsentInput | None = None,
+    client_session: str | None = None,
+    promo_driver_ack: promo_booking.DriverAck | None = None,
 ) -> Booking:
-    """P8: ``active -> accepted`` + booking ``confirmed`` + allocations + hold (or exempt), in one transaction."""
+    """P8: ``active -> accepted`` + booking ``confirmed`` + allocations + hold (or exempt), in one transaction.
+
+    Referral stage 4 (ADR-0023 §18): the promo terms are decided under the wallet and lot locks, reserved together
+    with the booking, and the hold is C_net. ``client_features`` is the actor's ``X-Elchi-Client-Features``
+    (``None`` = internal call) and ``client_session`` its login session (``sid``, Q126); ``promo_consent`` is the
+    client's explicit consent when the client accepts.
+    """
     now = _now(now)
     # Unlocked reads only locate the rows; everything is re-read under the locks below.
     thread = marketplace_service.get_thread_by_public_id(session, thread_public_id)
@@ -661,6 +677,10 @@ def accept_proposal(
         raise DomainError(code, details={"status": version.status})
     if side is ActorSide(version.author_side):
         raise DomainError(ErrorCode.NOT_PROPOSAL_RECIPIENT)  # AC05: the author never accepts its own version
+    # 4a. ADR-0025: the client's saved request (FOR NO KEY UPDATE, threads -> trip_intents): still active and on the
+    # terms this offer was made against. A parallel accept of another offer of the same request waits here and is
+    # refused once this one commits - before any capacity, promo lot or hold is touched.
+    trip_intent = marketplace_intents.verify_thread_intent(session, thread, for_accept=True)
     if listing.service_type == ServiceType.PARCEL.value:
         # §5.2: a new parcel booking needs an approved prohibited-items policy (fail-closed in production).
         # Only the *new* obligation is gated; everything already accepted keeps running to its end.
@@ -745,6 +765,18 @@ def accept_proposal(
     if not demand.is_empty:
         trips_service.reserve(session, trip.id, pickup_seq, dropoff_seq, demand)
 
+    # 5a. promo terms (ADR-0023 §18): wallet_accounts -> promo_consents -> promo_campaigns -> promo_lots, decided
+    # before the booking row because its frozen terms_snapshot records whether promo terms exist.
+    if fee_status is CommissionStatus.HELD:
+        wallet_service.lock_wallet(session, wallet_service.get_or_create_wallet(session, driver_id).id)
+    promo_plan = promo_booking.prepare_accept(
+        session, flags=flags, service_type=service.value, parcel_payer=_parcel_payer_for_listing(session, listing),
+        fare_minor=version.total_minor, fee_bps=version.fee_bps, proposal_version_id=version.id,
+        version_expires_at=ensure_aware_utc(version.expires_at), client_user_id=client_id, driver_user_id=driver_id,
+        actor_side=side or ActorSide.SYSTEM, actor_features=client_features, consent_input=promo_consent,
+        actor_session_ref=client_session, driver_ack=promo_driver_ack, now=now,
+    )
+
     listing_version_at_accept = listing.version
     # 6. marketplace: accept this version; the demand's other versions expire; listings fulfil (§2, §1).
     marketplace_service.accept_version(session, listing=listing, thread=thread, version=version, now=now)
@@ -770,6 +802,7 @@ def accept_proposal(
         request_listing_id=request_id,
         supply_listing_id=supply_id,
         proposal_thread_id=thread.id,
+        trip_intent_id=thread.trip_intent_id,
         accepted_proposal_version_id=version.id,
         route_version_id=trip.route_version_id,
         trip_version=trip.version,
@@ -813,6 +846,7 @@ def accept_proposal(
             "pickup_wait_minutes": trip.pickup_wait_minutes,
             "boarding_window_minutes": int(rules.BOARDING_WINDOW.total_seconds() // 60),
             "detour_quotes": [],
+            PROMO_SNAPSHOT_KEY: booking_promo_marker(applied=promo_plan.applied),
         },
         version=1,
         created_at=now,
@@ -824,8 +858,12 @@ def accept_proposal(
         {
             REQUEST_BINDING_INDEX: lambda: DomainError(ErrorCode.PROPOSAL_CHANGED, details={"reason": "demand_already_booked"}),
             ACCEPTED_VERSION_UNIQUE: lambda: DomainError(ErrorCode.PROPOSAL_CHANGED, details={"reason": "version_already_accepted"}),
+            TRIP_INTENT_BINDING_INDEX: lambda: DomainError(ErrorCode.TRIP_INTENT_BOOKED, details={"reason": "already_booked"}),
         },
     )
+    if trip_intent is not None:  # the request is booked; its other offers close (technical reason, no client fault)
+        marketplace_intents.bind_booking(session, trip_intent, booking_id=booking.id, accepted_thread_id=thread.id,
+                                         now=now)
     if not demand.is_empty:
         for seq in range(pickup_seq, dropoff_seq):
             session.add(
@@ -849,7 +887,11 @@ def accept_proposal(
              command="hold_fee" if fee_status is CommissionStatus.HELD else "mark_exempt", actor_user_id=None, side=ActorSide.SYSTEM)
     session.flush()
 
+    # 7a. promo reservations + immutable promo terms + consent used (promo group, after the booking row exists).
+    promo_booking.commit_accept(session, promo_plan, booking_id=booking.id, currency=booking.currency, now=now)
+
     # 8. money last (wallet group): hold with the frozen policy snapshot (AC19, AC43); 0 bps -> exempt, no hold (D3).
+    # A promo booking holds only C_net = C - P - H (never C followed by a fake refund).
     if fee_status is CommissionStatus.HELD:
         wallet_service.hold_fee(
             session,
@@ -861,6 +903,7 @@ def accept_proposal(
             corridor_id=booking.corridor_id,
             wallet_required=bool(flags.get(FeatureFlagKey.WALLET_REQUIRED.value, True)),
             fee_policy_id=booking.fee_policy_id,
+            net_commission_minor=promo_plan.quote.net_commission_minor if promo_plan.applied else None,
             now=now,
         )
 
@@ -879,7 +922,44 @@ def accept_proposal(
         },
         now,
     )
+    # last write of the transaction (its own row lock never sits between other locks)
+    promo_booking.note_client_features(session, user_id=actor_user_id, features=client_features,
+                                       session_ref=client_session, now=now)
     return booking
+
+
+def _parcel_payer_for_listing(session: Session, listing: Listing) -> str | None:
+    """Who pays a parcel's fare: the request's declared payer; a trip-offer parcel is paid by the sender (client)."""
+    if listing.service_type != ServiceType.PARCEL.value:
+        return None
+    details = marketplace_service.get_parcel_details(session, listing.id) if listing.kind == ListingKind.REQUEST.value else None
+    return (details.payer if details is not None and details.payer else ParcelPayer.SENDER.value)
+
+
+def _promo_features_guard(session: Session, booking: Booking, features: frozenset[str] | None, command: str,
+                          side: ActorSide) -> None:
+    """Q110/Q126: the acting app must render this party's promo cash terms to run a cash command - the discount is
+    never removed to suit an old app. Q124: a driver-credit-only booking asks nothing of the client's app (its cash
+    is F). ``None`` = internal call."""
+    if features is None:
+        return
+    differs = promo_booking.cash_terms_differ_for(session, booking, side)
+    if not promo_cash_command_allowed(features, command, booking_has_promo=differs):
+        raise DomainError(ErrorCode.CLIENT_UPGRADE_REQUIRED, details={"feature": PROMO_CASH_FEATURE, "command": command})
+
+
+def _promo_event(session: Session, booking: Booking, kind: str, occurred_at: datetime | None, now: datetime) -> None:
+    """Qualification intake inside this transaction (a rollback leaves no event; the sweep covers the rest)."""
+    promo_booking.record_event_if_enrolled(session, booking_id=booking.id, client_user_id=booking.client_user_id,
+                                           driver_user_id=booking.driver_user_id, kind=kind, occurred_at=occurred_at,
+                                           now=now)
+
+
+def _lock_booking_wallet(session: Session, booking: Booking) -> None:
+    """wallet_accounts before promo lots and wallet_holds (ADR-0023 §13)."""
+    hold_wallet_id = wallet_service.booking_hold_wallet_id(session, booking.id)
+    if hold_wallet_id is not None:
+        wallet_service.lock_wallet(session, hold_wallet_id)
 
 
 # ==============================================================================================================
@@ -920,9 +1000,14 @@ def _release_allocations(session: Session, booking: Booking, trip_id: int, now: 
     return True
 
 
-def _release_fee(session: Session, booking: Booking, *, actor_user_id: int | None, side: ActorSide, command: str = "release") -> None:
+def _release_fee(session: Session, booking: Booking, *, actor_user_id: int | None, side: ActorSide, promo_fault: PromoFault,
+                 command: str = "release") -> None:
     if booking.commission_status != CommissionStatus.HELD.value:
         return  # exempt stays exempt; captured/released are final here
+    # promo reservations go back with the hold (fair restoration by the decided *cause*, per holder - Q129), then
+    # the real hold is released; the real-money policy is unchanged
+    _lock_booking_wallet(session, booking)
+    promo_booking.release_reservations(session, booking_id=booking.id, fault=promo_fault)
     wallet_service.release_fee(session, booking_id=booking.id)
     _set_commission_status(session, booking, target=CommissionStatus.RELEASED, command=command, actor_user_id=actor_user_id, side=side)
 
@@ -969,8 +1054,12 @@ def _cancel_locked(
     fault_side: FaultSide,
     command: str,
     now: datetime,
+    fault_decided: bool = False,
 ) -> None:
-    """One transaction (AC21): status, allocations release, fee release, listing effects, event."""
+    """One transaction (AC21): status, allocations release, fee release, listing effects, event.
+
+    Q129: the actor and the cause are kept apart - the promo cause comes from the recorded ``fault_side``; an
+    operator/system cancel without a decided cause is ``undetermined`` (a person reviews), never "platform"."""
     _set_service_status(
         session, booking, target=PB.CANCELLED.value, command=command, actor_user_id=actor_user_id, side=side,
         now=now, reason=reason_code, emit=False,
@@ -984,9 +1073,11 @@ def _cancel_locked(
     _touch(booking, now)
     session.flush()
     _release_allocations(session, booking, trip.id, now)
-    _release_fee(session, booking, actor_user_id=actor_user_id, side=side)
+    _release_fee(session, booking, actor_user_id=actor_user_id, side=side,
+                 promo_fault=promo_booking.fault_for_cancel(fault_side, decided=fault_decided))
     session.flush()
     _listing_effects_after_cancel(session, booking, listings, side=side, actor_user_id=actor_user_id, now=now)
+    _promo_event(session, booking, "booking_cancelled", now, now)
     _emit(
         session,
         booking,
@@ -1024,8 +1115,13 @@ def cancel_booking(
     as_operator: bool = False,
     now: datetime | None = None,
     warnings: list[dict] | None = None,
+    fault_side: FaultSide | str | None = None,
 ) -> Booking:
-    """B3 (client, driver) and B13 ``cancel`` (``ops.booking_cancel``, admin+). The comment passes the Q43 filter."""
+    """B3 (client, driver) and B13 ``cancel`` (``ops.booking_cancel``, admin+). The comment passes the Q43 filter.
+
+    Q129: only an operator may name the cause (``fault_side``: client, driver, platform or none = justified); it is
+    recorded on the booking (N3 "unless decided") with the reason. Without it an operator cancel records no fault and
+    the promo cause stays ``undetermined``. The real-money outcome is the same either way (release, no penalty)."""
     now = _now(now)
     if comment is not None:
         comment = marketplace_service.filter_free_text(
@@ -1044,6 +1140,9 @@ def cancel_booking(
         side = participant
     if not (reason_code or "").strip():
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "reason_code"})
+    if fault_side is not None and not as_operator:
+        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "fault_side", "reason": "operator_only"})
+    decided = FaultSide(fault_side) if fault_side is not None else None
     trip, listings, booking = _lock_booking_scope(session, snapshot.id)
     _check_version(booking.version, expected_version)
     if pending_no_show_review(session, booking.id) is not None and side is not ActorSide.OPERATOR:
@@ -1051,13 +1150,15 @@ def cancel_booking(
     rules.ensure_cancellable(booking.service_type, booking.service_status)
     _cancel_locked(
         session, booking, trip=trip, listings=listings, side=side, actor_user_id=actor_user_id, reason_code=reason_code.strip(),
-        comment=comment, fault_side=rules.fault_side_for_cancel(side), command="cancel", now=now,
+        comment=comment, fault_side=decided or rules.fault_side_for_cancel(side), command="cancel", now=now,
+        fault_decided=decided is not None,
     )
     if as_operator:
         session.add(
             AuditLog(
                 actor_id=actor_user_id, entity_type="booking", entity_id=None, action="booking_cancel_by_operator",
-                details={"booking_id": booking_public_id(booking), "reason_code": reason_code.strip()},
+                details={"booking_id": booking_public_id(booking), "reason_code": reason_code.strip(),
+                         "fault_side": None if decided is None else decided.value},
             )
         )
         session.flush()
@@ -1362,11 +1463,9 @@ def _complete(session: Session, booking: Booking, *, command: str, actor_user_id
     _touch(booking, now)
     session.flush()
     state = dispute_state(session, booking.id) if booking.commission_status == CommissionStatus.HELD.value else "clear"
+    _promo_event(session, booking, "booking_completed", now, now)
     if rules.capture_on_completion(commission_status=booking.commission_status, blocking_dispute_open=state != "clear"):
-        wallet_service.capture_fee(session, booking_id=booking.id, actor_user_id=actor_user_id)
-        _set_commission_status(session, booking, target=CommissionStatus.CAPTURED, command="capture",
-                               actor_user_id=None, side=ActorSide.SYSTEM)
-        session.flush()
+        _capture_fee(session, booking, actor_user_id=actor_user_id, side=ActorSide.SYSTEM, command_actor=None, now=now)
     elif state == "unavailable":
         reason_code = CommissionReviewReason.DISPUTE_MODULE_UNAVAILABLE
         booking.finance_review_reason = reason_code.value
@@ -1374,13 +1473,30 @@ def _complete(session: Session, booking: Booking, *, command: str, actor_user_id
         session.flush()
         _emit(session, booking, EventType.COMMISSION_FINANCE_REVIEW_REQUIRED,
               {"booking_id": booking_public_id(booking), "reason_code": reason_code.value,
-               "amount_minor": booking.commission_minor, "currency": booking.currency}, now)
+               "amount_minor": _held_commission_minor(session, booking), "currency": booking.currency}, now)
     _emit(
         session, booking, EventType.BOOKING_COMPLETED,
         {"service_type": booking.service_type, "trip_id": _trip_public_id(session, booking.trip_id),
          "commission_status": booking.commission_status},
         now,
     )
+
+
+def _held_commission_minor(session: Session, booking: Booking) -> int:
+    """What is actually held on the real balance: C, or C_net on a promo booking (staff events only, Q16)."""
+    return promo_booking.terms_for_booking(session, booking).net_commission_minor
+
+
+def _capture_fee(session: Session, booking: Booking, *, actor_user_id: int | None, side: ActorSide,
+                 command_actor: int | None, now: datetime) -> None:
+    """Capture the held C_net once, together with the promo reservations (wallet account -> lots -> hold)."""
+    _lock_booking_wallet(session, booking)
+    promo_booking.consume_reservations(session, booking_id=booking.id, now=now)
+    wallet_service.capture_fee(session, booking_id=booking.id, actor_user_id=actor_user_id)
+    _set_commission_status(session, booking, target=CommissionStatus.CAPTURED, command="capture",
+                           actor_user_id=command_actor, side=side)
+    session.flush()
+    _promo_event(session, booking, "commission_captured", now, now)
 
 
 def perform_action(
@@ -1537,6 +1653,7 @@ def operator_command(
     fee_mode: Literal["capture", "release", "partial"] | None = None,
     proof_kind: ProofKind | str | None = None,
     now: datetime | None = None,
+    cancel_fault_side: FaultSide | str | None = None,
 ) -> Booking:
     now = _now(now)
     try:
@@ -1558,10 +1675,13 @@ def operator_command(
         _reissue_locked(session, booking, kind, actor_user_id=actor_user_id, side=ActorSide.OPERATOR, reason=reason,
                         self_service=False, now=now)
         return booking
+    if cancel_fault_side is not None and command is not OperatorBookingCommand.CANCEL:
+        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "cancel_fault_side", "reason": "cancel_only"})
     if command is OperatorBookingCommand.CANCEL:
         return cancel_booking(
             session, booking_public_id_value=booking_public_id_value, actor_user_id=actor_user_id,
             expected_version=expected_version, reason_code="operator_cancel", comment=reason, as_operator=True, now=now,
+            fault_side=cancel_fault_side,
         )
     snapshot = get_booking_by_public_id(session, booking_public_id_value)
     side = ActorSide.OPERATOR
@@ -1581,7 +1701,9 @@ def operator_command(
             _touch(booking, now)
             session.flush()
             _release_allocations(session, booking, trip.id, now)
-            _release_fee(session, booking, actor_user_id=actor_user_id, side=side)  # pilot: no penalty (D2)
+            # pilot: no penalty (D2). Q129: an operator-confirmed *client* no-show is the client's cause - the only
+            # no-show that is; a driver no-show or a disputed one is never written to the client
+            _release_fee(session, booking, actor_user_id=actor_user_id, side=side, promo_fault=PromoFault.CLIENT)
         else:
             outcome = reject_no_show_outcome(trip.status)
             NO_SHOW_REVIEW.assert_transition(review.status, NoShowReviewStatus.REJECTED.value, "reject_no_show")
@@ -1591,7 +1713,7 @@ def operator_command(
                 # N3: the trip is over, nobody can board: cancel now with driver fault.
                 _cancel_locked(session, booking, trip=trip, listings=listings, side=side, actor_user_id=actor_user_id,
                                reason_code="no_show_rejected", comment=reason, fault_side=FaultSide(outcome.fault_side),
-                               command="reject_no_show", now=now)
+                               command="reject_no_show", now=now, fault_decided=True)
             else:
                 _touch(booking, now)
         _audit_operator(session, booking, command, actor_user_id, reason)
@@ -1653,11 +1775,11 @@ def operator_command(
             raise DomainError(ErrorCode.INVALID_STATE_TRANSITION,
                               details={"machine": "commission", "command": "finalize_fee", "reason": "blocking_dispute_open"})
         if fee_mode == "capture":
-            wallet_service.capture_fee(session, booking_id=booking.id, actor_user_id=actor_user_id)
-            _set_commission_status(session, booking, target=CommissionStatus.CAPTURED, command="capture",
-                                   actor_user_id=actor_user_id, side=side)
+            # the held amount (C_net on a promo booking) - never recomputed from a newer campaign or rate
+            _capture_fee(session, booking, actor_user_id=actor_user_id, side=side, command_actor=actor_user_id, now=now)
         elif fee_mode == "release":
-            _release_fee(session, booking, actor_user_id=actor_user_id, side=side)
+            # Q129: a finance release names no cause - undetermined, reviewed by a person if it matters
+            _release_fee(session, booking, actor_user_id=actor_user_id, side=side, promo_fault=PromoFault.UNDETERMINED)
         else:
             raise DomainError(ErrorCode.VALIDATION_ERROR,
                               details={"field": "fee_decision.mode", "reason": "capture_or_release; partial goes through reversals (W8/W16)"})
@@ -1912,6 +2034,8 @@ def report_cash_receipt(
     reported_at: datetime,
     note: str | None = None,
     now: datetime | None = None,
+    client_features: frozenset[str] | None = None,
+    client_session: str | None = None,
 ) -> tuple[Booking, CashReceipt]:
     now = _now(now)
     snapshot = get_booking_by_public_id(session, booking_public_id_value)
@@ -1920,11 +2044,14 @@ def report_cash_receipt(
         raise DomainError(ErrorCode.NOT_FOUND)
     booking = lock_booking(session, snapshot.id)
     _check_version(booking.version, expected_version)
+    _promo_features_guard(session, booking, client_features, "report_cash_receipt", side)
     if side is ActorSide.CLIENT and _cash_payer_side(session, booking) is not ActorSide.CLIENT:
         raise DomainError(ErrorCode.FORBIDDEN, details={"reason": "not_the_payer"})
     if not rules.has_started(booking.service_type, booking.service_status):
         raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "cash_collection", "reason": "service_not_started"})
-    if amount_minor != booking.total_minor and not (note or "").strip():
+    # Q110: the cash the client owes is F_cash (= F on a booking without a discount), never F on a promo booking
+    cash_due = promo_booking.terms_for_booking(session, booking).cash_due_minor
+    if not cash_receipt_matches(cash_due, amount_minor) and not (note or "").strip():
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "note", "reason": "amount_differs_from_total"})
     previous = booking.cash_status
     CASH_COLLECTION.assert_transition(previous, CashCollectionStatus.REPORTED_PAID.value, "report_paid")
@@ -1941,6 +2068,8 @@ def report_cash_receipt(
     _touch(booking, now)
     session.flush()
     _emit_status_changed(session, booking, machine="cash", from_status=previous, to_status=booking.cash_status, now=now)
+    promo_booking.note_client_features(session, user_id=actor_user_id, features=client_features,
+                                       session_ref=client_session, now=now)
     return booking, receipt
 
 
@@ -1969,10 +2098,12 @@ def _receipt_for_decision(
 
 def acknowledge_cash_receipt(
     session: Session, *, booking_public_id_value: str, receipt_public_id: str, actor_user_id: int, expected_version: int,
-    comment: str | None = None, now: datetime | None = None,
+    comment: str | None = None, now: datetime | None = None, client_features: frozenset[str] | None = None,
+    client_session: str | None = None,
 ) -> tuple[Booking, CashReceipt]:
     now = _now(now)
     booking, receipt, side = _receipt_for_decision(session, booking_public_id_value, receipt_public_id, actor_user_id, expected_version)
+    _promo_features_guard(session, booking, client_features, "acknowledge_cash_receipt", side)
     previous = booking.cash_status
     CASH_COLLECTION.assert_transition(previous, CashCollectionStatus.ACKNOWLEDGED.value, "acknowledge")
     receipt.status = CashCollectionStatus.ACKNOWLEDGED.value
@@ -1987,18 +2118,23 @@ def acknowledge_cash_receipt(
     _touch(booking, now)
     session.flush()
     _emit_status_changed(session, booking, machine="cash", from_status=previous, to_status=booking.cash_status, now=now)
+    _promo_event(session, booking, "cash_acknowledged", now, now)
+    promo_booking.note_client_features(session, user_id=actor_user_id, features=client_features,
+                                       session_ref=client_session, now=now)
     return booking, receipt
 
 
 def contest_cash_receipt(
     session: Session, *, booking_public_id_value: str, receipt_public_id: str, actor_user_id: int, expected_version: int,
-    comment: str | None, now: datetime | None = None,
+    comment: str | None, now: datetime | None = None, client_features: frozenset[str] | None = None,
+    client_session: str | None = None,
 ) -> tuple[Booking, CashReceipt]:
     """``reported_paid -> contested``; the service status never changes (AC26). A12's opener creates the dispute."""
     now = _now(now)
     if not (comment or "").strip():
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "comment"})
     booking, receipt, side = _receipt_for_decision(session, booking_public_id_value, receipt_public_id, actor_user_id, expected_version)
+    _promo_features_guard(session, booking, client_features, "contest_cash_receipt", side)
     previous = booking.cash_status
     CASH_COLLECTION.assert_transition(previous, CashCollectionStatus.CONTESTED.value, "contest")
     receipt.status = CashCollectionStatus.CONTESTED.value
@@ -2080,6 +2216,8 @@ def resolve_contested_cash_receipt(
                                   "reason": reason, "version": booking.version}))
     session.flush()
     _emit_status_changed(session, booking, machine="cash", from_status=previous, to_status=cash_target, now=now)
+    if cash_target == CashCollectionStatus.ACKNOWLEDGED.value:
+        _promo_event(session, booking, "cash_acknowledged", now, now)
     return booking, receipt
 
 
@@ -2108,6 +2246,8 @@ def _amendment_terms(booking: Booking, changes: dict[str, Any]) -> tuple[int, in
 def create_amendment(
     session: Session, *, booking_public_id_value: str, actor_user_id: int, expected_version: int, changes: dict[str, Any],
     reason: str, now: datetime | None = None, warnings: list[dict] | None = None,
+    client_features: frozenset[str] | None = None, promo_consent: promo_booking.ConsentInput | None = None,
+    promo_driver_ack: promo_booking.DriverAck | None = None, client_session: str | None = None,
 ) -> BookingAmendment:
     now = _now(now)
     snapshot = get_booking_by_public_id(session, booking_public_id_value)
@@ -2119,6 +2259,7 @@ def create_amendment(
     reason = marketplace_service.filter_free_text(session, actor_user_id=actor_user_id, field="reason", text=reason, warnings=warnings) or ""
     booking = lock_booking(session, snapshot.id)
     _check_version(booking.version, expected_version)
+    _promo_features_guard(session, booking, client_features, "create_amendment", side)
     if booking.service_status not in rules.PRE_SERVICE_STATUSES:
         raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "amendment", "service_status": booking.service_status})
     quantity, unit, total = _amendment_terms(booking, changes)
@@ -2133,6 +2274,13 @@ def create_amendment(
     _flush_or_translate(session, {PROPOSED_AMENDMENT_INDEX: lambda: DomainError(ErrorCode.AMENDMENT_CONFLICT, details={"reason": "amendment_open"})})
     _history(session, booking, machine="amendment", from_status=None, to_status="proposed", command="create",
              actor_user_id=actor_user_id, side=side, reason=reason.strip())
+    # Q116: a promo booking's new money terms are computed now (the client confirms them if they are the author);
+    # the accept applies exactly these or refuses
+    promo_booking.prepare_amendment(session, booking=booking, new_total_minor=total, actor_side=side, stage="create",
+                                    consent_input=promo_consent, actor_features=client_features,
+                                    amendment_id=amendment.id, driver_ack=promo_driver_ack,
+                                    actor_session_ref=client_session,
+                                    amendment_expires_at=ensure_aware_utc(amendment.expires_at), now=now)
     # Wave 5: tell the counterparty there is something to answer (payload without the commission, Q16).
     _emit(
         session, booking, EventType.BOOKING_AMENDMENT_REQUESTED,
@@ -2148,6 +2296,8 @@ def create_amendment(
         now,
     )
     session.flush()
+    promo_booking.note_client_features(session, user_id=actor_user_id, features=client_features,
+                                       session_ref=client_session, now=now)
     return amendment
 
 
@@ -2193,7 +2343,9 @@ def _lock_amendment(session: Session, amendment_id: int, booking_id: int) -> Boo
 
 
 def accept_amendment(
-    session: Session, *, amendment_public_id: str, actor_user_id: int, expected_version: int, now: datetime | None = None
+    session: Session, *, amendment_public_id: str, actor_user_id: int, expected_version: int, now: datetime | None = None,
+    client_features: frozenset[str] | None = None, promo_consent: promo_booking.ConsentInput | None = None,
+    promo_driver_ack: promo_booking.DriverAck | None = None, client_session: str | None = None,
 ) -> Booking:
     """B10 (D10): trip -> booking -> amendment -> wallet; the single hold changes; allocations re-reserved."""
     now = _now(now)
@@ -2219,6 +2371,16 @@ def accept_amendment(
         raise DomainError(ErrorCode.AMENDMENT_CONFLICT, details={"reason": "booking_changed"})
     if trip.status != TripStatus.PLANNED.value:
         raise DomainError(ErrorCode.AMENDMENT_CONFLICT, details={"reason": "trip_not_planned"})
+    _promo_features_guard(session, booking, client_features, "accept_amendment", side)
+    # Q116: new promo money terms, read against the *current* agreement before any column moves (wallet account ->
+    # promo consents; the lots are locked by the reservation swap below, the hold last)
+    if booking.commission_status == CommissionStatus.HELD.value:
+        _lock_booking_wallet(session, booking)
+    promo_plan = promo_booking.prepare_amendment(session, booking=booking, new_total_minor=amendment.new_total_minor,
+                                                 actor_side=side, stage="accept", consent_input=promo_consent,
+                                                 actor_features=client_features, amendment_id=amendment.id,
+                                                 driver_ack=promo_driver_ack, actor_session_ref=client_session,
+                                                 amendment_expires_at=ensure_aware_utc(amendment.expires_at), now=now)
 
     # Q60 (0056): the amount/resource columns of the booking may change only after the amendment row is accepted in
     # this transaction, so the amendment status is flushed first.
@@ -2248,14 +2410,41 @@ def accept_amendment(
     session.flush()
     _history(session, booking, machine="amendment", from_status="proposed", to_status="accepted", command="accept",
              actor_user_id=actor_user_id, side=side)
+    if promo_plan is not None:
+        promo_booking.commit_amendment(session, promo_plan, booking=booking, amendment_id=amendment.id,
+                                       author_side=ActorSide(amendment.author_side), now=now)
     if booking.commission_status == CommissionStatus.HELD.value:
         wallet_service.adjust_hold(session, booking_id=booking.id, new_total_minor=booking.total_minor, fee_bps=booking.fee_bps,
                                    corridor_id=booking.corridor_id,
-                                   wallet_required=bool(booking.terms_snapshot.get("flags", {}).get(FeatureFlagKey.WALLET_REQUIRED.value, True)))
+                                   wallet_required=bool(booking.terms_snapshot.get("flags", {}).get(FeatureFlagKey.WALLET_REQUIRED.value, True)),
+                                   net_commission_minor=None if promo_plan is None else promo_plan.new.net_commission_minor)
         _history(session, booking, machine="commission", from_status=CommissionStatus.HELD.value, to_status=CommissionStatus.HELD.value,
                  command="adjust_hold", actor_user_id=None, side=ActorSide.SYSTEM)
     session.flush()
+    promo_booking.note_client_features(session, user_id=actor_user_id, features=client_features,
+                                       session_ref=client_session, now=now)
     return booking
+
+
+def confirm_amendment_promo(
+    session: Session, *, amendment_public_id: str, actor_user_id: int, client_features: frozenset[str],
+    client_session: str | None, promo_consent: promo_booking.ConsentInput | None = None,
+    promo_driver_ack: promo_booking.DriverAck | None = None, now: datetime | None = None,
+) -> BookingAmendment:
+    """Q126: the proposer of an open amendment confirms its new money terms again from its current session (its earlier
+    confirmation went stale). Nothing about the amendment changes; only the evidence is renewed."""
+    now = _now(now)
+    unlocked, snapshot, side = _amendment_scope(session, amendment_public_id, actor_user_id)
+    booking = lock_booking(session, snapshot.id)
+    amendment = _lock_amendment(session, unlocked.id, booking.id)
+    if booking.commission_status == CommissionStatus.HELD.value:
+        _lock_booking_wallet(session, booking)
+    promo_booking.confirm_amendment(session, booking=booking, amendment=amendment, actor_side=side,
+                                    client_features=client_features, session_ref=client_session,
+                                    consent_input=promo_consent, driver_ack=promo_driver_ack, now=now)
+    promo_booking.note_client_features(session, user_id=actor_user_id, features=client_features,
+                                       session_ref=client_session, now=now)
+    return amendment
 
 
 def decide_amendment(

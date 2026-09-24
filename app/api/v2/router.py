@@ -16,6 +16,7 @@ from app.modules.identity.api import router as identity_router
 from app.modules.marketplace.api import router as marketplace_router
 from app.modules.marketplace.feed.api import router as feed_router
 from app.modules.operations.api import router as operations_router
+from app.modules.promotions.api import router as promotions_router
 from app.modules.tracking.api import router as tracking_router
 from app.modules.trips.api import router as trips_router
 from app.modules.trust_support.api import router as trust_support_router
@@ -38,6 +39,9 @@ api_router.include_router(feed_router)
 # Wave 4: A13 operations and growth (O1-O3 share links incl. the public page, O4 queues, O5 KPI, O6 SLO,
 # O7 listing on behalf). The public page is the only unauthenticated /api/v2 route.
 api_router.include_router(operations_router)
+# Referral stage 5 (ADR-0023 §16, §19): promotions client + admin. GET /public/referral-codes/{code} is unauthenticated
+# and rate limited per source.
+api_router.include_router(promotions_router)
 
 
 def configure_v2_ports() -> None:

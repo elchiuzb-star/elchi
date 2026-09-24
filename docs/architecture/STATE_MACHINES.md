@@ -247,3 +247,80 @@ Boshlang‘ich `open`; terminal `resolved`. `open → acknowledged` (`acknowledg
 
 ### 12.5 Chat yozish qoidasi (A7)
 Holat mashinasi emas — ota ob’ektdan hisoblanadi: `communications.chat_writable` (proposal chat faqat thread `open`; bron chat terminal vaqtdan `CHAT_WRITABLE_AFTER_TERMINAL` (24 soat) gacha) → aks holda `409 CHAT_CLOSED`. Xabar kontenti o‘zgarmas; faqat `moderation_status` (`visible → hidden_by_staff`, O `ops.trust_review`, sabab, audit).
+
+## 13. Promotions & referral (23.09.2026, ADR-0023, Q101–Q110)
+
+Kod: `state_machines.PROMO_MACHINES`, sof qoidalar `app/contracts/promo.py`, testlar `tests/contracts/test_promo.py`. To‘rt hayot sikli **mustaqil**; hech biri booking, trip yoki commission holatini yozmaydi. Real hold/capture faqat mavjud §7 mashinasi orqali, summasi `C_net`.
+
+### 13.1 Kampaniya (`promo_campaigns.status`)
+| From | To | Buyruq | Actor / guard |
+|---|---|---|---|
+| draft | active | `activate` | super_admin (`promo.campaign_manage`); `validate_activation`: barcha parametr o‘rnatilgan (`None` ≠ 0), `M > 0`, pilot turi, budjet ≥ bitta maksimal va’da |
+| draft | closed | `discard` | super_admin |
+| active | paused | `pause` / `budget_exhausted` / `funding_loss` | super_admin / system (yangi va’da uchun joy yo‘q yoki shortfall) / finance (tashqi moliyalashtirish yo‘qolgani dalil bilan qayd etildi — G14, 0090) |
+| paused | active | `resume` | super_admin; shortfall yo‘q |
+| active | active | `switch_version` | super_admin; yangi versiya faqat yangi enrollment’larga (eski va’dalar o‘z versiyasida) |
+| active, paused | closed | `close` | super_admin |
+Pauza va yopish mavjud va’da va bonuslarni bekor qilmaydi; sarflash davom etadi. Shartlar faqat yangi o‘zgarmas **versiya** bilan o‘zgaradi; enrollment o‘z versiyasiga bog‘langan (QA #22).
+
+### 13.2 Referral attribution (`referral_attributions.status`)
+| From | To | Buyruq | Guard |
+|---|---|---|---|
+| — | attributed | (insert) | `decide_attribution`: o‘zini taklif yo‘q, birinchisi yutadi, 72 soat oynasi, identity oilasi bo‘yicha unique |
+| attributed | qualifying | `candidate_event` | mos xizmat hodisasi (dedup `qualification_event_key`) |
+| qualifying | attributed | `candidate_voided` | nomzod bron bekor/nizo/refund (grant’dan oldin) |
+| qualifying | qualified | `qualify` | `evaluate_qualification = QUALIFIED` grant oldidan qayta o‘qilgan holatda |
+| attributed, qualifying | rejected | `reject` | admin+ (`promo.fraud_decide`) review’dan keyin; zaif signal avtomatik rad etmaydi |
+| attributed | expired | `expire` | qualification oynasi nomzodsiz tugadi (system) |
+| rejected | attributed | `reinstate_on_appeal` | admin+, sabab + audit |
+
+### 13.3 Enrollment (`promo_enrollments.status`, 2-bosqich)
+`promised` (insert: kampaniya versiyasi, shartlar fingerprint’i va kirish vaqti mahkamlanadi; shu tranzaksiyada har mukofot uchun `promo_obligations` va budjet va’dasi) → `granted` | `released` (3-bosqich: qualification / muddat / rad). Mahkamlangan ustunlar trigger bilan o‘zgarmaydi. Attribution va enrollment alohida: attribution va’da emas; bitta attribution bir oiladagi bitta kampaniyaga kiritadi (Q117).
+
+### 13.3a Obligation (`promo_obligations.status`, Q115)
+`promised` (insert + ledger `promise`, budjet lock ostida) → `granted` (lot + ledger `grant`, ishlatilmagan qism `release_promise`) | `released` (ledger `release_promise`). Bitta beneficiarning mukofoti; va’da, grant va sarflash — bir majburiyat bosqichlari. Summa, beneficiar, versiya va `reward_key` o‘zgarmaydi (DB trigger).
+
+### 13.4 Reward / bonus lot (`promo_lots.status`)
+| From | To | Buyruq | Izoh |
+|---|---|---|---|
+| — | pending_review | (insert, `reward_key` unique) | har beneficiar alohida qator |
+| pending_review | available | `release_to_holder` | review yoki risk oynasi o‘tdi |
+| pending_review, available | reversed | `reverse` | faqat sarflanmagan qism (`reversal_plan`); consumed — risk xarajati, qarz emas |
+| available | available | `reserve` / `release_reservation` / `consume_partial` | qisman sarflash |
+| available | exhausted | `consume` | to‘liq consumed |
+| available | pending_review | `flag_for_review` | keyinroq kuchli signal |
+| available | expired | `expire` | faqat bo‘sh qism; rezervdagi o‘z bronida hal bo‘ladi |
+| expired | available | `reinstate` | `restored_expiry`: haydovchi/platforma aybi, `grace` |
+
+1-bosqich aniqlashtirishlari: lot summasi va egasi o‘zgarmaydi; `consumed_minor` va `reversed_minor` faqat o‘sadi; `reserved_minor` va `consumed_minor` deferred trigger bilan redemption’lar va `consume` yozuvlari yig‘indisiga teng. Reversal paytida rezervdagi qiymat o‘z broni bilan hal bo‘ladi; keyin bo‘shasa — reversal qilinadi, tiklanmaydi.
+
+### 13.4a Qualification (`promo_qualifications.status`, 3-bosqich)
+`waiting` (shartlar muddat ichida, 48 soat kutilmoqda) ↔ `review` (odam qaror qiladi) → `qualified` → `granted` (lot’lar yaratildi) | `rejected` (admin+ rad etdi). `granted`/`rejected` yakuniy (trigger). Bitta `(enrollment, milestone)` uchun bitta yozuv.
+
+### 13.4b Review (`promo_reviews.status`)
+`open` → `under_review` (operator, `promo.fraud_review`) → `approved` | `rejected` (admin+, `promo.fraud_decide`, izoh majburiy). Qaror yakuniy (trigger). `escalated_at` — SLA oshgani belgisi, holat emas; avtomatik qaror yo‘q. Tasdiq mukofot yaratmaydi.
+
+### 13.4c Consent (`promo_consents.status`, 4-bosqich)
+`active` → `used` (bron yoki amendment qabul qilindi; `booking_id` majburiy) | `superseded` (shu version/amendment uchun yangi rozilik). Summalar va obyekt o‘zgarmas (trigger); bitta faol rozilik (partial unique).
+
+### 13.5 Redemption (`promo_redemptions.status`, bitta lot × bitta bron)
+`reserved` (accept tranzaksiyasida, lock tartibi ADR-0023 §13) → `consumed` (bron capture bilan bir tranzaksiyada, bir marta) | `released` (bron hold release bilan). Consumed qayta sarflanmaydi. 4-bosqich: redemption bitta kelishuvga tegishli (`terms_seq`); amendment eski rezervni `released` qiladi va shu lot’da kichikroq yoki teng yangisini `reserved` yaratadi (`carry_reservation`, bitta tranzaksiya). Q129 (0089): `release_fault` ∈ `client | driver | platform | none | undetermined` — sabab, actor emas; har ega alohida baholanadi. Uzaytma berilgan bo‘lsa `restored_from/restored_until` yoziladi; `undetermined` bilan uzaytma bo‘lsa har ega uchun `cancel_fault` review, admin rad etsa faqat sarflanmagan uzaytma qaytariladi.
+
+### 13.6 Kampaniya juftligi (`promo_campaign_combinations.status`, Q123)
+`active` → `revoked` (super_admin, sabab, audit). Qator o‘chirilmaydi va o‘zgarmaydi (trigger); bitta juftlik uchun bitta faol qator. Bekor qilish faqat yangi bronlarga ta’sir qiladi.
+
+### 13.7 Passiv tomon tayyorligi (`promo_party_readiness.status`, Q126)
+`active` → `superseded` (shu versiya/amendment uchun shu foydalanuvchining yangi tasdig‘i). Dalil o‘zgarmas (trigger). Yaroqlilik holat emas — har accept’da hisoblanadi (muddat, login sessiyasi, oxirgi e’lon).
+
+## 14. Saqlangan safar/jo‘natma talabi (`trip_intents.status`, ADR-0025)
+Mashina: `state_machines.TRIP_INTENT`; DB’da `trg_trip_intents_guard` (noqonuniy o‘tish → `trip_intent_invalid_transition`).
+
+| Buyruq | Dan | Ga | Izoh |
+|---|---|---|---|
+| `edit` | `active` | `active` | Yangi versiya; muhim o‘zgarishda `terms_version++` va ochiq takliflar `trip_intent_changed` bilan yopiladi (avval `409 TRIP_INTENT_OFFERS_AFFECTED` + `acknowledge_open_offers`). |
+| `book` | `active` | `booked` | Faqat A4 accept tranzaksiyasida, talab lock’i ostida; `booking_id` yoziladi; boshqa ochiq takliflar `trip_intent_booked` bilan yopiladi. |
+| `reopen` | `booked` | `active` | Faqat bron `cancelled` bo‘lsa va mijozning aniq amali bilan; yangi versiya, `terms_version++` — eski takliflar qayta ochilmaydi. |
+| `close` | `active` \| `booked` | `closed` | Mijoz yopadi; `booking_id` tozalanadi (bron o‘zi tegilmaydi); ochiq takliflar `trip_intent_closed` bilan yopiladi. |
+
+`closed` — terminal. Bron bekor bo‘lishi talabni avtomatik `active`ga qaytarmaydi.
+

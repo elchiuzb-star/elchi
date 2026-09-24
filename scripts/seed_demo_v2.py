@@ -192,7 +192,7 @@ class Corridor:
 
 
 def pick_corridor(session: Session) -> Corridor:
-    """The richest open corridor: most confirmed stops, and a confirmed route to hang a trip on.
+    """The open corridor whose first confirmed route passes the most active stops - the trip hangs on that route.
 
     Chosen from the data rather than hardcoded, because which corridors exist depends on which of the geo
     seeders has been run. If none qualifies the script stops and says so - silently seeding into a closed
@@ -201,27 +201,30 @@ def pick_corridor(session: Session) -> Corridor:
     row = session.execute(
         text(
             """
-            SELECT c.id, c.name,
-                   (SELECT rv.public_id FROM route_versions rv
-                     WHERE rv.corridor_id = c.id AND rv.status = 'confirmed'
-                     ORDER BY rv.id LIMIT 1) AS route_public_id,
-                   (SELECT count(*) FROM corridor_stops cs
-                     WHERE cs.corridor_id = c.id AND cs.is_active) AS stops
+            SELECT c.id, c.name, rv.id AS route_id, rv.public_id AS route_public_id,
+                   (SELECT count(*) FROM route_version_stops rvs JOIN corridor_stops cs ON cs.id = rvs.stop_id
+                     WHERE rvs.route_version_id = rv.id AND cs.is_active) AS stops
             FROM service_corridors c
+            LEFT JOIN LATERAL (SELECT id, public_id FROM route_versions
+                                WHERE corridor_id = c.id AND status = 'confirmed' ORDER BY id LIMIT 1) rv ON true
             WHERE c.rollout_state IN ('pilot', 'active')
             ORDER BY stops DESC, c.id
             """
         )
     ).all()
-    for corridor_id, name, route_public_id, stops in row:
+    for corridor_id, name, route_id, route_public_id, stops in row:
         if route_public_id is None or stops < 2:
             continue
+        # The trip runs the confirmed route, so its stops are the *route's* stops in the route's order. A corridor
+        # may hold more active stops than one route passes (the geo fixture: 6 stops, two 4-stop routes); putting
+        # every corridor stop on the trip is what create_trip refused with ROUTE_CHANGED (stops_not_on_route_version).
         stop_rows = session.execute(
             text(
-                "SELECT public_id, name_uz FROM corridor_stops "
-                "WHERE corridor_id = :c AND is_active ORDER BY sequence_hint, id"
+                "SELECT cs.public_id, cs.name_uz FROM route_version_stops rvs "
+                "JOIN corridor_stops cs ON cs.id = rvs.stop_id "
+                "WHERE rvs.route_version_id = :r AND cs.is_active ORDER BY rvs.seq"
             ),
-            {"c": corridor_id},
+            {"r": route_id},
         ).all()
         return Corridor(
             id=corridor_id,

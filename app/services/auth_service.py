@@ -543,6 +543,19 @@ def build_token_response(db: Session, user: User) -> dict[str, Any]:
     return {**data, "success": True, "data": data, "message": "Login successful"}
 
 
+def login_session_state(db: Session, sid: str | None, user_id: int) -> str:
+    """Referral Q126: ``"live"``, ``"rotated"`` (a refresh replaced it; the chain is not recorded) or ``"ended"``
+    (logout, admin revoke, deletion, expiry, unknown, another user's session, or no ``sid`` at all). Read-only."""
+    if not sid:
+        return "ended"
+    row = db.scalar(select(RefreshSession).where(RefreshSession.jti == str(sid)))
+    if row is None or row.user_id != user_id or ensure_aware(row.expires_at) <= utcnow():
+        return "ended"
+    if row.is_revoked:
+        return "rotated" if row.revoked_reason == "rotated" else "ended"
+    return "live"
+
+
 def session_revoked(db: Session, payload: dict[str, Any] | None, *, include_rotated: bool = True) -> bool:
     """§17.6: is the login session behind this access token gone (logout, rotation, admin revoke)?
 

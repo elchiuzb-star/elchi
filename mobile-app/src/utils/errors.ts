@@ -9,7 +9,7 @@
  * missing, a balance is short - and never blames the network for a business rule. Most of these are things the
  * person can fix, and they can only fix what they are told.
  */
-import { ApiError } from "../types/api";
+import { ApiError, counterpartyStale } from "../types/api";
 import { translate, translateDynamic } from "../i18n";
 
 /**
@@ -19,6 +19,14 @@ import { translate, translateDynamic } from "../i18n";
  * server at all - the offline line, which is the one case where blaming the connection is the truth.
  */
 export function getErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.code === "PROMO_CONSENT_REQUIRED"
+      && (error.details as { party?: string } | undefined)?.party === "driver") {
+    return translate("promoNotice.driverAckRequired"); // Q125: the driver confirms its own numbers
+  }
+  if (error instanceof ApiError && counterpartyStale(error)) {
+    // Q126: the other side's confirmation went stale - requoting here would not help; say who has to act
+    return translate("promoNotice.counterpartyStale");
+  }
   if (error instanceof ApiError) {
     return translateDynamic(`error.${error.code}`) ?? translate("error.fallback");
   }

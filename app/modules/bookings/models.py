@@ -54,6 +54,14 @@ class Booking(Base):
     __table_args__ = (
         UniqueConstraint("public_id", name="uq_bookings_public_id"),
         UniqueConstraint("accepted_proposal_version_id", name="uq_bookings_accepted_proposal_version"),
+        # ADR-0025 (0091): one non-cancelled booking per saved trip/parcel request
+        Index(
+            "uq_bookings_trip_intent_binding",
+            "trip_intent_id",
+            unique=True,
+            postgresql_where=text("trip_intent_id IS NOT NULL AND service_status <> 'cancelled'"),
+            sqlite_where=text("trip_intent_id IS NOT NULL AND service_status <> 'cancelled'"),
+        ),
         Index(
             "uq_bookings_request_listing_binding",
             "request_listing_id",
@@ -131,6 +139,10 @@ class Booking(Base):
     )
     proposal_thread_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("proposal_threads.id", name="fk_bookings_proposal_thread_id"), nullable=False
+    )
+    # ADR-0025 (0091): the saved request of the accepted offer (equal to the thread's, frozen - trigger)
+    trip_intent_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("trip_intents.id", name="fk_bookings_trip_intent")
     )
     accepted_proposal_version_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("proposal_versions.id", name="fk_bookings_accepted_proposal_version_id"), nullable=False
