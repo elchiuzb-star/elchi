@@ -12,7 +12,7 @@ export type InboxTarget =
   | { kind: "listing"; id: string }
   | { kind: "proposal"; id: string }
   | { kind: "trip"; id: string }
-  | { kind: "dispute"; id: string };
+  | { kind: "support_thread"; id: string };
 
 const PATTERNS: Array<[RegExp, (match: RegExpMatchArray) => InboxTarget]> = [
   [/^\/bookings\/([^/?#]+)(\/messages)?\/?$/, (m) => ({ kind: "booking", id: m[1], chat: Boolean(m[2]) })],
@@ -20,7 +20,8 @@ const PATTERNS: Array<[RegExp, (match: RegExpMatchArray) => InboxTarget]> = [
   // A proposal's own chat is not opened by this client (Q100): the negotiation is the thread itself.
   [/^\/proposals\/([^/?#]+)(\/messages)?\/?$/, (m) => ({ kind: "proposal", id: m[1] })],
   [/^\/trips\/([^/?#]+)\/?$/, (m) => ({ kind: "trip", id: m[1] })],
-  [/^\/disputes\/([^/?#]+)\/?$/, (m) => ({ kind: "dispute", id: m[1] })],
+  // ADR-0026: an operator answer leads into the person's own chat for that booking (the dispute screens are gone).
+  [/^\/support-threads\/([^/?#]+)\/?$/, (m) => ({ kind: "support_thread", id: m[1] })],
 ];
 
 /** Where an item leads, or null when it leads nowhere this app has a screen for. */

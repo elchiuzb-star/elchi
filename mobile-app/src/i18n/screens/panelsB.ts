@@ -44,7 +44,8 @@ export const panelsBMessages = {
     ru: "Посылка ожидает, когда её заберут",
   },
   "publicTracking.status.parcelPickedUp": { uz: "Jo'natma haydovchida", ru: "Посылка у водителя" },
-  "publicTracking.status.parcelInTransit": { uz: "Jo'natma yo'lda", ru: "Посылка в пути" },
+  // Q142: the trip departed; that is not proof the parcel was handed over or loaded
+  "publicTracking.status.parcelInTransit": { uz: "Haydovchi yo'lga chiqdi", ru: "Водитель выехал" },
   "publicTracking.status.parcelDeliveryFailed": { uz: "Yetkazib bo'lmadi", ru: "Доставить не удалось" },
   "publicTracking.status.parcelDelivered": { uz: "Jo'natma topshirildi", ru: "Посылка передана" },
   "publicTracking.status.parcelReturnRequired": {

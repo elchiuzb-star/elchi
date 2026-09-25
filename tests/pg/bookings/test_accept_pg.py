@@ -9,7 +9,7 @@ from datetime import timedelta
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.contracts.errors import DomainError, ErrorCode
@@ -25,6 +25,7 @@ from tests.pg.bookings.conftest import (
     STAGGER_S,
     USERS_LOCK,
     accept,
+    booked,
     add_user,
     auth,
     counter,
@@ -38,6 +39,7 @@ from tests.pg.bookings.conftest import (
     propose,
     publish_listing,
     request_with_driver_proposal,
+    request_proposal,
     rows,
     scalar,
     seats_used,
@@ -45,7 +47,6 @@ from tests.pg.bookings.conftest import (
     wallet,
 )
 from tests.pg.harness import run_concurrently
-from tests.pg.identity.a1_world import passenger_offer
 
 pytestmark = pytest.mark.pg
 
@@ -76,28 +77,14 @@ def test_ac03_client_accepts_driver_proposal_on_request(bw: BW) -> None:
     assert [tuple(r) for r in history] == [("service", None, "confirmed", "accept"), ("cash", None, "unpaid", "accept"), ("commission", None, "held", "hold_fee")]
 
 
-def test_ac02_driver_accepts_client_proposal_on_trip_offer(bw: BW) -> None:
+def test_ac02_segment_booking_from_a_request_and_a_driver_proposal(bw: BW) -> None:
+    """ADR-0026 (Q138): AC02's segment booking now comes from the client's request answered by the driver's trip."""
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01A101AA", seats=3)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    ref = propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=1, unit=20_000_000, pickup="B", dropoff="D")
-    booking = accept(bw, ref, bw.w.driver_id)
+    booking = booked(bw, trip_public, bw.w.client_id, pickup="B", dropoff="D")
     with bw.db.session() as s:
         b = s.get(Booking, booking.id)
-        assert (b.request_listing_id, b.supply_listing_id is not None, b.pickup_occurrence_seq, b.dropoff_occurrence_seq) == (None, True, 2, 4)
-        assert marketplace_service.get_listing_by_public_id(s, offer).status == "published"  # seats remain: the offer stays open
+        assert (b.request_listing_id is not None, b.supply_listing_id, b.pickup_occurrence_seq, b.dropoff_occurrence_seq) == (True, None, 2, 4)
     assert seats_used(bw, trip_id) == [0, 1, 1]
-
-
-def test_trip_offer_is_fulfilled_when_its_last_seat_is_taken_and_other_threads_expire(bw: BW) -> None:
-    _, trip_public = driver_trip(bw, bw.w.driver_id, "01A102AA", seats=1)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    first = propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=1, unit=20_000_000)
-    second = propose(bw, offer, bw.w.client2_id, trip_public_id=None, quantity=1, unit=20_000_000)
-    accept(bw, first, bw.w.driver_id)
-    with bw.db.session() as s:
-        assert marketplace_service.get_listing_by_public_id(s, offer).status == "fulfilled"
-        other = marketplace_service.get_thread_by_public_id(s, second.thread_id)
-        assert (other.state, marketplace_service.current_version(s, other).status_reason) == ("closed", "capacity_gone")
 
 
 # --- AC04 / AC05 / Q54 / listing version ----------------------------------------------------------------------------------
@@ -256,21 +243,20 @@ def test_ac08_ac09_http_replay_and_key_reuse(bw: BW, client) -> None:  # noqa: A
 
 def test_ac10_ac11_segment_capacity_through_accept(bw: BW) -> None:
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01A130AA", seats=4)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
     with bw.db.session() as s:
         c3 = add_user(s, "+998901200003", "client", full_name="Uchinchi Mijoz")
         c4 = add_user(s, "+998901200004", "client", full_name="Tortinchi Mijoz")
         s.commit()
-    a_c = propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=2, unit=15_000_000, pickup="A", dropoff="C")
-    b_d = propose(bw, offer, bw.w.client2_id, trip_public_id=None, quantity=1, unit=15_000_000, pickup="B", dropoff="D")
-    a_d = propose(bw, offer, c3, trip_public_id=None, quantity=2, unit=15_000_000, pickup="A", dropoff="D")
-    c_d = propose(bw, offer, c4, trip_public_id=None, quantity=3, unit=15_000_000, pickup="C", dropoff="D")
-    accept(bw, a_c, bw.w.driver_id)
-    accept(bw, b_d, bw.w.driver_id)
+    a_c = request_proposal(bw, trip_public, bw.w.client_id, quantity=2, unit=15_000_000, pickup="A", dropoff="C")
+    b_d = request_proposal(bw, trip_public, bw.w.client2_id, quantity=1, unit=15_000_000, pickup="B", dropoff="D")
+    a_d = request_proposal(bw, trip_public, c3, quantity=2, unit=15_000_000, pickup="A", dropoff="D")
+    c_d = request_proposal(bw, trip_public, c4, quantity=3, unit=15_000_000, pickup="C", dropoff="D")
+    accept(bw, a_c, bw.w.client_id)
+    accept(bw, b_d, bw.w.client2_id)
     assert seats_used(bw, trip_id) == [2, 3, 1]  # A-B 2, B-C 3 (remaining 1), C-D 1
-    error = domain_error(lambda: accept(bw, a_d, bw.w.driver_id))
+    error = domain_error(lambda: accept(bw, a_d, c3))
     assert error.code is ErrorCode.CAPACITY_UNAVAILABLE and {seg["from_seq"] for seg in error.details["segments"]} == {2}  # AC10
-    accept(bw, c_d, bw.w.driver_id)  # AC11: C-D for 3 fits
+    accept(bw, c_d, c4)  # AC11: C-D for 3 fits
     assert seats_used(bw, trip_id) == [2, 3, 4]
 
 
@@ -501,7 +487,7 @@ def test_parcel_request_accept_and_geo_counter_hook(bw: BW) -> None:
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01A180AA")
     ref = propose(bw, listing, bw.w.driver_id, trip_public_id=trip_public, quantity=1, unit=7_000_000, dropoff="C", price_basis="total")
     booking = accept(bw, ref, bw.w.client_id)
-    assert (booking.service_type, booking.cargo_weight_g, booking.cargo_volume_ml, booking.seats) == ("parcel", 2_000, 8_000, 0)
+    assert (booking.service_type, booking.cargo_weight_g, booking.cargo_volume_ml, booking.seats) == ("parcel", 5_000, 12_000, 0)  # Q140: the small_box category limits, not typed values
     from app.modules.geo import service as geo_service
 
     bookings_service.register_geo_hooks()

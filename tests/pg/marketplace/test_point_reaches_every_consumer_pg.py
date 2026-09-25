@@ -39,7 +39,6 @@ from tests.pg.bookings.conftest import (  # noqa: F401  (bw/world are fixtures)
     publish_listing,
     world,
 )
-from tests.pg.identity.a1_world import passenger_offer
 from tests.pg.marketplace.test_point_endpoints_pg import point_body
 
 pytestmark = pytest.mark.pg
@@ -148,36 +147,6 @@ def test_the_competing_offers_list_answers_for_a_point_listing(bw: BW) -> None:
 
 
 # ----------------------------------------------------------------- M2: matches, both directions
-
-
-def test_the_owner_of_a_point_request_is_shown_matching_trip_offers(bw: BW) -> None:
-    listing = publish_point_request(bw)
-    _trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01P103AA")
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    assert offer
-
-    with bw.db.session() as s:
-        page = feed_service.listing_matches(
-            s, listing_public_id=listing, viewer_user_id=bw.w.client_id, now=bw.base
-        )
-    assert page.items, "a point-ended request used to report 'no matches' for every trip offer there was"
-
-
-def test_a_driver_sees_a_point_request_among_the_matches_for_their_trip_offer(bw: BW) -> None:
-    point_listing = publish_point_request(bw)
-    assert point_listing
-    _trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01P104AA")
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-
-    with bw.db.session() as s:
-        page = feed_service.listing_matches(
-            s, listing_public_id=offer, viewer_user_id=bw.w.driver_id, now=bw.base
-        )
-    ids = {marketplace_service.listing_public_id(item.listing) for item in page.items}
-    assert point_listing in ids, "the driver whose trip can serve the place could not see the request"
-
-
-# ----------------------------------------------------------------- saved searches
 
 
 def test_a_saved_search_fires_for_a_point_listing(bw: BW) -> None:

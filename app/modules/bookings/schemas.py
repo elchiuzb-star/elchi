@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, StrictInt, model_validator
 
 from app.modules.marketplace.schemas import PointEndDTO
+from app.modules.marketplace.schemas import ParcelCategoryDTO
 from app.contracts.dto import BookingVehicleDisclosureDTO, ContractModel, MediaRefDTO, UtcDateTime, VersionedCommand
 from app.contracts.enums import (
     ActorSide,
@@ -294,6 +295,12 @@ class BookingClientDTO(ContractModel):
     service_type: ServiceType
     service_status: str
     cash_status: CashCollectionStatus
+    # Q140 (ADR-0026): the agreed parcel size category and its limits (frozen on the booking).
+    parcel_category: ParcelCategoryDTO | None = None
+    quantity_amendable: bool = Field(
+        default=False,
+        description="Q145 (ADR-0026): whether an amendment may change the quantity. False for every booking made on a "
+                    "client request (D9) and for parcels; the unit price can still be amended by agreement.")
     version: int
     trip_id: str
     listing_ids: BookingListingIdsDTO

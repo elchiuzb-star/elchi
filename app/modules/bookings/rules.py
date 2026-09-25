@@ -90,29 +90,30 @@ ACTION_SIDES: dict[BookingAction, frozenset[ActorSide]] = {
 ACTION_SERVICES: dict[BookingAction, frozenset[ServiceType]] = {
     BookingAction.MARK_AWAITING_PICKUP: frozenset({ServiceType.PASSENGER, ServiceType.PARCEL}),
     BookingAction.ARRIVE_AT_PICKUP: frozenset({ServiceType.PASSENGER, ServiceType.PARCEL}),
-    BookingAction.COMPLETE: frozenset({ServiceType.PASSENGER, ServiceType.PARCEL}),
+    # Q139 (ADR-0026): the sender no longer confirms a parcel ("qabul qilindi"); only the passenger completes.
+    BookingAction.COMPLETE: frozenset({ServiceType.PASSENGER}),
     BookingAction.BOARD: frozenset({ServiceType.PASSENGER}),
     BookingAction.DROP_OFF: frozenset({ServiceType.PASSENGER}),
     BookingAction.REPORT_NO_SHOW: frozenset({ServiceType.PASSENGER}),
-    BookingAction.PICK_UP: frozenset({ServiceType.PARCEL}),
-    BookingAction.START_TRANSIT: frozenset({ServiceType.PARCEL}),
-    BookingAction.DELIVER: frozenset({ServiceType.PARCEL}),
-    BookingAction.REPORT_DELIVERY_FAILED: frozenset({ServiceType.PARCEL}),
-    BookingAction.RETRY_DELIVERY: frozenset({ServiceType.PARCEL}),
-    BookingAction.RETURN_TO_SENDER: frozenset({ServiceType.PARCEL}),
+    # Q139: the driver's parcel ladder (picked up / in transit / delivered / failed / retry / returned) is retired.
+    # The parcel goes on the way with the trip (system) and its outcome is an operator record (B13).
+    BookingAction.PICK_UP: frozenset(),
+    BookingAction.START_TRANSIT: frozenset(),
+    BookingAction.DELIVER: frozenset(),
+    BookingAction.REPORT_DELIVERY_FAILED: frozenset(),
+    BookingAction.RETRY_DELIVERY: frozenset(),
+    BookingAction.RETURN_TO_SENDER: frozenset(),
 }
 # Actions that need a code from the other party (spec §11: codes are separate per action).
+# Q139 (ADR-0026): parcel codes are retired; the passenger boarding code stays.
 ACTION_PROOF_KIND: dict[BookingAction, ProofKind] = {
     BookingAction.BOARD: ProofKind.BOARDING_CODE,
-    BookingAction.PICK_UP: ProofKind.PICKUP_CODE,
-    BookingAction.DELIVER: ProofKind.DELIVERY_CODE,
-    BookingAction.RETURN_TO_SENDER: ProofKind.RETURN_CODE,
 }
 # Codes shown to the code owner (B5). The driver never sees any of them.
 CLIENT_CODE_KINDS: dict[ServiceType, tuple[ProofKind, ...]] = {
     ServiceType.PASSENGER: (ProofKind.BOARDING_CODE,),
-    # Sender holds pickup/return; the delivery code is for the receiver (shared by the sender, pilot).
-    ServiceType.PARCEL: (ProofKind.PICKUP_CODE, ProofKind.DELIVERY_CODE, ProofKind.RETURN_CODE),
+    # Q139 (ADR-0026): a parcel carries no codes (legacy rows keep theirs in the table, never shown or asked for).
+    ServiceType.PARCEL: (),
 }
 
 
@@ -188,12 +189,13 @@ class PhoneDisclosure:
 
 
 def phone_disclosure(service_type: ServiceType | str, visibility: ContactVisibility) -> PhoneDisclosure:
-    """Q44: the parcel sender's (client's) phone never reaches the driver; the receiver's only after pickup."""
+    """Q44: the parcel sender's (client's) phone never reaches the driver; the receiver's only once the service started
+    (Q142, ADR-0026: a parcel's service starts when the trip departs - there is no pickup step any more)."""
     service = ServiceType(service_type)
     visible = visibility.phones_visible
     if service is ServiceType.PASSENGER:
         return PhoneDisclosure(visible, visible, False)
-    # Parcel: visibility starts at picked_up, so the receiver phone is shown only after pickup.
+    # Parcel: visibility starts with the service (trip depart, Q142), so the receiver phone is shown from then on.
     return PhoneDisclosure(visible, False, visible)
 
 
@@ -294,3 +296,14 @@ def ensure_fee_finalizable(service_status: str) -> None:
 
 def boarding_opens_at(planned_start_at: datetime) -> datetime:
     return ensure_aware_utc(planned_start_at) - BOARDING_WINDOW
+
+
+def quantity_amendable(service_type: ServiceType | str, *, from_request: bool) -> bool:
+    """D9/D10 (Q145, ADR-0026): may an agreed booking's quantity be amended?
+
+    A parcel is always one shipment. A booking made on a client request keeps the request's seat count (D9 - requests
+    are not split); the client changes the quantity *before* a booking exists by editing the request (Q20 expires the
+    open offers, which must be agreed again). Only legacy bookings made on a driver's trip offer (pre-Q138) could move
+    the quantity by a two-sided amendment (D10). Unit-price amendments are unaffected.
+    """
+    return ServiceType(service_type) is ServiceType.PASSENGER and not from_request

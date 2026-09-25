@@ -8,6 +8,8 @@ with real proof codes, ``report_cash_receipt`` / ``acknowledge_cash_receipt`` an
 
 from __future__ import annotations
 
+from tests.pg.marketplace.catalog_world import synthetic_category
+
 import itertools
 import uuid
 from datetime import timedelta
@@ -100,14 +102,16 @@ def parcel_body(bw: BW, *, receiver_phone: str, unit: int, destination: str = "C
         "origin_stop_id": bw.w.stop_public_ids["A"], "destination_stop_id": bw.w.stop_public_ids[destination],
         "departure_window_start": start.isoformat(), "departure_window_end": (start + timedelta(hours=2)).isoformat(),
         "price_basis": "total", "unit_price_minor": unit,
-        "parcel": {"parcel_type": "documents", "weight_g": 2_000, "length_cm": 20, "width_cm": 20, "height_cm": 20,
+        "parcel": {"parcel_type": "documents", "category_id": synthetic_category(bw.db),
                    "fragile": False, "payer": "sender", "sender": {"name": "Synthetic Sender", "phone": "+998900000299"},
                    "receiver": {"name": "Synthetic Receiver", "phone": receiver_phone}},
     })
 
 
 def completed_parcels_on_one_trip(bw: BW, sender_id: int, receivers: list[str], *, destination: str = "C") -> list[int]:
-    """Two (or more) real parcel bookings of one sender on one trip, each with its own pickup and delivery proof."""
+    """Real parcel bookings of one sender on one trip, finished the only way left (ADR-0026, Q139/Q143): the trip
+    departs (in transit), staff record ``mark_delivered`` and ``complete_with_evidence``, finance captures. No codes,
+    no in-app cash - so there is no handover/delivery proof and no confirmed cash either."""
     driver_id = bw.w.driver_id
     trip_id, trip_public = driver_trip(bw, driver_id, plate())
     booking_ids = []
@@ -118,15 +122,11 @@ def completed_parcels_on_one_trip(bw: BW, sender_id: int, receivers: list[str], 
                       dropoff=destination, price_basis="total")
         booking_ids.append(accept(bw, ref, sender_id).id)
     run_trip_action(bw, trip_id, driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    codes = {booking_id: codes_for(bw, booking_id, sender_id) for booking_id in booking_ids}
-    for booking_id in booking_ids:
-        act(bw, booking_id, driver_id, "pick_up", code=codes[booking_id]["pickup_code"], now=bw.base + timedelta(minutes=5))
-        report_and_acknowledge_cash(bw, booking_id, driver_id, sender_id, at=bw.base + timedelta(minutes=6))
-        act(bw, booking_id, driver_id, "start_transit", now=bw.base + timedelta(minutes=10))
     run_trip_action(bw, trip_id, driver_id, "depart", now=bw.base + timedelta(minutes=12))
     for booking_id in booking_ids:
-        act(bw, booking_id, driver_id, "deliver", code=codes[booking_id]["delivery_code"], now=bw.base + timedelta(hours=2))
-        act(bw, booking_id, sender_id, "complete", now=bw.base + timedelta(hours=2, minutes=10))
+        operator(bw, booking_id, bw.operator_id, "mark_delivered", now=bw.base + timedelta(hours=2), reason="synthetic delivery")
+        operator(bw, booking_id, bw.operator_id, "complete_with_evidence", now=bw.base + timedelta(hours=2, minutes=10),
+                 reason="synthetic completion")
         finalize_capture(bw, booking_id)
     run_trip_action(bw, trip_id, driver_id, "complete", now=bw.base + timedelta(hours=4))
     return booking_ids

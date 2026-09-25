@@ -40,7 +40,11 @@ from app.modules.identity.web import (
 )
 from app.modules.marketplace import intents as marketplace_intents
 from app.modules.marketplace import service as marketplace_service
+from app.modules.marketplace import service  # the parcel-policy routes below use the short name
 from app.modules.marketplace.schemas import (
+    ParcelCategoryCatalogDTO,
+    ParcelCategoryVersionCreate,
+    ParcelCategoryVersionDTO,
     TripIntentCommand,
     TripIntentCreate,
     TripIntentDTO,
@@ -732,6 +736,86 @@ def confirm_parcel_policy(
 
     return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body,
                        handler=handler, resource_type="parcel_policy")
+
+
+# --- Q140 (ADR-0026): parcel size catalog -----------------------------------------------------------------------------
+
+
+def _catalog_version_dto(session: Session, version) -> ParcelCategoryVersionDTO:  # noqa: ANN001 - ParcelCategoryVersion
+    from app.modules.marketplace import parcel_catalog
+
+    return ParcelCategoryVersionDTO(
+        id=parcel_catalog.version_public_id(version), label=version.label, status=version.status, synthetic=version.synthetic,
+        created_by=identity_service.user_public_id(session, version.created_by),
+        confirmed_by=identity_service.user_public_id(session, version.confirmed_by) if version.confirmed_by else None,
+        confirmed_at=ensure_aware_utc(version.confirmed_at) if version.confirmed_at else None,
+        effective_from=ensure_aware_utc(version.effective_from) if version.effective_from else None,
+        version=version.version,
+        items=[parcel_catalog.item_dto(item) for item in parcel_catalog.items_of(session, version.id)],
+    )
+
+
+@router.get("/parcel-categories", response_model=Envelope[ParcelCategoryCatalogDTO], responses=ERROR_RESPONSES)
+def parcel_categories(session: Session = Depends(get_session)) -> Envelope[ParcelCategoryCatalogDTO]:
+    """The size categories a sender picks from (no typed dimensions). ``confirmed=false`` = no approved catalog yet."""
+    from app.modules.marketplace import parcel_catalog
+
+    view = parcel_catalog.active_catalog(session)
+    version = view.version
+    return Envelope[ParcelCategoryCatalogDTO](data=ParcelCategoryCatalogDTO(
+        confirmed=version is not None, synthetic=bool(version and version.synthetic),
+        label=version.label if version else None,
+        effective_from=ensure_aware_utc(version.effective_from) if version and version.effective_from else None,
+        items=[parcel_catalog.item_dto(item) for item in view.items],
+    ))
+
+
+@router.get("/admin/parcel-categories", response_model=Envelope[list[ParcelCategoryVersionDTO]], responses=ERROR_RESPONSES)
+def list_parcel_category_versions(
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session)
+) -> Envelope[list[ParcelCategoryVersionDTO]]:
+    from app.modules.marketplace import parcel_catalog
+
+    versions = parcel_catalog.list_versions(session, actor_user_id=user_id)
+    return Envelope[list[ParcelCategoryVersionDTO]](data=[_catalog_version_dto(session, v) for v in versions])
+
+
+@router.post("/admin/parcel-categories", response_model=Envelope[ParcelCategoryVersionDTO], status_code=201,
+             responses=ERROR_RESPONSES)
+def create_parcel_category_version(
+    body: ParcelCategoryVersionCreate, request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Draft a catalog version (`platform.policy_manage`, super_admin). A draft applies to nobody."""
+    from app.modules.marketplace import parcel_catalog
+
+    def handler() -> ParcelCategoryVersionDTO:
+        version = parcel_catalog.create_version(session, actor_user_id=user_id, label=body.label, source_note=body.source_note,
+                                                synthetic=body.synthetic, items=body.items)
+        return _catalog_version_dto(session, version)
+
+    return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body,
+                       handler=handler, success_status=201, resource_type="parcel_category_version")
+
+
+@router.post("/admin/parcel-categories/{version_id}/confirm", response_model=Envelope[ParcelCategoryVersionDTO],
+             responses=ERROR_RESPONSES)
+def confirm_parcel_category_version(
+    body: VersionedCommand, request: Request, version_id: str = Path(max_length=64),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Activate a drafted catalog - a different super_admin than its author; synthetic catalogs never in production."""
+    from app.modules.marketplace import parcel_catalog
+
+    def handler() -> ParcelCategoryVersionDTO:
+        version = parcel_catalog.confirm_version(session, actor_user_id=user_id, version_public_id_value=version_id,
+                                                 expected_version=body.expected_version)
+        return _catalog_version_dto(session, version)
+
+    return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body,
+                       handler=handler, resource_type="parcel_category_version")
 
 
 def _policy_version_dto(session: Session, version: ParcelPolicyVersion) -> ParcelPolicyVersionDTO:

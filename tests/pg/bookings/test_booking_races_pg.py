@@ -11,6 +11,7 @@ import time
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -20,16 +21,16 @@ from app.modules.bookings.models import Booking
 from app.modules.marketplace import service as marketplace_service
 from tests.pg.bookings.conftest import (
     BW,
-    STAGGER_S,
     TRIPS_LOCK,
     accept,
+    booked,
     act,
     codes_for,
     driver_trip,
-    hold_inside,
     passenger_request_body,
     propose,
     publish_listing,
+    request_proposal,
     rows,
     run_trip_action,
     scalar,
@@ -37,9 +38,19 @@ from tests.pg.bookings.conftest import (
     wallet,
 )
 from tests.pg.harness import run_concurrently
-from tests.pg.identity.a1_world import passenger_offer
 
 pytestmark = pytest.mark.pg
+
+
+def _await_lock_waiter(bw: BW, *, deadline_s: float = 30.0) -> None:
+    """Returns once another backend is waiting on a lock - a condition, not a delay (the poll only paces the check)."""
+    end = time.monotonic() + deadline_s
+    with bw.db.engine.connect() as conn:
+        while time.monotonic() < end:
+            if conn.execute(text("SELECT count(*) FROM pg_locks WHERE NOT granted")).scalar():
+                return
+            time.sleep(0.01)
+    raise AssertionError("the late transaction never waited on the early one's lock")
 
 
 def _is_deadlock(error: BaseException | None) -> bool:
@@ -52,25 +63,37 @@ def test_accept_vs_cancel_on_the_same_trip_serialize_without_deadlock(
 ) -> None:
     clock = lock_clock(TRIPS_LOCK)
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01C100AA", seats=2)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    first = accept(bw, propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=1, unit=20_000_000), bw.w.driver_id)
-    second_ref = propose(bw, offer, bw.w.client2_id, trip_public_id=None, quantity=1, unit=20_000_000)
+    first = booked(bw, trip_public, bw.w.client_id)  # ADR-0026: request + driver proposal on the shared trip
+    second_ref = request_proposal(bw, trip_public, bw.w.client2_id)
     early = 0 if cancel_first else 1
     early_ident: dict[str, int] = {}
-    hold_inside(monkeypatch, marketplace_service, "lock_listings", only_thread=lambda: threading.get_ident() == early_ident.get("t"))
+    holds = threading.Event()
+    original = marketplace_service.lock_listings
+
+    def gated(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        # Deterministic handoff (no sleep decides the order): the early transaction already holds the trip lock
+        # here (trip -> listings, ADR-0017); it lets the late one start and returns only once PostgreSQL shows the
+        # late one *waiting* on a lock.
+        result = original(*args, **kwargs)
+        if threading.get_ident() == early_ident.get("t"):
+            holds.set()
+            _await_lock_waiter(bw)
+        return result
+
+    monkeypatch.setattr(marketplace_service, "lock_listings", gated)
 
     def work(index: int, session: Session) -> str:
         clock.bind(index)
         if index == early:
             early_ident["t"] = threading.get_ident()
         else:
-            time.sleep(STAGGER_S)
+            assert holds.wait(30), "the early transaction never reached its locked section"
         if index == 0:
             bookings_service.cancel_booking(session, booking_public_id_value=bookings_service.booking_public_id(first),
                                             actor_user_id=bw.w.client_id, expected_version=first.version, reason_code="race")
             session.commit()
             return "cancelled"
-        accept(bw, second_ref, bw.w.driver_id, session=session)
+        accept(bw, second_ref, bw.w.client2_id, session=session)
         return "accepted"
 
     report = run_concurrently(2, work, engine=bw.db.engine)
@@ -83,8 +106,7 @@ def test_accept_vs_cancel_on_the_same_trip_serialize_without_deadlock(
 
 def test_parallel_cancels_release_once(bw: BW) -> None:
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01C101AA", seats=2)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    booking = accept(bw, propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=2, unit=20_000_000), bw.w.driver_id)
+    booking = booked(bw, trip_public, bw.w.client_id, quantity=2)
 
     def work(index: int, session: Session) -> str:
         actor = bw.w.client_id if index % 2 == 0 else bw.w.driver_id

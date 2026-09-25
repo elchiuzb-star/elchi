@@ -35,7 +35,8 @@ CLIENT_NEW_BUSINESS_CAPABILITIES: frozenset[Capability] = frozenset(
     {Capability.LISTING_CREATE_REQUEST, Capability.PROPOSAL_SUBMIT_AS_CLIENT}
 )
 DRIVER_NEW_BUSINESS_CAPABILITIES: frozenset[Capability] = frozenset(
-    {Capability.LISTING_CREATE_TRIP_OFFER, Capability.PROPOSAL_SUBMIT_AS_DRIVER, Capability.TRIP_CREATE}
+    # Q138 (ADR-0026): LISTING_CREATE_TRIP_OFFER is no longer granted - drivers answer client requests only.
+    {Capability.PROPOSAL_SUBMIT_AS_DRIVER, Capability.TRIP_CREATE}
 )
 
 # Decision 22 (wave 1.5): any active driver-role account may view its commission wallet and

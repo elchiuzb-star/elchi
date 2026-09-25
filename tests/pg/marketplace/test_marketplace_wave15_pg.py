@@ -3,6 +3,8 @@ decisions 20/21/23, pause/resume, expiry workers, rejected event, frozen final v
 
 from __future__ import annotations
 
+from tests.pg.marketplace.catalog_world import synthetic_category
+
 from datetime import timedelta
 
 import pytest
@@ -19,9 +21,7 @@ from app.modules.platform.service import sqlstate_of
 from app.modules.trips import service as trips_service
 from tests.pg.identity.a1_world import (
     World,
-    make_trip,
     make_vehicle,
-    passenger_offer,
     passenger_request,
     run_in_thread,
     trip_create,
@@ -38,43 +38,6 @@ def _publish(world: World, session: Session, listing_public_id: str, owner_id: i
     return marketplace_service.publish_listing(
         session, listing_public_id=listing_public_id, actor_user_id=owner_id, expected_version=version
     )
-
-
-def published_offer(world: World, *, plate: str = "01F600FF", parcel: bool = False) -> tuple[str, int, str]:
-    vehicle = make_vehicle(world, world.driver_id, plate)
-    trip_id, trip_public_id = make_trip(world, world.driver_id, vehicle, start=world.base_time)
-    body = passenger_offer(world, trip_public_id, start=world.base_time)
-    if parcel:
-        body = ListingCreate.model_validate(
-            {
-                **body.model_dump(mode="json"),
-                "service_type": "parcel",
-                "price_basis": "total",
-                "unit_price_minor": 5_000_000,
-                "parcel": {"max_weight_g": 20_000, "max_volume_ml": 100_000, "max_dimension_cm": 60, "accepted_parcel_types": ["box"]},
-            }
-        )
-    with world.db.session() as s:
-        listing = marketplace_service.create_listing(s, owner_user_id=world.driver_id, data=body)
-        listing_public_id = marketplace_service.listing_public_id(listing)
-        _publish(world, s, listing_public_id, world.driver_id)
-        s.commit()
-    return listing_public_id, trip_id, trip_public_id
-
-
-def client_proposal(world: World, *, pickup: str = "B", dropoff: str = "D", hour: int = 1, **extra: object) -> ProposalCreate:
-    start = world.base_time + timedelta(hours=hour)
-    body = {
-        "pickup_stop_id": world.stop_public_ids[pickup],
-        "dropoff_stop_id": world.stop_public_ids[dropoff],
-        "pickup_window_start": start.isoformat(),
-        "pickup_window_end": (start + timedelta(minutes=30)).isoformat(),
-        "quantity": 1,
-        "price_basis": "per_seat",
-        "unit_price_minor": 15_000_000,
-    }
-    body.update(extra)
-    return ProposalCreate.model_validate(body)
 
 
 # --- deadlock fix: FOR NO KEY UPDATE on users rows ------------------------------------------------------
@@ -227,71 +190,7 @@ def test_blocked_driver_cannot_submit_or_counter(world: World) -> None:
     assert info.value.code is ErrorCode.DRIVER_NOT_ELIGIBLE
 
 
-def test_decision21_client_cannot_propose_on_blocked_drivers_offer(world: World) -> None:
-    listing_id, _, _ = published_offer(world)
-    with world.db.session() as s:
-        identity_service.block_driver_eligibility(
-            s, driver_user_id=world.driver_id, actor_user_id=world.admin_id, expected_version=1, reason="docs"
-        )
-        s.commit()
-    with world.db.session() as s, pytest.raises(DomainError) as info:
-        marketplace_service.submit_proposal(s, listing_public_id=listing_id, actor_user_id=world.client_id, data=client_proposal(world))
-    assert info.value.code is ErrorCode.DRIVER_NOT_ELIGIBLE
-    assert info.value.details == {"reason": "trip_driver_not_eligible"}
-
-
 # --- AC02 side, demand snapshot, segment checks --------------------------------------------------------
-
-
-def test_ac02_client_proposal_on_trip_offer_with_baggage_snapshot(world: World) -> None:
-    listing_id, trip_id, _ = published_offer(world)
-    with world.db.session() as s:
-        thread = marketplace_service.submit_proposal(
-            s,
-            listing_public_id=listing_id,
-            actor_user_id=world.client_id,
-            data=client_proposal(world, baggage={"pieces": 1, "total_weight_g": 12_000, "total_volume_ml": 60_000}),
-        )
-        version = marketplace_service.current_version(s, thread)
-        assert (version.author_side, version.pickup_occurrence_seq, version.dropoff_occurrence_seq) == ("client", 2, 4)
-        assert (version.baggage_ml, version.cargo_weight_g, version.trip_version) == (60_000, 0, 1)
-        assert marketplace_service.version_demand(version, service_type="passenger").seats == 1
-        assert [load.seats_used for load in trips_service.get_segment_loads(s, trip_id)] == [0, 0, 0]
-        s.commit()
-        thread_public_id = marketplace_service.thread_public_id(thread)
-
-    with world.db.session() as s:  # D9 on counter: offers are not bound to a seat count, requests are
-        thread = marketplace_service.counter_proposal(
-            s, thread_public_id_value=thread_public_id, actor_user_id=world.driver_id, data=ProposalCounter(expected_revision=1, quantity=2)
-        )
-        assert marketplace_service.current_version(s, thread).baggage_ml == 60_000  # carried over
-        s.rollback()
-
-    with world.db.session() as s, pytest.raises(DomainError) as info:  # trip baggage capacity 200 000 ml
-        marketplace_service.submit_proposal(
-            s,
-            listing_public_id=listing_id,
-            actor_user_id=world.client2_id,
-            data=client_proposal(world, baggage={"total_volume_ml": 250_000}),
-        )
-    assert info.value.code is ErrorCode.CARGO_LIMIT_EXCEEDED
-
-
-def test_trip_offer_segment_must_lie_inside_the_offer(world: World) -> None:
-    vehicle = make_vehicle(world, world.driver_id, "01H800HH")
-    _, trip_public_id = make_trip(world, world.driver_id, vehicle, start=world.base_time)
-    body = passenger_offer(world, trip_public_id, start=world.base_time)
-    body = ListingCreate.model_validate({**body.model_dump(mode="json"), "origin_stop_id": world.stop_public_ids["B"]})
-    with world.db.session() as s:
-        listing = marketplace_service.create_listing(s, owner_user_id=world.driver_id, data=body)
-        listing_id = marketplace_service.listing_public_id(listing)
-        _publish(world, s, listing_id, world.driver_id)
-        s.commit()
-    with world.db.session() as s, pytest.raises(DomainError) as info:
-        marketplace_service.submit_proposal(
-            s, listing_public_id=listing_id, actor_user_id=world.client_id, data=client_proposal(world, pickup="A", hour=0)
-        )
-    assert info.value.code is ErrorCode.ROUTE_MISMATCH and info.value.details == {"reason": "outside_offer_segment"}
 
 
 def test_route_mismatch_time_window_and_cutoff_at_submit(world: World) -> None:
@@ -351,38 +250,6 @@ def published_request_at(world: World, *, hours_after_base: int) -> str:
         return public_id
 
 
-def test_parcel_offer_proposal_snapshot_and_limits(world: World) -> None:
-    listing_id, _, _ = published_offer(world, parcel=True)
-    base = client_proposal(world, pickup="A", hour=0, price_basis="total", unit_price_minor=4_000_000)
-    # W21-4 (wave 3.1): a trip-offer parcel proposal carries the receiver - nothing is picked up without one.
-    parcel = {"parcel_type": "box", "weight_g": 5_000, "length_cm": 30, "width_cm": 20, "height_cm": 10,
-              "receiver": {"name": "Olim", "phone": "+998900000999"}}
-    with world.db.session() as s:
-        thread = marketplace_service.submit_proposal(
-            s,
-            listing_public_id=listing_id,
-            actor_user_id=world.client_id,
-            data=ProposalCreate.model_validate({**base.model_dump(mode="json"), "parcel": parcel}),
-        )
-        version = marketplace_service.current_version(s, thread)
-        assert (version.receiver_name, version.receiver_phone) == ("Olim", "+998900000999")
-        assert (version.cargo_weight_g, version.cargo_volume_ml) == (5_000, 6_000)
-        assert (version.parcel_length_cm, version.parcel_width_cm, version.parcel_height_cm) == (30, 20, 10)
-        s.commit()
-    for update, code in (
-        ({"parcel": {**parcel, "weight_g": 25_000}}, ErrorCode.CARGO_LIMIT_EXCEEDED),
-        ({"parcel": {**parcel, "length_cm": 70}}, ErrorCode.CARGO_LIMIT_EXCEEDED),
-        ({"parcel": None}, ErrorCode.VALIDATION_ERROR),
-        ({"baggage": {"total_volume_ml": 1_000}}, ErrorCode.VALIDATION_ERROR),
-        ({"quantity": 2, "parcel": parcel}, ErrorCode.QUANTITY_MISMATCH),
-        ({"parcel": {k: v for k, v in parcel.items() if k != "receiver"}}, ErrorCode.VALIDATION_ERROR),  # W21-4
-    ):
-        body = ProposalCreate.model_validate({**base.model_dump(mode="json"), **update})
-        with world.db.session() as s, pytest.raises(DomainError) as info:
-            marketplace_service.submit_proposal(s, listing_public_id=listing_id, actor_user_id=world.client2_id, data=body)
-        assert info.value.code is code, update
-
-
 def test_parcel_request_proposal_takes_demand_from_the_request(world: World) -> None:
     body = ListingCreate.model_validate(
         {
@@ -395,7 +262,7 @@ def test_parcel_request_proposal_takes_demand_from_the_request(world: World) -> 
             "price_basis": "total",
             "unit_price_minor": 7_000_000,
             "parcel": {
-                "parcel_type": "box", "weight_g": 4_000, "length_cm": 40, "width_cm": 30, "height_cm": 20, "payer": "sender",
+                "parcel_type": "box", "category_id": synthetic_category(world.db), "payer": "sender",  # Q140
                 "sender": {"name": "Aziza", "phone": "+998900000201"}, "receiver": {"name": "Olim", "phone": "+998900000999"},
             },
         }
@@ -413,7 +280,9 @@ def test_parcel_request_proposal_takes_demand_from_the_request(world: World) -> 
         version = marketplace_service.current_version(
             s, marketplace_service.submit_proposal(s, listing_public_id=listing_id, actor_user_id=world.driver_id, data=offer)
         )
-        assert (version.cargo_weight_g, version.cargo_volume_ml, version.parcel_height_cm) == (4_000, 24_000, 20)
+        # Q140: the demand is the category's limits (synthetic small_box), snapshotted with the category item
+        assert (version.cargo_weight_g, version.cargo_volume_ml) == (5_000, 12_000)
+        assert version.parcel_category_item_id is not None
         s.rollback()
     with_parcel = ProposalCreate.model_validate(
         {**offer.model_dump(mode="json"), "parcel": {"weight_g": 1, "length_cm": 1, "width_cm": 1, "height_cm": 1}}
@@ -544,7 +413,7 @@ def test_reject_emits_event_and_final_version_is_frozen(world: World) -> None:
             s.execute(text(statement), {"v": version_id})
 
 
-def test_trip_change_expires_threads_and_rechecks_offers(world: World) -> None:
+def test_trip_change_expires_open_proposal_threads(world: World) -> None:
     _, thread_public_id, trip_id = open_thread(world)
     with world.db.session() as s:
         trip = s.execute(text("SELECT public_id, version FROM trips WHERE id = :t"), {"t": trip_id}).one()
@@ -566,17 +435,3 @@ def test_trip_change_expires_threads_and_rechecks_offers(world: World) -> None:
         )
         s.commit()
 
-    with world.db.session() as s:
-        offer = marketplace_service.create_listing(
-            s, owner_user_id=world.driver_id, data=passenger_offer(world, trip_public_id, start=world.base_time)
-        )
-        s.commit()
-    removing_d = [dict(stop) for stop in stops[:2]] + [
-        {"stop_id": world.stop_public_ids["C"], "seq": 3, "planned_arrival_at": (world.base_time + timedelta(hours=2)).isoformat()}
-    ]
-    with world.db.session() as s, pytest.raises(DomainError) as info:
-        trips_service.patch_trip(
-            s, trip_public_id_value=trip_public_id, actor_user_id=world.driver_id, data=TripPatch.model_validate({"expected_version": trip.version + 1, "stops": removing_d})
-        )
-    assert info.value.code is ErrorCode.ROUTE_MISMATCH
-    assert info.value.details["listing_id"] == marketplace_service.listing_public_id(offer)

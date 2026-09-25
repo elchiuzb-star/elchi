@@ -313,6 +313,35 @@ def test_two_parallel_accepts_cannot_spend_one_bonus(pw: PW) -> None:
     assert pw.ref.promo.issues() == []
 
 
+def test_the_client_choosing_two_drivers_at_once_books_one_and_reserves_only_for_it(pw: PW) -> None:
+    """ADR-0026 (Q138): replaces the retired saved-request race. One client request, two drivers' offers, the client
+    accepts both at the same moment with a bonus consent: one booking, one hold, one reservation; the loser leaves no
+    consent, hold or reservation behind."""
+    from tests.pg.bookings.conftest import passenger_request_body, propose, publish_listing
+    from tests.pg.promotions.lifecycle import passenger_trip
+
+    client = pw.ref.client()
+    p_lot = pw.lot(client, PromoInstrument.PASSENGER_BONUS, P_LOT)
+    listing = publish_listing(pw.bw, client, passenger_request_body(pw.bw, seats=1, unit=FARE))
+    refs = []
+    for driver in (pw.bw.w.driver_id, pw.bw.w.driver2_id):
+        pw.declare(driver)
+        trip = passenger_trip(pw.bw, driver)
+        ref = propose(pw.bw, listing, driver, trip_public_id=trip[1], quantity=1, unit=FARE)
+        pw.ready(ref, driver)
+        refs.append(ref)
+
+    report = run_concurrently(2, lambda i, s: pw.accept(refs[i], client, consent=(P_LOT, FARE - P_LOT), session=s).id,
+                              engine=pw.db.engine)
+    assert len([r for r in report.results if r.error is None]) == 1, report.results
+    assert pw.scalar("SELECT count(*) FROM bookings WHERE service_status <> 'cancelled'") == 1
+    assert pw.scalar("SELECT count(*) FROM wallet_holds") == 1
+    assert pw.scalar("SELECT count(*) FROM promo_redemptions WHERE lot_id = :l", l=p_lot) == 1
+    assert (pw.lot_row(p_lot)["reserved_minor"], pw.lot_row(p_lot)["consumed_minor"]) == (P_LOT, 0)
+    assert pw.rows("SELECT status FROM promo_consents") == [("used",)]  # the refused attempt's consent rolled back
+    assert pw.ref.promo.issues() == []
+
+
 def test_bonus_enough_but_driver_real_balance_short_rolls_back_everything(pw: PW) -> None:
     from tests.pg.identity.a1_world import add_user
 

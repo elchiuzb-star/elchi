@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formFromListing, ownerListingActions, planListingPatch, windowEditable, type EditableListing } from "./listingEdit";
+import { formFromListing, ownerListingActions, planListingPatch, seatsEditable, windowEditable, type EditableListing } from "./listingEdit";
 
 const NOW = new Date("2026-09-24T08:00:00Z").getTime();
 
@@ -68,5 +68,34 @@ describe("planListingPatch (Q20)", () => {
     const plan = planListingPatch(offer, { ...formFromListing(offer), windowStart: "", price: "250000" }, NOW);
     expect(plan.invalid).toBeNull();
     expect(plan.body).toEqual({ unit_price_minor: 25_000_000 });
+  });
+});
+
+describe("seat count before a booking (Q145, ADR-0026)", () => {
+  const passenger = {
+    seat_count: 2, adults: 2, children: 0, child_seat_required: false,
+    baggage: { pieces: 1, total_weight_g: 10_000, total_volume_ml: 40_000 }, special_assistance: null, amenities: [],
+  };
+  const passengerRequest: EditableListing = { ...request, service_type: "passenger", passenger };
+
+  it("is offered only on a passenger request", () => {
+    expect(seatsEditable(passengerRequest)).toBe(true);
+    expect(seatsEditable({ ...passengerRequest, service_type: "parcel", passenger: null })).toBe(false);
+    expect(formFromListing(passengerRequest).seats).toBe("2");
+    expect(formFromListing(request).seats).toBe("");
+  });
+
+  it("sends the whole passenger block with the new count and marks the edit material (open offers close)", () => {
+    const plan = planListingPatch(passengerRequest, { ...formFromListing(passengerRequest), seats: "3" }, NOW);
+    expect(plan.body.passenger).toEqual({ ...passenger, seat_count: 3, adults: 3 });
+    expect(plan.material).toBe(true);  // no old offer is silently stretched to three people
+  });
+
+  it("keeps the children and refuses counts the server would refuse", () => {
+    const withChild = { ...passengerRequest, passenger: { ...passenger, adults: 1, children: 1 } };
+    expect(planListingPatch(withChild, { ...formFromListing(withChild), seats: "3" }, NOW).body.passenger)
+      .toMatchObject({ seat_count: 3, adults: 2, children: 1 });
+    expect(planListingPatch(withChild, { ...formFromListing(withChild), seats: "1" }, NOW).invalid).toBe("seats_children");
+    expect(planListingPatch(passengerRequest, { ...formFromListing(passengerRequest), seats: "9" }, NOW).invalid).toBe("seats");
   });
 });

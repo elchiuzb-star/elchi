@@ -7,9 +7,16 @@
  * screen asks for a second tap only when the edit is material.
  */
 
+import type { Schemas } from "../api/v2/http";
+
+/** The passenger block as the listing carries it; a PATCH replaces the whole block, so it travels complete. */
+export type PassengerBlock = Schemas["PassengerDetails"];
+
 export interface EditableListing {
   status: string;
   kind: string;
+  service_type?: string;
+  passenger?: PassengerBlock | null;
   unit_price_minor: number;
   comment?: string | null;
   departure_window_start: string;
@@ -22,6 +29,8 @@ export interface ListingEditForm {
   comment: string;
   windowStart: string;
   windowEnd: string;
+  /** Q145: a passenger request's seat count, changeable until a booking exists. Empty for other listings. */
+  seats: string;
 }
 
 export interface ListingPatchPlan {
@@ -31,6 +40,7 @@ export interface ListingPatchPlan {
     comment?: string | null;
     departure_window_start?: string;
     departure_window_end?: string;
+    passenger?: PassengerBlock;
   };
   /** Q20: this edit expires the open offers of a live listing. */
   material: boolean;
@@ -57,6 +67,12 @@ export function windowEditable(listing: Pick<EditableListing, "kind">): boolean 
   return listing.kind === "request";
 }
 
+/** Q145 (ADR-0026): the client changes the number of seats on its own passenger request - before a booking exists.
+ * After a booking the seat count stays as agreed (D9). */
+export function seatsEditable(listing: Pick<EditableListing, "kind" | "service_type" | "passenger">): boolean {
+  return listing.kind === "request" && listing.service_type === "passenger" && Boolean(listing.passenger);
+}
+
 function soumToMinor(value: string): number {
   const parsed = Number(value.replace(/\s/g, ""));
   return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) * 100 : 0;
@@ -81,6 +97,7 @@ export function formFromListing(listing: EditableListing): ListingEditForm {
     comment: listing.comment ?? "",
     windowStart: isoToLocalInput(listing.departure_window_start),
     windowEnd: isoToLocalInput(listing.departure_window_end),
+    seats: seatsEditable(listing) && listing.passenger ? String(listing.passenger.seat_count) : "",
   };
 }
 
@@ -111,6 +128,19 @@ export function planListingPatch(listing: EditableListing, form: ListingEditForm
         body.departure_window_end = end;
         material = LIVE.includes(listing.status);
       }
+    }
+  }
+
+  if (seatsEditable(listing) && listing.passenger) {
+    const seats = Number(form.seats);
+    const children = Number(listing.passenger.children ?? 0);
+    if (!Number.isInteger(seats) || seats < 1 || seats > 8) invalid = invalid ?? "seats";
+    else if (seats <= children) invalid = invalid ?? "seats_children";
+    else if (seats !== listing.passenger.seat_count) {
+      // Q20: a new seat count expires the open offers; drivers must offer again for the new number (no offer is
+      // silently stretched to more people). The whole block travels because the server replaces it.
+      body.passenger = { ...listing.passenger, seat_count: seats, adults: seats - children };
+      material = material || LIVE.includes(listing.status);
     }
   }
 

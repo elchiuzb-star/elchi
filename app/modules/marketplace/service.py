@@ -191,10 +191,8 @@ EXPIRABLE_STATUSES = (ListingStatus.PUBLISHED.value, ListingStatus.PAUSED.value,
 CLOSED_OFFER_STATUSES = (ListingStatus.CANCELLED.value, ListingStatus.EXPIRED.value)
 REQUEST_PARCEL_REQUIRED = (
     "parcel_type",
-    "weight_g",
-    "length_cm",
-    "width_cm",
-    "height_cm",
+    # Q140 (ADR-0026): a size category from the catalog replaces typed weight / length / width / height.
+    "parcel_category_item_id",
     "payer",
     "sender_name",
     "sender_phone",
@@ -476,16 +474,9 @@ def listings_for_trip(session: Session, trip_id: int) -> list[Listing]:
 
 
 def has_published_trip_offer(session: Session, trip_id: int) -> bool:
-    return (
-        session.execute(
-            select(Listing.id).where(
-                Listing.trip_id == trip_id,
-                Listing.kind == ListingKind.TRIP_OFFER.value,
-                Listing.status == ListingStatus.PUBLISHED.value,
-            )
-        ).first()
-        is not None
-    )
+    """Q138 (ADR-0026): a trip is internal (driver and staff only) - it is never published to clients again."""
+    del session, trip_id
+    return False
 
 
 def list_owner_listings(
@@ -806,10 +797,18 @@ def _write_details(
             row = ParcelListingDetails(listing_id=listing.id)
             session.add(row)
         row.parcel_type = parcel.parcel_type.value if parcel.parcel_type is not None else None
-        row.weight_g = parcel.weight_g
-        row.length_cm = parcel.length_cm
-        row.width_cm = parcel.width_cm
-        row.height_cm = parcel.height_cm
+        if parcel.category_id:
+            # Q140: the category is the size; typed numbers are not stored beside it (one source of truth).
+            from app.modules.marketplace import parcel_catalog
+
+            row.parcel_category_item_id = parcel_catalog.resolve_active_item(session, parcel.category_id).id
+            row.weight_g = row.length_cm = row.width_cm = row.height_cm = None
+        else:
+            row.parcel_category_item_id = None
+            row.weight_g = parcel.weight_g
+            row.length_cm = parcel.length_cm
+            row.width_cm = parcel.width_cm
+            row.height_cm = parcel.height_cm
         row.fragile = parcel.fragile
         row.declared_value_minor = parcel.declared_value_minor
         row.photo_file_id = _resolve_cargo_photo(
@@ -903,6 +902,9 @@ def create_listing(
     comment = filter_free_text(  # first, so a rejected create still records the hit (R2-b)
         session, actor_user_id=owner_user_id, field="comment", text=data.comment, warnings=warnings, filter_hits=filter_hits
     )
+    if ListingKind(data.kind) is ListingKind.TRIP_OFFER:
+        # Q138 (ADR-0026): only clients create listings; a driver's trip is internal (capacity), never a listing.
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"kind": ListingKind.TRIP_OFFER.value})
     kind, service = ListingKind(data.kind), ServiceType(data.service_type)
     identity_service.require_capability(
         identity_service.get_capabilities(session, owner_user_id, now=now), LISTING_CREATE_CAPABILITY[kind]
@@ -1003,8 +1005,8 @@ def _assert_pilot_parcel_limits(session: Session, listing: Listing) -> None:
     details = session.execute(
         select(ParcelListingDetails).where(ParcelListingDetails.listing_id == listing.id)
     ).scalar_one_or_none()
-    if details is None:
-        return
+    if details is None or details.parcel_category_item_id is not None:
+        return  # Q140: a catalog category was checked against the pilot limits when the catalog was drafted
     over: dict[str, int] = {}
     if (details.weight_g or 0) > PARCEL_PILOT_MAX_WEIGHT_G:
         over["weight_g"] = PARCEL_PILOT_MAX_WEIGHT_G
@@ -1225,11 +1227,16 @@ def _publish_like(
     identity_service.lock_user_eligibility(session, [listing.owner_user_id])
     listing = lock_listing(session, listing.id)
     _check_version(listing.version, expected_version)
+    if listing.kind == ListingKind.TRIP_OFFER.value:
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"kind": ListingKind.TRIP_OFFER.value})  # Q138: an old draft/paused offer never goes live
     LISTING.assert_transition(listing.status, ListingStatus.PUBLISHED.value, command)
     _assert_publishable(session, listing, now)
     if listing.service_type == ServiceType.PARCEL.value:
         # §5.2: no approved prohibited-items policy -> no NEW parcel listing in production (fail-closed).
         assert_parcel_policy_ready(session)
+        from app.modules.marketplace import parcel_catalog
+
+        parcel_catalog.assert_catalog_ready(session)  # Q140: nor without a confirmed size catalog
     _assert_pilot_parcel_limits(session, listing)
     if command == "publish" and listing.published_at is None:
         # Only a genuinely new publish counts against the §5.4 limit; resuming a paused post is not a new post.
@@ -1376,6 +1383,8 @@ def patch_listing(
     """
     now = _now(now)
     listing = _owner_listing(session, listing_public_id, actor_user_id)
+    if listing.kind == ListingKind.TRIP_OFFER.value:
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"kind": ListingKind.TRIP_OFFER.value})  # Q138: retired offers are read-only
     identity_service.lock_user_eligibility(session, [listing.owner_user_id])
     listing = lock_listing(session, listing.id)
     _check_version(listing.version, data.expected_version)
@@ -1615,6 +1624,7 @@ class _Demand:
     length_cm: int | None = None
     width_cm: int | None = None
     height_cm: int | None = None
+    category_item_id: int | None = None  # Q140: the size category the demand was taken from
 
     def resources(self, *, seats: int) -> ResourceDemand:
         return ResourceDemand(
@@ -1648,6 +1658,15 @@ def _demand_for(
         request_parcel = get_parcel_details(session, listing.id)
         if request_parcel is None:
             return _Demand()
+        if request_parcel.parcel_category_item_id is not None:
+            # Q140: a category demands its worst case - max weight and max volume - from the segment capacity, so the
+            # capacity engine (versions -> allocations -> segment counters) is unchanged.
+            from app.modules.marketplace import parcel_catalog
+
+            item = parcel_catalog.get_item(session, request_parcel.parcel_category_item_id)
+            return _Demand(cargo_weight_g=item.max_weight_g, cargo_volume_ml=item.max_volume_ml,
+                           length_cm=item.max_length_cm, width_cm=item.max_width_cm, height_cm=item.max_height_cm,
+                           category_item_id=item.id)
         dims = (request_parcel.length_cm, request_parcel.width_cm, request_parcel.height_cm)
         return _Demand(
             cargo_weight_g=request_parcel.weight_g or 0,
@@ -2166,6 +2185,7 @@ def _insert_version(
         baggage_ml=demand.baggage_ml,
         cargo_weight_g=demand.cargo_weight_g,
         cargo_volume_ml=demand.cargo_volume_ml,
+        parcel_category_item_id=demand.category_item_id,
         parcel_length_cm=demand.length_cm,
         parcel_width_cm=demand.width_cm,
         parcel_height_cm=demand.height_cm,
@@ -2238,6 +2258,9 @@ def submit_proposal(
     listing = lock_listing(session, listing.id)
     _listing_open_for_proposals(listing, now)
     kind = ListingKind(listing.kind)
+    if kind is ListingKind.TRIP_OFFER:
+        # Q138: nobody answers a driver listing any more - drivers answer client requests.
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"kind": ListingKind.TRIP_OFFER.value})
     side = proposer_side(kind)
     identity_service.require_capability(
         identity_service.get_capabilities(session, actor_user_id, now=now), PROPOSAL_CAPABILITY[side]
@@ -2246,24 +2269,15 @@ def submit_proposal(
     # ADR-0025: an offer made from the client's saved request - checked before anything is written
     intent = intent_version = None
     if data.trip_intent is not None:
-        if side is not ActorSide.CLIENT:
-            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "trip_intent", "reason": "client_offers_only"})
-        from app.modules.marketplace import intents
+        # Q138 (ADR-0026): saved trip requests existed to answer driver listings; they are retired with them.
+        raise DomainError(ErrorCode.TRIP_INTENT_RETIRED, details={"field": "trip_intent"})
 
-        intent, intent_version = intents.prepare_for_proposal(
-            session, ref=data.trip_intent, owner_user_id=actor_user_id, listing=listing, data=data, now=now)
-
-    if kind is ListingKind.REQUEST:
-        if not data.trip_id:
-            raise DomainError(ErrorCode.VALIDATION_ERROR, "a driver proposal needs trip_id", details={"field": "trip_id"})
-        trip = trips_service.get_trip_by_public_id(session, data.trip_id)
-        if trip.driver_user_id != actor_user_id:
-            raise DomainError(ErrorCode.NOT_FOUND, details={"field": "trip_id"})
-    else:
-        trip = trips_service.get_trip(session, listing.trip_id)
-        if data.trip_id and trips_service.resolve_trip_id(session, data.trip_id) != trip.id:
-            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "trip_id"})
-        _require_trip_driver_eligible(session, trip, now)
+    # Q138: only a client request reaches here - the driver proposes with their own (internal) trip.
+    if not data.trip_id:
+        raise DomainError(ErrorCode.VALIDATION_ERROR, "a driver proposal needs trip_id", details={"field": "trip_id"})
+    trip = trips_service.get_trip_by_public_id(session, data.trip_id)
+    if trip.driver_user_id != actor_user_id:
+        raise DomainError(ErrorCode.NOT_FOUND, details={"field": "trip_id"})
     _trip_open_for_proposals(trip, now)
 
     # Q88: a point-ended listing hands its own places down to the proposal; only a stop-ended one asks the
@@ -2426,6 +2440,8 @@ def counter_proposal(
     identity_service.lock_user_eligibility(session, [actor_user_id], mode="share")
     listing = lock_listing(session, thread.listing_id)
     thread = lock_thread(session, thread.id)
+    if listing.kind == ListingKind.TRIP_OFFER.value:
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"kind": ListingKind.TRIP_OFFER.value})  # Q138: an old negotiation on a driver listing cannot continue
     if thread.state != THREAD_OPEN:
         raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "proposal_thread", "from": thread.state})
     current = current_version(session, thread, for_update=True)
@@ -3184,3 +3200,48 @@ def list_parcel_policy_versions(session: Session, *, actor_user_id: int, now: da
 
 def parcel_policy_public_id(version: ParcelPolicyVersion) -> str:
     return format_public_id(PublicIdPrefix.PARCEL_POLICY, version.public_id)
+
+
+# --- Q138 (ADR-0026): driver listings retired ---------------------------------------------------------------------------
+
+DRIVER_LISTING_RETIRED_REASON = "driver_listing_retired"
+RETIRE_BATCH = 100
+
+
+def retire_driver_listings(session: Session, *, now: datetime | None = None, limit: int = RETIRE_BATCH) -> int:
+    """Worker (``marketplace.retire_driver_listings``): close what is still open of the retired model.
+
+    * a published/paused ``trip_offer`` is cancelled with reason ``driver_listing_retired`` - its open negotiations
+      expire first with the same technical reason (``proposal.expired`` / ``listing.cancelled`` through the outbox);
+    * an ``active`` saved trip request (ADR-0025) is closed and its open offers expire the same way.
+
+    Never touches a booking (an agreed price or an accepted trip keeps running), never a draft (it can never go live -
+    service guard + DB trigger), and records no fault, strike or penalty. Idempotent: a second run finds nothing.
+    Returns how many listings and requests it closed.
+    """
+    from app.modules.marketplace import intents
+    from app.modules.marketplace.models import TripIntent
+
+    from app.contracts.enums import TripIntentStatus
+
+    now = _now(now)
+    closed = 0
+    listing_ids = list(session.execute(
+        select(Listing.id).where(Listing.kind == ListingKind.TRIP_OFFER.value,
+                                 Listing.status.in_((ListingStatus.PUBLISHED.value, ListingStatus.PAUSED.value)))
+        .order_by(Listing.id).limit(limit)
+    ).scalars())
+    for listing_id in listing_ids:
+        listing = lock_listing(session, listing_id)
+        if listing.status not in (ListingStatus.PUBLISHED.value, ListingStatus.PAUSED.value):
+            continue
+        cancel_listing_for_booking(session, listing=listing, actor_user_id=None, reason_code=DRIVER_LISTING_RETIRED_REASON,
+                                   now=now)
+        closed += 1
+    intent_ids = list(session.execute(
+        select(TripIntent.id).where(TripIntent.status == TripIntentStatus.ACTIVE.value).order_by(TripIntent.id).limit(limit)
+    ).scalars())
+    for intent_id in intent_ids:
+        closed += int(intents.retire_intent(session, intent_id, now=now))
+    session.flush()
+    return closed

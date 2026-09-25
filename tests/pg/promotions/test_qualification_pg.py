@@ -7,7 +7,6 @@ jobs directly. SYNTHETIC people, amounts and campaign parameters only.
 
 from __future__ import annotations
 
-import uuid
 from datetime import timedelta
 
 import pytest
@@ -30,7 +29,8 @@ from tests.pg.promotions.lifecycle import (
     new_receiver,
     passenger_trip,
 )
-from tests.pg.promotions.referral_world import KEYS, Ref, enable_promotions, new_phone
+from tests.pg.promotions.referral_world import KEYS, Ref, enable_promotions
+from tests.pg.ops.test_db_roles import roles  # noqa: F401  (fixture)
 
 pytestmark = pytest.mark.pg
 
@@ -391,28 +391,81 @@ def test_referrer_served_booking_does_not_close_the_enrollment(q) -> None:  # no
 # --- parcels and driver milestones ------------------------------------------------------------------------------------
 
 
-def test_two_real_parcels_on_one_trip_qualify(q) -> None:  # noqa: ANN001
+def test_staff_completed_parcels_never_qualify_by_themselves(q) -> None:  # noqa: ANN001
+    """ADR-0026 (Q139, open decision D-1): a parcel has no handover/delivery proof and no in-app cash confirmation any
+    more. Staff completion plus a real capture is *not* treated as the referee's qualifying evidence - nothing is
+    granted automatically; the promise stays reserved until the enrollment's own deadline (no silent release)."""
     bw, ref = q
     campaign = ref.parcel_campaign()
     referee, enrollment = _enrolled(ref, campaign)
     bookings = completed_parcels_on_one_trip(bw, referee, [new_receiver(), new_receiver()])
-    ready = max(_ready_at(ref, b) for b in bookings)
-    assert _process(ref, enrollment, ready) == "granted"
-    assert sorted(_scalar(ref, "SELECT evidence_booking_ids FROM promo_qualifications WHERE enrollment_id = :e",
-                          e=enrollment)) == sorted(bookings)
+    assert _scalar(ref, "SELECT count(*) FROM bookings WHERE id = ANY(:b) AND service_status = 'completed' "
+                        "AND commission_status = 'captured'", b=bookings) == 2
+    assert _process(ref, enrollment, utc_now() + timedelta(days=3)) != "granted"
+    assert _lots(ref, enrollment) == []
+    assert _scalar(ref, "SELECT count(*) FROM promo_qualifications WHERE enrollment_id = :e", e=enrollment) == 0
+    assert ref.promo.budget(campaign).promised_minor == COMMITMENT
 
 
-def test_a_parcel_split_for_the_reward_goes_to_review(q) -> None:  # noqa: ANN001
+def _retired_reviews(ref: Ref, enrollment: int) -> list[int]:
+    return [r[0] for r in ref.pg_db.engine.connect().execute(text(
+        "SELECT id FROM promo_reviews WHERE kind = 'qualification_path_retired' AND enrollment_id = :e"), {"e": enrollment})]
+
+
+def _enrollment_status(ref: Ref, enrollment: int) -> str:
+    return _scalar(ref, "SELECT status FROM promo_enrollments WHERE id = :e", e=enrollment)
+
+
+def test_a_promised_parcel_enrollment_waits_for_a_person_not_for_the_deadline(q) -> None:  # noqa: ANN001
+    """Q147 (ADR-0026): the parcel proofs Q113 asks for were removed by the platform. Such a promise is neither granted
+    without evidence nor released by the deadline, and the retired path is never a ground to reject it (D-4 open)."""
     bw, ref = q
     campaign = ref.parcel_campaign()
-    referee, enrollment = _enrolled(ref, campaign)
-    receiver = new_receiver()
-    bookings = completed_parcels_on_one_trip(bw, referee, [receiver, receiver])
-    ready = max(_ready_at(ref, b) for b in bookings)
-    assert _process(ref, enrollment, ready) == "review"
-    reasons = _scalar(ref, "SELECT reason_codes FROM promo_reviews WHERE enrollment_id = :e", e=enrollment)
-    assert reasons == ["split_shipment"]
-    assert _lots(ref, enrollment) == [] and ref.promo.budget(campaign).promised_minor == COMMITMENT
+    _, rejected_one = _enrolled(ref, campaign)
+    _, approved_one = _enrolled(ref, campaign)
+    promised = ref.promo.budget(campaign).promised_minor
+    with ref.pg_db.session() as s:
+        assert qualification.review_retired_parcel_enrollments(s, now=utc_now()) == 2
+        s.commit()
+    with ref.pg_db.session() as s:
+        assert qualification.review_retired_parcel_enrollments(s, now=utc_now()) == 0  # idempotent
+        s.commit()
+    assert len(_retired_reviews(ref, rejected_one)) == len(_retired_reviews(ref, approved_one)) == 1
+
+    after_deadline = _scalar(ref, "SELECT max(qualification_deadline) FROM promo_enrollments") + timedelta(days=1)
+    with ref.pg_db.session() as s:
+        qualification.expire_enrollments(s, now=after_deadline)
+        s.commit()
+    assert _enrollment_status(ref, rejected_one) == _enrollment_status(ref, approved_one) == "promised"
+    assert ref.promo.budget(campaign).promised_minor == promised  # the obligation is kept
+    assert _lots(ref, rejected_one) == [] and _lots(ref, approved_one) == []  # and nothing is granted without evidence
+    assert len(_retired_reviews(ref, rejected_one)) == 1  # the deadline pass opened no second review
+
+    # the platform removing the proof is not the participant's breach: "reject" is refused and nothing is released
+    refused = None
+    with ref.pg_db.session() as s:
+        try:
+            qualification.decide_review(s, review_id=_retired_reviews(ref, rejected_one)[0], decision="reject",
+                                        actor_user_id=ref.promo.admin_id, actor_capabilities=ADMIN_CAPS,
+                                        note="synthetic: trying to reject for the retired path", expected_version=1)
+        except DomainError as exc:
+            refused = exc
+            s.rollback()
+    assert refused is not None and refused.code is ErrorCode.INVALID_STATE_TRANSITION
+    assert refused.details["reason"] == "retired_path_is_not_a_violation"
+    assert _enrollment_status(ref, rejected_one) == "promised"
+    # approval records that the promise is to be honoured; it grants nothing (D-4 open) and keeps the reserve
+    with ref.pg_db.session() as s:
+        qualification.decide_review(s, review_id=_retired_reviews(ref, approved_one)[0], decision="approve",
+                                    actor_user_id=ref.promo.admin_id, actor_capabilities=ADMIN_CAPS,
+                                    note="synthetic: honour when D-4 is decided", expected_version=1)
+        s.commit()
+    assert _enrollment_status(ref, approved_one) == "promised" and _lots(ref, approved_one) == []
+    with ref.pg_db.session() as s:
+        qualification.expire_enrollments(s, now=after_deadline + timedelta(days=1))
+        s.commit()
+    assert _enrollment_status(ref, approved_one) == _enrollment_status(ref, rejected_one) == "promised"
+    assert ref.promo.budget(campaign).promised_minor == promised  # every reserve kept
 
 
 def test_driver_milestone_counts_distinct_trips(q) -> None:  # noqa: ANN001
@@ -569,3 +622,32 @@ def test_unauthorised_staff_cannot_grant_or_move_ledger_through_reviews(q) -> No
                                                     actor_capabilities=OPERATOR_CAPS, reason="x")
     assert _scalar(ref, "SELECT count(*) FROM promo_ledger_transactions") == ledger_before
     assert _scalar(ref, "SELECT status FROM promo_reviews WHERE id = :r", r=review_id) == "open"
+
+
+def test_the_retired_path_job_runs_under_the_application_role_once_and_keeps_the_reserve(roles, q) -> None:  # noqa: ANN001, F811
+    """Q147 worker job under the real non-privileged application role (db_roles.bootstrap, as deploy does), on a real
+    promised parcel enrollment: one review, a second run opens none, the reserve and the promise stay as they were."""
+    from sqlalchemy import create_engine
+
+    from app import worker
+    from tests.pg.ops.test_db_roles import _as, _libpq_dsn, _plan, db_roles
+
+    bw, ref = q
+    campaign = ref.parcel_campaign()
+    _, enrollment = _enrolled(ref, campaign)
+    promised = ref.promo.budget(campaign).promised_minor
+    db_roles.bootstrap(_libpq_dsn(ref.pg_db.url), _plan(ref.pg_db, roles))
+    engine = create_engine(_as(ref.pg_db, roles.app, roles.app_password))
+    job = next(j for j in worker.SERVICE_JOBS if j.name == "promotions.review_retired_parcel_enrollments")
+    try:
+        with engine.connect() as conn:
+            who = conn.execute(text("SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")).one()
+        assert (who[0], who[1], who[2]) == (roles.app, False, False)
+        first = worker.run_service_job(job, worker.resolve_service_function(job), engine=engine)
+        second = worker.run_service_job(job, worker.resolve_service_function(job), engine=engine)
+    finally:
+        engine.dispose()
+    assert first == (True, 1) and second == (True, 0)
+    assert len(_retired_reviews(ref, enrollment)) == 1
+    assert _enrollment_status(ref, enrollment) == "promised" and _lots(ref, enrollment) == []
+    assert ref.promo.budget(campaign).promised_minor == promised

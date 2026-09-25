@@ -62,6 +62,11 @@ class PublicIdPrefix(StrEnum):
     FRAUD_SIGNAL = "fsg"
     # Wave 7 (additive): §5.2 parcel policy versions.
     PARCEL_POLICY = "ppv"
+    # ADR-0026 (additive): parcel size catalog (Q140) and the booking-bound operator chat (Q141).
+    PARCEL_CATEGORY_VERSION = "pcv"
+    PARCEL_CATEGORY = "pct"
+    SUPPORT_THREAD = "sth"
+    SUPPORT_MESSAGE = "smg"
     STAFF_MFA_FACTOR = "mfa"
     # referral stage 3 (additive)
     PROMO_ENROLLMENT = "pen"

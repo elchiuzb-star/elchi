@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import exists, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -373,6 +373,12 @@ def decide_review(session: Session, *, review_id: int, decision: str, actor_user
         raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "promo_review", "from": review.status})
     if review.version != expected_version:
         raise DomainError(ErrorCode.VERSION_CONFLICT, details={"current_version": review.version})
+    if review.kind == QUALIFICATION_PATH_RETIRED and decision == "reject":
+        # Q147: the platform removed the parcel proofs; that is not the participant's breach, so it can never be the
+        # ground for refusing the promise or releasing its reserve. A real breach of an approved condition (self-referral,
+        # identity match, inactive party, qualification risk) goes through its own review kind, reason and audit.
+        raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={
+            "machine": "promo_review", "kind": review.kind, "reason": "retired_path_is_not_a_violation"})
     review.status = "approved" if decision == "approve" else "rejected"
     review.decided_by, review.decided_at, review.decision_note, review.updated_at = actor_user_id, now, note, now
     review.version += 1
@@ -411,6 +417,8 @@ def decide_review(session: Session, *, review_id: int, decision: str, actor_user
             if item.get("table") == "promo_redemptions":
                 promo_service.withdraw_restoration(session, redemption_id=int(item["id"]), actor_user_id=actor_user_id,
                                                    actor_capabilities=actor_capabilities, reason=note, now=now)
+    # "qualification_path_retired" (Q147, D-4 open): approval records that the promise is to be honoured and keeps the
+    # reserve; it grants nothing - there is no approved evidence path or grant authority yet. Rejection is refused above.
     # "restoration_uncovered" (Q127): the decision records a person's judgement; it moves no value by itself
     promo_service._audit(session, actor_user_id, "promo_reviews", review.id, f"review_{review.status}",
                          {"kind": review.kind, "reasons": list(review.reason_codes)}, note)
@@ -785,6 +793,42 @@ def _pending_in_time(session: Session, enrollment: PromoEnrollment, now: datetim
     return False
 
 
+# ADR-0026 (Q147): the parcel pickup and delivery proofs a parcel enrollment needs (Q113) no longer exist - the
+# platform removed them, the people did nothing wrong. Such a promise is never released by the deadline and never
+# granted without evidence: it waits in a person's review, with its reserve kept.
+QUALIFICATION_PATH_RETIRED = "qualification_path_retired"
+PARCEL_PROOF_RETIRED = "parcel_proof_retired"
+
+
+def hold_retired_parcel_enrollment(session: Session, enrollment: PromoEnrollment, *, now: datetime) -> PromoReview:
+    """Open (or return) the transition review of a promised parcel enrollment. Moves no value; idempotent."""
+    return open_review(
+        session, kind=QUALIFICATION_PATH_RETIRED, dedup_key=f"{QUALIFICATION_PATH_RETIRED}:{enrollment.id}",
+        reasons=[PARCEL_PROOF_RETIRED], evidence=[{"table": "promo_enrollments", "id": enrollment.id}], now=now,
+        sla=_review_sla(session, enrollment.campaign_id), enrollment_id=enrollment.id, campaign_id=enrollment.campaign_id,
+    )
+
+
+def review_retired_parcel_enrollments(session: Session, *, limit: int = 100, now: datetime | None = None) -> int:
+    """Worker: every promised parcel enrollment gets its transition review at once (not only at its deadline).
+    Returns how many reviews were newly opened; a re-run opens none."""
+    now = _now(now)
+    opened = 0
+    ids = session.execute(
+        select(PromoEnrollment.id).where(PromoEnrollment.status == "promised",
+                                         PromoEnrollment.service_type == ServiceType.PARCEL.value,
+                                         ~exists().where(PromoReview.enrollment_id == PromoEnrollment.id,
+                                                         PromoReview.kind == QUALIFICATION_PATH_RETIRED))
+        .order_by(PromoEnrollment.id).limit(limit)).scalars().all()
+    for enrollment_id in ids:
+        enrollment = _lock_enrollment(session, enrollment_id)
+        if enrollment.status == "promised":
+            hold_retired_parcel_enrollment(session, enrollment, now=now)
+            opened += 1
+    session.flush()
+    return opened
+
+
 def expire_enrollments(session: Session, *, limit: int = 100, now: datetime | None = None) -> int:
     """Past the qualification deadline: release what can no longer be earned; keep what is being decided."""
     now = _now(now)
@@ -798,6 +842,11 @@ def expire_enrollments(session: Session, *, limit: int = 100, now: datetime | No
             process_enrollment(session, enrollment_id=enrollment_id, now=now)
             enrollment = _lock_enrollment(session, enrollment_id)
             campaign = session.get(PromoCampaign, enrollment.campaign_id)
+            if enrollment.status == "promised" and enrollment.service_type == ServiceType.PARCEL.value:
+                # Q147: the deadline cannot be met because the platform removed the proof - not released here
+                hold_retired_parcel_enrollment(session, enrollment, now=now)
+                savepoint.commit()
+                continue
             if enrollment.status == "promised" and campaign.processing_suspended_at is None \
                     and not _pending_in_time(session, enrollment, now):
                 _release_milestone(session, enrollment, None, reason="qualification deadline passed",

@@ -1721,6 +1721,16 @@
               }
             ]
           },
+          "parcel_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParcelCategoryDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "parcel_contacts": {
             "anyOf": [
               {
@@ -1768,6 +1778,12 @@
           "quantity": {
             "title": "Quantity",
             "type": "integer"
+          },
+          "quantity_amendable": {
+            "default": false,
+            "description": "Q145 (ADR-0026): whether an amendment may change the quantity. False for every booking made on a client request (D9) and for parcels; the unit price can still be amended by agreement.",
+            "title": "Quantity Amendable",
+            "type": "boolean"
           },
           "service_status": {
             "title": "Service Status",
@@ -2069,6 +2085,16 @@
               }
             ]
           },
+          "parcel_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParcelCategoryDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "parcel_contacts": {
             "anyOf": [
               {
@@ -2116,6 +2142,12 @@
           "quantity": {
             "title": "Quantity",
             "type": "integer"
+          },
+          "quantity_amendable": {
+            "default": false,
+            "description": "Q145 (ADR-0026): whether an amendment may change the quantity. False for every booking made on a client request (D9) and for parcels; the unit price can still be amended by agreement.",
+            "title": "Quantity Amendable",
+            "type": "boolean"
           },
           "service_status": {
             "title": "Service Status",
@@ -5344,6 +5376,31 @@
         "title": "DisputeCommand",
         "type": "object"
       },
+      "DisputeCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DisputeCreate",
+        "type": "object"
+      },
       "DisputeDTO": {
         "additionalProperties": false,
         "properties": {
@@ -5418,33 +5475,6 @@
           "escalate_at"
         ],
         "title": "DisputeDTO",
-        "type": "object"
-      },
-      "DisputeEvidenceCreate": {
-        "additionalProperties": false,
-        "properties": {
-          "file_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 10,
-            "title": "File Ids",
-            "type": "array"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "maxLength": 1000,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          }
-        },
-        "title": "DisputeEvidenceCreate",
         "type": "object"
       },
       "DisputeEvidenceDTO": {
@@ -8444,6 +8474,114 @@
         "title": "Envelope[OutboxEventAdminDTO]",
         "type": "object"
       },
+      "Envelope_ParcelCategoryCatalogDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ParcelCategoryCatalogDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[ParcelCategoryCatalogDTO]",
+        "type": "object"
+      },
+      "Envelope_ParcelCategoryVersionDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ParcelCategoryVersionDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[ParcelCategoryVersionDTO]",
+        "type": "object"
+      },
       "Envelope_ParcelPolicyDTO_": {
         "additionalProperties": false,
         "properties": {
@@ -9956,6 +10094,168 @@
         "title": "Envelope[SupportContactsDTO]",
         "type": "object"
       },
+      "Envelope_SupportFileLinkDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SupportFileLinkDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[SupportFileLinkDTO]",
+        "type": "object"
+      },
+      "Envelope_SupportThreadAdminDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SupportThreadAdminDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[SupportThreadAdminDTO]",
+        "type": "object"
+      },
+      "Envelope_SupportThreadDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SupportThreadDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[SupportThreadDTO]",
+        "type": "object"
+      },
       "Envelope_SupportTicketAdminDTO_": {
         "additionalProperties": false,
         "properties": {
@@ -10780,6 +11080,67 @@
           "data"
         ],
         "title": "Envelope[Union[ListingDTO, ListingPublicDTO]]",
+        "type": "object"
+      },
+      "Envelope_Union_SupportThreadDTO__NoneType__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupportThreadDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[Union[SupportThreadDTO, NoneType]]",
         "type": "object"
       },
       "Envelope_Union_TripDTO__TripPublicDTO__": {
@@ -12686,6 +13047,64 @@
         "title": "Envelope[list[OutboxEventAdminDTO]]",
         "type": "object"
       },
+      "Envelope_list_ParcelCategoryVersionDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ParcelCategoryVersionDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[ParcelCategoryVersionDTO]]",
+        "type": "object"
+      },
       "Envelope_list_ParcelPolicyVersionDTO__": {
         "additionalProperties": false,
         "properties": {
@@ -13496,6 +13915,122 @@
           "data"
         ],
         "title": "Envelope[list[StopDTO]]",
+        "type": "object"
+      },
+      "Envelope_list_SupportThreadAdminDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SupportThreadAdminDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[SupportThreadAdminDTO]]",
+        "type": "object"
+      },
+      "Envelope_list_SupportThreadDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SupportThreadDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[SupportThreadDTO]]",
         "type": "object"
       },
       "Envelope_list_SupportTicketAdminDTO__": {
@@ -16766,6 +17301,16 @@
               }
             ]
           },
+          "parcel_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParcelCategoryDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "parcel_type": {
             "anyOf": [
               {
@@ -17037,122 +17582,6 @@
           "dropoffs"
         ],
         "title": "ManifestStopDTO",
-        "type": "object"
-      },
-      "MatchDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "comparable_total_minor": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comparable Total Minor"
-          },
-          "group": {
-            "$ref": "#/components/schemas/MatchGroup"
-          },
-          "labels": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Labels",
-            "type": "array"
-          },
-          "listing": {
-            "$ref": "#/components/schemas/ListingPublicDTO"
-          },
-          "match": {
-            "$ref": "#/components/schemas/FeedMatchDTO"
-          },
-          "ranking_version": {
-            "title": "Ranking Version",
-            "type": "string"
-          },
-          "ready_to_accept": {
-            "title": "Ready To Accept",
-            "type": "boolean"
-          },
-          "reputation": {
-            "$ref": "#/components/schemas/FeedReputationDTO"
-          },
-          "trip_availability_summary": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TripAvailabilitySummaryDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "listing",
-          "match",
-          "ranking_version",
-          "group",
-          "ready_to_accept",
-          "labels",
-          "reputation"
-        ],
-        "title": "MatchDTO",
-        "type": "object"
-      },
-      "MatchEnvelope": {
-        "additionalProperties": false,
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/MatchDTO"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/FeedPageMeta"
-          },
-          "success": {
-            "const": true,
-            "default": true,
-            "title": "Success",
-            "type": "boolean"
-          },
-          "warnings": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ApiWarning"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Warnings"
-          }
-        },
-        "required": [
-          "data",
-          "meta"
-        ],
-        "title": "MatchEnvelope",
         "type": "object"
       },
       "MatchGroup": {
@@ -17457,7 +17886,8 @@
           "resolve_custody_case",
           "finalize_fee",
           "cancel",
-          "reissue_proof_code"
+          "reissue_proof_code",
+          "mark_delivered"
         ],
         "title": "OperatorBookingCommand",
         "type": "string"
@@ -17534,6 +17964,7 @@
           "finance_review",
           "dispute",
           "support_ticket",
+          "support_thread",
           "trust_review",
           "unanswered_listing",
           "stale_tracking",
@@ -17779,6 +18210,341 @@
         "title": "PageMeta",
         "type": "object"
       },
+      "ParcelCategoryCatalogDTO": {
+        "additionalProperties": false,
+        "description": "What a sender picks from. ``confirmed=false`` = no approved catalog (production refuses new parcel business);\n``synthetic=true`` = demo/test values, never real tariffs.",
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParcelCategoryDTO"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "synthetic": {
+            "default": false,
+            "title": "Synthetic",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirmed"
+        ],
+        "title": "ParcelCategoryCatalogDTO",
+        "type": "object"
+      },
+      "ParcelCategoryDTO": {
+        "additionalProperties": false,
+        "description": "Q140 (ADR-0026): a size category from the server catalog - the same row the client picks and the driver sees.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "icon_key": {
+            "title": "Icon Key",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "max_height_cm": {
+            "title": "Max Height Cm",
+            "type": "integer"
+          },
+          "max_length_cm": {
+            "title": "Max Length Cm",
+            "type": "integer"
+          },
+          "max_volume_ml": {
+            "title": "Max Volume Ml",
+            "type": "integer"
+          },
+          "max_weight_g": {
+            "title": "Max Weight G",
+            "type": "integer"
+          },
+          "max_width_cm": {
+            "title": "Max Width Cm",
+            "type": "integer"
+          },
+          "name_ru": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ru"
+          },
+          "name_uz": {
+            "title": "Name Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name_uz",
+          "icon_key",
+          "max_length_cm",
+          "max_width_cm",
+          "max_height_cm",
+          "max_weight_g",
+          "max_volume_ml"
+        ],
+        "title": "ParcelCategoryDTO",
+        "type": "object"
+      },
+      "ParcelCategoryItemInput": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[a-z][a-z0-9_]{1,31}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "display_order": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Order"
+          },
+          "icon_key": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Icon Key",
+            "type": "string"
+          },
+          "max_height_cm": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 500.0,
+            "title": "Max Height Cm",
+            "type": "integer"
+          },
+          "max_length_cm": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 500.0,
+            "title": "Max Length Cm",
+            "type": "integer"
+          },
+          "max_volume_ml": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 125000000.0,
+            "title": "Max Volume Ml",
+            "type": "integer"
+          },
+          "max_weight_g": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000.0,
+            "title": "Max Weight G",
+            "type": "integer"
+          },
+          "max_width_cm": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 500.0,
+            "title": "Max Width Cm",
+            "type": "integer"
+          },
+          "name_ru": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ru"
+          },
+          "name_uz": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name_uz",
+          "icon_key",
+          "max_length_cm",
+          "max_width_cm",
+          "max_height_cm",
+          "max_weight_g",
+          "max_volume_ml"
+        ],
+        "title": "ParcelCategoryItemInput",
+        "type": "object"
+      },
+      "ParcelCategoryVersionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParcelCategoryItemInput"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "label": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "source_note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Note"
+          },
+          "synthetic": {
+            "default": false,
+            "description": "Demo/test values - never confirmable in production.",
+            "title": "Synthetic",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "label",
+          "items"
+        ],
+        "title": "ParcelCategoryVersionCreate",
+        "type": "object"
+      },
+      "ParcelCategoryVersionDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParcelCategoryDTO"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "active",
+              "superseded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "synthetic": {
+            "title": "Synthetic",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "synthetic",
+          "created_by",
+          "version"
+        ],
+        "title": "ParcelCategoryVersionDTO",
+        "type": "object"
+      },
       "ParcelContactsDTO": {
         "additionalProperties": false,
         "properties": {
@@ -17820,6 +18586,30 @@
             "maxItems": 20,
             "title": "Accepted Parcel Types",
             "type": "array"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParcelCategoryDTO"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Response-only: the agreed category and its limits."
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Q140 (ADR-0026): the size category picked from GET /parcel-categories. Replaces typed dimensions.",
+            "title": "Category Id"
           },
           "declared_value_minor": {
             "anyOf": [
@@ -20264,6 +21054,53 @@
         "title": "ProposalDemandDTO",
         "type": "object"
       },
+      "ProposalDriverSummaryDTO": {
+        "additionalProperties": false,
+        "description": "ADR-0026 (Q138, with Q40/Q43): what the request owner compares drivers by before choosing - the same anonymous\nset competing drivers see on the offer board. No name, photo, plate, phone, make/model or any id.",
+        "properties": {
+          "completed_bookings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed Bookings"
+          },
+          "rating_bucket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RatingBucket"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when there are too few ratings or the reputation is unknown - never invented."
+          },
+          "rating_count": {
+            "default": 0,
+            "title": "Rating Count",
+            "type": "integer"
+          },
+          "seat_capacity": {
+            "title": "Seat Capacity",
+            "type": "integer"
+          },
+          "vehicle_class": {
+            "title": "Vehicle Class",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vehicle_class",
+          "seat_capacity"
+        ],
+        "title": "ProposalDriverSummaryDTO",
+        "type": "object"
+      },
       "ProposalParcel": {
         "additionalProperties": false,
         "description": "Parcel on a parcel trip-offer proposal; checked against the offer limits and trip cargo capacity.",
@@ -20577,6 +21414,17 @@
           },
           "driver": {
             "$ref": "#/components/schemas/ProposalPartyDTO"
+          },
+          "driver_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalDriverSummaryDTO"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0026: shown to the request owner only (anonymous comparison, Q40 set)."
           },
           "id": {
             "title": "Id",
@@ -23342,6 +24190,388 @@
         "title": "SupportContactsDTO",
         "type": "object"
       },
+      "SupportFileLinkDTO": {
+        "additionalProperties": false,
+        "description": "A short-lived signed link to one evidence file (existing signed-URL mechanism; expires on its own).",
+        "properties": {
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "name",
+          "url",
+          "expires_at",
+          "content_type"
+        ],
+        "title": "SupportFileLinkDTO",
+        "type": "object"
+      },
+      "SupportFileRefDTO": {
+        "additionalProperties": false,
+        "description": "A thread file as staff see it: a readable label and an opaque reference - never the storage key.",
+        "properties": {
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "staff_only": {
+            "default": false,
+            "title": "Staff Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ref",
+          "name",
+          "message_id"
+        ],
+        "title": "SupportFileRefDTO",
+        "type": "object"
+      },
+      "SupportMessageCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SupportMessageCreate",
+        "type": "object"
+      },
+      "SupportMessageDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "enum": [
+              "me",
+              "operator",
+              "system",
+              "client",
+              "driver"
+            ],
+            "title": "Author",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "has_files": {
+            "default": false,
+            "title": "Has Files",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "staff_only": {
+            "default": false,
+            "title": "Staff Only",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "text",
+          "created_at"
+        ],
+        "title": "SupportMessageDTO",
+        "type": "object"
+      },
+      "SupportThreadAdminDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "assigned_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "booking_id": {
+            "title": "Booking Id",
+            "type": "string"
+          },
+          "carried_over_from_dispute": {
+            "default": false,
+            "title": "Carried Over From Dispute",
+            "type": "boolean"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/SupportFileRefDTO"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message_count": {
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/SupportMessageDTO"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "requester_side": {
+            "enum": [
+              "client",
+              "driver"
+            ],
+            "title": "Requester Side",
+            "type": "string"
+          },
+          "requester_user_id": {
+            "title": "Requester User Id",
+            "type": "string"
+          },
+          "staff_status": {
+            "enum": [
+              "waiting",
+              "assigned",
+              "answered",
+              "closed"
+            ],
+            "title": "Staff Status",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "booking_id",
+          "requester_side",
+          "status",
+          "staff_status",
+          "message_count",
+          "version",
+          "created_at",
+          "requester_user_id"
+        ],
+        "title": "SupportThreadAdminDTO",
+        "type": "object"
+      },
+      "SupportThreadCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "assignee_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "required": [
+          "expected_version"
+        ],
+        "title": "SupportThreadCommand",
+        "type": "object"
+      },
+      "SupportThreadDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "booking_id": {
+            "title": "Booking Id",
+            "type": "string"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message_count": {
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/SupportMessageDTO"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "requester_side": {
+            "enum": [
+              "client",
+              "driver"
+            ],
+            "title": "Requester Side",
+            "type": "string"
+          },
+          "staff_status": {
+            "enum": [
+              "waiting",
+              "assigned",
+              "answered",
+              "closed"
+            ],
+            "title": "Staff Status",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "booking_id",
+          "requester_side",
+          "status",
+          "staff_status",
+          "message_count",
+          "version",
+          "created_at"
+        ],
+        "title": "SupportThreadDTO",
+        "type": "object"
+      },
+      "SupportThreadOpen": {
+        "additionalProperties": false,
+        "description": "The complaint button. ``text`` is optional: the thread can be opened first and written into after.",
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "SupportThreadOpen",
+        "type": "object"
+      },
       "SupportTicketAdminDTO": {
         "additionalProperties": false,
         "properties": {
@@ -24483,58 +25713,6 @@
           "segments"
         ],
         "title": "TripAvailabilityDTO",
-        "type": "object"
-      },
-      "TripAvailabilitySummaryDTO": {
-        "additionalProperties": false,
-        "description": "Remaining capacity on the matched segment (no vehicle identity, Q43).",
-        "properties": {
-          "min_remaining_cargo_volume_ml": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Min Remaining Cargo Volume Ml"
-          },
-          "min_remaining_cargo_weight_g": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Min Remaining Cargo Weight G"
-          },
-          "min_remaining_seats": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Min Remaining Seats"
-          },
-          "seat_capacity": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seat Capacity"
-          }
-        },
-        "title": "TripAvailabilitySummaryDTO",
         "type": "object"
       },
       "TripCreate": {
@@ -26688,34 +27866,6 @@
         "title": "FeeQuoteDTO",
         "type": "object"
       },
-      "app__modules__trust_support__schemas__DisputeCreate": {
-        "additionalProperties": false,
-        "properties": {
-          "description": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Description",
-            "type": "string"
-          },
-          "evidence_file_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 10,
-            "title": "Evidence File Ids",
-            "type": "array"
-          },
-          "type": {
-            "$ref": "#/components/schemas/DisputeType"
-          }
-        },
-        "required": [
-          "type",
-          "description"
-        ],
-        "title": "DisputeCreate",
-        "type": "object"
-      },
       "app__modules__wallet__schemas__FeeQuoteDTO": {
         "additionalProperties": false,
         "properties": {
@@ -26759,31 +27909,6 @@
           "net_minor"
         ],
         "title": "FeeQuoteDTO",
-        "type": "object"
-      },
-      "app__schemas__dispute__DisputeCreate": {
-        "additionalProperties": false,
-        "properties": {
-          "comment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Comment"
-          },
-          "reason": {
-            "title": "Reason",
-            "type": "string"
-          }
-        },
-        "required": [
-          "reason"
-        ],
-        "title": "DisputeCreate",
         "type": "object"
       }
     },
@@ -31738,6 +32863,359 @@
         ]
       }
     },
+    "/api/v2/admin/parcel-categories": {
+      "get": {
+        "operationId": "list_parcel_category_versions_api_v2_admin_parcel_categories_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_ParcelCategoryVersionDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Parcel Category Versions",
+        "tags": [
+          "v2 Marketplace"
+        ]
+      },
+      "post": {
+        "description": "Draft a catalog version (`platform.policy_manage`, super_admin). A draft applies to nobody.",
+        "operationId": "create_parcel_category_version_api_v2_admin_parcel_categories_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParcelCategoryVersionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_ParcelCategoryVersionDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Parcel Category Version",
+        "tags": [
+          "v2 Marketplace"
+        ]
+      }
+    },
+    "/api/v2/admin/parcel-categories/{version_id}/confirm": {
+      "post": {
+        "description": "Activate a drafted catalog - a different super_admin than its author; synthetic catalogs never in production.",
+        "operationId": "confirm_parcel_category_version_api_v2_admin_parcel_categories__version_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionedCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_ParcelCategoryVersionDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Confirm Parcel Category Version",
+        "tags": [
+          "v2 Marketplace"
+        ]
+      }
+    },
     "/api/v2/admin/parcel-policies": {
       "get": {
         "operationId": "list_parcel_policies_api_v2_admin_parcel_policies_get",
@@ -35725,6 +37203,558 @@
         ]
       }
     },
+    "/api/v2/admin/support-threads": {
+      "get": {
+        "operationId": "admin_list_support_threads_api_v2_admin_support_threads_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assigned",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "me",
+                    "unassigned"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assigned"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_SupportThreadAdminDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin List Support Threads",
+        "tags": [
+          "v2 Trust & support"
+        ]
+      }
+    },
+    "/api/v2/admin/support-threads/{thread_id}": {
+      "get": {
+        "operationId": "admin_get_support_thread_api_v2_admin_support_threads__thread_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_SupportThreadAdminDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Get Support Thread",
+        "tags": [
+          "v2 Trust & support"
+        ]
+      }
+    },
+    "/api/v2/admin/support-threads/{thread_id}/files/{file_ref}": {
+      "get": {
+        "description": "ADR-0026: open one evidence file of a complaint thread - live staff session + ``ops.trust_review`` + the file\nbelongs to this thread; the view is audited and the answer is a short-lived signed link (no money or bonus effect).",
+        "operationId": "admin_support_thread_file_api_v2_admin_support_threads__thread_id__files__file_ref__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_ref",
+            "required": true,
+            "schema": {
+              "maxLength": 80,
+              "title": "File Ref",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_SupportFileLinkDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Support Thread File",
+        "tags": [
+          "v2 Trust & support"
+        ]
+      }
+    },
+    "/api/v2/admin/support-threads/{thread_id}/{command}": {
+      "post": {
+        "operationId": "admin_support_thread_command_api_v2_admin_support_threads__thread_id___command__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "command",
+            "required": true,
+            "schema": {
+              "enum": [
+                "assign",
+                "reply",
+                "close"
+              ],
+              "title": "Command",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportThreadCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_SupportThreadAdminDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Admin Support Thread Command",
+        "tags": [
+          "v2 Trust & support"
+        ]
+      }
+    },
     "/api/v2/admin/support/tickets": {
       "get": {
         "operationId": "admin_list_tickets_api_v2_admin_support_tickets_get",
@@ -39367,142 +41397,6 @@
         ]
       }
     },
-    "/api/v2/bookings/{booking_id}/disputes": {
-      "post": {
-        "operationId": "open_dispute_api_v2_bookings__booking_id__disputes_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "booking_id",
-            "required": true,
-            "schema": {
-              "title": "Booking Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/app__modules__trust_support__schemas__DisputeCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_DisputeDTO_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Open Dispute",
-        "tags": [
-          "v2 Trust & support"
-        ]
-      }
-    },
     "/api/v2/bookings/{booking_id}/messages": {
       "get": {
         "operationId": "list_booking_messages_api_v2_bookings__booking_id__messages_get",
@@ -39906,6 +41800,251 @@
           }
         ],
         "summary": "Create Rating",
+        "tags": [
+          "v2 Trust & support"
+        ]
+      }
+    },
+    "/api/v2/bookings/{booking_id}/support-thread": {
+      "get": {
+        "operationId": "get_booking_support_thread_api_v2_bookings__booking_id__support_thread_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "title": "Booking Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Union_SupportThreadDTO__NoneType__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Booking Support Thread",
+        "tags": [
+          "v2 Trust & support"
+        ]
+      },
+      "post": {
+        "description": "\"Shikoyat qilish\": the caller's open operator chat for this booking - an existing one, or a new one (200 either\nway; a retry or a second tap never creates a duplicate).",
+        "operationId": "open_support_thread_api_v2_bookings__booking_id__support_thread_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "title": "Booking Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportThreadOpen"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_SupportThreadDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Open Support Thread",
         "tags": [
           "v2 Trust & support"
         ]
@@ -41125,252 +43264,6 @@
         ]
       }
     },
-    "/api/v2/disputes/{dispute_id}": {
-      "get": {
-        "operationId": "get_dispute_api_v2_disputes__dispute_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "dispute_id",
-            "required": true,
-            "schema": {
-              "title": "Dispute Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_DisputeDTO_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Get Dispute",
-        "tags": [
-          "v2 Trust & support"
-        ]
-      }
-    },
-    "/api/v2/disputes/{dispute_id}/evidence": {
-      "post": {
-        "operationId": "add_evidence_api_v2_disputes__dispute_id__evidence_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "dispute_id",
-            "required": true,
-            "schema": {
-              "title": "Dispute Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DisputeEvidenceCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_DisputeDTO_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Add Evidence",
-        "tags": [
-          "v2 Trust & support"
-        ]
-      }
-    },
     "/api/v2/districts": {
       "get": {
         "description": "G16: the district catalogue, the second step of the direction picker (wave 10).\n\nAn unknown region answers with an empty list rather than 404: the picker is a catalogue, not a resource.",
@@ -42574,164 +44467,6 @@
         "summary": "Cancel Listing",
         "tags": [
           "v2 Marketplace"
-        ]
-      }
-    },
-    "/api/v2/listings/{listing_id}/matches": {
-      "get": {
-        "operationId": "get_listing_matches_api_v2_listings__listing_id__matches_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "listing_id",
-            "required": true,
-            "schema": {
-              "title": "Listing Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/FeedSort",
-              "default": "recommended"
-            }
-          },
-          {
-            "in": "query",
-            "name": "include_alternatives",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Alternatives",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 512,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cursor"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 50,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MatchEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Get Listing Matches",
-        "tags": [
-          "v2 Feed"
         ]
       }
     },
@@ -44319,136 +46054,6 @@
         ]
       }
     },
-    "/api/v2/me/disputes": {
-      "get": {
-        "operationId": "list_my_disputes_api_v2_me_disputes_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 512,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cursor"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_list_DisputeDTO__"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "List My Disputes",
-        "tags": [
-          "v2 Trust & support"
-        ]
-      }
-    },
     "/api/v2/me/listings": {
       "get": {
         "operationId": "list_my_listings_api_v2_me_listings_get",
@@ -45918,6 +47523,119 @@
         "summary": "List My Saved Searches",
         "tags": [
           "v2 Feed"
+        ]
+      }
+    },
+    "/api/v2/me/support-threads": {
+      "get": {
+        "operationId": "list_my_support_threads_api_v2_me_support_threads_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_SupportThreadDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List My Support Threads",
+        "tags": [
+          "v2 Trust & support"
         ]
       }
     },
@@ -47428,6 +49146,88 @@
         "summary": "Read Notification",
         "tags": [
           "v2 Communications"
+        ]
+      }
+    },
+    "/api/v2/parcel-categories": {
+      "get": {
+        "description": "The size categories a sender picks from (no typed dimensions). ``confirmed=false`` = no approved catalog yet.",
+        "operationId": "parcel_categories_api_v2_parcel_categories_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_ParcelCategoryCatalogDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Parcel Categories",
+        "tags": [
+          "v2 Marketplace"
         ]
       }
     },
@@ -50126,6 +51926,252 @@
         "summary": "Search Stops",
         "tags": [
           "Geo v2"
+        ]
+      }
+    },
+    "/api/v2/support-threads/{thread_id}": {
+      "get": {
+        "operationId": "get_support_thread_api_v2_support_threads__thread_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_SupportThreadDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Support Thread",
+        "tags": [
+          "v2 Trust & support"
+        ]
+      }
+    },
+    "/api/v2/support-threads/{thread_id}/messages": {
+      "post": {
+        "operationId": "post_support_message_api_v2_support_threads__thread_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportMessageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_SupportThreadDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Post Support Message",
+        "tags": [
+          "v2 Trust & support"
         ]
       }
     },

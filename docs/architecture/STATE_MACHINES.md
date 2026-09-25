@@ -324,3 +324,56 @@ Mashina: `state_machines.TRIP_INTENT`; DB’da `trg_trip_intents_guard` (noqonun
 
 `closed` — terminal. Bron bekor bo‘lishi talabni avtomatik `active`ga qaytarmaydi.
 
+
+## 15. ADR-0026 (25.09.2026, Q138–Q143) — yuqoridagi §1, §5, §6, §8, §14 dan ustun
+
+### 15.1 Listing / proposal (Q138)
+- `trip_offer` uchun yangi qator va `draft|paused → published`, `draft → paused` o‘tishlari **yo‘q** (servis
+  `DRIVER_LISTING_RETIRED` + trigger `trg_listings_driver_offer_retired`). Eski `published/paused` `trip_offer` →
+  `cancelled` (`driver_listing_retired`, ishchi `marketplace.retire_driver_listings`, tizim buyrug‘i).
+- `trip_offer` dagi ochiq thread: `submit`/`counter`/`accept` rad; ishchi uni texnik sabab bilan yopadi.
+- `trip_intents` (§14): yangi qator yo‘q (trigger `trg_trip_intents_retired`); `edit`/`reopen` rad (`TRIP_INTENT_RETIRED`);
+  `active → closed` (ishchi, `driver_listing_retired`) va egasining `close` buyrug‘i qoladi.
+
+### 15.2 Parcel booking (§5 o‘rniga, Q139/Q142/Q143)
+| From | To | Buyruq | Kim |
+|---|---|---|---|
+| `confirmed` | `awaiting_pickup` | `mark_awaiting_pickup` | tizim (trip `start_boarding`) |
+| `awaiting_pickup` | `in_transit` | `trip_departed` | tizim (trip `depart`) — «yo‘lda», topshirish da’vosi emas |
+| `in_transit` / `picked_up` / `delivery_failed` | `delivered` | `mark_delivered` (sabab majburiy) | operator (`ops.booking_command`) |
+| `delivered` | `completed` | `complete_with_evidence` | operator — **capture faqat shu yerda** (Q74/Q84 qoidalari bilan) |
+| `in_transit` / `picked_up` / `delivery_failed` | `return_required` | `require_return` | operator |
+| `return_required` | `returned` | `return_to_sender` | operator |
+| `confirmed` / `awaiting_pickup` | `cancelled` | `cancel` | mijoz / haydovchi / operator (avvalgidek) |
+
+- Haydovchining `pick_up`, `start_transit`, `deliver`, `report_delivery_failed`, `retry_delivery`, `return_to_sender` va
+  jo‘natuvchining `complete` amallari — **hech kimga ruxsat yo‘q** (`INVALID_STATE_TRANSITION`). Legacy o‘tishlar
+  (`pick_up`, `start_transit`, `deliver`) mashinada faqat eski qatorlarni tavsiflash uchun qoladi.
+- `picked_up`/`in_transit` safar yakunini to‘smaydi (`PARCEL_AWAITING_OPERATOR_OUTCOME`); `delivered` darhol
+  `awaiting_confirmation` navbatida (`booking.confirmation_overdue`, `overdue_since` = qayd vaqti).
+- Proof: faqat yo‘lovchi `boarding_code`. Pochta kodi yaratilmaydi, ko‘rsatilmaydi, qayta chiqarilmaydi.
+- **D-1 ochiq:** yakunlash qoidasi (operator / haydovchi yozuvi / boshqa) — foydalanuvchi qarori kutilmoqda.
+
+### 15.3 Cash (§6, Q139)
+- Pochta uchun `cash_receipts` yaratilmaydi (`parcel_cash_receipts_retired`); `bookings.cash_status` pochtada o‘zgarmaydi.
+  Yo‘lovchi naqd oqimi o‘zgarmagan.
+
+### 15.4 Support thread (`support_threads.status`, Q141)
+| From | To | Buyruq | Kim |
+|---|---|---|---|
+| — | `open` | `open` («Shikoyat qilish») | bron ishtirokchisi (mijoz yoki haydovchi); bor ochiq chat qaytariladi |
+| `open` | `open` | `message` | so‘rovchi (kontakt filtri, daqiqasiga 20) |
+| `open` | `open` | `assign` / `reply` | xodim (`ops.trust_review`) |
+| `open` | `closed` | `close` | xodim |
+
+- Bitta ochiq chat / (bron, so‘rovchi) — partial unique `uq_support_threads_open`. Yopilgan chat qayta ochilmaydi; yangi
+  «Shikoyat qilish» yangi chat ochadi. Hech bir o‘tish pul, komissiya, bonus yoki firibgarlik holatiga tegmaydi.
+- `staff_status` (foydalanuvchiga ko‘rinadi): `waiting` (xodim olmagan) → `assigned` → `answered` → `closed`.
+- `disputes_v2` (§8) — faqat xodim ichki yozuvi; foydalanuvchi uni ochmaydi.
+
+### 15.5 Kuzatuv (25.09.2026, Q144)
+- Pochta `delivered → completed` (`complete_with_evidence`, operator): komissiya `held` qoladi, `finance_review` navbati
+  (`parcel_staff_completion`); `held → captured` faqat `finalize_fee` (finance). Takroriy/parallel buyruq — bitta o'tish
+  (`VERSION_CONFLICT`/`INVALID_STATE_TRANSITION`), bitta capture. Chat `closed` xizmat holatiga ta'sir qilmaydi.
+- `promo_enrollments` (`service_type = parcel`, `promised`): muddat o'tishi `released` ga olib o'tmaydi; `qualification_path_retired`
+  review `reject` → `released`, `approve` → `promised` qoladi (D-4).

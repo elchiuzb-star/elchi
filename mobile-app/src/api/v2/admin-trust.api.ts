@@ -130,3 +130,33 @@ export function adminTripTracking(tripId: string) {
 export function createListingOnBehalf(body: ListingOnBehalfBody, idempotencyKey = newIdempotencyKey()) {
   return v2AdminRequestFull<AdminListingDTO>("/admin/listings/on-behalf", { method: "POST", body, idempotencyKey });
 }
+
+// --- ADR-0026 (Q141): the booking-bound operator chat queue -------------------------------------------------------
+
+export type SupportThreadAdminDTO = Schemas["SupportThreadAdminDTO"];
+export type SupportThreadCommandName = "assign" | "reply" | "close";
+
+export function listSupportThreadsAdmin(params: { status?: "open" | "closed"; assigned?: "me" | "unassigned"; limit?: number } = {}) {
+  return v2AdminRequest<SupportThreadAdminDTO[]>("/admin/support-threads", { query: params });
+}
+
+export function getSupportThreadAdmin(threadId: string) {
+  return v2AdminRequest<SupportThreadAdminDTO>(`/admin/support-threads/${threadId}`);
+}
+
+export type SupportFileLinkDTO = Schemas["SupportFileLinkDTO"];
+
+/** ADR-0026: a short-lived signed link to one evidence file (live staff session + ops.trust_review; audited). */
+export function supportThreadFileLink(threadId: string, fileRef: string) {
+  return v2AdminRequest<SupportFileLinkDTO>(`/admin/support-threads/${threadId}/files/${encodeURIComponent(fileRef)}`);
+}
+
+/** assign (to self by default), reply (a message to the requester) or close. None of them moves money. */
+export function supportThreadCommand(
+  threadId: string, command: SupportThreadCommandName, body: { expected_version: number; text?: string | null },
+  idempotencyKey: string = newIdempotencyKey(),
+) {
+  return v2AdminRequest<SupportThreadAdminDTO>(`/admin/support-threads/${threadId}/${command}`, {
+    method: "POST", body, idempotencyKey,
+  });
+}

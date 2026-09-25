@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.contracts.enums import EventType
 from app.contracts.communications import DispatchedEvent
 from app.contracts.enums import ActorSide, ListingKind
 from app.contracts.errors import DomainError
@@ -212,7 +213,10 @@ def _user(session: Session, event: DispatchedEvent) -> list[Recipient]:
             user_id = identity_service.resolve_user_id(session, event.aggregate_public_id)
         except DomainError:
             return []
-    return [Recipient(user_id, EventAudience.CLIENT, None)]
+    link = None
+    if event.event_type == EventType.SUPPORT_THREAD_REPLIED and event.payload.get("thread_id"):
+        link = f"/support-threads/{event.payload['thread_id']}"  # ADR-0026: straight into the requester's own chat
+    return [Recipient(user_id, EventAudience.CLIENT, link)]
 
 
 def _chat_thread(session: Session, event: DispatchedEvent) -> list[Recipient]:

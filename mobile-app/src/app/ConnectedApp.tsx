@@ -99,13 +99,11 @@ import {
   listCorridorDistricts,
   listDistricts,
   listRegions,
-  listingMatches,
   listCorridorRoutes,
   listCorridorStops,
   listCorridors,
   listListingOffers,
   listListingProposals,
-  offersFeed,
   previewDirection,
   withdrawProposal,
   listMyListings,
@@ -128,7 +126,6 @@ import {
   type ListingDTO,
   type ListingOfferDTO,
   type MapPointDTO,
-  type MatchDTO,
   type MediaRefDTO,
   type StopRefDTO,
   type ProposalThreadDTO,
@@ -139,9 +136,9 @@ import {
 import { newIdempotencyKey } from "../api/v2/http";
 import { LOCALES, translate, translateDynamic } from "../i18n";
 import { useLocale } from "../i18n/react";
+import type { MessageKey } from "../i18n/messages";
 import { negotiationActions, turnLabel, type ActorSide } from "./auction";
 import { alternativeReason, splitFeedGroups } from "./feedGroups";
-import { offerableServices, type OfferService } from "./tripOffers";
 import {
   CANCEL_REASONS,
   canCancelBooking,
@@ -157,44 +154,17 @@ import {
   waitParts,
   type BookingSide,
 } from "./bookingControls";
-import { formFromListing, ownerListingActions, planListingPatch, windowEditable, type ListingEditForm } from "./listingEdit";
+import { formFromListing, ownerListingActions, planListingPatch, seatsEditable, windowEditable, type ListingEditForm } from "./listingEdit";
 import { inboxBody, inboxTitle, parseInboxLink, unreadCount } from "./inbox";
 import { bidTotalMinor, bpsPercent } from "./commissionPreview";
-import { TripIntentEditor, TripIntentFitNotes, TripIntentSummary, type IntentEditForm } from "./v2/TripIntentPanel";
 import { BlockPanel, MyReportsList, ReportForm } from "./v2/BlockAndReportPanel";
 import { ShareLinkPanel, TrackingGrantPanel } from "./v2/TrackingSharePanel";
 import { ReputationCard } from "./v2/ReputationCard";
 import { ParcelPolicyNotice } from "./v2/ParcelPolicyNotice";
+import { ParcelCategoryLine, ParcelCategoryPicker, categoryLimitsText } from "./v2/ParcelCategoryPicker";
 import { DriverTripDetail } from "./v2/DriverTripDetail";
 import { StopSearch } from "./v2/StopSearch";
 import { bookingCounterparty, canShareListing, canShareTracking, routesThroughStop } from "./safetyMounts";
-import {
-  closeTripIntent,
-  createTripIntent,
-  editTripIntent,
-  getTripIntent,
-  listTripIntents,
-  reopenTripIntent,
-  tripIntentFit,
-  type TripIntentCreate,
-  type TripIntentDTO,
-  type TripIntentFitDTO,
-  type TripIntentUpdate,
-} from "../api/v2/tripIntents.api";
-import {
-  fitBlocks,
-  intentSummary,
-  isExpired,
-  offersAffectedText,
-  parcelDiffers,
-  parcelInput,
-  pickActive,
-  prefillBid,
-  priceLine,
-  readActiveIntentId,
-  updateBody,
-  writeActiveIntentId,
-} from "./tripIntent";
 import {
   createTrip,
   createVehicle,
@@ -218,24 +188,25 @@ import {
   type WalletDTO,
 } from "../api/v2/driver.api";
 import {
-  addDisputeEvidence,
   createSavedSearch,
   createSupportTicket,
   deleteSavedSearch,
-  getDispute,
   markNotificationRead,
-  myDisputes,
   notifications as fetchNotifications,
   type NotificationDTO,
   mySupportTickets,
-  openDispute,
   rateBooking,
   savedSearches,
   supportContacts as fetchSupportContacts,
-  type DisputeDTO,
   type SavedSearchDTO,
   type SupportContactsDTO,
   type SupportTicketDTO,
+  openSupportThread,
+  bookingSupportThread,
+  mySupportThreads,
+  getSupportThread,
+  postSupportMessage,
+  type SupportThreadDTO,
 } from "../api/v2/client-extras.api";
 import {
   acceptAmendment,
@@ -314,9 +285,6 @@ type Screen =
   | "client-order-review"
   | "client-success"
   | "client-orders"
-  | "client-offers"
-  | "client-offer-bid"
-  | "client-intent-edit"
   | "client-proposals"
   | "client-bonus"
   | "driver-bonus"
@@ -326,16 +294,14 @@ type Screen =
   | "client-booking-detail"
   | "driver-proposals"
   | "booking-rating"
-  | "booking-dispute"
   | "booking-chat"
   | "booking-amendment"
   | "listing-edit"
-  | "dispute-detail"
   | "driver-saved-searches"
-  | "my-disputes"
+  | "support-thread"
+  | "my-support-threads"
   | "support"
   | "settings"
-  | "listing-matches"
   | "booking-tracking"
   | "client-bids"
   | "client-confirm"
@@ -351,7 +317,6 @@ type Screen =
   | "driver-trip-detail"
   | "safety-center"
   | "driver-add-route"
-  | "driver-offer-create"
   | "driver-feed"
   | "driver-bid"
   | "driver-orders"
@@ -576,8 +541,9 @@ function soumToMinor(value: string): number {
  * Kept in step with the server set - a narrower list would hide the button in exactly the awkward cases
  * (failed delivery, return) where the two people most need to agree on what was paid.
  */
+// ADR-0026 (Q139): no "I paid / I got the money" step for a parcel - the agreed amount is shown, nothing is confirmed.
 const CASH_RECORDABLE: Record<string, string[]> = {
-  parcel: ["picked_up", "in_transit", "delivered", "delivery_failed", "return_required", "returned", "completed"],
+  parcel: [],
   passenger: ["onboard", "arrived", "completed"],
 };
 
@@ -589,14 +555,28 @@ const PASSENGER_PROGRESS: Array<[string, string]> = [
   labelledPair("completed", "app.progress.completed"),
 ];
 
+// Q139/Q142 (ADR-0026): the system only knows that the trip is being prepared and that it departed - not that the
+// parcel was handed over or loaded. Each step says exactly what was recorded, and by whom.
 const PARCEL_PROGRESS: Array<[string, string]> = [
   labelledPair("confirmed", "status.confirmed"),
-  labelledPair("awaiting_pickup", "app.progress.driverAtStop"),
-  labelledPair("picked_up", "app.progress.parcelPickedUp"),
-  labelledPair("in_transit", "status.in_transit"),
-  labelledPair("delivered", "status.delivered"),
+  labelledPair("awaiting_pickup", "parcel.progress.tripPreparing"),
+  labelledPair("in_transit", "parcel.status.driverDeparted"),
+  labelledPair("delivered", "parcel.progress.deliveredByOperator"),
   labelledPair("completed", "app.progress.completed"),
 ];
+
+/** A legacy parcel left at `picked_up` by the retired driver ladder sits on the "departed" step, no further. */
+function progressStatus(serviceType: string | undefined, status: string | undefined): string | undefined {
+  return serviceType === "parcel" && status === "picked_up" ? "in_transit" : status;
+}
+
+/** The badge text for a v2 booking: a parcel "in transit" only means the driver's trip departed (Q142). */
+function bookingBadgeLabel(booking: { service_type: string; service_status: string }): string | undefined {
+  if (booking.service_type !== "parcel") return undefined;
+  if (booking.service_status === "in_transit" || booking.service_status === "picked_up") return translate("parcel.status.driverDeparted");
+  if (booking.service_status === "delivered") return translate("parcel.progress.deliveredByOperator");
+  return undefined;
+}
 
 /** §17.1: the documents a driver has to upload before staff can verify them. */
 const DRIVER_DOCUMENT_TYPES: DriverDocumentType[] = ["passport", "selfie", "license", "car_document", "car_photo"];
@@ -1690,10 +1670,9 @@ export function ConnectedApp() {
     windowEnd: "",
     unitPrice: "",
     parcelType: "box",
-    weightKg: "",
-    lengthCm: "",
-    widthCm: "",
-    heightCm: "",
+    // Q140 (ADR-0026): a size category from the server catalog replaces typed weight / length / width / height.
+    categoryId: "",
+    categoryName: "",
     senderName: "",
     receiverName: "",
   });
@@ -1754,33 +1733,11 @@ export function ConnectedApp() {
     destinationStopId: "",
     price: "",
   });
-  // Q92, client side: the driver trip offers this client can answer, and the one they are answering.
-  const [offerFeed, setOfferFeed] = useState<FeedItemDTO[]>([]);
-  const [selectedOffer, setSelectedOffer] = useState<FeedItemDTO | null>(null);
-  const [offerBid, setOfferBid] = useState({
-    price: "",
-    seats: 1,
-    parcelType: "box",
-    weightKg: "",
-    lengthCm: "",
-    widthCm: "",
-    heightCm: "",
-    receiverName: "",
-    receiverPhone: "",
-  });
-  // ADR-0025: the saved request that fills every driver's offer screen. Private to this account, never published.
-  const [activeIntent, setActiveIntent] = useState<TripIntentDTO | null>(null);
-  const [myIntents, setMyIntents] = useState<TripIntentDTO[]>([]);
-  const [intentLoading, setIntentLoading] = useState(false);
-  const [intentError, setIntentError] = useState<string | null>(null);
-  const [intentFit, setIntentFit] = useState<TripIntentFitDTO | null>(null);
-  const [intentFitLoading, setIntentFitLoading] = useState(false);
-  /** "new" makes the route summary start another request; "edit" sends its places into the active one. */
-  const [intentDraftMode, setIntentDraftMode] = useState<"new" | "edit">("new");
-  /** A material edit waiting for the client to accept that N open offers close (409 TRIP_INTENT_OFFERS_AFFECTED). */
-  const [intentEditPending, setIntentEditPending] = useState<
-    { body: Record<string, unknown>; openOffers: number; then: Screen } | null
-  >(null);
+  // ADR-0026 (Q141): the booking-bound operator chat on screen ("Shikoyat qilish"), and the person's list of them.
+  const [supportThread, setSupportThread] = useState<SupportThreadDTO | null>(null);
+  const [supportThreads, setSupportThreads] = useState<SupportThreadDTO[]>([]);
+  const [supportDraft, setSupportDraft] = useState("");
+  const [supportBack, setSupportBack] = useState<Screen>("client-home");
   const [driverBookings, setDriverBookings] = useState<AnyBooking[]>([]);
   const [driverBooking, setDriverBooking] = useState<BookingDTO | null>(null);
   const [proofCode, setProofCode] = useState("");
@@ -1798,11 +1755,6 @@ export function ConnectedApp() {
   /** M3: the directions this driver asked to be told about. */
   const [saved, setSaved] = useState<SavedSearchDTO[]>([]);
   const [districtNames, setDistrictNames] = useState<Record<string, string>>({});
-  /** M2: what can serve the listing currently open, ranked by the server (§8.2). */
-  const [matches, setMatches] = useState<MatchDTO[]>([]);
-  const [matchesFor, setMatchesFor] = useState<{ id: string; kind: string } | null>(null);
-  /** S6: the note being attached to an open dispute, keyed by dispute id. */
-  const [evidenceNote, setEvidenceNote] = useState<{ id: string; note: string } | null>(null);
   const [amendments, setAmendments] = useState<AmendmentDTO[]>([]);
   const [amendmentForm, setAmendmentForm] = useState({ quantity: "", unitPrice: "", reason: "" });
   const [chatMessages, setChatMessages] = useState<ChatMessageDTO[]>([]);
@@ -1816,8 +1768,6 @@ export function ConnectedApp() {
   const [tracking, setTracking] = useState<BookingTrackingDTO | null>(null);
   const [trackingError, setTrackingError] = useState("");
   const [cashAmount, setCashAmount] = useState("");
-  const [bookingDisputes, setBookingDisputes] = useState<DisputeDTO[]>([]);
-  const [disputeType, setDisputeType] = useState("service");
   const [flags, setFlags] = useState<EffectiveFlagsDTO["flags"] | null>(null);
   // One counter form at a time; `pending` is the guard against a second submit of the same revision.
   const [counterFor, setCounterFor] = useState<string | null>(null);
@@ -1858,8 +1808,6 @@ export function ConnectedApp() {
   const [cancelRefusal, setCancelRefusal] = useState<string | null>(null);
   /** B5a: the last reissue answer per code kind - the new code's note, or the server's wait (Q75). */
   const [reissueNotice, setReissueNotice] = useState<{ kind: string; text: string; ok: boolean } | null>(null);
-  /** S5: the dispute opened from "Nizolarim". */
-  const [disputeDetail, setDisputeDetail] = useState<DisputeDTO | null>(null);
   /** L3: the owner's edit of one listing, and whether the Q20 warning was already shown for it. */
   const [listingEdit, setListingEdit] = useState<
     { listing: ListingDTO; form: ListingEditForm; back: Screen; confirming: boolean; openOffers: number | null } | null
@@ -1984,16 +1932,12 @@ export function ConnectedApp() {
     }
   }, [auth.isAuthenticated, auth.isLoading, auth.user?.role, screen]);
 
-  // ADR-0025: on every sign-in the saved request is re-read for *this* account; nothing of the previous one stays.
+  // ADR-0026: on every sign-in the operator chat on screen belongs to *this* account; nothing of the previous one stays.
   useEffect(() => {
-    setActiveIntent(null);
-    setMyIntents([]);
-    setIntentFit(null);
-    setIntentError(null);
-    if (auth.user?.role !== "client" || !auth.user?.id) return;
-    void loadIntents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.user?.id, auth.user?.role]);
+    setSupportThread(null);
+    setSupportThreads([]);
+    setSupportDraft("");
+  }, [auth.user?.id]);
 
   useEffect(() => {
     if (auth.user?.role !== "client" || !auth.user.phone || orderForm.sender_phone) return;
@@ -2353,12 +2297,7 @@ export function ConnectedApp() {
       });
     return () => { isActive = false; };
   }, [auth.isAuthenticated, directionCorridorId]);
-  const parcelReady = Boolean(
-    Number(listingForm.weightKg) > 0
-    && Number(listingForm.lengthCm) > 0
-    && Number(listingForm.widthCm) > 0
-    && Number(listingForm.heightCm) > 0,
-  );
+  const parcelReady = Boolean(listingForm.categoryId);
 
   /**
    * The districts this direction passes, in travel order (G17). `on_confirmed_route` is what makes the
@@ -2441,10 +2380,7 @@ export function ConnectedApp() {
         : {
             parcel: {
               parcel_type: listingForm.parcelType,
-              weight_g: Math.round(Number(listingForm.weightKg) * 1000),
-              length_cm: Math.round(Number(listingForm.lengthCm)),
-              width_cm: Math.round(Number(listingForm.widthCm)),
-              height_cm: Math.round(Number(listingForm.heightCm)),
+              category_id: listingForm.categoryId,
               payer: "sender",
               sender: { name: listingForm.senderName.trim(), phone: orderForm.sender_phone.trim() },
               receiver: { name: listingForm.receiverName.trim(), phone: orderForm.receiver_phone.trim() },
@@ -2474,34 +2410,27 @@ export function ConnectedApp() {
     const booking = (await getBooking(bookingId)) as BookingClientDTO;
     setClientBooking(booking);
     setBookingCodes(await getBookingCodes(bookingId).catch(() => null));
-    setBookingDisputes(await myDisputes({ limit: 20 }).catch(() => [] as DisputeDTO[]));
     setReissueNotice(null);
-    if (booking.service_status === "cancelled") await loadIntentOfBooking(bookingId);
     go("client-booking-detail");
   }
 
   /**
-   * ADR-0025: a cancelled booking that came from a saved request. The request is re-read from the server (not a
-   * copy kept on this device) so "Qayta qidirish" is offered exactly when the server says it may be (`can_reopen`).
+   * ADR-0026 (Q141): "Shikoyat qilish". Opens - or returns - this person's own operator chat for this booking; a second
+   * tap or a retry lands in the same thread (the server guarantees one open thread per booking and requester).
    */
-  async function loadIntentOfBooking(bookingId: string): Promise<TripIntentDTO | null> {
-    if (auth.user?.role !== "client") return null;
-    const booked = await listTripIntents("booked").catch(() => [] as TripIntentDTO[]);
-    const linked = intentOfBooking(booked, bookingId);
-    if (!linked) return null;
-    const fresh = await getTripIntent(linked.id).catch(() => linked);
-    setMyIntents((list) => [fresh, ...list.filter((item) => item.id !== fresh.id)]);
-    return fresh;
+  async function openSupportFor(bookingId: string, back: Screen) {
+    const opened = await openSupportThread(bookingId, null, newIdempotencyKey());
+    setSupportThread(opened.data);
+    setSupportDraft("");
+    setSupportBack(back);
+    go("support-thread");
   }
 
-  /** The explicit "search again" of ADR-0025, started from the cancelled booking itself. */
-  function searchAgainFor(intent: TripIntentDTO) {
-    void run(async () => {
-      const next = await reopenTripIntent(intent.id, intent.version);
-      rememberIntent(next);
-      setServiceMode(next.service_type as "parcel" | "passenger");
-      go("client-offers");
-    }, translate("app.toast.searchRestarted"));
+  async function openSupportThreadById(threadId: string, back: Screen) {
+    setSupportThread(await getSupportThread(threadId));
+    setSupportDraft("");
+    setSupportBack(back);
+    go("support-thread");
   }
 
   /**
@@ -2573,20 +2502,6 @@ export function ConnectedApp() {
     go("booking-rating");
   }
 
-  function openDisputeForm(bookingId: string, side: BookingSide) {
-    setOpenBooking({ id: bookingId, side });
-    setDisputeType("service");
-    setDisputeComment("");
-    go("booking-dispute");
-  }
-
-  /** S5: one dispute, re-read so both sides' latest evidence and any decision are current. */
-  async function openDisputeDetail(disputeId: string) {
-    setDisputeDetail(await getDispute(disputeId));
-    setEvidenceNote(null);
-    go("dispute-detail");
-  }
-
   /** L3: the owner's edit form, opened on the listing as the server has it now (its `version` is what is sent). */
   async function openListingEdit(listingId: string, back: Screen) {
     const listing = await getListing(listingId);
@@ -2612,14 +2527,6 @@ export function ConnectedApp() {
     }, translate(pause ? "listingOwner.paused" : "listingOwner.resumed"));
   }
 
-  /** ADR-0025: the editor opens on the request as the server has it, not a copy from another session. */
-  function openIntentEditor() {
-    void run(async () => {
-      if (activeIntent) rememberIntent(await getTripIntent(activeIntent.id));
-      go("client-intent-edit");
-    });
-  }
-
   /**
    * N4: where an inbox item leads. The link is the server's (`communications.recipients`); the screen it opens
    * depends on which side this account is, because a booking has a client view and a driver view.
@@ -2643,8 +2550,8 @@ export function ConnectedApp() {
       go(driver ? "driver-proposals" : "client-proposals");
     } else if (target.kind === "trip") {
       if (driver) go("driver-routes");
-    } else if (target.kind === "dispute") {
-      await openDisputeDetail(target.id);
+    } else if (target.kind === "support_thread") {
+      await openSupportThreadById(target.id, driver ? "driver-notifications" : "client-notifications");
     }
   }
 
@@ -2675,14 +2582,6 @@ export function ConnectedApp() {
    * is fetched alongside and the ids are resolved to the names the driver picked them by. An id that cannot be
    * resolved is described ("bekat") rather than printed.
    */
-  /** Open the ranked matches of a listing this person owns. */
-  async function openMatches(listingId: string, kind: string) {
-    const result = await listingMatches(listingId, { limit: 20 });
-    setMatches(result.data);
-    setMatchesFor({ id: listingId, kind });
-    setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
-    go("listing-matches");
-  }
 
   async function loadSavedSearches() {
     const [rows, districts] = await Promise.all([savedSearches(), listDistricts({ limit: 500 })]);
@@ -2801,31 +2700,6 @@ export function ConnectedApp() {
     setProposalTotal(counts.reduce((sum, value) => sum + value, 0));
   }
 
-  /** The trip offers already published for one trip - what that journey is advertised as, and for how much. */
-  function tripOffers(tripId: string) {
-    return myOffers.filter((offer) => offer.trip_id === tripId && offer.status !== "cancelled" && offer.status !== "expired");
-  }
-
-  /**
-   * Which services this trip can still be advertised for.
-   *
-   * Q92: one trip carries both, and the database says so - `uq_listings_open_trip_offer` is unique on
-   * `(trip_id, service_type)`, not on `trip_id`. So a driver may publish a taxi offer *and* a parcel offer on
-   * the same journey, and the second one is refused only if it repeats the first's service.
-   *
-   * The screen used to open on "passenger" every time, which meant the second tap on a trip that already had
-   * a passenger offer walked the driver through the whole form and then failed on send with DUPLICATE_LISTING
-   * - the one path that makes "can a driver post both?" feel like "no". The same filter as `tripOffers` is
-   * used, because that is exactly the index's predicate: a cancelled or expired offer frees its service again.
-   */
-  function availableOfferServices(tripId: string): OfferService[] {
-    // `myOffers` already holds every listing of this trip; the module applies the index's own status filter.
-    return offerableServices(
-      myOffers.filter((offer) => offer.trip_id === tripId),
-      { passengerEnabled: Boolean(flags?.passenger_enabled) },
-    );
-  }
-
   function resetOrderDraft() {
     setOrderForm(emptyOrder);
     setSelectedFromCity(null);
@@ -2842,10 +2716,8 @@ export function ConnectedApp() {
       windowEnd: "",
       unitPrice: "",
       parcelType: "box",
-      weightKg: "",
-      lengthCm: "",
-      widthCm: "",
-      heightCm: "",
+      categoryId: "",
+      categoryName: "",
       senderName: "",
       receiverName: "",
     });
@@ -2946,225 +2818,6 @@ export function ConnectedApp() {
    */
   // --- ADR-0025: the saved trip/parcel request ------------------------------------------------------------------
 
-  function rememberIntent(intent: TripIntentDTO | null) {
-    setActiveIntent(intent);
-    writeActiveIntentId(auth.user?.id, intent?.id ?? null);
-    if (intent) setMyIntents((list) => [intent, ...list.filter((item) => item.id !== intent.id)]);
-  }
-
-  async function loadIntents(): Promise<TripIntentDTO | null> {
-    setIntentLoading(true);
-    setIntentError(null);
-    try {
-      // Live ones only, asked for by status so a long history of closed requests never pushes them off the page.
-      const [active, booked] = await Promise.all([listTripIntents("active"), listTripIntents("booked")]);
-      const live = [...active, ...booked];
-      const chosen = pickActive(live, readActiveIntentId(auth.user?.id));
-      setMyIntents(live);
-      setActiveIntent(chosen);
-      writeActiveIntentId(auth.user?.id, chosen?.id ?? null);
-      return chosen;
-    } catch (cause) {
-      setIntentError(getErrorMessage(cause));
-      return null;
-    } finally {
-      setIntentLoading(false);
-    }
-  }
-
-  /** One end as the request stores it: a verified stop by id, a marked place by its district and point (Q88). */
-  function intentEnd(end: DirectionEnd) {
-    if (end.point && end.district) {
-      return { district_id: end.district.id, lat: end.point.lat, lng: end.point.lng, address: end.point.address ?? null };
-    }
-    return { stop_id: end.stop?.id ?? null };
-  }
-
-  /** What the route summary says, as request terms. The price is optional - it is only the client's own hint. */
-  function intentTermsFromHome() {
-    const passenger = serviceMode === "passenger";
-    return {
-      origin: intentEnd(pickupEnd),
-      destination: intentEnd(dropoffEnd),
-      window_start: localInputToIso(listingForm.windowStart),
-      window_end: localInputToIso(listingForm.windowEnd),
-      quantity: passenger ? seatCount : 1,
-      price_basis: listingUnitMinor > 0 ? (passenger ? "per_seat" : "total") : null,
-      unit_price_minor: listingUnitMinor > 0 ? listingUnitMinor : null,
-    };
-  }
-
-  /**
-   * PATCH the active request. A material change with open offers answers 409 first; the client is then shown how
-   * many offers close and the same body is resent with `acknowledge_open_offers` only after they agree.
-   */
-  async function sendIntentEdit(body: Record<string, unknown>, then: Screen): Promise<TripIntentDTO | null> {
-    if (!activeIntent) return null;
-    try {
-      const result = await editTripIntent(activeIntent.id, body as unknown as TripIntentUpdate);
-      rememberIntent(result.data);
-      return result.data;
-    } catch (cause) {
-      const failure = cause as { code?: string; details?: { open_offers?: number } };
-      if (failure.code === "TRIP_INTENT_OFFERS_AFFECTED") {
-        setIntentEditPending({ body, openOffers: failure.details?.open_offers ?? activeIntent.open_offers, then });
-        return null;
-      }
-      if (failure.code?.startsWith("TRIP_INTENT") || failure.code === "VERSION_CONFLICT") void loadIntents();
-      throw cause;
-    }
-  }
-
-  async function saveIntentFromHome() {
-    const terms = intentTermsFromHome();
-    const editing = intentDraftMode === "edit" && activeIntent?.status === "active"
-      && activeIntent.service_type === serviceMode;
-    if (editing && activeIntent) {
-      if (!(await sendIntentEdit(updateBody(activeIntent, terms), "client-offers"))) return;
-    } else {
-      const created = await createTripIntent({
-        service_type: serviceMode,
-        ...terms,
-        parcel: serviceMode === "parcel" ? { parcel_type: listingForm.parcelType } : null,
-      } as unknown as TripIntentCreate);
-      rememberIntent(created.data);
-    }
-    setIntentDraftMode("new");
-    go("client-offers");
-  }
-
-  function saveIntentEdit(form: IntentEditForm) {
-    if (!activeIntent) return;
-    const passenger = activeIntent.service_type === "passenger";
-    const priceMinor = soumToMinor(form.price);
-    const body = updateBody(activeIntent, {
-      window_start: localInputToIso(form.windowStart),
-      window_end: localInputToIso(form.windowEnd),
-      quantity: passenger ? form.quantity : 1,
-      price_basis: priceMinor > 0 ? (passenger ? "per_seat" : "total") : null,
-      unit_price_minor: priceMinor > 0 ? priceMinor : null,
-      parcel: passenger ? null : parcelInput(form),
-    });
-    void run(async () => {
-      if (await sendIntentEdit(body, "client-offers")) go("client-offers");
-    }, translate("app.toast.intentUpdated"));
-  }
-
-  function closeActiveIntent() {
-    if (!activeIntent) return;
-    const intent = activeIntent;
-    void run(async () => {
-      await closeTripIntent(intent.id, intent.version);
-      const next = await loadIntents();
-      go("client-offers");
-      await loadOfferFeed(serviceMode, next);
-    }, translate("app.toast.intentClosed"));
-  }
-
-  /** Explicit "search again" after a cancelled booking; the old offers stay closed (ADR-0025). */
-  function reopenActiveIntent() {
-    if (!activeIntent) return;
-    const intent = activeIntent;
-    void run(async () => {
-      const next = await reopenTripIntent(intent.id, intent.version);
-      rememberIntent(next);
-      await loadOfferFeed(serviceMode, next);
-    }, translate("app.toast.searchRestarted"));
-  }
-
-  function startNewIntent() {
-    setIntentDraftMode("new");
-    go("client-home");
-  }
-
-  function editIntentRoute() {
-    if (!activeIntent) return;
-    setIntentDraftMode("edit");
-    setServiceMode(activeIntent.service_type as "parcel" | "passenger");
-    go("client-home");
-  }
-
-  /** The list may be older than the request (edited from another device): the chosen one is re-read first. */
-  function selectIntent(intent: TripIntentDTO) {
-    void run(async () => {
-      const fresh = await getTripIntent(intent.id);
-      rememberIntent(fresh);
-      await loadOfferFeed(serviceMode, fresh);
-    });
-  }
-
-  /** The request the offer screen works with: live, and of the same service as this driver's offer. */
-  function intentFor(offer: { service_type: string } | null | undefined): TripIntentDTO | null {
-    return activeIntent && offer && activeIntent.status === "active" && activeIntent.service_type === offer.service_type
-      ? activeIntent
-      : null;
-  }
-
-  /** A driver's offer opens already filled from the request; the differences are fetched, nothing is reserved. */
-  function openOfferBid(item: FeedItemDTO) {
-    const intent = intentFor(item.listing);
-    setSelectedOffer(item);
-    setIntentFit(null);
-    if (intent) {
-      const fill = prefillBid(intent, item.listing);
-      setOfferBid({
-        price: fill.price,
-        seats: fill.seats,
-        parcelType: intent.current_version.parcel?.parcel_type ?? "box",
-        weightKg: fill.weightKg,
-        lengthCm: fill.lengthCm,
-        widthCm: fill.widthCm,
-        heightCm: fill.heightCm,
-        receiverName: fill.receiverName,
-        receiverPhone: fill.receiverPhone,
-      });
-      setIntentFitLoading(true);
-      void tripIntentFit(intent.id, item.listing.id)
-        .then(setIntentFit)
-        .catch(() => setIntentFit(null))
-        .finally(() => setIntentFitLoading(false));
-    } else {
-      setOfferBid({ ...offerBid, price: String(Math.round(item.listing.unit_price_minor / 100)), seats: 1 });
-    }
-    go("client-offer-bid");
-  }
-
-  async function loadOfferFeed(mode: "parcel" | "passenger" = serviceMode, intentOverride?: TripIntentDTO | null) {
-    // ADR-0025: with a live saved request the feed answers for it, so the list matches the summary above it and
-    // survives a restart; without one it reads the places marked on the home sheet, as before.
-    const intent = intentOverride !== undefined ? intentOverride : activeIntent;
-    if (intent && intent.status === "active") {
-      const v = intent.current_version;
-      const result = await offersFeed({
-        service_type: intent.service_type,
-        origin_district_id: v.origin.district?.id,
-        origin_stop_id: v.origin.district ? undefined : v.origin.stop?.id,
-        destination_district_id: v.destination.district?.id,
-        destination_stop_id: v.destination.district ? undefined : v.destination.stop?.id,
-        seats: intent.service_type === "passenger" ? v.quantity : undefined,
-        limit: 30,
-      });
-      setOfferFeed(result.data);
-      setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
-      return;
-    }
-    if (!pickupEnd.stop && !pickupEnd.district) {
-      setOfferFeed([]);
-      return;
-    }
-    const result = await offersFeed({
-      service_type: mode,
-      origin_district_id: pickupEnd.district?.id,
-      origin_stop_id: pickupEnd.district ? undefined : pickupEnd.stop?.id,
-      destination_district_id: dropoffEnd.district?.id,
-      destination_stop_id: dropoffEnd.district ? undefined : dropoffEnd.stop?.id,
-      seats: mode === "passenger" ? offerBid.seats : undefined,
-      limit: 30,
-    });
-    setOfferFeed(result.data);
-    setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
-  }
-
   /**
    * §9.2: the wallet is the commission account, not earnings. A pending top-up is a request, not money, so it
    * is shown on its own line and never added to the balance.
@@ -3183,7 +2836,6 @@ export function ConnectedApp() {
   async function openDriverBooking(bookingId: string) {
     setProofCode("");
     setDriverBooking((await getBooking(bookingId)) as BookingDTO);
-    setBookingDisputes(await myDisputes({ limit: 20 }).catch(() => [] as DisputeDTO[]));
     go("driver-order-detail");
   }
 
@@ -3274,7 +2926,7 @@ export function ConnectedApp() {
         if (screen === "driver-profile") await loadDriverTrips();
       });
     }
-    if (screen === "my-disputes") void run(async () => setBookingDisputes(await myDisputes()));
+    if (screen === "my-support-threads") void run(async () => setSupportThreads(await mySupportThreads({ limit: 30 })));
     if (screen === "driver-saved-searches") void run(loadSavedSearches);
     if (screen === "driver-routes") void run(loadDriverTrips);
     if (screen === "driver-add-route") {
@@ -3285,8 +2937,6 @@ export function ConnectedApp() {
     }
     if (screen === "driver-documents") void run(loadDriverDocuments);
     if (screen === "driver-feed") void run(loadRequestFeed);
-    if (screen === "driver-offer-create") void run(loadDriverTrips);
-    if (screen === "client-offers") void run(loadOfferFeed);
     if (screen === "driver-proposals" || screen === "client-proposals") {
       void run(async () => {
         if (screen === "driver-proposals") await loadDriverTrips();
@@ -3423,23 +3073,6 @@ export function ConnectedApp() {
     );
   }
 
-  /** The disputes of one booking, each opening its detail (S5). */
-  function renderBookingDisputes(bookingId: string) {
-    return bookingDisputes.filter((item) => item.booking_id === bookingId).map((item) => (
-      <button
-        key={item.id}
-        type="button"
-        onClick={() => void run(() => openDisputeDetail(item.id))}
-        className="el-press w-full rounded-[14px] border border-border bg-card p-4 text-left"
-      >
-        <p className="text-[12px] text-muted-foreground">{translate("dispute.detailTitle")}</p>
-        <p className="mt-1 text-[14px] font-medium text-foreground">
-          {disputeTypeLabel(item.type)} · {disputeStatusLabel(item.status)}
-        </p>
-      </button>
-    ));
-  }
-
   /**
    * The person on the other side of an accepted booking: reputation, then "Xavfsizlik" (report this booking, block
    * this person). Only a booking carries the counterparty's id (Q43) - nothing here derives one.
@@ -3456,16 +3089,22 @@ export function ConnectedApp() {
             <ReputationCard userId={other.userId} serviceType={booking.service_type} />
           </div>
         )}
-        <div className="space-y-2">
-          <p className="px-1 text-[13px] font-semibold text-muted-foreground">{translate("safety.section")}</p>
-          <p className="px-1 text-[12px] leading-5 text-muted-foreground">{translate("safety.sectionHint")}</p>
-          <ReportForm subjectType="booking" subjectId={booking.id} />
-          {other ? (
-            <BlockPanel targetUserId={other.userId} labelFor={(id) => (id === other.userId ? other.name : id)} />
-          ) : (
-            <p className="px-1 text-[12px] leading-5 text-muted-foreground">{translate("safety.counterpartyMissing")}</p>
-          )}
-        </div>
+        {/* Q146 (ADR-0026): the main way to get help is the "Yordam / shikoyat" chat above. A safety report and
+            blocking are a separate, secondary action - folded here so the two are never side by side as equals. */}
+        <details className="group rounded-[14px] border border-border bg-card px-4 py-3" data-testid="safety-menu">
+          <summary className="cursor-pointer list-none text-[13px] font-semibold text-muted-foreground">
+            {translate("safety.menuTitle")}
+          </summary>
+          <div className="mt-3 space-y-2">
+            <p className="text-[12px] leading-5 text-muted-foreground">{translate("safety.sectionHint")}</p>
+            <ReportForm subjectType="booking" subjectId={booking.id} title={translate("safety.reportTitle")} />
+            {other ? (
+              <BlockPanel targetUserId={other.userId} labelFor={(id) => (id === other.userId ? other.name : id)} />
+            ) : (
+              <p className="text-[12px] leading-5 text-muted-foreground">{translate("safety.counterpartyMissing")}</p>
+            )}
+          </div>
+        </details>
       </>
     );
   }
@@ -4117,340 +3756,6 @@ export function ConnectedApp() {
       );
     }
 
-    if (screen === "client-offers") {
-      const offerSections = splitFeedGroups(offerFeed);
-      const offerCard = (item: FeedItemDTO, isAlternative = false) => {
-        const reason = isAlternative ? alternativeReasonLabel(item.match.reasons) : null;
-        return (
-          <div
-            key={item.listing.id}
-            className={cls(
-              "rounded-[16px] border bg-card p-4",
-              isAlternative ? "border-dashed border-muted-foreground/40" : "border-border",
-            )}
-          >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
-                <MapPin size={14} color="var(--primary)" />
-                {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
-              </span>
-              <span
-                className={cls(
-                  "shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold",
-                  isAlternative ? "bg-warning/14 text-warning" : "bg-accent text-primary",
-                )}
-              >
-                {reason ?? matchLabel(item.match.match_type)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-              <span>{shortDate(item.listing.departure_window_start)}</span>
-              <span className="font-semibold text-foreground">
-                {formatUzs(item.listing.unit_price_minor / 100)}
-                {item.listing.price_basis === "per_seat" ? ` / ${translate("common.seat")}` : ""}
-              </span>
-            </div>
-            {/* Section 8.2 / AC36: no invented 4.5 for a driver nobody has rated - the label is the server's. */}
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              {item.reputation.average_rating !== null
-                ? translate("offers.driverPriceRated", {
-                    count: item.reputation.completed_bookings,
-                    rating: String(item.reputation.average_rating),
-                  })
-                : translate("offers.driverPriceUnrated", { count: item.reputation.completed_bookings })}
-            </p>
-            <button
-              type="button"
-              onClick={() => openOfferBid(item)}
-              className={cls(
-                "el-press mt-3 h-10 w-full rounded-[10px] text-[14px] font-semibold",
-                isAlternative ? "border border-primary text-primary" : "bg-primary text-primary-foreground",
-              )}
-            >
-              {translate("offers.makeOffer")}
-            </button>
-          </div>
-        );
-      };
-      return (
-        <main className="flex flex-1 flex-col bg-background">
-          <TopBar title={translate("offers.title")} back={() => go("client-home")} />
-          <section className="el-enter el-stagger flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            <TripIntentSummary
-              intent={activeIntent}
-              others={myIntents}
-              loading={intentLoading}
-              error={intentError}
-              busy={busy}
-              onEdit={openIntentEditor}
-              onNew={startNewIntent}
-              onReopen={reopenActiveIntent}
-              onRetry={() => void loadIntents()}
-              onSelect={selectIntent}
-            />
-            <p className="text-[13px] leading-5 text-muted-foreground">
-              {(activeIntent?.status === "active" ? activeIntent.service_type : serviceMode) === "passenger"
-                ? translate("offers.introPassenger")
-                : translate("offers.introParcel")}
-            </p>
-            {matchScope === "confirmed_stops" && (offerFeed.length > 0) && (
-              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
-                {confirmedStopsNote()}
-              </p>
-            )}
-            {busy && !offerFeed.length ? <ListSkeleton /> : offerFeed.length ? (
-              <>
-                {offerSections.primary.map((item) => offerCard(item))}
-                {offerSections.alternative.length > 0 && (
-                  <div className="pt-2">
-                    <h2 className="text-[16px] font-bold text-foreground">{translate("match.alternativesTitle")}</h2>
-                    <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                      {translate("match.alternativesNote")}
-                    </p>
-                  </div>
-                )}
-                {offerSections.alternative.map((item) => offerCard(item, true))}
-              </>
-            ) : (
-              <EmptyState
-                icon={Truck}
-                title={translate("offers.emptyTitle")}
-                subtitle={translate("offers.emptySubtitle")}
-                action={translate("offers.emptyAction")}
-                onAction={() => go("client-home")}
-              />
-            )}
-          </section>
-        </main>
-      );
-    }
-
-    if (screen === "client-offer-bid" && selectedOffer) {
-      const offer = selectedOffer.listing;
-      const perSeat = offer.price_basis === "per_seat";
-      // ADR-0025: with a saved request the number of people is the request's, the same for every driver.
-      const bidIntent = intentFor(offer);
-      const intentExpired = bidIntent ? bidIntent.expired || isExpired(bidIntent) : false;
-      const seats = bidIntent ? bidIntent.current_version.quantity : perSeat ? Math.max(1, offerBid.seats) : 1;
-      const priceSoum = Math.round(Number(offerBid.price));
-      const requestPrice = bidIntent?.current_version.unit_price_minor ? bidIntent.current_version : null;
-      const priceFromRequest = bidIntent ? prefillBid(bidIntent, offer).priceFromRequest : false;
-      const parcelNeeded = offer.service_type === "parcel";
-      const parcelReady = !parcelNeeded || Boolean(
-        Number(offerBid.weightKg) > 0 && Number(offerBid.lengthCm) > 0 && Number(offerBid.widthCm) > 0
-        && Number(offerBid.heightCm) > 0 && offerBid.receiverName.trim() && offerBid.receiverPhone.trim(),
-      );
-      return (
-        <main className="flex flex-1 flex-col bg-card">
-          <TopBar title={translate("offers.makeOffer")} back={() => go("client-offers")} />
-          <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
-            {bidIntent && (
-              <div className="rounded-[14px] border border-primary/30 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">{translate("offerBid.yourRequest")}</p>
-                <p className="mt-0.5 text-[14px] font-semibold leading-5 text-foreground">{intentSummary(bidIntent)}</p>
-                <div className="mt-1.5 flex gap-4">
-                  <button type="button" onClick={openIntentEditor} className="el-press text-[13px] font-semibold text-primary">
-                    {translate("listingOwner.edit")}
-                  </button>
-                  <button type="button" onClick={startNewIntent} className="el-press text-[13px] font-semibold text-muted-foreground">
-                    {translate("offerBid.newIntent")}
-                  </button>
-                </div>
-              </div>
-            )}
-            {bidIntent && intentExpired && (
-              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
-                {translate("offerBid.intentExpired")}
-              </p>
-            )}
-            {bidIntent && <TripIntentFitNotes fit={intentFit} loading={intentFitLoading} />}
-            <div className="rounded-[14px] bg-background p-4">
-              <p className="font-semibold text-foreground">
-                {endLabel(offer.origin_stop, offer.origin_point)} {"->"} {endLabel(offer.destination_stop, offer.destination_point)}
-              </p>
-              {/* The driver's advertised price and the client's own offer are two lines, never one number. */}
-              <p className="mt-1 text-[13px] text-muted-foreground">
-                {translate("offerBid.driverPrice", {
-                  price: bidIntent
-                    ? priceLine(offer.price_basis, offer.unit_price_minor, seats)
-                    : `${formatUzs(offer.unit_price_minor / 100)}${perSeat ? ` / ${translate("common.seat")}` : ""}`,
-                })}
-              </p>
-              <p className="mt-1 text-[13px] text-muted-foreground">
-                {translate("offerBid.departure", {
-                  from: shortDate(offer.departure_window_start),
-                  to: shortDate(offer.departure_window_end),
-                })}
-              </p>
-            </div>
-
-            {bidIntent && bidIntent.service_type === "passenger" && (
-              <p className="text-[13px] text-secondary-foreground">
-                {translate("offerBid.peopleLabel")}{" "}
-                <span className="font-semibold">{translate("offerBid.peopleCount", { count: seats })}</span>{" "}
-                {translate("offerBid.peopleFromIntent")}
-              </p>
-            )}
-            {perSeat && !bidIntent && (
-              <Field
-                label={translate("offerBid.seatsLabel")}
-                type="number"
-                value={String(offerBid.seats)}
-                onChange={(value) => setOfferBid({ ...offerBid, seats: Math.max(1, Math.min(8, Number(value) || 1)) })}
-              />
-            )}
-            <Field
-              label={perSeat ? translate("offerBid.pricePerSeatLabel") : translate("offerBid.priceLabel")}
-              type="number"
-              value={offerBid.price}
-              onChange={(value) => setOfferBid({ ...offerBid, price: value })}
-              placeholder={translate("offerBid.pricePlaceholder")}
-            />
-            {bidIntent && priceSoum > 0 ? (
-              <p className="text-[13px] font-semibold leading-5 text-foreground">
-                {translate("offerBid.yourOffer", { price: priceLine(offer.price_basis, priceSoum * 100, seats) })}
-              </p>
-            ) : perSeat && priceSoum > 0 ? (
-              <p className="text-[12px] leading-5 text-muted-foreground">
-                {translate("offerBid.totalForSeats", { seats, total: formatUzs(priceSoum * seats) })}
-              </p>
-            ) : null}
-            {bidIntent && requestPrice && !priceFromRequest && (
-              <p className="text-[12px] leading-5 text-muted-foreground">
-                {translate("offerBid.requestPriceOtherBasis", {
-                  price: priceLine(requestPrice.price_basis ?? "total", requestPrice.unit_price_minor ?? 0, seats),
-                })}
-              </p>
-            )}
-            {bidIntent && (
-              <p className="text-[12px] leading-5 text-muted-foreground">
-                {translate("offerBid.priceOnlyForDriver")}
-              </p>
-            )}
-
-            {parcelNeeded && (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label={translate("offerBid.weightKg")} type="number" value={offerBid.weightKg} onChange={(v) => setOfferBid({ ...offerBid, weightKg: v })} />
-                  <Field label={translate("offerBid.lengthCm")} type="number" value={offerBid.lengthCm} onChange={(v) => setOfferBid({ ...offerBid, lengthCm: v })} />
-                  <Field label={translate("offerBid.widthCm")} type="number" value={offerBid.widthCm} onChange={(v) => setOfferBid({ ...offerBid, widthCm: v })} />
-                  <Field label={translate("offerBid.heightCm")} type="number" value={offerBid.heightCm} onChange={(v) => setOfferBid({ ...offerBid, heightCm: v })} />
-                </div>
-                {/* W21-4 (Q79): a trip-offer parcel needs a receiver before pickup, and only the sender can give
-                    one - asked for here, where it can still be fixed, not at the driver's `pick_up`. */}
-                <Field label={translate("offerBid.receiverName")} value={offerBid.receiverName} onChange={(v) => setOfferBid({ ...offerBid, receiverName: v })} />
-                <Field label={translate("offerBid.receiverPhone")} value={offerBid.receiverPhone} onChange={(v) => setOfferBid({ ...offerBid, receiverPhone: v })} placeholder="+998..." />
-                <ParcelPolicyNotice />
-              </>
-            )}
-
-            <BonusConsentPanel
-              listingId={offer.id}
-              unitPriceMinor={priceSoum * 100}
-              quantity={seats}
-              choice={offerConsent}
-              onChoice={setOfferConsent}
-              refreshToken={consentRefresh}
-            />
-
-            {/* Section 5.3: an offer reserves nothing. Saying so here is what stops "men taklif berdim" from
-                reading as "joy band qilindi". */}
-            <p className="text-[12px] leading-5 text-muted-foreground">
-              {translate("offerBid.reservesNothing")}
-            </p>
-
-            <div className="mt-auto">
-              <PrimaryButton
-                disabled={priceSoum <= 0 || !parcelReady || !offer.origin_stop || !offer.destination_stop || busy
-                  || intentExpired || fitBlocks(bidIntent ? intentFit : null)}
-                onClick={() => void run(async () => {
-                  if (!offer.origin_stop || !offer.destination_stop) return;
-                  // ADR-0025: parcel data typed here belongs to the request, so it is saved there first and every
-                  // later driver's screen starts with it. A material change with open offers asks before closing them.
-                  let intent = bidIntent;
-                  if (intent && parcelNeeded && parcelDiffers(intent, offerBid)) {
-                    intent = await sendIntentEdit(updateBody(intent, { parcel: parcelInput(offerBid) }), "client-offer-bid");
-                    if (!intent) return;
-                  }
-                  const intentParcel = intent?.current_version.parcel ?? null;
-                  const promo = consentBody(offerConsent);
-                  await submitProposal(
-                    offer.id,
-                    {
-                      // The trip is the offer's own; the window is the one it advertises, which the server
-                      // checks against that trip's real ETA at the pickup stop.
-                      trip_id: offer.trip_id ?? null,
-                      pickup_stop_id: offer.origin_stop.id,
-                      dropoff_stop_id: offer.destination_stop.id,
-                      pickup_window_start: offer.departure_window_start,
-                      pickup_window_end: offer.departure_window_end,
-                      price_basis: offer.price_basis,
-                      quantity: seats,
-                      unit_price_minor: priceSoum * 100,
-                      parcel: parcelNeeded
-                        ? intentParcel
-                          ? {
-                              parcel_type: intentParcel.parcel_type ?? null,
-                              weight_g: intentParcel.weight_g ?? 0,
-                              length_cm: intentParcel.length_cm ?? 0,
-                              width_cm: intentParcel.width_cm ?? 0,
-                              height_cm: intentParcel.height_cm ?? 0,
-                              receiver: intentParcel.receiver ?? null,
-                            }
-                          : {
-                              weight_g: Math.round(Number(offerBid.weightKg) * 1000),
-                              length_cm: Math.round(Number(offerBid.lengthCm)),
-                              width_cm: Math.round(Number(offerBid.widthCm)),
-                              height_cm: Math.round(Number(offerBid.heightCm)),
-                              receiver: { name: offerBid.receiverName.trim(), phone: offerBid.receiverPhone.trim() },
-                            }
-                        : null,
-                      ...(intent ? { trip_intent: { id: intent.id, version_no: intent.current_version.version_no } } : {}),
-                      ...(promo ? { promo_consent: promo } : {}),
-                    },
-                    newIdempotencyKey(),
-                  ).catch((cause) => {
-                    requoteOn(cause);
-                    if ((cause as { code?: string }).code?.startsWith("TRIP_INTENT")) void loadIntents();
-                    throw cause;
-                  });
-                  if (intent) rememberIntent({ ...intent, open_offers: intent.open_offers + 1 });
-                  setOfferConsent(NO_CONSENT);
-                  await loadOfferFeed();
-                  go("client-proposals");
-                }, translate("offerBid.sent"))}
-              >
-                {translate("offerBid.submit")}
-              </PrimaryButton>
-            </div>
-          </section>
-        </main>
-      );
-    }
-
-    if (screen === "client-intent-edit") {
-      return (
-        <main className="flex flex-1 flex-col bg-card">
-          <TopBar
-            title={activeIntent?.service_type === "parcel" ? translate("offerBid.parcelRequestTitle") : translate("offerBid.tripRequestTitle")}
-            back={() => go("client-offers")}
-          />
-          {activeIntent ? (
-            <TripIntentEditor
-              key={`${activeIntent.id}:${activeIntent.version}`}
-              intent={activeIntent}
-              busy={busy}
-              onSave={saveIntentEdit}
-              onChangeRoute={editIntentRoute}
-              onClose={closeActiveIntent}
-            />
-          ) : (
-            <EmptyState icon={MapPin} title={translate("offerBid.noSavedRequest")} action={translate("offerBid.newIntent")} onAction={startNewIntent} />
-          )}
-        </main>
-      );
-    }
-
     if (screen === "client-location-selector") {
       const selectorTitle = locationSelectorMode === "pickup" ? translate("direction.from") : translate("direction.to");
       return (
@@ -4608,18 +3913,6 @@ export function ConnectedApp() {
               >
                 {translate("common.save")}
               </PrimaryButton>
-              {/* ADR-0025: the same answers, kept privately as a request that fills each driver's offer screen. It
-                  is not published and sends nothing by itself; the price is optional here. */}
-              <div className="mt-2">
-                <SecondaryButton
-                  disabled={busy || saveBlockers.some((problem) => problem !== translate("listingOwner.invalid.price"))}
-                  onClick={() => void run(saveIntentFromHome)}
-                >
-                  {intentDraftMode === "edit" && activeIntent?.status === "active" && activeIntent.service_type === serviceMode
-                    ? translate("routeSummary.updateRequest")
-                    : translate("routeSummary.seeDriverOffers")}
-                </SecondaryButton>
-              </div>
               {saveBlockers.length > 0 && (
                 <ul className="mt-2 space-y-1">
                   {saveBlockers.map((problem) => (
@@ -4693,15 +3986,10 @@ export function ConnectedApp() {
                 ))}
               </div>
             </div>
-            <Field label={translate("orderForm.weight")} type="number" placeholder="3" value={listingForm.weightKg} onChange={(v) => setListingForm({ ...listingForm, weightKg: v })} />
-            <div className="grid grid-cols-3 gap-2">
-              <Field label={translate("orderForm.length")} type="number" placeholder="40" value={listingForm.lengthCm} onChange={(v) => setListingForm({ ...listingForm, lengthCm: v })} />
-              <Field label={translate("orderForm.width")} type="number" placeholder="30" value={listingForm.widthCm} onChange={(v) => setListingForm({ ...listingForm, widthCm: v })} />
-              <Field label={translate("orderForm.height")} type="number" placeholder="20" value={listingForm.heightCm} onChange={(v) => setListingForm({ ...listingForm, heightCm: v })} />
-            </div>
-            <p className="text-[12px] leading-5 text-muted-foreground">
-              {translate("orderForm.sizeHint")}
-            </p>
+            <ParcelCategoryPicker
+              value={listingForm.categoryId}
+              onChange={(item) => setListingForm({ ...listingForm, categoryId: item.id, categoryName: `${item.name_uz} · ${categoryLimitsText(item)}` })}
+            />
             <ParcelPolicyNotice />
             <PrimaryButton disabled={!parcelReady} onClick={() => go("client-order-photo")}>
               {translate("common.continue")}
@@ -4828,8 +4116,8 @@ export function ConnectedApp() {
                 const parcelName = PARCEL_TYPES.find(([value]) => value === listingForm.parcelType)?.[1] ?? "-";
                 rows.push([
                   translate("orderForm.review.parcel"),
-                  translate("orderForm.review.parcelWeight", { type: parcelName, weight: listingForm.weightKg || "-" }),
-                  translate("orderForm.review.parcelSize", { length: listingForm.lengthCm || "-", width: listingForm.widthCm || "-", height: listingForm.heightCm || "-" }),
+                  parcelName,
+                  listingForm.categoryName || "-",
                 ]);
                 rows.push([translate("orderForm.review.sender"), listingForm.senderName || "-", orderForm.sender_phone || translate("orderForm.review.noPhone")]);
                 rows.push([translate("orderForm.review.receiver"), listingForm.receiverName || "-", orderForm.receiver_phone || translate("orderForm.review.noPhone")]);
@@ -4914,7 +4202,7 @@ export function ConnectedApp() {
                       {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
                   {endLabel(booking.dropoff.stop, booking.dropoff.point)}
                     </span>
-                    <StatusBadge status={booking.service_status} />
+                    <StatusBadge status={booking.service_status} label={bookingBadgeLabel(booking)} />
                   </div>
                   <div className="flex items-center justify-between text-[13px] text-muted-foreground">
                     <span>{shortDate(booking.pickup.window_start ?? undefined)}</span>
@@ -5022,7 +4310,7 @@ export function ConnectedApp() {
                   {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
                   {endLabel(booking.dropoff.stop, booking.dropoff.point)}
                 </span>
-                <StatusBadge status={booking.service_status} />
+                <StatusBadge status={booking.service_status} label={bookingBadgeLabel(booking)} />
               </div>
               <div className="flex items-center justify-between text-[13px] text-muted-foreground">
                 <span>{shortDate(booking.pickup.window_start ?? undefined)}</span>
@@ -5038,6 +4326,7 @@ export function ConnectedApp() {
               <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
                 {translate("bookingDetail.fareNote")}
               </p>
+              <ParcelCategoryLine category={booking.parcel_category} />
             </div>
             {booking.service_type === "parcel" && (
               <ParcelPhoto
@@ -5119,42 +4408,13 @@ export function ConnectedApp() {
                 {translate("rating.rateDriver")}
               </PrimaryButton>
             )}
-            {canOpenDispute(booking.service_status) && (
-              <SecondaryButton onClick={() => openDisputeForm(booking.id, "client")}>
-                {translate("orders.reportProblem")}
-              </SecondaryButton>
-            )}
-            {renderBookingDisputes(booking.id)}
+            {/* ADR-0026 (Q141): a complaint is a conversation with an operator about THIS booking - no form, no stages. */}
+            <SecondaryButton disabled={busy} onClick={() => void run(() => openSupportFor(booking.id, "client-booking-detail"))}>
+              {translate("support.complain")}
+            </SecondaryButton>
             {renderCancelControls(booking, "client")}
-            {booking.service_status === "cancelled" && (() => {
-              // ADR-0025: the booking came from a saved request; searching again is an explicit act, and the
-              // old offers stay closed. `can_reopen` is the server's answer, re-read when this screen opened.
-              const intent = intentOfBooking(myIntents, booking.id);
-              return (
-                <div className="space-y-2 rounded-[14px] border border-border bg-card p-4">
-                  {renderCancelledNote(booking)}
-                  {intent?.can_reopen && (
-                    <>
-                      <p className="text-[12px] leading-5 text-muted-foreground">{translate("bookingCancel.searchAgainHint")}</p>
-                      <PrimaryButton disabled={busy} onClick={() => searchAgainFor(intent)}>
-                        {translate("bookingCancel.searchAgain")}
-                      </PrimaryButton>
-                    </>
-                  )}
-                </div>
-              );
-            })()}
-            {booking.service_status === "delivered" && (
-              <PrimaryButton
-                disabled={busy}
-                onClick={() => void run(async () => {
-                  await bookingAction(booking.id, "complete", { expected_version: booking.version });
-                  await openClientBooking(booking.id);
-                  await loadMyListings();
-                }, translate("bookingDetail.completed"))}
-              >
-                {translate("orders.confirmDelivered")}
-              </PrimaryButton>
+            {booking.service_status === "cancelled" && (
+              <div className="space-y-2 rounded-[14px] border border-border bg-card p-4">{renderCancelledNote(booking)}</div>
             )}
             {renderBookingSafety(booking, "client")}
           </section>
@@ -5418,48 +4678,6 @@ export function ConnectedApp() {
       );
     }
 
-    if (screen === "booking-dispute" && openBooking) {
-      // S3 from either side. The commission type is the driver's alone (Q16), so the picker depends on the side.
-      const side = openBooking.side;
-      const booking = side === "driver" ? driverBooking : clientBooking;
-      if (!booking) return <EmptyState icon={Package} title={translate("bookingRating.bookingNotFound")} />;
-      const back = () => go(side === "driver" ? "driver-order-detail" : "client-booking-detail");
-      return (
-        <main className="flex flex-1 flex-col bg-card">
-          <TopBar title={translate("bookingDispute.title")} back={back} />
-          <section className="flex flex-1 flex-col gap-4 px-5 py-5">
-            <PickSelect
-              label={translate("bookingDispute.typeLabel")}
-              placeholder={translate("bookingDispute.typePlaceholder")}
-              value={disputeType}
-              options={disputeTypeOptions(side)}
-              onChange={setDisputeType}
-            />
-            <Field label={translate("listingOwner.commentLabel")} value={disputeComment} multiline onChange={setDisputeComment} />
-            <p className="text-[12px] leading-5 text-muted-foreground">
-              {translate("bookingDispute.gpsEvidenceNote")}
-            </p>
-            <div className="mt-auto">
-              <PrimaryButton
-                disabled={busy || disputeComment.trim().length < 5}
-                onClick={() => void run(async () => {
-                  await openDispute(
-                    booking.id,
-                    { type: disputeType as DisputeDTO["type"], description: disputeComment.trim() },
-                    newIdempotencyKey(),
-                  );
-                  setDisputeComment("");
-                  await (side === "driver" ? openDriverBooking(booking.id) : openClientBooking(booking.id));
-                }, translate("bookingDispute.opened"))}
-              >
-                {translate("common.send")}
-              </PrimaryButton>
-            </div>
-          </section>
-        </main>
-      );
-    }
-
     if (screen === "booking-amendment" && openBooking) {
       // B9 / Q60: after a booking exists, only the quantity and the unit price may still move, and only by
       // agreement. Everything else in the snapshot is frozen in the database - so this screen offers exactly
@@ -5468,7 +4686,10 @@ export function ConnectedApp() {
       const booking = side === "driver" ? driverBooking : clientBooking;
       if (!booking) return <EmptyState icon={Package} title={translate("bookingRating.bookingNotFound")} />;
       const back = () => go(side === "driver" ? "driver-order-detail" : "client-booking-detail");
-      const quantity = Number(amendmentForm.quantity);
+      // Q145 (ADR-0026): a booking made on a client request keeps its agreed seat count (D9); only the price can move.
+      // The server says which case this is - the field is not offered when the answer would be a refusal.
+      const quantityAmendable = Boolean(booking.quantity_amendable);
+      const quantity = quantityAmendable ? Number(amendmentForm.quantity) : booking.quantity;
       const unitMinor = soumToMinor(amendmentForm.unitPrice);
       const changed =
         (Number.isFinite(quantity) && quantity >= 1 && quantity !== booking.quantity) ||
@@ -5493,12 +4714,19 @@ export function ConnectedApp() {
             {open.length === 0 && (
               <div className="space-y-3 rounded-[16px] border border-border bg-card p-4">
                 <p className="text-[13px] font-semibold text-foreground">{translate("amendment.proposeTitle")}</p>
-                <Field
-                  label={booking.service_type === "passenger" ? translate("amendment.seatsLabel") : translate("amendment.quantityLabel")}
-                  type="number"
-                  value={amendmentForm.quantity}
-                  onChange={(value) => setAmendmentForm({ ...amendmentForm, quantity: value })}
-                />
+                {quantityAmendable ? (
+                  <Field
+                    label={booking.service_type === "passenger" ? translate("amendment.seatsLabel") : translate("amendment.quantityLabel")}
+                    type="number"
+                    value={amendmentForm.quantity}
+                    onChange={(value) => setAmendmentForm({ ...amendmentForm, quantity: value })}
+                  />
+                ) : (
+                  <p className="rounded-[12px] bg-muted px-3 py-2.5 text-[12px] leading-5 text-muted-foreground" data-testid="quantity-fixed">
+                    {translate(booking.service_type === "passenger" ? "amendment.seatsFixed" : "amendment.parcelQuantityFixed",
+                               { count: booking.quantity })}
+                  </p>
+                )}
                 <Field
                   label={booking.price_basis === "per_seat" ? translate("amendment.seatPriceLabel") : translate("amendment.priceLabel")}
                   type="number"
@@ -5773,193 +5001,6 @@ export function ConnectedApp() {
       );
     }
 
-    if (screen === "my-disputes") {
-      // S6: a dispute is the one place where what the two people say is weighed by a third. Evidence is the
-      // part that decides it, so it has to be addable after the first report - people remember the photo late.
-      const side = auth.user?.role === "driver" ? "driver" : "client";
-      const back = () => go(side === "driver" ? "driver-profile" : "client-profile");
-      return (
-        <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title={translate("disputes.title")} back={back} />
-          <section className="el-enter el-stagger min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            {busy && !bookingDisputes.length ? <ListSkeleton rows={2} /> : bookingDisputes.length ? bookingDisputes.map((item) => {
-              const open = !["resolved", "rejected", "withdrawn", "closed"].includes(item.status);
-              const editing = evidenceNote?.id === item.id;
-              return (
-                <div key={item.id} className="rounded-[16px] border border-border bg-card p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[15px] font-semibold text-foreground">
-                        {disputeTypeLabel(item.type)}
-                      </p>
-                      <p className="mt-1 text-[12px] text-muted-foreground">{shortDate(item.created_at)}</p>
-                    </div>
-                    <StatusBadge status={item.status} />
-                  </div>
-                  <p className="mt-2 text-[13px] leading-5 text-secondary-foreground">{item.description}</p>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void run(() => openDisputeDetail(item.id))}
-                    className="el-press mt-2 text-[13px] font-semibold text-primary"
-                  >
-                    {translate("dispute.details")}
-                  </button>
-
-                  {item.evidence.length > 0 && (
-                    <div className="mt-3 space-y-1.5 rounded-[12px] bg-slate-50 p-3">
-                      <p className="text-[12px] font-semibold text-muted-foreground">{translate("disputes.evidence")}</p>
-                      {item.evidence.map((entry, index) => (
-                        <p key={index} className="text-[12px] leading-5 text-secondary-foreground">
-                          {entry.note || translate("disputes.fileAttached")}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-
-                  {item.resolution && (
-                    <p className="mt-3 rounded-[12px] bg-accent px-3 py-2.5 text-[13px] leading-5 text-primary">
-                      {translate("disputes.decisionPrefix")} {item.resolution.text || disputeResolutionLabel(item.resolution.code ?? "") || item.resolution.code}
-                    </p>
-                  )}
-
-                  {open && !editing && (
-                    <div className="mt-3">
-                      <SecondaryButton onClick={() => setEvidenceNote({ id: item.id, note: "" })}>
-                        {translate("disputes.addEvidence")}
-                      </SecondaryButton>
-                    </div>
-                  )}
-                  {open && editing && (
-                    <div className="mt-3 space-y-2">
-                      <Field
-                        label={translate("disputes.extraNoteLabel")}
-                        multiline
-                        value={evidenceNote.note}
-                        onChange={(note) => setEvidenceNote({ id: item.id, note })}
-                        hint={translate("disputes.contactsHiddenHint")}
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={busy || evidenceNote.note.trim().length < 3}
-                          onClick={() => void run(async () => {
-                            await addDisputeEvidence(item.id, { note: evidenceNote.note.trim(), file_ids: [] }, newIdempotencyKey());
-                            setEvidenceNote(null);
-                            setBookingDisputes(await myDisputes());
-                          }, translate("disputes.evidenceAdded"))}
-                          className="el-press h-11 flex-1 rounded-[12px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:bg-slate-400"
-                        >
-                          {translate("common.send")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEvidenceNote(null)}
-                          className="el-press h-11 flex-1 rounded-[12px] bg-muted text-[14px] font-semibold text-muted-foreground"
-                        >
-                          {translate("common.cancel")}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            }) : (
-              <EmptyState
-                icon={FileText}
-                title={translate("disputes.emptyTitle")}
-                subtitle={translate("disputes.emptySubtitle")}
-              />
-            )}
-          </section>
-        </main>
-      );
-    }
-
-    if (screen === "dispute-detail" && disputeDetail) {
-      // S5: one dispute as its participant sees it. Re-read on open and on demand, because the other side and the
-      // operator add to it after the first report - a stale copy would hide the decision.
-      const item = disputeDetail;
-      const open = !["resolved", "rejected", "withdrawn", "closed"].includes(item.status);
-      return (
-        <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title={translate("dispute.detailTitle")} back={() => go("my-disputes")} />
-          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            <div className="rounded-[16px] border border-border bg-card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[16px] font-semibold text-foreground">{disputeTypeLabel(item.type)}</p>
-                  <p className="mt-1 text-[12px] text-muted-foreground">{formatDateTime(item.created_at)}</p>
-                </div>
-                <StatusBadge status={item.status} />
-              </div>
-              <p className="mt-2 text-[12px] text-muted-foreground">
-                {translate("dispute.openedBy")}: {translateDynamic(`dispute.side.${item.opened_by_side}`) ?? item.opened_by_side}
-              </p>
-              {item.escalated && open && (
-                <p className="mt-1 text-[12px] text-warning">{translate("dispute.escalated")}</p>
-              )}
-              <p className="mt-3 text-[14px] leading-6 text-secondary-foreground">{item.description}</p>
-            </div>
-            {item.evidence.length > 0 && (
-              <div className="space-y-2 rounded-[16px] border border-border bg-card p-4">
-                <p className="text-[13px] font-semibold text-muted-foreground">{translate("disputes.evidence")}</p>
-                {item.evidence.map((entry, index) => (
-                  <div key={index} className="rounded-[12px] bg-background px-3 py-2">
-                    <p className="text-[12px] text-muted-foreground">
-                      {translateDynamic(`dispute.side.${entry.author_side}`) ?? entry.author_side} · {formatDateTime(entry.created_at)}
-                    </p>
-                    <p className="mt-0.5 text-[13px] leading-5 text-secondary-foreground">
-                      {entry.note || (entry.file_ids.length ? translate("disputes.filesAttached", { count: entry.file_ids.length }) : "-")}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-            {item.resolution && (
-              <p className="rounded-[12px] bg-accent px-3 py-2.5 text-[13px] leading-5 text-primary">
-                {translate("disputes.decisionPrefix")} {item.resolution.text || disputeResolutionLabel(item.resolution.code ?? "") || item.resolution.code}
-                {item.resolution.decided_at ? ` · ${formatDateTime(item.resolution.decided_at)}` : ""}
-              </p>
-            )}
-            {open && (
-              evidenceNote?.id === item.id ? (
-                <div className="space-y-2">
-                  <Field
-                    label={translate("disputes.extraNoteLabel")}
-                    multiline
-                    value={evidenceNote.note}
-                    onChange={(note) => setEvidenceNote({ id: item.id, note })}
-                    hint={translate("disputes.contactsHiddenHint")}
-                  />
-                  <PrimaryButton
-                    disabled={busy || evidenceNote.note.trim().length < 3}
-                    onClick={() => void run(async () => {
-                      const result = await addDisputeEvidence(item.id, { note: evidenceNote.note.trim(), file_ids: [] }, newIdempotencyKey());
-                      setEvidenceNote(null);
-                      setDisputeDetail(result.data);
-                    }, translate("disputes.evidenceAdded"))}
-                  >
-                    {translate("common.send")}
-                  </PrimaryButton>
-                </div>
-              ) : (
-                <SecondaryButton onClick={() => setEvidenceNote({ id: item.id, note: "" })}>{translate("disputes.addEvidence")}</SecondaryButton>
-              )
-            )}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void run(() => openDisputeDetail(item.id))}
-              className="el-press h-10 w-full text-[13px] font-semibold text-muted-foreground"
-            >
-              {translate("dispute.refresh")}
-            </button>
-          </section>
-        </main>
-      );
-    }
-
     if (screen === "listing-edit" && listingEdit) {
       // L3 / Q20: what changes, and whether it closes the open offers, is worked out before anything is sent.
       const { listing, form, back, confirming, openOffers } = listingEdit;
@@ -5994,6 +5035,15 @@ export function ConnectedApp() {
               onChange={(comment) => setForm({ comment })}
               hint={translate("disputes.contactsHiddenHint")}
             />
+            {seatsEditable(listing) && (
+              <Field
+                label={translate("listingEdit.seats")}
+                type="number"
+                value={form.seats}
+                onChange={(seats) => setForm({ seats })}
+                hint={translate("listingEdit.seatsHint")}
+              />
+            )}
             {allowWindow ? (
               <>
                 <Field
@@ -6032,123 +5082,6 @@ export function ConnectedApp() {
                 {plan.material && confirming ? translate("listingOwner.materialConfirm") : translate("common.save")}
               </PrimaryButton>
             </div>
-          </section>
-        </main>
-      );
-    }
-
-    if (screen === "listing-matches" && matchesFor) {
-      // A request's matches are trip offers; a trip offer's matches are client requests. Same endpoint, same
-      // ranking, and in both directions the person picks - nothing here accepts anything on their behalf.
-      const isRequest = matchesFor.kind === "request";
-      const back = () => go(isRequest ? "client-listing-detail" : "driver-routes");
-      // Same two answers as the feed: what matches the published listing, and what is only near it.
-      const matchSections = splitFeedGroups(matches);
-      const matchCard = (item: MatchDTO, isAlternative = false) => {
-        const reason = isAlternative ? alternativeReasonLabel(item.match.reasons) : null;
-        return (
-          <div
-            key={item.listing.id}
-            className={cls(
-              "rounded-[16px] border bg-card p-4",
-              isAlternative ? "border-dashed border-muted-foreground/40" : "border-border",
-            )}
-          >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="min-w-0 flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
-                <MapPin size={14} color="var(--primary)" />
-                <span className="truncate">
-                  {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"}{" "}
-                  {endLabel(item.listing.destination_stop, item.listing.destination_point)}
-                </span>
-              </span>
-              <span
-                className={cls(
-                  "shrink-0 rounded-full px-2.5 py-1 text-[12px] font-semibold",
-                  isAlternative ? "bg-warning/14 text-warning" : "bg-accent text-primary",
-                )}
-              >
-                {reason ?? matchLabel(item.match.match_type)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-              <span>{shortDate(item.listing.departure_window_start)}</span>
-              <span className="font-semibold text-foreground">
-                {formatUzs((item.comparable_total_minor ?? item.listing.total_minor) / 100)}
-              </span>
-            </div>
-            {item.reputation.completed_bookings > 0 && (
-              <p className="mt-1 text-[12px] text-muted-foreground">
-                {translate("matches.completedCount", { count: item.reputation.completed_bookings })}
-                {/* U6: no invented rating for a new account (§8.2) - the label says which case this is. */}
-                {item.reputation.average_rating !== null && item.reputation.average_rating !== undefined
-                  ? ` · ${translate("matches.rating", { rating: item.reputation.average_rating.toFixed(1) })}`
-                  : ` · ${translate("matches.notRated")}`}
-              </p>
-            )}
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (isRequest) {
-                    setSelectedOffer(item as unknown as FeedItemDTO);
-                    setOfferBid({ ...offerBid, price: String(Math.round(item.listing.unit_price_minor / 100)), seats: 1 });
-                    go("client-offer-bid");
-                  } else {
-                    setSelectedRequest(item as unknown as FeedItemDTO);
-                    setBidPrice(String(Math.round(item.listing.total_minor / 100)));
-                    setProposalTripId(trips[0]?.id ?? "");
-                    void loadRivalOffers(item.listing.id);
-                    go("driver-bid");
-                  }
-                }}
-                className={cls(
-                  "el-press h-10 w-full rounded-[10px] text-[14px] font-semibold",
-                  isAlternative ? "border border-primary text-primary" : "bg-primary text-primary-foreground",
-                )}
-              >
-                {translate("matches.makeOffer")}
-              </button>
-            </div>
-          </div>
-        );
-      };
-      return (
-        <main className="flex min-h-0 flex-1 flex-col bg-background">
-          <TopBar title={isRequest ? translate("matches.titleTrips") : translate("matches.titleRequests")} back={back} />
-          <section className="el-enter el-stagger min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5">
-            <p className="text-[13px] leading-5 text-muted-foreground">
-              {isRequest
-                ? translate("matches.introTrips")
-                : translate("matches.introRequests")}
-            </p>
-            {matchScope === "confirmed_stops" && matches.length > 0 && (
-              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
-                {confirmedStopsNote()}
-              </p>
-            )}
-            {busy && !matches.length ? <ListSkeleton /> : matches.length ? (
-              <>
-                {matchSections.primary.map((item) => matchCard(item))}
-                {matchSections.alternative.length > 0 && (
-                  <div className="pt-2">
-                    <h2 className="text-[16px] font-bold text-foreground">{translate("match.alternativesTitle")}</h2>
-                    <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                      {translate("match.alternativesNote")}
-                    </p>
-                  </div>
-                )}
-                {matchSections.alternative.map((item) => matchCard(item, true))}
-              </>
-            ) : (
-              <EmptyState
-                icon={Truck}
-                title={isRequest ? translate("matches.emptyTrips") : translate("matches.emptyRequests")}
-                subtitle={isRequest
-                  ? translate("matches.emptyTripsSubtitle")
-                  : translate("matches.emptyRequestsSubtitle")}
-              />
-            )}
           </section>
         </main>
       );
@@ -6311,7 +5244,7 @@ export function ConnectedApp() {
               <ol className="mt-3 space-y-2">
                 {(booking?.service_type === "passenger" ? PASSENGER_PROGRESS : PARCEL_PROGRESS).map(([status, label]) => {
                   const ladder = booking?.service_type === "passenger" ? PASSENGER_PROGRESS : PARCEL_PROGRESS;
-                  const index = ladder.findIndex(([value]) => value === booking?.service_status);
+                  const index = ladder.findIndex(([value]) => value === progressStatus(booking?.service_type, booking?.service_status));
                   const position = ladder.findIndex(([value]) => value === status);
                   const done = index >= 0 && position <= index;
                   return (
@@ -6393,7 +5326,7 @@ export function ConnectedApp() {
               [translate("listingDetail.departureWindow"), `${shortDate(listing.departure_window_start)} - ${shortDate(listing.departure_window_end)}`],
               [translate("common.price"), formatUzs(listing.total_minor / 100)],
               [translate("listingDetail.parcel"), listing.parcel
-                ? translate("listingDetail.parcelValue", { type: PARCEL_TYPES.find(([value]) => value === listing.parcel?.parcel_type)?.[1] ?? "-", weight: Math.round((listing.parcel.weight_g ?? 0) / 100) / 10 })
+                ? `${PARCEL_TYPES.find(([value]) => value === listing.parcel?.parcel_type)?.[1] ?? "-"} · ${listing.parcel.category ? `${listing.parcel.category.name_uz} (${categoryLimitsText(listing.parcel.category)})` : "-"}`
                 : "-"],
               [translate("listingOwner.commentLabel"), listing.comment || "-"],
             ].map(([label, value]) => (
@@ -6412,11 +5345,6 @@ export function ConnectedApp() {
             )}
             {listingThreads.length > 0 && (
               <PrimaryButton onClick={() => go("client-listing-bids")}>{translate("listingDetail.viewOffers")}</PrimaryButton>
-            )}
-            {listing.status === "published" && (
-              <SecondaryButton onClick={() => void run(() => openMatches(listing.id, listing.kind))}>
-                {translate("listingDetail.viewMatches")}
-              </SecondaryButton>
             )}
             {["draft", "published", "paused"].includes(listing.status) && (
               <SecondaryButton
@@ -6463,6 +5391,23 @@ export function ConnectedApp() {
                       <p className="mt-1 text-[13px] text-muted-foreground">
                         {version ? `${shortDate(version.pickup_window_start)} - ${shortDate(version.pickup_window_end)}` : "-"}
                       </p>
+                      {thread.driver_summary && (
+                        // ADR-0026 (Q138 + Q40): the client compares the answers by the anonymous set - vehicle class,
+                        // seats and the rating group with its count; never a name, plate or phone before accept (Q43).
+                        <p className="mt-1 text-[12px] leading-5 text-muted-foreground" data-testid="driver-summary">
+                          {translate("app.rivalBoard.vehicleSeats", {
+                            vehicle: vehicleClassLabel(thread.driver_summary.vehicle_class),
+                            seats: thread.driver_summary.seat_capacity,
+                          })}
+                          {" · "}
+                          {ratingBucketLabel(thread.driver_summary.rating_bucket)
+                            ? translate("app.rivalBoard.ratings", {
+                                bucket: ratingBucketLabel(thread.driver_summary.rating_bucket) ?? "",
+                                count: thread.driver_summary.rating_count,
+                              })
+                            : translate("listingBids.noRatingsYet")}
+                        </p>
+                      )}
                     </div>
                     <p className="text-[17px] font-bold text-primary">{version ? formatUzs(version.total_minor / 100) : "-"}</p>
                   </div>
@@ -6798,7 +5743,7 @@ export function ConnectedApp() {
               <ProfileActionRow icon={Truck} label={translate("clientProfile.myProposals")} description={translate("clientProfile.myProposalsHint")} onClick={() => go("client-proposals")} />
               <ProfileActionRow icon={Tag} label={translate("clientProfile.bonus")} description={translate("clientProfile.bonusHint")} onClick={() => go("client-bonus")} />
               <ProfileActionRow icon={Bell} label={translate("notifications.title")} description={translate("clientProfile.notificationsHint")} onClick={() => go("client-notifications")} />
-              <ProfileActionRow icon={FileText} label={translate("clientProfile.myDisputes")} description={translate("clientProfile.myDisputesHint")} onClick={() => go("my-disputes")} />
+              <ProfileActionRow icon={FileText} label={translate("support.myThreads")} description={translate("support.myThreadsHint")} onClick={() => go("my-support-threads")} />
               <ProfileActionRow icon={Shield} label={translate("safety.centerTitle")} description={translate("safety.centerDescription")} onClick={() => go("safety-center")} />
               <ProfileActionRow icon={Headphones} label={translate("clientProfile.help")} description={translate("clientProfile.helpHint")} onClick={() => go("support")} />
               <ProfileActionRow icon={Shield} label={translate("clientProfile.settings")} description={translate("clientProfile.settingsHint")} onClick={() => go("settings")} />
@@ -7151,76 +6096,8 @@ export function ConnectedApp() {
                     {translate("driverRoutes.boardingWindowHint")}
                   </p>
                 )}
-                {/* Q92: the driver is an author in this market, not only an answerer. A planned trip can be
-                    put up with the driver's own starting price, and clients answer it with theirs. */}
-                {tripOffers(trip.id).map((offer) => (
-                  <div key={offer.id} className="mt-2 rounded-[12px] bg-slate-50 px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-semibold text-foreground">
-                        {offer.service_type === "passenger" ? translate("driverRoutes.passengerOffer") : translate("driverRoutes.parcelOffer")}
-                      </span>
-                      <span className="text-[13px] font-bold text-primary">
-                        {formatUzs(offer.unit_price_minor / 100)}
-                        {offer.price_basis === "per_seat" ? translate("driverRoutes.perSeatSuffix") : ""}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[12px] text-muted-foreground">
-                      {translate("driverRoutes.offerStatusLine", { status: listingStatusLabel(offer.status) })}
-                    </p>
-                    {/* Q98: published only - a draft nobody can open would always read "nobody has looked". */}
-                    {offer.status === "published" && (
-                      <p className="mt-0.5 text-[12px] text-muted-foreground">{viewCountLabel(offer.view_count)}</p>
-                    )}
-                    {offer.status === "draft" && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void run(async () => {
-                          await publishListing(offer.id, offer.version);
-                          await loadDriverTrips();
-                        }, translate("driverRoutes.published"))}
-                        className="el-press mt-2 h-9 w-full rounded-[10px] bg-primary text-[13px] font-semibold text-primary-foreground"
-                      >
-                        {translate("driverRoutes.publish")}
-                      </button>
-                    )}
-                    {offer.status === "published" && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void run(() => openMatches(offer.id, offer.kind))}
-                        className="el-press mt-2 h-9 w-full rounded-[10px] bg-accent text-[13px] font-semibold text-primary"
-                      >
-                        {translate("driverRoutes.viewMatches")}
-                      </button>
-                    )}
-                    <div className="mt-2">
-                      {renderListingOwnerControls(offer, "driver-routes", loadDriverTrips)}
-                    </div>
-                  </div>
-                ))}
-                {trip.status === "planned" && availableOfferServices(trip.id).length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const first = trip.stops[0]?.stop.id ?? "";
-                      const last = trip.stops[trip.stops.length - 1]?.stop.id ?? "";
-                      setOfferForm({
-                        tripId: trip.id,
-                        // Open on a service this trip does not already advertise, so the second offer on a
-                        // journey is one tap rather than a refusal.
-                        serviceType: availableOfferServices(trip.id)[0],
-                        originStopId: first,
-                        destinationStopId: last,
-                        price: "",
-                      });
-                      go("driver-offer-create");
-                    }}
-                    className="el-press mt-3 h-10 w-full rounded-[10px] border border-primary text-[14px] font-semibold text-primary"
-                  >
-                    {tripOffers(trip.id).length > 0 ? translate("driverRoutes.addAnotherOffer") : translate("driverRoutes.publishWithPrice")}
-                  </button>
-                )}
+                {/* Q138 (ADR-0026): a trip is the driver's internal plan (vehicle, stops, seats and cargo per segment). It is
+                    never published to clients; the driver answers client requests from the feed with it. */}
               </div>
               );
             }) : <EmptyState icon={Navigation} title={translate("driverRoutes.empty")} action={translate("driverRoutes.addRoute")} onAction={() => go("driver-add-route")} />}
@@ -7231,21 +6108,114 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-trip-detail" && openTripId) {
-      // The trip's own view (availability, manifest), then O1 share links for the offers on it that are open.
-      const shareable = tripOffers(openTripId).filter((offer) => canShareListing(offer.status));
+      // The trip's own view (availability, manifest). Q138: a trip is internal - nothing on it is shared with clients.
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
           <TopBar title={translate("trip.detailsTitle")} back={() => go("driver-routes")} />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
             <DriverTripDetail tripId={openTripId} />
-            {shareable.map((offer) => (
-              <div key={offer.id} className="space-y-2">
-                <p className="px-1 text-[13px] font-semibold text-muted-foreground">
-                  {translate("listingShare.title")}: {offer.service_type === "passenger" ? translate("driverRoutes.passengerOffer") : translate("driverRoutes.parcelOffer")}
-                </p>
-                <ShareLinkPanel listingId={offer.id} />
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "support-thread" && supportThread) {
+      // ADR-0026 (Q141): this person's private conversation with an operator about one booking. No form, no stages;
+      // nothing here refunds, cancels a fee, grants a bonus or judges anyone - staff use their own tools for that.
+      const thread = supportThread;
+      const open = thread.status === "open";
+      const statusText = translate(`support.status.${thread.staff_status}` as MessageKey);
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title={translate("support.threadTitle")} back={() => go(supportBack)} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6 pt-5">
+            <div className="rounded-[14px] border border-border bg-card p-4">
+              <p className="text-[12px] text-muted-foreground">{translate("support.statusLabel")}</p>
+              <p className="mt-1 text-[14px] font-semibold text-foreground" data-testid="support-status">{statusText}</p>
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("support.noPromise")}</p>
+            </div>
+            {(thread.messages ?? []).length === 0 && (
+              <p className="px-1 text-[13px] leading-5 text-muted-foreground">{translate("support.emptyThread")}</p>
+            )}
+            {(thread.messages ?? []).map((message) => (
+              <div
+                key={message.id}
+                className={cls(
+                  "max-w-[85%] rounded-[14px] px-3 py-2 text-[14px] leading-5",
+                  message.author === "me" ? "ml-auto bg-primary text-primary-foreground"
+                    : message.author === "system" ? "mx-auto bg-muted text-center text-[12px] text-muted-foreground"
+                      : "bg-card text-foreground border border-border",
+                )}
+              >
+                {message.author === "operator" && (
+                  <p className="mb-0.5 text-[11px] font-semibold text-primary">{translate("support.operator")}</p>
+                )}
+                <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                <p className="mt-1 text-[10px] opacity-70">{shortDate(message.created_at)}</p>
               </div>
             ))}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run(async () => setSupportThread(await getSupportThread(thread.id)))}
+              className="el-press text-[13px] font-semibold text-primary"
+            >
+              {translate("support.refresh")}
+            </button>
+          </section>
+          <div className="border-t border-border bg-card px-5 py-3">
+            {open ? (
+              <div className="flex items-end gap-2">
+                <Field label={translate("support.draftLabel")} value={supportDraft} onChange={setSupportDraft} multiline />
+                <button
+                  type="button"
+                  disabled={busy || !supportDraft.trim()}
+                  onClick={() => void run(async () => {
+                    const sent = await postSupportMessage(thread.id, supportDraft.trim(), newIdempotencyKey());
+                    setSupportThread(sent.data);
+                    setSupportDraft("");
+                    if (sent.warnings.length) setMessage(translate("support.masked"));
+                  })}
+                  className="el-press mb-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50"
+                  aria-label={translate("support.send")}
+                >
+                  <Send size={18} />
+                </button>
+              </div>
+            ) : (
+              <p className="text-[12px] leading-5 text-muted-foreground">{translate("support.closedNote")}</p>
+            )}
+          </div>
+        </main>
+      );
+    }
+
+    if (screen === "my-support-threads") {
+      const back = () => go(auth.user?.role === "driver" ? "driver-profile" : "client-profile");
+      return (
+        <main className="flex min-h-0 flex-1 flex-col bg-background">
+          <TopBar title={translate("support.myThreads")} back={back} />
+          <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
+            {busy && !supportThreads.length ? <ListSkeleton /> : supportThreads.length ? supportThreads.map((thread) => (
+              <button
+                key={thread.id}
+                type="button"
+                onClick={() => void run(() => openSupportThreadById(thread.id, "my-support-threads"))}
+                className="el-press w-full rounded-[14px] border border-border bg-card p-4 text-left"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[14px] font-semibold text-foreground">{translate("support.threadTitle")}</span>
+                  <span className="rounded-full bg-accent px-2.5 py-1 text-[11px] font-semibold text-primary">
+                    {translate(`support.status.${thread.staff_status}` as MessageKey)}
+                  </span>
+                </div>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  {translate("support.threadMeta", { count: thread.message_count, date: shortDate(thread.created_at) })}
+                </p>
+              </button>
+            )) : (
+              <EmptyState icon={Headphones} title={translate("support.noThreadsTitle")} subtitle={translate("support.noThreadsHint")} />
+            )}
           </section>
         </main>
       );
@@ -7427,154 +6397,6 @@ export function ConnectedApp() {
       );
     }
 
-    if (screen === "driver-offer-create") {
-      if (!driverApproved) {
-        return (
-          <main className="flex flex-1 flex-col bg-card">
-            <TopBar title={translate("offerCreate.gateTitle")} back={() => go("driver-routes")} />
-            <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
-              <DriverVerificationGate
-                status={driverProfile?.verification_status}
-                onProfile={() => go("driver-profile-form")}
-                onDocuments={() => go("driver-documents")}
-                onSupport={() => go("support")}
-              />
-            </section>
-          </main>
-        );
-      }
-      const trip = trips.find((item) => item.id === offerForm.tripId);
-      const offerableServices = availableOfferServices(offerForm.tripId);
-      const alreadyOffered = tripOffers(offerForm.tripId).map((offer) => offer.service_type);
-      const stopOptions = (trip?.stops ?? []).map((stop) => [stop.stop.id, stop.stop.name_uz] as [string, string]);
-      const window = offerWindowForTrip(trip, offerForm.originStopId);
-      const seatsOrOne = offerForm.serviceType === "passenger" ? (trip?.seat_capacity ?? 1) : 1;
-      const priceSoum = Math.round(Number(offerForm.price));
-      const hasCargoRoom = Boolean(trip?.cargo_capacity_weight_g || trip?.cargo_capacity_volume_ml);
-      const offerReady = Boolean(
-        trip && offerForm.originStopId && offerForm.destinationStopId
-        && offerForm.originStopId !== offerForm.destinationStopId
-        && window && priceSoum > 0
-        && (offerForm.serviceType === "passenger" || hasCargoRoom),
-      );
-      return (
-        <main className="flex flex-1 flex-col bg-card">
-          <TopBar title={translate("offerCreate.title")} back={() => go("driver-routes")} />
-          <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
-            <div className="rounded-[14px] bg-background p-4">
-              <p className="font-semibold text-foreground">
-                {(trip?.stops[0]?.stop.name_uz ?? "-")} {"->"} {(trip?.stops[(trip?.stops.length ?? 1) - 1]?.stop.name_uz ?? "-")}
-              </p>
-              <p className="mt-1 text-[13px] text-muted-foreground">
-                {translate("offerCreate.tripMeta", { date: trip ? shortDate(trip.planned_start_at) : "-", seats: trip?.seat_capacity ?? 0 })}
-              </p>
-            </div>
-
-            {/* Q92: both service types are the driver's to publish. Passenger stays behind its flag (K7/Q91) -
-                the model is always there, only the way in is gated. A service this trip already advertises is
-                left out rather than shown and refused on send. */}
-            {offerableServices.length > 1 && (
-              <SegmentedControl
-                value={offerForm.serviceType}
-                options={[["passenger", translate("offerCreate.servicePassenger")], ["parcel", translate("offerCreate.serviceParcel")]] as const}
-                onChange={(value) => setOfferForm({ ...offerForm, serviceType: value })}
-              />
-            )}
-            {alreadyOffered.length > 0 && (
-              <p className="text-[12px] leading-5 text-muted-foreground">
-                {translate("offerCreate.alreadyOffered", {
-                  services: alreadyOffered
-                    .map((service) => (service === "passenger" ? translate("offerCreate.servicePassengerLower") : translate("offerCreate.serviceParcelLower")))
-                    .join(translate("offerCreate.and")),
-                })}
-              </p>
-            )}
-
-            <PickSelect
-              label={translate("offerCreate.from")}
-              placeholder={translate("offerCreate.stopPlaceholder")}
-              value={offerForm.originStopId}
-              options={stopOptions}
-              onChange={(value) => setOfferForm({ ...offerForm, originStopId: value })}
-            />
-            <PickSelect
-              label={translate("offerCreate.to")}
-              placeholder={translate("offerCreate.stopPlaceholder")}
-              value={offerForm.destinationStopId}
-              options={stopOptions}
-              onChange={(value) => setOfferForm({ ...offerForm, destinationStopId: value })}
-            />
-            {offerForm.originStopId === offerForm.destinationStopId && offerForm.originStopId !== "" && (
-              <p className="text-[12px] leading-5 text-destructive">{translate("offerCreate.sameStops")}</p>
-            )}
-            {window && (
-              <div className="rounded-[14px] bg-accent px-4 py-3">
-                <p className="text-[12px] font-semibold text-primary">{translate("offerCreate.departureWindow")}</p>
-                <p className="mt-0.5 text-[15px] font-semibold text-foreground">
-                  {shortDate(window.start)} - {shortDate(window.end)}
-                </p>
-                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                  {translate("offerCreate.windowHint")}
-                </p>
-              </div>
-            )}
-
-            <Field
-              label={offerForm.serviceType === "passenger" ? translate("offerCreate.pricePerSeat") : translate("offerCreate.priceParcel")}
-              type="number"
-              value={offerForm.price}
-              onChange={(value) => setOfferForm({ ...offerForm, price: value })}
-              placeholder={translate("offerCreate.pricePlaceholder")}
-            />
-            {offerForm.serviceType === "passenger" && priceSoum > 0 && (
-              <p className="text-[12px] leading-5 text-muted-foreground">
-                {translate("offerCreate.totalForSeats", { seats: seatsOrOne, total: formatUzs(priceSoum * seatsOrOne) })}
-              </p>
-            )}
-            {offerForm.serviceType === "parcel" && !hasCargoRoom && (
-              <p className="text-[12px] leading-5 text-destructive">
-                {translate("offerCreate.noCargoRoom")}
-              </p>
-            )}
-            {/* §5.3 / Q90: this is a starting price in an auction, not a tariff. Saying so here is what keeps
-                the driver from reading the number back as a guaranteed fare. */}
-            <p className="text-[12px] leading-5 text-muted-foreground">
-              {translate("offerCreate.startingPriceNote")}
-            </p>
-
-            <div className="mt-auto">
-              <PrimaryButton
-                disabled={!offerReady || busy}
-                onClick={() => void run(async () => {
-                  if (!trip || !window) return;
-                  const created = await createListing(
-                    {
-                      kind: "trip_offer",
-                      service_type: offerForm.serviceType,
-                      trip_id: trip.id,
-                      origin_stop_id: offerForm.originStopId,
-                      destination_stop_id: offerForm.destinationStopId,
-                      departure_window_start: window.start,
-                      departure_window_end: window.end,
-                      price_basis: offerForm.serviceType === "passenger" ? "per_seat" : "total",
-                      unit_price_minor: priceSoum * 100,
-                    } as ListingCreate,
-                    newIdempotencyKey(),
-                  );
-                  // L1 creates a draft; the market only sees it once it is published (§5.3).
-                  await publishListing(created.data.id, created.data.version);
-                  await loadDriverTrips();
-                  go("driver-routes");
-                }, translate("driverRoutes.published"))}
-              >
-                {translate("offerCreate.submit")}
-              </PrimaryButton>
-            </div>
-          </section>
-        </main>
-      );
-    }
-
     if (screen === "driver-feed") {
       // The tab is reachable from the bottom bar at any time, so the refusal lives here rather than in the
       // navigation: hiding the tab would leave an unverified driver wondering where the work is.
@@ -7625,6 +6447,8 @@ export function ConnectedApp() {
               <span>{shortDate(item.listing.departure_window_start)}</span>
               <span className="font-semibold text-foreground">{formatUzs(item.listing.total_minor / 100)}</span>
             </div>
+            {/* Q140: the driver sees the parcel's size category and its limits before offering. */}
+            <ParcelCategoryLine category={item.listing.parcel_category} />
             <div className="mt-3">
               <button
                 onClick={() => {
@@ -7742,7 +6566,7 @@ export function ConnectedApp() {
                       {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
                   {endLabel(booking.dropoff.stop, booking.dropoff.point)}
                     </span>
-                    <StatusBadge status={booking.service_status} />
+                    <StatusBadge status={booking.service_status} label={bookingBadgeLabel(booking)} />
                   </div>
                   <div className="flex items-center justify-between text-[13px] text-muted-foreground">
                     <span>{shortDate(booking.pickup.window_start ?? undefined)}</span>
@@ -7791,6 +6615,7 @@ export function ConnectedApp() {
                 {endLabel(request.listing.destination_stop, request.listing.destination_point)}
               </p>
               <p className="text-[13px] text-muted-foreground">{translate("driverBid.clientPrice", { price: formatUzs(request.listing.total_minor / 100) })}</p>
+              <ParcelCategoryLine category={request.listing.parcel_category} />
               <p className="mt-1 text-[13px] text-muted-foreground">
                 {translate("driverBid.departure", {
                   start: shortDate(request.listing.departure_window_start),
@@ -7881,15 +6706,14 @@ export function ConnectedApp() {
 
     if (screen === "driver-order-detail" && driverBooking) {
       const booking = driverBooking;
-      // The order the parcel machine really takes (verified against the API, 17.09.2026):
-      // confirmed -> arrive_at_pickup -> pick_up (code) -> start_transit -> deliver (code) -> client completes.
+      // ADR-0026 (Q139): a parcel has no driver ladder and no codes - it goes on the way with the trip and staff
+      // record its outcome. The passenger ladder keeps the boarding code (spec §11).
+      const isParcel = booking.service_type === "parcel";
       const nextAction =
         booking.service_status === "confirmed" ? ["arrive_at_pickup", translate("driverBooking.action.arrive")] :
-        booking.service_status === "awaiting_pickup" ? ["pick_up", translate("driverBooking.action.pickUp")] :
-        booking.service_status === "picked_up" ? ["start_transit", translate("driverBooking.action.startTransit")] :
-        booking.service_status === "in_transit" ? ["deliver", translate("driverBooking.action.deliver")] : null;
-      // B5: pick-up and delivery both need the code the client holds.
-      const needsCode = nextAction?.[0] === "pick_up" || nextAction?.[0] === "deliver";
+        !isParcel && booking.service_status === "awaiting_pickup" ? ["board", translate("driverBooking.action.board")] :
+        !isParcel && booking.service_status === "onboard" ? ["drop_off", translate("driverBooking.action.dropOff")] : null;
+      const needsCode = nextAction?.[0] === "board";
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
           <TopBar title={translate("driverBooking.title")} back={() => go("driver-orders")} />
@@ -7901,7 +6725,7 @@ export function ConnectedApp() {
                   {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
                   {endLabel(booking.dropoff.stop, booking.dropoff.point)}
                 </span>
-                <StatusBadge status={booking.service_status} />
+                <StatusBadge status={booking.service_status} label={bookingBadgeLabel(booking)} />
               </div>
               <div className="flex items-center justify-between text-[13px] text-muted-foreground">
                 <span>{shortDate(booking.pickup.window_start ?? undefined)}</span>
@@ -7915,8 +6739,14 @@ export function ConnectedApp() {
               [endRowLabel(booking.dropoff.stop, translate("driverBooking.dropoffStop"), translate("driverBooking.dropoffPoint")),
                endLabel(booking.dropoff.stop, booking.dropoff.point)],
               [translate("dispute.side.client"), booking.client?.display_name ?? translate("driverBooking.clientHidden")],
-              // Q44: the participant phones open when the service starts, not at accept.
-              [translate("driverBooking.phone"), booking.client?.contact_phone ?? translate("driverBooking.phoneHidden")],
+              // Q44: the participant phones open when the service starts, not at accept. A parcel's sender phone never
+              // reaches the driver; the receiver's opens when the trip departs (Q142) - with no code, that is how the
+              // parcel is handed over.
+              booking.service_type === "parcel"
+                ? [translate("driverBooking.receiver"), booking.parcel_contacts?.receiver_phone
+                    ? `${booking.parcel_contacts.receiver_name ?? ""} ${booking.parcel_contacts.receiver_phone}`.trim()
+                    : translate("driverBooking.receiverHidden")]
+                : [translate("driverBooking.phone"), booking.client?.contact_phone ?? translate("driverBooking.phoneHidden")],
               // §9: the fare is cash between the two people; it never passes through ELCHI or the wallet.
               [translate("driverBooking.fare"), translate("driverBooking.fareCash", { amount: formatUzs(cashDueMinor(booking) / 100) })],
             ].map(([label, value]) => (
@@ -7925,6 +6755,7 @@ export function ConnectedApp() {
                 <p className="mt-1 text-[14px] font-medium text-foreground">{value}</p>
               </div>
             ))}
+            <ParcelCategoryLine category={booking.parcel_category} />
             {booking.service_type === "parcel" && (
               <ParcelPhoto
                 photo={booking.parcel_photo}
@@ -7935,16 +6766,12 @@ export function ConnectedApp() {
             {needsCode && (
               <>
                 <Field
-                  label={nextAction?.[0] === "pick_up" ? translate("driverBooking.handoverCode") : translate("driverBooking.deliveryCode")}
+                  label={translate("driverBooking.boardingCode")}
                   value={proofCode}
                   onChange={setProofCode}
                   placeholder={translate("driverBooking.codePlaceholder")}
                 />
-                <p className="text-[12px] leading-5 text-muted-foreground">
-                  {nextAction?.[0] === "pick_up"
-                    ? translate("driverBooking.codeFromSender")
-                    : translate("driverBooking.codeFromRecipient")}
-                </p>
+                <p className="text-[12px] leading-5 text-muted-foreground">{translate("driverBooking.codeFromPassenger")}</p>
               </>
             )}
             {(CASH_RECORDABLE[booking.service_type] ?? []).includes(booking.service_status) && (
@@ -7986,12 +6813,15 @@ export function ConnectedApp() {
                 {translate("rating.rateClient")}
               </PrimaryButton>
             )}
-            {canOpenDispute(booking.service_status) && (
-              <SecondaryButton onClick={() => openDisputeForm(booking.id, "driver")}>
-                {translate("driverBooking.reportProblem")}
-              </SecondaryButton>
+            {isParcel && ["in_transit", "picked_up", "delivered", "delivery_failed", "return_required"].includes(booking.service_status) && (
+              <p className="rounded-[14px] bg-accent px-4 py-3 text-[12px] leading-5 text-primary">
+                {translate("parcel.operatorRecordsOutcome")}
+              </p>
             )}
-            {renderBookingDisputes(booking.id)}
+            {/* ADR-0026 (Q141): the driver's own, private conversation with an operator about this booking. */}
+            <SecondaryButton disabled={busy} onClick={() => void run(() => openSupportFor(booking.id, "driver-order-detail"))}>
+              {translate("support.complain")}
+            </SecondaryButton>
             {renderCancelControls(booking, "driver")}
             {booking.service_status === "cancelled" && (
               <div className="rounded-[14px] border border-border bg-card p-4">{renderCancelledNote(booking)}</div>
@@ -8237,7 +7067,7 @@ export function ConnectedApp() {
               <ProfileActionRow icon={Package} label={translate("driverProfile.action.proposals")} description={translate("driverProfile.action.proposalsHint")} onClick={() => go("driver-proposals")} />
               <ProfileActionRow icon={Tag} label={translate("driverProfile.action.bonus")} description={translate("driverProfile.action.bonusHint")} onClick={() => go("driver-bonus")} />
               <ProfileActionRow icon={Package} label={translate("driverProfile.action.orders")} description={translate("driverProfile.action.ordersHint")} onClick={() => go("driver-orders")} />
-              <ProfileActionRow icon={FileText} label={translate("driverProfile.action.disputes")} description={translate("driverProfile.action.disputesHint")} onClick={() => go("my-disputes")} />
+              <ProfileActionRow icon={FileText} label={translate("support.myThreads")} description={translate("support.myThreadsHint")} onClick={() => go("my-support-threads")} />
               <ProfileActionRow icon={Shield} label={translate("safety.centerTitle")} description={translate("safety.centerDescription")} onClick={() => go("safety-center")} />
               <ProfileActionRow icon={Headphones} label={translate("driverProfile.action.support")} description={translate("driverProfile.action.supportHint")} onClick={() => go("support")} />
               <ProfileActionRow icon={Shield} label={translate("driverProfile.action.settings")} description={translate("driverProfile.action.settingsHint")} onClick={() => go("settings")} />
@@ -8356,23 +7186,6 @@ export function ConnectedApp() {
               )}
             </div>
           </div>
-        )}
-        {intentEditPending && (
-          <ConfirmSheet
-            title={translate("confirmDialog.intentEdit.title")}
-            text={offersAffectedText(intentEditPending.openOffers)}
-            confirmText={translate("common.save")}
-            cancelText={translate("confirmDialog.back")}
-            onCancel={() => setIntentEditPending(null)}
-            onConfirm={() => {
-              const pending = intentEditPending;
-              setIntentEditPending(null);
-              void run(async () => {
-                const saved = await sendIntentEdit({ ...pending.body, acknowledge_open_offers: true }, pending.then);
-                if (saved) go(pending.then);
-              }, translate("confirmDialog.intentEdit.saved"));
-            }}
-          />
         )}
         {confirmAction && (
           <ConfirmSheet

@@ -39,8 +39,6 @@ pytestmark = pytest.mark.skipif(not CONNECTED_APP.is_file(), reason="mobile-app 
     ("source", "function"),
     [
         (DRIVER_API, "requestsFeed"),  # the driver's feed of client requests
-        (MARKETPLACE_API, "offersFeed"),  # the client's feed of driver trip offers
-        (MARKETPLACE_API, "listingMatches"),  # either side, from a listing they already published
     ],
 )
 def test_every_discovery_call_asks_for_the_alternatives(source: Path, function: str) -> None:
@@ -69,7 +67,8 @@ def test_the_split_lives_in_a_pure_module() -> None:
         assert forbidden not in source, f"feedGroups.ts must stay pure (found {forbidden})"
 
 
-@pytest.mark.parametrize("screen", ["driver-feed", "client-offers", "listing-matches"])
+# ADR-0026 (Q138): the client offers feed and the matches screen are retired; the driver feed remains
+@pytest.mark.parametrize("screen", ["driver-feed"])
 def test_each_list_screen_separates_the_two_groups(screen: str) -> None:
     source = CONNECTED_APP.read_text(encoding="utf-8")
     opening = re.search(rf'if \(screen === "{re.escape(screen)}"(?: [^)]*)?\) \{{', source)

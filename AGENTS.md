@@ -97,7 +97,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Q62** Detour va AC13 pilotda qoldiriladi (Q46): accept detour quote’ni barcha muhitlarda rad etadi.
 - **Q63** Trip’da bironta allocation bo‘lsa (qaytarilgan/inactive ham) bekatlarni o‘zgartirish taqiq.
 - **Q64** Davlat raqami: accept’dan keyin maskalangan raqam + model + rang; to‘liq raqam trip `boarding` holatida yoki pickup’ga ≤ 30 daqiqa qolganda.
-- **Q65** Delivery kodi pilotda jo‘natuvchiga “faqat qabul qiluvchiga bering” ogohlantirishi bilan ko‘rsatiladi. `delivered` bronni avtomatik yakunlamaydi: jo‘natuvchi tasdiqlaydi yoki 24 soatda operator navbatiga tushadi. Chatdagi 6 xonali kodlar maskalanadi. Keyin kod qabul qiluvchiga havola/SMS orqali.
+- **Q65** *(Q139 bilan almashtirilgan: pochta kodi va jo‘natuvchi tasdig‘i yo‘q)* Delivery kodi pilotda jo‘natuvchiga “faqat qabul qiluvchiga bering” ogohlantirishi bilan ko‘rsatiladi. `delivered` bronni avtomatik yakunlamaydi: jo‘natuvchi tasdiqlaydi yoki 24 soatda operator navbatiga tushadi. Chatdagi 6 xonali kodlar maskalanadi. Keyin kod qabul qiluvchiga havola/SMS orqali.
 - **Q66** Nizo moduli (A12) yo‘q bo‘lsa 503 o‘rniga xizmat yakunlanadi, komissiya hold’da qoladi va finance navbatiga tushadi.
 - **Q67** Counter’da narx band’i narx **yoki** pickup/dropoff bekati o‘zgarsa qayta baholanadi (Q53 aniqlashtirilgan). **Q90:** baholash natijasi ogohlantirish, bloklash emas.
 - **Q68** Jo‘natma turi va qulayliklar — kontraktdagi qat’iy enum.
@@ -115,7 +115,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 **Wave 3.1 tasdiqlari (16.09.2026):**
 - **Q77 (M1)** Nizo ochilganda safar xom GPS nuqtalari alohida dalil jadvaliga (`tracking_evidence_points`) ko‘chiriladi; nusxalanmagan hold’li partition tashlanmaydi. Nizo yopilgach hold bo‘shatiladi va nusxa `EVIDENCE_RETENTION_AFTER_RELEASE` (30 kun) dan keyin o‘chadi. Xom nuqtalarning umumiy 7 kunlik retention’i o‘zgarmaydi. Egalar A6 + A12.
 - **Q78** v2 nizo qarori (`resolve`/`reject`) — faqat **admin+** (`ops.dispute_decide`), v1 Q13/Q38 bilan bir xil; operator `start_review` va izoh bilan qoladi (izoh audit qatorida). Naqd natija nizo qarorining o‘z maydoni (`DisputeCommand.cash_outcome`): `resolution_code` bilan zid bo‘lsa rad, `contested` kvitansiyali payment nizosi natijasiz yopilmaydi. `resolve_contested_cash_receipt` ham `ops.dispute_decide` talab qiladi.
-- **Q79 (W21-4)** Trip-offer parcel’da qabul qiluvchi majburiy: mijoz taklifida so‘raladi (counter oldingi qabul qiluvchini saqlaydi), `pick_up` qabul qiluvchisiz rad etiladi.
+- **Q79 (W21-4)** *(Q138/Q139 bilan tarixga o‘tgan)* Trip-offer parcel’da qabul qiluvchi majburiy: mijoz taklifida so‘raladi (counter oldingi qabul qiluvchini saqlaydi), `pick_up` qabul qiluvchisiz rad etiladi.
 - **Q80 (U5)** v1 staff kirishi effektiv rollarni (`users.role` + faol `user_roles`) tan oladi, **doira faqat `admin_drivers.py`**; Q3 saqlanadi (marketplace akkaunt staff bo‘lmaydi), javob kodi/matni/shakli o‘zgarmaydi.
 - **Q81 (U1)** Parcel jo‘natuvchisi haydovchining jonli joylashuvini **pickup’dan keyin** ko‘radi (kontraktdagi konservativ qoida saqlanadi).
 - **Q82 (U3)** Push provayderi tanlanmaguncha faqat ilova ichidagi xabarlar; `communications.push_delivery` vazifasi ulangan, provayder o‘chiq bo‘lsa DB’ga tegmaydi. Provayder — alohida ADR.
@@ -172,7 +172,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   Wave 13 dagi «klientda passenger oqimi umuman bo'lmasin» degan qo'riqchi test **xato** edi va olib
   tashlandi.
 
-- **Q92** To'rtala listing turi ham mahsulot doirasida va **har ikki tomonda kirish nuqtasi bo'lishi shart**:
+- **Q92** *(Q138 bilan almashtirilgan: haydovchi e'loni olib tashlandi)* To'rtala listing turi ham mahsulot doirasida va **har ikki tomonda kirish nuqtasi bo'lishi shart**:
   `request+passenger`, `request+parcel` (muallif — mijoz/jo'natuvchi), `trip_offer+passenger`,
   `trip_offer+parcel` (muallif — haydovchi). Haydovchi faqat javob beruvchi emas: u o'z safarini narx bilan
   e'lon qiladi; mijoz o'z narxini taklif qiladi. Feed ikki tomonlama: haydovchi `side=requests`, mijoz
@@ -227,7 +227,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
     `version`, `terms_version`, `updated_at` **tegilmaydi** — o'qish tahrir emas, aks holda e'lonni ochgan
     odam undagi barcha ochiq takliflarni bekor qilgan bo'lardi (Q54).
   - Son ikkala DTO'da (`ListingDTO`, `ListingPublicDTO`) — kimligini oshkor qilmaydi, faqat son.
-- **Q99 (Q92 ning klient tomoni)** Bitta safarga ikkala xizmat e'lonini qo'yish DB'da allaqachon ruxsat etilgan
+- **Q99 (Q92 ning klient tomoni)** *(Q138 bilan almashtirilgan)* Bitta safarga ikkala xizmat e'lonini qo'yish DB'da allaqachon ruxsat etilgan
   (`uq_listings_open_trip_offer` — `(trip_id, service_type)`). Klient endi e'lon formasini safar **hali
   e'lon qilmagan** xizmat turida ochadi; ikkalasi ham bor bo'lsa tugma ko'rsatilmaydi. Qoida sof modulda:
   `mobile-app/src/app/tripOffers.ts` (indeks predikati bilan bir xil: `cancelled`/`expired` xizmatni
@@ -432,7 +432,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   navbati, CAC, refund ulushi kabi biznes chegaralari dalilga asoslangan alohida tasdiqni kutadi.
 
 **Saqlangan safar/jo‘natma talabi (24.09.2026) — ADR-0025:**
-- **Q136 (foydalanuvchi qarori)** Mijoz yo‘nalish, vaqt, odamlar soni/jo‘natma ma’lumotini bir marta kiritadi (`trip_intents`,
+- **Q136 (foydalanuvchi qarori)** *(Q138 bilan almashtirilgan: saqlangan talablar yangi yaratilmaydi)* Mijoz yo‘nalish, vaqt, odamlar soni/jo‘natma ma’lumotini bir marta kiritadi (`trip_intents`,
   shaxsiy, e’lon emas, o‘zi hech kimga taklif yubormaydi); har haydovchi e’loniga taklif shu talabdan to‘ldiriladi, lekin har taklif
   mustaqil kelishuv: o‘z narxi, promo quote’i va roziligi. Bitta talab — bitta bekor qilinmagan bron (servis + DB unique); parallel
   accept’da yutqazgan sig‘im, promo yoki hold qoldirmaydi, qolgan takliflar texnik sabab bilan yopiladi (jarima/strike/reyting yo‘q).
@@ -444,6 +444,57 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Q137 (Q8 ni yakunlaydi)** OTP kodi **4 xona**. Backend standarti (`Settings.otp_length = 4`), `mobile-app` zaxira qiymati
   (`VITE_OTP_LENGTH || 4`) va `.env.example` fayllari bir xil; kontrakt testi kod standartlarini solishtiradi, lokal `.env` ni emas.
   Muhitda `ELCHI_OTP_LENGTH` va `VITE_OTP_LENGTH` o‘rnatilsa, ikkalasi 4 bo‘lishi shart.
+
+**Mahsulot oqimini qayta ishlash (24.09.2026) — ADR-0026:**
+- **Q138 (foydalanuvchi qarori; Q92, Q99, Q97 ning `side=offers`/`matches` qismi, Q21 ning trip_offer qismi va Q136/ADR-0025 ni
+  almashtiradi)** Haydovchi e'lon yaratmaydi: faqat mijoz yo'lovchi yoki pochta e'lonini beradi; haydovchi mos e'lonni ko'radi,
+  mijoz narxiga rozi bo'ladi yoki boshqa narx taklif qiladi; mijoz takliflarni solishtirib tanlaydi; bron atomar accept bilan.
+  `trip_offer` yaratish/nashr/tahrir/unga javob servisda va DB trigger'da rad (`DRIVER_LISTING_RETIRED`), `side=offers` va
+  `GET /listings/{id}/matches` olib tashlandi. Trip, avtomobil va segment sig'imi — ichki model, mijozga e'lon emas.
+  Saqlangan talablar (ADR-0025) yangi yaratilmaydi (`TRIP_INTENT_RETIRED`); tarix o'qiladi. Eski ochiq e'lon, taklif va
+  talablarni `marketplace.retire_driver_listings` texnik sabab bilan yopadi; faol bronlar o'zgarmaydi. Bog'langan guruh
+  e'lonlari modeli tasdiqlanmagan va qurilmagan (hech narsa saqlanmadi).
+- **Q139 (Q65, Q75 ning pochta kodi/reissue qismi, Q79 ning trip-offer qismi va Q85 ning pochta qismini almashtiradi)** Pochtada
+  topshirish/qabul qilish/qaytarish kodi yo'q; haydovchining pochta amallari va jo'natuvchining «qabul qilindi» tasdig'i yo'q;
+  pochta naqd kvitansiyasi yo'q. Pochta trip jo'naganda `in_transit` (tizim, «yo'lga chiqdi»), `delivered` va `completed` —
+  faqat operator (sabab/dalil bilan); komissiya capture — faqat operator yakunlaganda. Yo'lovchi boarding kodi va naqd
+  kvitansiyasi, telefon OTP va xodim MFA o'zgarmaydi. Referral: yangi pochta broni dalilsiz ⇒ qualification yo'q, avtomatik
+  mukofot yo'q, enrollment muddat bilan tugaydi.
+- **Q140 (Q68 ni to'ldiradi)** Jo'natma o'lcham-vazni raqam bilan kiritilmaydi — server katalogidagi toifa tanlanadi
+  (`parcel_category_versions/items`; `platform.policy_manage` admini boshqaradi, versiyalanadi va audit'ga yoziladi — ikkinchi xodim talabi yo'q (0094: katalog taqiqlangan jo'natmalar siyosati emas, ikki xodimni talab qiladigan qoida yo'q); `synthetic` demo qiymatlar production'da faollashmaydi. Haqiqiy o'lcham/vazn qiymatlari tasdiqlanmagan).
+  Bron toifa elementiga muzlatilgan havola bilan; sig'im toifaning max og'irligi va max hajmi bilan band qilinadi. Production'da
+  tasdiqlangan real katalog bo'lmasa yangi pochta biznesi yo'q (`PARCEL_CATALOG_UNCONFIRMED`). `ParcelType` (mazmun) saqlanadi.
+- **Q141 (Q78 ning foydalanuvchi ochadigan nizo qismini almashtiradi)** Mijoz va haydovchi uchun nizo formasi/ekranlari yo'q;
+  bron tafsilotida «Shikoyat qilish» shu bronga bog'langan operator chatini ochadi (bitta ochiq chat / bron / so'rovchi,
+  mijoz va haydovchi chatlari alohida va xususiy). Chat pul, komissiya, bonus yoki firibgarlik hukmiga ta'sir qilmaydi;
+  `disputes_v2` faqat xodim ichki yozuvi (Q66/Q74/Q77/Q84/Q127 ta'sirlari o'zgarmaydi). Eski nizolar tarixi va dalillari
+  bilan chatga ko'chirildi.
+- **Q142 (Q44 talqini)** Pochta xizmatining «boshlanishi» — trip jo'nashi (`in_transit`): telefonlar va kuzatuv oynasi shundan.
+- **Q143 (ochiq qaror, D-1)** Pochtani yakunlash qoidasi tasdiqlanmagan. Vaqtinchalik xavfsiz xulq: «yetkazildi» va «yakunlandi»
+  faqat operator, pul faqat operator yakunlaganda. Variantlar va oqibatlari — ADR-0026 va yakuniy hisobotda.
+
+**ADR-0026 kuzatuv qarorlari (25.09.2026):**
+- **Q144 (D-1, foydalanuvchi: vaqtinchalik)** Pochtani operator yakunlashi — **lokal vaqtinchalik yechim**, yakuniy mahsulot
+  qarori emas va production uchun tayyor oqim deb yozilmaydi. Foydalanuvchi yo'nalishi: haydovchining «yetkazdim» tugmasi
+  yetarli, kamchilik bo'lsa mijoz «Yordam / shikoyat» chati orqali — bu alohida ishda qaror qilinadi, hozir qayta
+  kiritilmaydi. Vaqtinchalik xulq: xodim yakunlagan pochta komissiyasi `held` qoladi va finance navbatiga tushadi
+  (`parcel_staff_completion`); capture faqat `finalize_fee` (`finance.fee_finalize`). Yakunlash asosi (sabab, dalil fayllari,
+  qaysi holatdan) audit qatorida. Chat yopilishi xizmat yakuni emas.
+- **Q145 (D-2, foydalanuvchi)** Bron yaratilguncha mijoz so'rovdagi odamlar sonini o'zgartira oladi (Q20: ochiq takliflar
+  yopiladi, eski taklif yangi songa yashirincha tatbiq etilmaydi). Bron yaratilgandan keyin miqdor o'zgarmaydi (D9);
+  UI bu amalni taklif qilmaydi va sababini aytadi (`BookingDTO.quantity_amendable`). Narx amendment'i ikki tomon roziligi va
+  promo qoidalari bilan qoladi. Ikki tomon tasdig'i bilan miqdor o'zgarishi — keyin alohida.
+- **Q146 (D-3, foydalanuvchi)** Bron sahifasida asosiy tugma — «Yordam / shikoyat» (operator chati). Xavfsizlik xabari va
+  bloklash — «Xavfsizlik haqida xabar berish», qo'shimcha (yig'iladigan) menyuda, asosiy tugma bilan yonma-yon emas.
+- **Q147 (foydalanuvchi)** Pochta referral kampaniyasi o'chiq qoladi. Mavjud `promised` pochta enrollment'lari (platforma
+  pochta dalilini olib tashlagani uchun shartni bajarib bo'lmaydi) muddat bilan bo'shatilmaydi va dalilsiz grant
+  qilinmaydi: `qualification_path_retired` review, rezerv saqlanadi. Eski yo'lning olib tashlanishi foydalanuvchi
+  qoidabuzarligi emas — bu review'ni **rad etib bo'lmaydi** (`retired_path_is_not_a_violation`); haqiqiy shart buzilishi
+  o'z review turi, sababi va audit'i bilan. Admin ma'qullashi grant emas. Bajarish yo'li — ochiq (**D-4**).
+- Shikoyat chati dalillari xodimga faqat qisqa muddatli imzoli havola orqali: faol login sessiyasi (`sid`),
+  `ops.trust_review`, fayl shu murojaatga tegishli; ko'rish audit'da; foydalanuvchiga ichki dalil yoki havola berilmaydi.
+- Chatga ko'chirilgan eski nizolarda (0093) so'rovchi o'z matni, o'z dalil izohlari va qarorni ko'radi; boshqa ishtirokchi
+  va xodim dalillari `staff_only`; foydalanuvchi DTO'sida fayl id/havolasi yo'q.
 
 **Wave 3.1 dan keyin ochiq qolgan uch band yopilgan (24.09.2026 audit):** U6 `rating_bucket` — A-variant; ADR-0021 staff MFA — **Accepted** (faqat xodim faktorlarini ulash va `enforce_privileged` rejimi — go-live bandi); dalil fayllari — imzolangan havola bilan.
 

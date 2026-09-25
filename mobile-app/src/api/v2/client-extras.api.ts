@@ -1,4 +1,4 @@
-/** The rest of the client surface (A8): the in-app inbox, saved searches, ratings and disputes.
+/** The rest of the client surface (A8): the in-app inbox, saved searches, ratings and the operator chat (ADR-0026).
  *
  * Push is not wired: the pilot decision is in-app only until a provider ADR (Q82), so this module never registers
  * a device token - the inbox is the delivery channel.
@@ -10,9 +10,8 @@ export type SavedSearchDTO = Schemas["SavedSearchDTO"];
 export type SavedSearchCreate = Schemas["SavedSearchCreate"];
 export type RatingCreate = Schemas["RatingCreate"];
 export type RatingDTO = Schemas["RatingDTO"];
-export type DisputeDTO = Schemas["DisputeDTO"];
-export type DisputeCreate = Schemas["app__modules__trust_support__schemas__DisputeCreate"];
-export type DisputeEvidenceCreate = Schemas["DisputeEvidenceCreate"];
+export type SupportThreadDTO = Schemas["SupportThreadDTO"];
+export type SupportMessageDTO = Schemas["SupportMessageDTO"];
 export type SupportContactsDTO = Schemas["SupportContactsDTO"];
 export type SupportTicketDTO = Schemas["SupportTicketDTO"];
 export type SupportTicketCreate = Schemas["SupportTicketCreate"];
@@ -49,21 +48,33 @@ export function rateBooking(bookingId: string, body: RatingCreate, idempotencyKe
   return v2RequestFull<RatingDTO>(`/bookings/${bookingId}/ratings`, { method: "POST", body, idempotencyKey });
 }
 
-export function myDisputes(params: { limit?: number } = {}) {
-  return v2Request<DisputeDTO[]>("/me/disputes", { query: params });
+/**
+ * ADR-0026 (Q141): "Shikoyat qilish" - the caller's own operator chat for this booking. The server returns the open
+ * thread if there is one (a second tap or a retry never makes another); the other party never sees it.
+ */
+export function openSupportThread(bookingId: string, text: string | null, idempotencyKey: string) {
+  return v2RequestFull<SupportThreadDTO>(`/bookings/${bookingId}/support-thread`, {
+    method: "POST", body: { text: text || null }, idempotencyKey,
+  });
 }
 
-export function openDispute(bookingId: string, body: DisputeCreate, idempotencyKey: string): Promise<V2Result<DisputeDTO>> {
-  return v2RequestFull<DisputeDTO>(`/bookings/${bookingId}/disputes`, { method: "POST", body, idempotencyKey });
+/** The caller's open thread for this booking, or null - so the button can say "continue" instead of "open". */
+export function bookingSupportThread(bookingId: string) {
+  return v2Request<SupportThreadDTO | null>(`/bookings/${bookingId}/support-thread`);
 }
 
-/** S5: one dispute as its participant sees it - the evidence both sides added and the decision, if any. */
-export function getDispute(disputeId: string) {
-  return v2Request<DisputeDTO>(`/disputes/${disputeId}`);
+export function mySupportThreads(params: { limit?: number } = {}) {
+  return v2Request<SupportThreadDTO[]>("/me/support-threads", { query: params });
 }
 
-export function addDisputeEvidence(disputeId: string, body: DisputeEvidenceCreate, idempotencyKey: string) {
-  return v2RequestFull<DisputeDTO>(`/disputes/${disputeId}/evidence`, { method: "POST", body, idempotencyKey });
+export function getSupportThread(threadId: string) {
+  return v2Request<SupportThreadDTO>(`/support-threads/${threadId}`);
+}
+
+export function postSupportMessage(threadId: string, text: string, idempotencyKey: string) {
+  return v2RequestFull<SupportThreadDTO>(`/support-threads/${threadId}/messages`, {
+    method: "POST", body: { text }, idempotencyKey,
+  });
 }
 
 /**

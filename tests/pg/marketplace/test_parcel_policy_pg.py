@@ -23,8 +23,6 @@ from sqlalchemy import text
 
 from app.contracts.errors import DomainError, ErrorCode
 from app.modules.marketplace import service as marketplace_service
-from app.modules.marketplace.models import ParcelPolicyVersion
-from app.modules.platform import service as platform_service
 from tests.pg.bookings.conftest import (  # noqa: F401  (shared A4 fixtures)
     BW,
     accept,
@@ -212,6 +210,29 @@ def _draft_parcel_listing(bw: BW) -> str:  # noqa: F811
         return marketplace_service.listing_public_id(listing)
 
 
+def _confirm_catalog_for_production(bw: BW) -> None:  # noqa: F811
+    """Activate a size catalog through the service (0094: one policy_manage admin is enough; a second one is used here
+    only because this helper predates it). The values are the test ones (tests.pg.marketplace.catalog_world) and the
+    source note says so; ``synthetic=False`` only because production refuses a synthetic catalog."""
+    from app.modules.marketplace import parcel_catalog
+    from app.modules.marketplace.schemas import ParcelCategoryItemInput
+    from tests.pg.marketplace.catalog_world import SYNTHETIC_ITEMS
+
+    items = [ParcelCategoryItemInput.model_validate({
+        "code": code, "name_uz": name, "icon_key": icon, "max_length_cm": length, "max_width_cm": width,
+        "max_height_cm": height, "max_weight_g": weight, "max_volume_ml": volume})
+        for code, (name, icon, length, width, height, weight, volume) in SYNTHETIC_ITEMS.items()]
+    with bw.db.session() as session:
+        version = parcel_catalog.create_version(session, actor_user_id=bw.super_id, label="test-catalog",
+                                                source_note="test-only values, not a tariff", synthetic=False, items=items)
+        session.commit()
+        public_id, expected = parcel_catalog.version_public_id(version), version.version
+    with bw.db.session() as session:
+        parcel_catalog.confirm_version(session, actor_user_id=_second_super_admin(session, bw),
+                                       version_public_id_value=public_id, expected_version=expected)
+        session.commit()
+
+
 def _second_super_admin(session, bw: BW) -> int:  # noqa: ANN001, F811
     """§5.2 approval needs a *different* super_admin; the pilot therefore needs at least two."""
     from app.models import User
@@ -271,6 +292,7 @@ def test_confirming_the_approved_list_reopens_new_parcel_business_in_production(
     """End to end: draft -> second super_admin confirms -> the gate that refused now lets a listing through."""
     from scripts.seed_parcel_policy_draft import DRAFT_ITEMS
 
+    _confirm_catalog_for_production(bw)  # Q140: production also needs a confirmed, non-synthetic size catalog
     parcel_listing = _draft_parcel_listing(bw)
     as_production()
 

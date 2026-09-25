@@ -201,10 +201,18 @@ PARCEL_BOOKING = StateMachine(
         _t(PC.CONFIRMED, PC.AWAITING_PICKUP, "mark_awaiting_pickup"),
         _t(PC.CONFIRMED, PC.CANCELLED, "cancel"),
         _t(PC.AWAITING_PICKUP, PC.CANCELLED, "cancel"),
+        # Q139 (ADR-0026): no pickup code and no driver "picked up" step - the parcel is "on the way" when the trip
+        # departs (system). It is not a claim that the parcel was handed over.
+        _t(PC.AWAITING_PICKUP, PC.IN_TRANSIT, "trip_departed"),
+        # Legacy rows only (created before Q139): the retired driver ladder may have left a parcel here.
         _t(PC.AWAITING_PICKUP, PC.PICKED_UP, "pick_up"),
         _t(PC.PICKED_UP, PC.IN_TRANSIT, "start_transit"),
         _t(PC.PICKED_UP, PC.RETURN_REQUIRED, "require_return"),
         _t(PC.IN_TRANSIT, PC.DELIVERED, "deliver"),
+        # Q139: with no delivery code and no receiver confirmation, "delivered" is an operator record (B13).
+        _t(PC.IN_TRANSIT, PC.DELIVERED, "mark_delivered"),
+        _t(PC.PICKED_UP, PC.DELIVERED, "mark_delivered"),
+        _t(PC.DELIVERY_FAILED, PC.DELIVERED, "mark_delivered"),
         _t(PC.IN_TRANSIT, PC.DELIVERY_FAILED, "report_delivery_failed"),
         _t(PC.IN_TRANSIT, PC.RETURN_REQUIRED, "require_return"),
         _t(PC.DELIVERY_FAILED, PC.IN_TRANSIT, "retry_delivery"),
@@ -534,6 +542,9 @@ PARCEL_SETTLED_FOR_TRIP: frozenset[str] = frozenset(
 )
 # Still-open bookings that do not block trip completion because an operator case owns them.
 PARCEL_OPEN_WITH_CUSTODY_CASE: frozenset[str] = frozenset({PC.DELIVERY_FAILED.value, PC.RETURN_REQUIRED.value})
+# Q139 (ADR-0026): a parcel on the way has no driver step left - its outcome (delivered / return) is recorded by an
+# operator, so it never keeps the driver from completing the trip. It stays open in the `parcel_outcome` queue.
+PARCEL_AWAITING_OPERATOR_OUTCOME: frozenset[str] = frozenset({PC.PICKED_UP.value, PC.IN_TRANSIT.value})
 PASSENGER_OPEN_WITH_NO_SHOW_REVIEW: frozenset[str] = frozenset({PB.AWAITING_PICKUP.value})
 
 
@@ -556,7 +567,7 @@ def booking_blocks_trip_completion(
         if service_status in PASSENGER_SETTLED_FOR_TRIP:
             return False
         return not (service_status in PASSENGER_OPEN_WITH_NO_SHOW_REVIEW and has_pending_no_show_review)
-    if service_status in PARCEL_SETTLED_FOR_TRIP:
+    if service_status in PARCEL_SETTLED_FOR_TRIP or service_status in PARCEL_AWAITING_OPERATOR_OUTCOME:
         return False
     return not (service_status in PARCEL_OPEN_WITH_CUSTODY_CASE and has_open_custody_case)
 
@@ -591,5 +602,6 @@ def booking_blocks_trip_cancel(service_type: ServiceType | str, service_status: 
 # first (confirm_no_show / reject_no_show), then cancels. The review machine has no trip-cancel command.
 TRIP_CANCEL_REFUSED_WITH_PENDING_NO_SHOW_REVIEW = True
 
-# Q65: a `delivered` parcel without sender confirmation enters the operator queue (awaiting_confirmation) after this.
+# Q65 (superseded by Q139, ADR-0026): kept for the historical contract; a parcel `delivered` is now in the operator
+# queue at once because no sender confirmation exists. Not read by the booking flow any more.
 DELIVERED_OPERATOR_QUEUE_AFTER = timedelta(hours=24)

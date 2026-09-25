@@ -18,7 +18,7 @@ from tests.pg.bookings.conftest import (  # noqa: F401  (bw fixture)
     accept,
     act,
     bw,
-    codes_for,
+    operator,
     driver_trip,
     parcel_request_body,
     propose,
@@ -38,13 +38,9 @@ def test_blocked_driver_keeps_obligations_for_a_delivered_parcel_after_trip_comp
         bw.w.client_id,
     )
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    act(bw, booking.id, bw.w.driver_id, "pick_up", code=codes_for(bw, booking.id, bw.w.client_id)["pickup_code"], now=bw.base)
-    run_trip_action(bw, trip_id, bw.w.driver_id, "depart", now=bw.base + timedelta(minutes=5))
-    act(bw, booking.id, bw.w.driver_id, "start_transit", now=bw.base + timedelta(minutes=6))
-    delivered = act(
-        bw, booking.id, bw.w.driver_id, "deliver", code=codes_for(bw, booking.id, bw.w.client_id)["delivery_code"],
-        now=bw.base + timedelta(hours=2),
-    )
+    run_trip_action(bw, trip_id, bw.w.driver_id, "depart", now=bw.base + timedelta(minutes=5))  # Q142: in transit
+    delivered = operator(bw, booking.id, bw.operator_id, "mark_delivered", now=bw.base + timedelta(hours=2),
+                         reason="receiver confirmed to support")  # Q139: staff record the outcome
     assert delivered.service_status == "delivered"
     assert run_trip_action(bw, trip_id, bw.w.driver_id, "complete", now=bw.base + timedelta(hours=4)) == "completed"
 

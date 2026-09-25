@@ -20,6 +20,8 @@ from tests.pg.bookings.conftest import (
     BW,
     FUNDED_MINOR,
     accept,
+    booked,
+    legacy_offer_booking,
     act,
     add_user,
     auth,
@@ -31,6 +33,7 @@ from tests.pg.bookings.conftest import (
     parcel_request_body,
     propose,
     publish_listing,
+    request_proposal,
     request_with_driver_proposal,
     rows,
     run_trip_action,
@@ -39,7 +42,6 @@ from tests.pg.bookings.conftest import (
     view,
     wallet,
 )
-from tests.pg.identity.a1_world import passenger_offer
 
 pytestmark = pytest.mark.pg
 
@@ -86,11 +88,8 @@ def _parcel_in_transit(bw: BW, plate: str, *, driver_id: int | None = None):  # 
     driver_id = driver_id or bw.w.driver_id
     trip_id, booking = _parcel_booking(bw, plate, driver_id=driver_id)
     run_trip_action(bw, trip_id, driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    codes = codes_for(bw, booking.id, bw.w.client_id)
-    act(bw, booking.id, driver_id, "pick_up", code=codes["pickup_code"], now=bw.base)
-    run_trip_action(bw, trip_id, driver_id, "depart", now=bw.base + timedelta(minutes=5))
-    act(bw, booking.id, driver_id, "start_transit", now=bw.base + timedelta(minutes=6))
-    return trip_id, booking, codes
+    run_trip_action(bw, trip_id, driver_id, "depart", now=bw.base + timedelta(minutes=5))  # Q142: on the way at depart
+    return trip_id, booking
 
 
 def _report_no_show(bw: BW, booking_id: int) -> None:
@@ -110,15 +109,14 @@ def _queue(bw: BW, actor_id: int, queue: str, *, now: datetime | None = None) ->
 
 def test_q61_unapproved_vehicle_blocks_new_bookings_only(bw: BW) -> None:
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01C100AA", seats=3)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    first = propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=1, unit=20_000_000)
-    second = propose(bw, offer, bw.w.client2_id, trip_public_id=None, quantity=1, unit=20_000_000)
-    booking = accept(bw, first, bw.w.driver_id)
+    first = request_proposal(bw, trip_public, bw.w.client_id)
+    second = request_proposal(bw, trip_public, bw.w.client2_id)
+    booking = accept(bw, first, bw.w.client_id)
     for status in ("rejected", "blocked"):
         with bw.db.engine.begin() as conn:
             conn.execute(text("UPDATE vehicles SET verification_status = :s WHERE id = (SELECT vehicle_id FROM trips WHERE id = :t)"),
                          {"s": status, "t": trip_id})
-        error = domain_error(lambda: accept(bw, second, bw.w.driver_id))
+        error = domain_error(lambda: accept(bw, second, bw.w.client2_id))
         assert error.code is ErrorCode.VEHICLE_NOT_ELIGIBLE and error.http_status == 409
     assert scalar(bw.db, "SELECT count(*) FROM bookings") == 1 and seats_used(bw, trip_id) == [1, 1, 1]
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
@@ -270,16 +268,18 @@ def test_br4_board_and_pick_up_on_planned_trip_are_trip_not_started_without_atte
     assert failures == [] and scalar(bw.db, "SELECT count(*) FROM booking_proof_attempts") == 0
     assert scalar(bw.db, "SELECT count(*) FROM booking_proofs WHERE booking_id = :b", b=booking.id) == 0
 
+    # Q139 (ADR-0026): a parcel has no driver pickup step at all - no code, no attempt row, the trip's depart moves it
     parcel_trip, parcel = _parcel_booking(bw, "01C105AA", driver_id=bw.w.driver2_id)
-    act(bw, parcel.id, bw.w.driver2_id, "mark_awaiting_pickup", now=bw.base - timedelta(hours=2))
-    pickup = codes_for(bw, parcel.id, bw.w.client_id)["pickup_code"]
-    parcel_error = domain_error(lambda: act(bw, parcel.id, bw.w.driver2_id, "pick_up", code=pickup, failures=failures))
-    assert parcel_error.code is ErrorCode.TRIP_NOT_STARTED and failures == []
+    parcel_error = domain_error(lambda: act(bw, parcel.id, bw.w.driver2_id, "pick_up", code="123456", failures=failures))
+    assert parcel_error.code is ErrorCode.INVALID_STATE_TRANSITION and failures == []
+    assert scalar(bw.db, "SELECT count(*) FROM booking_proof_attempts") == 0
 
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
     assert act(bw, booking.id, bw.w.driver_id, "board", code=code, now=bw.base).service_status == "onboard"
     run_trip_action(bw, parcel_trip, bw.w.driver2_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    assert act(bw, parcel.id, bw.w.driver2_id, "pick_up", code=pickup, now=bw.base).service_status == "picked_up"
+    assert scalar(bw.db, "SELECT service_status FROM bookings WHERE id = :b", b=parcel.id) != "in_transit"  # boarding is not departure
+    run_trip_action(bw, parcel_trip, bw.w.driver2_id, "depart", now=bw.base)
+    assert scalar(bw.db, "SELECT service_status FROM bookings WHERE id = :b", b=parcel.id) == "in_transit"
 
 
 def test_br4_trip_cancel_refused_with_people_or_parcels_inside_interrupt_resume(bw: BW) -> None:
@@ -294,12 +294,12 @@ def test_br4_trip_cancel_refused_with_people_or_parcels_inside_interrupt_resume(
     assert run_trip_action(bw, trip_id, bw.w.driver_id, "resume", reason="fixed", now=bw.base + timedelta(minutes=40)) == "in_progress"
     assert domain_error(lambda: run_trip_action(bw, trip_id, bw.w.driver_id, "resume", reason="x", now=bw.base)).code is ErrorCode.INVALID_STATE_TRANSITION
 
-    parcel_trip, parcel = _parcel_booking(bw, "01C107AA", driver_id=bw.w.driver2_id)
-    run_trip_action(bw, parcel_trip, bw.w.driver2_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    act(bw, parcel.id, bw.w.driver2_id, "pick_up", code=codes_for(bw, parcel.id, bw.w.client_id)["pickup_code"], now=bw.base)
-    custody = domain_error(lambda: run_trip_action(bw, parcel_trip, bw.w.driver2_id, "cancel", reason="engine", now=bw.base))
+    parcel_trip, parcel = _parcel_in_transit(bw, "01C107AA", driver_id=bw.w.driver2_id)  # Q142: in transit at depart
+    run_trip_action(bw, parcel_trip, bw.w.driver2_id, "interrupt", reason="flat tyre", now=bw.base + timedelta(minutes=20))
+    custody = domain_error(lambda: run_trip_action(bw, parcel_trip, bw.w.driver2_id, "cancel", reason="engine",
+                                                   now=bw.base + timedelta(minutes=30)))
     assert custody.code is ErrorCode.TRIP_HAS_UNRESOLVED_BOOKINGS and custody.details["bookings"] == [_public(parcel)]
-    assert scalar(bw.db, "SELECT status FROM trips WHERE id = :t", t=parcel_trip) == "boarding"
+    assert scalar(bw.db, "SELECT status FROM trips WHERE id = :t", t=parcel_trip) == "interrupted"
 
 
 def test_trip_cancel_on_planned_trip_cancels_pre_service_bookings_and_releases(bw: BW) -> None:
@@ -350,9 +350,8 @@ def test_q62_detour_quote_is_refused_at_accept(bw: BW, monkeypatch: pytest.Monke
 
 def test_q64_plate_disclosure_by_time_boarding_and_cancellation(bw: BW) -> None:
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01C111AA", seats=3)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    first = accept(bw, propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=1, unit=20_000_000), bw.w.driver_id)
-    second = accept(bw, propose(bw, offer, bw.w.client2_id, trip_public_id=None, quantity=1, unit=20_000_000), bw.w.driver_id)
+    first = booked(bw, trip_public, bw.w.client_id)
+    second = booked(bw, trip_public, bw.w.client2_id)
     pickup = scalar(bw.db, "SELECT pickup_window_start FROM bookings WHERE id = :b", b=first.id)
 
     early = view(bw, first.id, "client", now=pickup - timedelta(hours=2))["driver"]["vehicle"]
@@ -374,50 +373,44 @@ def test_q64_plate_disclosure_by_time_boarding_and_cancellation(bw: BW) -> None:
     assert boarding["plate_number"] == "01C111AA"  # trip boarding
 
 
-# --- Q65 / AC20: delivered does not complete; sender confirms once; 24 h operator queue ---------------------------------------------
+# --- Q139 (ADR-0026, supersedes Q65) / AC20: staff record the parcel outcome; money only at staff completion ----------------
 
 
-def test_q65_delivered_waits_for_sender_confirmation_and_captures_once(bw: BW, client) -> None:  # noqa: ANN001
-    _, booking, codes = _parcel_in_transit(bw, "01C112AA")
+def test_q139_parcel_has_no_codes_staff_record_delivery_and_capture_happens_once(bw: BW, client) -> None:  # noqa: ANN001
+    _, booking = _parcel_in_transit(bw, "01C112AA")
     response = client.get(f"/api/v2/bookings/{_public(booking)}/codes", headers=auth(bw.w.client_id, "client"))
-    assert response.status_code == 200 and [c["kind"] for c in response.json()["data"]["codes"]] == ["delivery_code"]
-    assert response.json()["warnings"] == [{
-        "code": "DELIVERY_CODE_SHARE_WITH_RECEIVER_ONLY", "field": "codes.delivery_code", "details": None,
-        "message": response.json()["warnings"][0]["message"]}]
-    version_before = booking_version(bw, booking.id)
+    assert response.status_code == 200 and response.json()["data"]["codes"] == []  # no pickup/delivery code to show
+    assert not response.json().get("warnings")
     captures = _captures(bw)
-    delivered = act(bw, booking.id, bw.w.driver_id, "deliver", code=codes["delivery_code"], now=bw.base + timedelta(hours=2))
-    assert (delivered.service_status, delivered.commission_status, delivered.version) == ("delivered", "held", version_before + 1)
-    assert _captures(bw) == captures and wallet(bw, bw.w.driver_id)[1] == 1_050_000
-    assert domain_error(lambda: act(bw, booking.id, bw.w.driver_id, "complete")).code is ErrorCode.FORBIDDEN  # only the sender confirms
-    done = act(bw, booking.id, bw.w.client_id, "complete", now=bw.base + timedelta(hours=3))
-    assert (done.service_status, done.commission_status) == ("completed", "held")  # Q74: no probe -> finance review
-    assert domain_error(lambda: act(bw, booking.id, bw.w.client_id, "complete")).code is ErrorCode.INVALID_STATE_TRANSITION
-    assert _captures(bw) == captures
-    finalized = operator(bw, booking.id, bw.finance_id, "finalize_fee", fee_mode="capture", reason="delivery confirmed")
-    assert finalized.commission_status == "captured" and _captures(bw) == captures + 1  # AC20: one capture
-
-
-def test_q65_unconfirmed_delivery_enters_operator_queue_after_24h_signal_and_evidence_completion(bw: BW) -> None:
-    _, booking, codes = _parcel_in_transit(bw, "01C113AA")
+    for actor in (bw.w.driver_id, bw.w.client_id):  # nobody declares delivery or completion in the app
+        for action in ("deliver", "complete"):
+            assert domain_error(lambda: act(bw, booking.id, actor, action, now=bw.base + timedelta(hours=2))).code in (
+                ErrorCode.INVALID_STATE_TRANSITION, ErrorCode.FORBIDDEN)
     delivered_at = bw.base + timedelta(hours=2)
-    act(bw, booking.id, bw.w.driver_id, "deliver", code=codes["delivery_code"], now=delivered_at)
-    assert _queue(bw, bw.operator_id, "awaiting_confirmation", now=delivered_at + timedelta(hours=23)) == []
-    later = delivered_at + timedelta(hours=25)
-    assert _queue(bw, bw.operator_id, "awaiting_confirmation", now=later) == [booking.id]
+    version_before = booking_version(bw, booking.id)
+    delivered = operator(bw, booking.id, bw.operator_id, "mark_delivered", now=delivered_at, reason="receiver confirmed to support")
+    assert (delivered.service_status, delivered.commission_status, delivered.version) == ("delivered", "held", version_before + 1)
+    assert _captures(bw) == captures and wallet(bw, bw.w.driver_id)[1] == 1_050_000  # a staff record moves no money
+    # the delivered parcel is in the staff queue at once, and the signal says so (no 24 h sender window)
+    assert _queue(bw, bw.operator_id, "awaiting_confirmation", now=delivered_at) == [booking.id]
     with bw.db.session() as s:
-        assert bookings_service.emit_confirmation_overdue_signals(s, now=later) == 1
+        assert bookings_service.emit_confirmation_overdue_signals(s, now=delivered_at) == 1
         s.commit()
     with bw.db.session() as s:
-        assert bookings_service.emit_confirmation_overdue_signals(s, now=later + timedelta(hours=1)) == 0  # dedup
+        assert bookings_service.emit_confirmation_overdue_signals(s, now=delivered_at + timedelta(hours=1)) == 0  # dedup
         s.commit()
     payload = rows(bw.db, "SELECT payload FROM outbox_events WHERE event_type = 'booking.confirmation_overdue'")[0].payload
     assert payload["booking_id"] == _public(booking) and payload["service_status"] == "delivered"
-    assert _parse(payload["overdue_since"]) == delivered_at + timedelta(hours=24)
-    done = operator(bw, booking.id, bw.operator_id, "complete_with_evidence", now=later, reason="receiver confirmed by phone")
-    assert (done.service_status, done.commission_status) == ("completed", "held")  # Q74
-    assert _queue(bw, bw.operator_id, "awaiting_confirmation", now=later) == []
+    assert _parse(payload["overdue_since"]) == delivered_at
+    done = operator(bw, booking.id, bw.operator_id, "complete_with_evidence", now=delivered_at + timedelta(hours=1),
+                    reason="receiver confirmed by phone")
+    assert (done.service_status, done.commission_status) == ("completed", "held")  # Q74: no probe -> finance review
+    assert _queue(bw, bw.operator_id, "awaiting_confirmation", now=delivered_at) == []
     assert _queue(bw, bw.operator_id, "finance_review") == [booking.id]
+    assert domain_error(lambda: operator(bw, booking.id, bw.operator_id, "complete_with_evidence")).code is ErrorCode.INVALID_STATE_TRANSITION
+    assert _captures(bw) == captures
+    finalized = operator(bw, booking.id, bw.finance_id, "finalize_fee", fee_mode="capture", reason="delivery confirmed")
+    assert finalized.commission_status == "captured" and _captures(bw) == captures + 1  # AC20: one capture
 
 
 def test_operator_complete_with_evidence_for_arrived_passenger_after_24h(bw: BW) -> None:
@@ -469,8 +462,8 @@ def test_q66_unavailable_dispute_check_completes_keeps_hold_and_queues_for_finan
 def test_b12_queues_hold_escalation_signals_and_contact_audit(bw: BW, client) -> None:  # noqa: ANN001
     _, _, _, passenger = _boarding_passenger(bw, "01C116AA")
     _report_no_show(bw, passenger.id)
-    _, parcel, _ = _parcel_in_transit(bw, "01C117AA", driver_id=bw.w.driver2_id)
-    act(bw, parcel.id, bw.w.driver2_id, "report_delivery_failed", now=bw.base + timedelta(hours=2), note="nobody at the stop")
+    _, parcel = _parcel_in_transit(bw, "01C117AA", driver_id=bw.w.driver2_id)
+    operator(bw, parcel.id, bw.operator_id, "require_return", now=bw.base + timedelta(hours=2), reason="receiver unreachable")
 
     assert _queue(bw, bw.operator_id, "no_show_review") == [passenger.id]
     assert _queue(bw, bw.operator_id, "custody_case") == [parcel.id]
@@ -506,8 +499,7 @@ def test_b12_queues_hold_escalation_signals_and_contact_audit(bw: BW, client) ->
 
 def test_expire_due_amendments_worker_function(bw: BW) -> None:
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01C118AA", seats=3)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    booking = accept(bw, propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=1, unit=20_000_000), bw.w.driver_id)
+    booking = legacy_offer_booking(bw, trip_public, bw.w.client_id)  # quantity amendment: legacy offer booking (D9, D-2)
     with bw.db.session() as s:
         bookings_service.create_amendment(s, booking_public_id_value=_public(booking), actor_user_id=bw.w.client_id,
                                           expected_version=booking.version, changes={"quantity": 2}, reason="friend joins")
@@ -580,8 +572,7 @@ def test_ac26_http_cash_report_and_acknowledge(bw: BW, client) -> None:  # noqa:
 
 def _offer_booking_with_amendment(bw: BW, plate: str, *, client_id: int, driver_id: int, quantity: int = 2):  # noqa: ANN202
     trip_id, trip_public = driver_trip(bw, driver_id, plate, seats=3)
-    offer = publish_listing(bw, driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    booking = accept(bw, propose(bw, offer, client_id, trip_public_id=None, quantity=1, unit=20_000_000), driver_id)
+    booking = legacy_offer_booking(bw, trip_public, client_id, driver_id=driver_id)  # D10 path: legacy offers only
     with bw.db.session() as s:
         amendment = bookings_service.create_amendment(s, booking_public_id_value=_public(booking), actor_user_id=client_id,
                                                       expected_version=booking.version, changes={"quantity": quantity}, reason="more seats")
@@ -825,12 +816,11 @@ def test_m2_finalize_fee_refused_while_a_blocking_dispute_is_open(bw: BW) -> Non
 def test_signal_functions_never_starve_new_rows_behind_signalled_ones(bw: BW) -> None:
     """A10a review: with limit=1, more than limit*4 already-signalled due rows must not hide a new due row.
     The functions write outbox rows only and never commit (AGENTS §4): an uncommitted session leaves nothing behind."""
-    trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01C121AA", seats=7)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
+    trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01C121AA", seats=7, baggage_ml=400_000)  # 6 x 40 000 ml
     with bw.db.session() as s:
         clients = [add_user(s, f"+99890130{i:04d}", "client", full_name=f"Mijoz {i}") for i in range(6)]
         s.commit()
-    bookings = [accept(bw, propose(bw, offer, c, trip_public_id=None, quantity=1, unit=20_000_000), bw.w.driver_id) for c in clients]
+    bookings = [booked(bw, trip_public, c) for c in clients]
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
     for client_id, booking in zip(clients, bookings, strict=True):
         act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, client_id)["boarding_code"], now=bw.base)

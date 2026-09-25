@@ -324,9 +324,18 @@ describe("listing on behalf (O7)", () => {
       onBehalfBody({
         owner: "usr_c", consent: "", kind: "request", service: "passenger", tripId: "", originStop: "a",
         destinationStop: "b", start: "2026-09-25T08:00", end: "2026-09-25T09:00", basis: "per_seat", price: "1000",
-        seats: "1", parcelType: "box", weightKg: "", comment: "",
+        seats: "1", parcelType: "box", categoryId: "", comment: "",
       }),
     ).toBeNull();
+    // Q140 (ADR-0026): a parcel on someone's behalf needs a size category, never a typed weight
+    const parcel = {
+      owner: "usr_c", consent: "call 12", kind: "request" as const, service: "parcel" as const, tripId: "", originStop: "a",
+      destinationStop: "b", start: "2026-09-25T08:00", end: "2026-09-25T09:00", basis: "total" as const, price: "30000",
+      seats: "1", parcelType: "box" as const, categoryId: "", comment: "",
+    };
+    expect(onBehalfBody(parcel)).toBeNull();
+    expect(onBehalfBody({ ...parcel, categoryId: "pct_small" })?.parcel).toMatchObject({ category_id: "pct_small" });
+    expect(onBehalfBody({ ...parcel, categoryId: "pct_small" })?.kind).toBe("request");
   });
 });
 

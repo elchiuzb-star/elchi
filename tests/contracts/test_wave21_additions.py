@@ -81,7 +81,8 @@ def test_admin_queues_cover_a4_queues_q66() -> None:
     assert CommissionReviewReason.DISPUTE_MODULE_UNAVAILABLE.value == "dispute_module_unavailable"
     # wave 3.1 (W3-6): migration 0062 widened ck_bookings_finance_review with this value.
     assert CommissionReviewReason.DISPUTE_RESOLVED.value == "dispute_resolved"
-    assert {r.value for r in CommissionReviewReason} == {"dispute_module_unavailable", "dispute_resolved"}
+    # Q144 (ADR-0026, 0093): a parcel completed by staff waits for finance
+    assert {r.value for r in CommissionReviewReason} == {"dispute_module_unavailable", "dispute_resolved", "parcel_staff_completion"}
 
 
 def test_v2_service_flags_match_geo_q72() -> None:

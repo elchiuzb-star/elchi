@@ -4,6 +4,11 @@ import type { TokenResponse } from "../types/auth";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1").replace(/\/$/, "");
 
+/** A server-relative link (e.g. a signed `/api/v1/files/...` URL) resolved against the API's own origin. */
+export function apiOriginUrl(path: string): string {
+  return new URL(path, API_BASE_URL).toString();
+}
+
 type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   auth?: boolean;

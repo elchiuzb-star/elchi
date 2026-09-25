@@ -75,6 +75,7 @@ const REVIEW_KINDS: Record<string, string> = {
   post_grant_recheck: "Mukofotdan keyin o'zgargan dalil",
   party_not_active: "Ishtirokchi faol emas",
   reinstate_unfulfilled: "Tiklash bajarilmadi (byudjet yetmadi)",
+  qualification_path_retired: "Pochta dalili olib tashlangan - va'da saqlanadi (rad etib bo'lmaydi; bajarish yo'li D-4 ochiq)",
   cancel_fault: "Bekor qilish sababi aniqlanmagan (har ega alohida)",
   restoration_uncovered: "Siyosat qamramagan holat: sarflangan bonus yoki kredit",
 };
@@ -675,10 +676,13 @@ function ReviewsTab() {
               onClick={() => void staff.act(async () => { await adminDecideReview(row.id, "approve", (notes[row.id] ?? "").trim(), row.version); load(); })}>
               Tasdiqlash
             </Btn>
-            <Btn tone="danger" disabled={staff.busy || !(notes[row.id] ?? "").trim()}
-              onClick={() => void staff.act(async () => { await adminDecideReview(row.id, "reject", (notes[row.id] ?? "").trim(), row.version); load(); })}>
-              Rad etish
-            </Btn>
+            {/* Q147: the retired parcel path is not the participant's breach - the server refuses "reject" for it */}
+            {row.kind !== "qualification_path_retired" && (
+              <Btn tone="danger" disabled={staff.busy || !(notes[row.id] ?? "").trim()}
+                onClick={() => void staff.act(async () => { await adminDecideReview(row.id, "reject", (notes[row.id] ?? "").trim(), row.version); load(); })}>
+                Rad etish
+              </Btn>
+            )}
           </div>
         </div>
       ))}

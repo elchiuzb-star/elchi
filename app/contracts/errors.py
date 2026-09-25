@@ -118,6 +118,12 @@ class ErrorCode(StrEnum):
     TRIP_INTENT_CHANGED = "TRIP_INTENT_CHANGED"
     TRIP_INTENT_OFFERS_AFFECTED = "TRIP_INTENT_OFFERS_AFFECTED"
     TRIP_INTENT_EXPIRED = "TRIP_INTENT_EXPIRED"
+    # ADR-0026 (additive)
+    DRIVER_LISTING_RETIRED = "DRIVER_LISTING_RETIRED"
+    TRIP_INTENT_RETIRED = "TRIP_INTENT_RETIRED"
+    SUPPORT_THREAD_CLOSED = "SUPPORT_THREAD_CLOSED"
+    PARCEL_CATEGORY_REQUIRED = "PARCEL_CATEGORY_REQUIRED"
+    PARCEL_CATALOG_UNCONFIRMED = "PARCEL_CATALOG_UNCONFIRMED"
     REFERRAL_CODE_INVALID = "REFERRAL_CODE_INVALID"
     REFERRAL_NOT_ELIGIBLE = "REFERRAL_NOT_ELIGIBLE"
 
@@ -270,6 +276,21 @@ ERROR_CATALOGUE: dict[ErrorCode, ErrorSpec] = {
     ),
     ErrorCode.TRIP_INTENT_EXPIRED: ErrorSpec(
         409, "The saved request's time window has passed; the client must set a new date - it is never moved silently."
+    ),
+    ErrorCode.DRIVER_LISTING_RETIRED: ErrorSpec(
+        409, "Drivers no longer publish listings (ADR-0026): only clients create requests; drivers answer them."
+    ),
+    ErrorCode.TRIP_INTENT_RETIRED: ErrorSpec(
+        409, "Saved trip requests answered driver listings, which are retired (ADR-0026); publish a request instead."
+    ),
+    ErrorCode.SUPPORT_THREAD_CLOSED: ErrorSpec(
+        409, "This conversation with the operator is closed; pressing the complaint button opens a new one."
+    ),
+    ErrorCode.PARCEL_CATEGORY_REQUIRED: ErrorSpec(
+        400, "A parcel needs a size category from the catalog (no typed dimensions, ADR-0026)."
+    ),
+    ErrorCode.PARCEL_CATALOG_UNCONFIRMED: ErrorSpec(
+        503, "No confirmed parcel size catalog is active in production; new parcel business waits for one (fail-closed)."
     ),
     ErrorCode.REFERRAL_WINDOW_CLOSED: ErrorSpec(
         409, "The attribution window (72 h from first phone verification, before the first booking) has closed."

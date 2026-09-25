@@ -563,3 +563,61 @@ Wave 8 dagi kontraktga ta’sir qilgan o‘zgarishlar (endpointsiz):
 - **ADR-0019 (R1) Accepted:** P9 `GET /listings/{listing_id}/offers`, `ListingOfferDTO`, narx diapazoni `PRICE_OUT_OF_BAND` — §7. Egasi A1 (endpoint, anonimlashtirish, narx tekshiruvi), A2 (band konfiguratsiyasi va admin endpointlari — A2 kartasida).
 - **ADR-0020 (R2) Accepted:** accept’dan oldin DTO’larda kontakt yo‘q (§4 `TripPublicDTO`, §5, §7), kontakt filtri va `warnings` (§7), telefon ochilish qoidalari (§8 `BookingDTO`, `TripManifestDTO`). Spec §16 dagi “tasdiqlanganda telefon” qoidasi foydalanuvchi qarori (Q43–Q44) bilan almashtirildi.
 - **Q46:** production’da routing provayderi yo‘q → detour match’lar qaytmaydi (faqat tasdiqlangan bekat match’lari); klient matni buni aytadi, “yo‘lda olib ketadi” va’dasi yo‘q.
+
+## 16. ADR-0026 (25.09.2026, Q138–Q143) — yuqoridagi bo‘limlardan ustun
+**Olib tashlangan / rad etiladigan:**
+- `POST /listings` `kind=trip_offer`, trip_offer’ni `publish`/`resume`/`PATCH`, trip_offer’ga `proposals`/`counter`/`accept`
+  → `409 DRIVER_LISTING_RETIRED` (`details.kind`). `GET /feed?side=offers` va `side=offers` saqlangan qidiruv →
+  `409 DRIVER_LISTING_RETIRED` (`details.side`). **M2** `GET /listings/{id}/matches` — route yo‘q (404).
+- §7a `POST/PATCH /me/trip-intents`, `reopen` → `409 TRIP_INTENT_RETIRED`; `GET` va `close` qoladi (tarix).
+- Mijoz/haydovchi nizo route’lari: `POST /bookings/{id}/disputes`, `GET /me/disputes`, `GET /disputes/{id}`,
+  `POST /disputes/{id}/evidence` — route yo‘q. `/admin/disputes*` (xodim) qoladi.
+- Pochta: `GET /bookings/{id}/codes` pochtada `codes: []` (ogohlantirishsiz); pochta `POST /bookings/{id}/actions`
+  (`pick_up`, `start_transit`, `deliver`, `report_delivery_failed`, `retry_delivery`, `return_to_sender`, `complete`) →
+  `409 INVALID_STATE_TRANSITION`; `POST /bookings/{id}/cash-receipts` pochtada → `409 INVALID_STATE_TRANSITION`
+  (`details.reason = parcel_cash_receipts_retired`). Reissue faqat `boarding_code`.
+
+**Yangi:**
+| # | Method / path | Auth / capability | Request | Response | Idem | Ver | Xatolar |
+|---|---|---|---|---|---|---|---|
+| PC1 | `GET /parcel-categories` | Auth | — | `ParcelCategoryCatalogDTO {confirmed, synthetic, label?, effective_from?, items: ParcelCategoryDTO[]}` | — | — | — |
+| PC2 | `GET /admin/parcel-categories` | `platform.policy_manage` | — | `list[ParcelCategoryVersionDTO]` | — | — | `FORBIDDEN` |
+| PC3 | `POST /admin/parcel-categories` | `platform.policy_manage` | `ParcelCategoryVersionCreate {label, source_note?, synthetic, items[]}` | `ParcelCategoryVersionDTO` (draft) | Y | — | `VALIDATION_ERROR` (`pilot_parcel_limit`, `volume_exceeds_box`, `duplicate_code`) |
+| PC4 | `POST /admin/parcel-categories/{id}/confirm` | `platform.policy_manage` (0094: muallif ham bo'lishi mumkin; audit) | `{expected_version}` | `ParcelCategoryVersionDTO` (active) | Y | Y | `FORBIDDEN`, production’da sintetik → rad |
+| ST1 | `POST /bookings/{id}/support-thread` | Bron ishtirokchisi | `{text?}` | `SupportThreadDTO` (200; bor ochiq chat qaytadi) | Y | — | `NOT_FOUND`; `warnings` `CONTACT_INFO_MASKED` |
+| ST2 | `GET /bookings/{id}/support-thread` | Bron ishtirokchisi | — | `SupportThreadDTO \| null` (o‘zining ochiq chati) | — | — | `NOT_FOUND` |
+| ST3 | `GET /me/support-threads` | Auth | `?limit` | `list[SupportThreadDTO]` | — | — | — |
+| ST4 | `GET /support-threads/{id}` | So‘rovchi | — | `SupportThreadDTO` | — | — | `NOT_FOUND` (boshqaning chati) |
+| ST5 | `POST /support-threads/{id}/messages` | So‘rovchi | `{text}` | `SupportThreadDTO` (201) | Y | — | `SUPPORT_THREAD_CLOSED`, `RATE_LIMITED`, `NOT_FOUND` |
+| ST6 | `GET /admin/support-threads` | `ops.view` | `?status=open\|closed&assigned=me\|unassigned&cursor&limit` | `list[SupportThreadAdminDTO]` | — | — | `FORBIDDEN` |
+| ST7 | `GET /admin/support-threads/{id}` | `ops.view` (audit qatori) | — | `SupportThreadAdminDTO` | — | — | — |
+| ST8 | `POST /admin/support-threads/{id}/{assign\|reply\|close}` | `ops.trust_review` | `{expected_version, text?, assignee_id?}` | `SupportThreadAdminDTO` | Y | Y | `VERSION_CONFLICT`, `SUPPORT_THREAD_CLOSED` |
+| B13+ | `POST /admin/bookings/{id}/commands` `command=mark_delivered` | `ops.booking_command` | `{expected_version, reason}` | `BookingDTO` | Y | Y | `INVALID_STATE_TRANSITION` (yo‘lovchi yoki noto‘g‘ri holat) |
+
+**DTO o‘zgarishlari:** `ParcelDetails.category_id` (kirish, pochta so‘rovida majburiy — `PARCEL_CATEGORY_REQUIRED`) va
+`category` (chiqish); raqamli `weight_g/length_cm/...` endi kiritilmaydi. `ListingPublicDTO.parcel_category` va
+`BookingClientDTO.parcel_category` — kelishilgan toifa (bronda muzlatilgan). `SupportThreadDTO {id (sth_), booking_id,
+requester_side, status, staff_status: waiting|assigned|answered|closed, message_count, version, created_at, closed_at?,
+messages[{id (smg_), author: me|operator|system|client|driver, text, has_files, created_at}]}`;
+`SupportThreadAdminDTO` + `requester_user_id, assigned_to?, carried_over_from_dispute, file_ids[]`.
+**Hodisalar:** `support.thread.opened` (xodim), `support.thread.replied` (so‘rovchi; inbox havolasi `/support-threads/{id}`).
+Production: tasdiqlangan `synthetic=false` katalog bo‘lmasa pochta e’loni/broni → `503 PARCEL_CATALOG_UNCONFIRMED`.
+
+**ADR-0026 kuzatuv (25.09.2026, Q144–Q147):**
+- `ProposalThreadDTO.driver_summary {vehicle_class, seat_capacity, rating_bucket?, rating_count, completed_bookings?}` —
+  faqat so'rov egasiga (Q40 anonim to'plami; ism/raqam/telefon yo'q). Haydovchi tomonida `null`.
+- `BookingClientDTO.quantity_amendable: bool` — amendment miqdorni o'zgartira oladimi (so'rov bronida va pochtada `false`).
+- `PATCH /listings/{id}` passenger so'rovida `passenger` bloki (to'liq) bilan odamlar soni — bron bo'lguncha; Q20 bo'yicha
+  ochiq takliflar `listing_changed` bilan yopiladi.
+- `SupportMessageDTO.staff_only` — faqat xodim ko'rinishida; so'rovchi bunday qatorni olmaydi, `message_count` ko'rinadiganlar soni.
+- `B13 complete_with_evidence` pochtada: `commission_status` `held` qoladi, `finance_review_reason = parcel_staff_completion`,
+  staff event `commission.finance_review_required`; capture — `finalize_fee` (`finance.fee_finalize`). Audit `details`:
+  `reason`, `evidence_file_ids`, `service_status_from/to`, `commission_status`.
+- Promo review turi `qualification_path_retired` (admin panelda ko'rinadi); `reject` va'dani bo'shatadi, `approve` rezervni saqlaydi.
+- **ST9** `GET /admin/support-threads/{id}/files/{ref}` — faol login sessiyasi (`sid`, aks holda 401), `ops.trust_review`,
+  `ref` shu murojaatga tegishli (aks holda 404) → `SupportFileLinkDTO {ref, name, url, expires_at, content_type}` (mavjud
+  imzoli havola, muddati o'tsa `/api/v1/files` 403). Audit `support_thread_file_viewed`. `SupportThreadAdminDTO.file_ids`
+  (xom kalitlar) o'rniga `files[{ref, name, message_id, staff_only}]`.
+- `qualification_path_retired` review: `reject` → `409 INVALID_STATE_TRANSITION` (`retired_path_is_not_a_violation`); `approve`
+  qiymat o'zgartirmaydi (D-4).
+

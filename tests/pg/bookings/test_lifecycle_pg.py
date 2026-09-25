@@ -7,15 +7,16 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import select
 
-from app.contracts.errors import DomainError, ErrorCode
+from app.contracts.errors import ErrorCode
 from app.core.config import settings
 from app.modules.bookings import service as bookings_service
-from app.modules.bookings.models import Booking, BookingAllocation, BookingProof
+from app.modules.bookings.models import Booking, BookingProof
 from app.modules.identity import service as identity_service
 from app.modules.marketplace import service as marketplace_service
 from tests.pg.bookings.conftest import (
     BW,
     accept,
+    legacy_offer_booking,
     act,
     auth,
     booking_version,
@@ -24,7 +25,6 @@ from tests.pg.bookings.conftest import (
     driver_trip,
     operator,
     parcel_request_body,
-    passenger_request_body,
     propose,
     publish_listing,
     request_with_driver_proposal,
@@ -35,7 +35,6 @@ from tests.pg.bookings.conftest import (
     view,
     wallet,
 )
-from tests.pg.identity.a1_world import passenger_offer
 
 pytestmark = pytest.mark.pg
 
@@ -222,6 +221,8 @@ def test_reject_no_show_while_trip_runs_keeps_awaiting_pickup(bw: BW) -> None:
 
 
 def test_parcel_custody_trip_completion_return_and_fee_finalization(bw: BW) -> None:
+    """ADR-0026 (Q139/Q142/Q143): no parcel codes, no driver pickup/delivery steps, no in-app cash - the trip's depart
+    puts the parcel on the way, staff record the outcome (delivered or the return flow), money only on staff decision."""
     listing = publish_listing(bw, bw.w.client_id, parcel_request_body(bw))
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01B130AA")
     ref = propose(bw, listing, bw.w.driver_id, trip_public_id=trip_public, quantity=1, unit=7_000_000, dropoff="C", price_basis="total")
@@ -229,32 +230,38 @@ def test_parcel_custody_trip_completion_return_and_fee_finalization(bw: BW) -> N
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
     before = view(bw, booking.id, "driver", now=bw.base)
     assert before["parcel_contacts"] == {"receiver_name": None, "receiver_phone": None} and before["client"]["contact_phone"] is None
+    assert codes_for(bw, booking.id, bw.w.client_id) == {}  # Q139: no pickup/delivery/return codes are issued
+    for retired in ("pick_up", "start_transit", "deliver", "report_delivery_failed"):
+        error = domain_error(lambda: act(bw, booking.id, bw.w.driver_id, retired, now=bw.base, failures=[]))
+        assert error.code is ErrorCode.INVALID_STATE_TRANSITION, retired
+    with bw.db.session() as s:
+        b = s.get(Booking, booking.id)
+        cash = domain_error(lambda: bookings_service.report_cash_receipt(
+            s, booking_public_id_value=bookings_service.booking_public_id(b), actor_user_id=bw.w.driver_id,
+            expected_version=b.version, amount_minor=b.total_minor, reported_at=bw.base))
+    assert cash.code is ErrorCode.INVALID_STATE_TRANSITION and cash.details["reason"] == "parcel_cash_receipts_retired"
 
-    codes = codes_for(bw, booking.id, bw.w.client_id)
-    assert set(codes) == {"pickup_code", "delivery_code"} and codes["pickup_code"] != codes["delivery_code"]
-    wrong_kind = domain_error(lambda: act(bw, booking.id, bw.w.driver_id, "pick_up", code=codes["delivery_code"], failures=[]))
-    assert wrong_kind.code is ErrorCode.PROOF_INVALID  # a delivery code never proves a pickup
-    act(bw, booking.id, bw.w.driver_id, "pick_up", code=codes["pickup_code"], now=bw.base + timedelta(minutes=5))
-    after = view(bw, booking.id, "driver", now=bw.base + timedelta(minutes=6))
-    assert after["parcel_contacts"]["receiver_phone"] == RECEIVER_PHONE  # Q44: receiver phone after pickup
+    run_trip_action(bw, trip_id, bw.w.driver_id, "depart", now=bw.base + timedelta(minutes=12))
+    assert scalar(bw.db, "SELECT service_status FROM bookings WHERE id = :b", b=booking.id) == "in_transit"
+    after = view(bw, booking.id, "driver", now=bw.base + timedelta(minutes=13))
+    assert after["parcel_contacts"]["receiver_phone"] == RECEIVER_PHONE  # Q142: the service starts at depart
     assert after["client"]["contact_phone"] is None  # Q44: the sender's phone never reaches the driver
+    assert after["total_minor"] == 7_000_000  # the agreed price stays on the booking
 
     with bw.db.session() as s:
         custody = domain_error(lambda: bookings_service.cancel_booking(
             s, booking_public_id_value=bookings_service.booking_public_id(booking), actor_user_id=bw.w.client_id,
             expected_version=booking_version(bw, booking.id), reason_code="changed_mind"))
-    assert custody.code is ErrorCode.CUSTODY_REQUIRES_RETURN_FLOW  # AC22
+    assert custody.code is ErrorCode.CUSTODY_REQUIRES_RETURN_FLOW  # AC22: a parcel on the way is not cancelled
 
-    act(bw, booking.id, bw.w.driver_id, "start_transit", now=bw.base + timedelta(minutes=10))
-    act(bw, booking.id, bw.w.driver_id, "report_delivery_failed", now=bw.base + timedelta(hours=2), note="nobody at the stop")
-    assert scalar(bw.db, "SELECT status FROM custody_cases WHERE booking_id = :b", b=booking.id) == "open"
-    run_trip_action(bw, trip_id, bw.w.driver_id, "depart", now=bw.base + timedelta(minutes=12))
-    assert run_trip_action(bw, trip_id, bw.w.driver_id, "complete", now=bw.base + timedelta(hours=4)) == "completed"  # AC42
-    assert scalar(bw.db, "SELECT service_status FROM bookings WHERE id = :b", b=booking.id) == "delivery_failed"  # unchanged
+    # AC42 (Q143 interim): the trip completes with the parcel still on the way; the outcome waits for staff
+    assert run_trip_action(bw, trip_id, bw.w.driver_id, "complete", now=bw.base + timedelta(hours=4)) == "completed"
+    assert scalar(bw.db, "SELECT (service_status, commission_status)::text FROM bookings WHERE id = :b",
+                  b=booking.id) == "(in_transit,held)"  # time passing is not delivery and moves no money
 
     operator(bw, booking.id, bw.operator_id, "require_return", now=bw.base + timedelta(hours=5))
-    return_code = codes_for(bw, booking.id, bw.w.client_id)["return_code"]
-    returned = act(bw, booking.id, bw.w.driver_id, "return_to_sender", code=return_code, now=bw.base + timedelta(hours=6))
+    assert scalar(bw.db, "SELECT status FROM custody_cases WHERE booking_id = :b", b=booking.id) == "open"
+    returned = operator(bw, booking.id, bw.operator_id, "return_to_sender", now=bw.base + timedelta(hours=6))
     assert (returned.service_status, returned.commission_status) == ("returned", "held")  # no automatic fee decision
     assert scalar(bw.db, "SELECT status FROM custody_cases WHERE booking_id = :b", b=booking.id) == "resolved"
     assert domain_error(lambda: operator(bw, booking.id, bw.operator_id, "finalize_fee", fee_mode="capture")).code is ErrorCode.FORBIDDEN
@@ -262,21 +269,31 @@ def test_parcel_custody_trip_completion_return_and_fee_finalization(bw: BW) -> N
     assert finalized.commission_status == "captured"
 
 
-def test_trip_completion_is_refused_while_a_parcel_is_in_transit(bw: BW) -> None:
+def test_parcel_outcome_is_recorded_by_staff_and_money_moves_only_at_their_completion(bw: BW) -> None:
     listing = publish_listing(bw, bw.w.client_id, parcel_request_body(bw))
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01B131AA")
     booking = accept(bw, propose(bw, listing, bw.w.driver_id, trip_public_id=trip_public, quantity=1, unit=7_000_000, dropoff="C",
                                  price_basis="total"), bw.w.client_id)
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    act(bw, booking.id, bw.w.driver_id, "pick_up", code=codes_for(bw, booking.id, bw.w.client_id)["pickup_code"], now=bw.base)
     run_trip_action(bw, trip_id, bw.w.driver_id, "depart", now=bw.base + timedelta(minutes=5))
-    act(bw, booking.id, bw.w.driver_id, "start_transit", now=bw.base + timedelta(minutes=6))
-    error = domain_error(lambda: run_trip_action(bw, trip_id, bw.w.driver_id, "complete", now=bw.base + timedelta(hours=4)))
-    assert error.code is ErrorCode.TRIP_HAS_UNRESOLVED_BOOKINGS and error.details["bookings"] == [bookings_service.booking_public_id(booking)]
-    delivery = codes_for(bw, booking.id, bw.w.client_id)["delivery_code"]
-    done = act(bw, booking.id, bw.w.driver_id, "deliver", code=delivery, now=bw.base + timedelta(hours=2))
-    assert (done.service_status, done.commission_status) == ("delivered", "held")  # Q65: delivery no longer completes
+    # neither side can declare the parcel delivered or the booking complete
+    for actor in (bw.w.driver_id, bw.w.client_id):
+        assert domain_error(lambda: act(bw, booking.id, actor, "complete", now=bw.base + timedelta(hours=3))).code in (
+            ErrorCode.INVALID_STATE_TRANSITION, ErrorCode.FORBIDDEN)
+    # mark_delivered is booking_command (operator), not a finance or client action
+    assert domain_error(lambda: operator(bw, booking.id, bw.w.client_id, "mark_delivered")).code is ErrorCode.FORBIDDEN
+    delivered = operator(bw, booking.id, bw.operator_id, "mark_delivered", now=bw.base + timedelta(hours=2),
+                         reason="receiver confirmed by phone to support")
+    assert (delivered.service_status, delivered.commission_status, delivered.completed_at) == ("delivered", "held", None)
+    assert scalar(bw.db, "SELECT count(*) FROM ledger_transactions WHERE booking_id = :b AND reference_kind = 'commission_capture'",
+                  b=booking.id) == 0  # a delivered record is not completion and moves no money
     assert run_trip_action(bw, trip_id, bw.w.driver_id, "complete", now=bw.base + timedelta(hours=4)) == "completed"
+    # the unconfirmed delivered parcel sits in the operator queue right away (no 24 h wait for a sender tap)
+    done = operator(bw, booking.id, bw.operator_id, "complete_with_evidence", now=bw.base + timedelta(hours=5),
+                    reason="delivery confirmed by support call")
+    assert done.service_status == "completed" and done.completed_at is not None
+    # a replay of the staff record is refused, not repeated
+    assert domain_error(lambda: operator(bw, booking.id, bw.operator_id, "mark_delivered")).code is ErrorCode.INVALID_STATE_TRANSITION
 
 
 # --- AC26 cash ----------------------------------------------------------------------------------------------------------------
@@ -317,8 +334,7 @@ def test_ac26_contested_cash_keeps_service_status(bw: BW) -> None:
 
 def test_d10_amendment_changes_quantity_reserves_again_and_adjusts_the_single_hold(bw: BW) -> None:
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01B150AA", seats=3)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    booking = accept(bw, propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=1, unit=20_000_000), bw.w.driver_id)
+    booking = legacy_offer_booking(bw, trip_public, bw.w.client_id)  # D10 quantity amendments: legacy offer bookings only
     assert wallet(bw, bw.w.driver_id)[1] == 3_000_000
     with bw.db.session() as s:
         amendment = bookings_service.create_amendment(
@@ -353,8 +369,7 @@ def test_d10_amendment_changes_quantity_reserves_again_and_adjusts_the_single_ho
 def test_booking_amendments_are_listed_for_participants_only(bw: BW) -> None:
     """B9 read side: the counterpart must be able to find the amendment it is expected to answer."""
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01B152AA", seats=3)
-    offer = publish_listing(bw, bw.w.driver_id, passenger_offer(bw.w, trip_public, start=bw.base))
-    booking = accept(bw, propose(bw, offer, bw.w.client_id, trip_public_id=None, quantity=1, unit=20_000_000), bw.w.driver_id)
+    booking = legacy_offer_booking(bw, trip_public, bw.w.client_id)  # D10 quantity amendments: legacy offer bookings only
     public_id = bookings_service.booking_public_id(booking)
     with bw.db.session() as s:
         assert bookings_service.list_booking_amendments(

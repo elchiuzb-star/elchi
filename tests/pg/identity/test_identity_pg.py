@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import threading
-import time
-from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -16,10 +13,9 @@ from sqlalchemy.orm import Session
 from app.contracts.enums import OBLIGATION_CAPABILITIES, Capability, Role, role_combination_allowed
 from app.contracts.errors import DomainError, ErrorCode
 from app.modules.identity import service as identity_service
-from app.modules.marketplace import service as marketplace_service
 from tests.pg.conftest import REPO_ROOT, PgDatabase, run_alembic, script_heads
 from tests.pg.harness import run_concurrently
-from tests.pg.identity.a1_world import World, add_user, make_trip, make_vehicle, passenger_offer
+from tests.pg.identity.a1_world import World, add_user, make_trip, make_vehicle
 
 pytestmark = pytest.mark.pg
 
@@ -219,100 +215,3 @@ def test_blocks_partial_unique_and_immutability(world: World) -> None:
             s.execute(text("UPDATE driver_eligibility_blocks SET lift_reason = 'x' WHERE id = :b"), {"b": block_id})
 
 
-def _draft_offers(world: World, count: int) -> list[str]:
-    vehicle = make_vehicle(world, world.driver_id, "01E500EE")
-    listing_ids = []
-    for day in range(count):
-        start = world.base_time + timedelta(days=day)
-        _, trip_public_id = make_trip(world, world.driver_id, vehicle, start=start)
-        with world.db.session() as s:
-            listing = marketplace_service.create_listing(
-                s, owner_user_id=world.driver_id, data=passenger_offer(world, trip_public_id, start=start)
-            )
-            listing_ids.append(marketplace_service.listing_public_id(listing))
-            s.commit()
-    return listing_ids
-
-
-def _wait_for_lock_waiters(world: World, expected: int, timeout_s: float = 15.0) -> None:
-    deadline = time.monotonic() + timeout_s
-    with world.db.engine.connect() as conn:
-        while time.monotonic() < deadline:
-            waiting = conn.execute(
-                text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'")
-            ).scalar_one()
-            conn.rollback()  # fresh stats snapshot on the next poll
-            if waiting >= expected:
-                return
-            time.sleep(0.05)
-    raise AssertionError(f"expected {expected} sessions waiting on a lock")
-
-
-def _publish_in_thread(world: World, listing_id: str, results: dict[str, object]) -> threading.Thread:
-    def run() -> None:
-        with world.db.session() as s:
-            try:
-                marketplace_service.publish_listing(s, listing_public_id=listing_id, actor_user_id=world.driver_id, expected_version=1)
-                s.commit()
-                results[listing_id] = "published"
-            except DomainError as exc:
-                s.rollback()
-                results[listing_id] = exc.code
-            except BaseException as exc:  # noqa: BLE001 - surfaced by the assertion
-                s.rollback()
-                results[listing_id] = exc
-
-    thread = threading.Thread(target=run)
-    thread.start()
-    return thread
-
-
-def test_ac41_block_first_then_waiting_publishes_see_it(world: World) -> None:
-    listing_ids = _draft_offers(world, 4)
-    blocker = world.db.session()
-    try:
-        identity_service.block_driver_eligibility(
-            blocker, driver_user_id=world.driver_id, actor_user_id=world.admin_id, expected_version=1, reason="fraud review"
-        )  # holds FOR UPDATE on the driver's users row
-        results: dict[str, object] = {}
-        threads = [_publish_in_thread(world, listing_id, results) for listing_id in listing_ids]
-        _wait_for_lock_waiters(world, len(listing_ids))
-        blocker.commit()
-    finally:
-        blocker.close()
-    for thread in threads:
-        thread.join(timeout=30)
-    assert set(results.values()) == {ErrorCode.DRIVER_NOT_ELIGIBLE}, results
-    with world.db.session() as s:
-        assert s.execute(text("SELECT count(*) FROM listings WHERE status = 'published'")).scalar_one() == 0
-
-
-def test_ac41_publish_first_then_block_waits(world: World) -> None:
-    first, second = _draft_offers(world, 2)
-    publisher = world.db.session()
-    outcome: dict[str, object] = {}
-    try:
-        marketplace_service.publish_listing(publisher, listing_public_id=first, actor_user_id=world.driver_id, expected_version=1)
-
-        def block() -> None:
-            with world.db.session() as s:
-                identity_service.block_driver_eligibility(
-                    s, driver_user_id=world.driver_id, actor_user_id=world.admin_id, expected_version=1, reason="late block"
-                )
-                s.commit()
-                outcome["blocked_at"] = time.monotonic()
-
-        thread = threading.Thread(target=block)
-        thread.start()
-        _wait_for_lock_waiters(world, 1)
-        outcome["published_at"] = time.monotonic()
-        publisher.commit()
-    finally:
-        publisher.close()
-    thread.join(timeout=30)
-    assert outcome["blocked_at"] > outcome["published_at"]
-    with world.db.session() as s:
-        assert marketplace_service.get_listing_by_public_id(s, first).status == "published"  # committed before the block
-        with pytest.raises(DomainError) as info:
-            marketplace_service.publish_listing(s, listing_public_id=second, actor_user_id=world.driver_id, expected_version=1)
-        assert info.value.code is ErrorCode.DRIVER_NOT_ELIGIBLE

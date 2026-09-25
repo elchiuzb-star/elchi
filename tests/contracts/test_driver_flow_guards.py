@@ -142,7 +142,8 @@ def test_the_refusal_has_client_copy_in_both_languages() -> None:
 # --- Q96: an unverified driver takes no new business -------------------------------------------------------
 
 
-@pytest.mark.parametrize("screen", ["driver-feed", "driver-bid", "driver-routes", "driver-offer-create"])
+# ADR-0026 (Q138): driver-offer-create is gone - drivers publish no listings
+@pytest.mark.parametrize("screen", ["driver-feed", "driver-bid", "driver-routes"])
 def test_the_new_business_screens_refuse_an_unverified_driver(screen: str) -> None:
     body = render_block(screen)
     assert "!driverApproved" in body, f"{screen} lets an unverified driver start work and fail on send"

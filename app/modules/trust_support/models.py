@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Identity,
@@ -401,3 +402,81 @@ class FraudSignal(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+
+
+class SupportThread(Base):
+    """Q141 (ADR-0026, migration 20260924_0092): a booking-bound conversation between ONE requester and staff.
+
+    "Shikoyat qilish" on a booking opens (or returns) the requester's open thread for that booking: one open thread
+    per (booking, requester) - partial unique index - so a repeated tap or a network retry never makes a second one.
+    The client's and the driver's threads are separate; neither reads the other's. Opening or closing a thread moves
+    no money, grants nothing and judges nobody.
+    """
+
+    __tablename__ = "support_threads"
+    __table_args__ = (
+        UniqueConstraint("public_id", name="uq_support_threads_public_id"),
+        UniqueConstraint("source_dispute_id", name="uq_support_threads_source_dispute"),
+        Index(
+            "uq_support_threads_open",
+            "booking_id",
+            "requester_user_id",
+            unique=True,
+            postgresql_where=text("status = 'open'"),
+            sqlite_where=text("status = 'open'"),
+        ),
+        Index("ix_support_threads_queue", "status", "assigned_to", "last_message_at", "id"),
+        Index("ix_support_threads_requester", "requester_user_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    booking_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("bookings.id", name="support_threads_booking_id_fkey"), nullable=False)
+    requester_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", name="support_threads_requester_user_id_fkey"), nullable=False
+    )
+    requester_side: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'open'"))
+    assigned_to: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", name="support_threads_assigned_to_fkey"))
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", name="support_threads_closed_by_fkey"))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    close_note: Mapped[str | None] = mapped_column(Text)
+    message_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_staff_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    source_dispute_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("disputes_v2.id", name="support_threads_source_dispute_id_fkey")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+
+
+class SupportMessage(Base):
+    """One line of a support thread (append-only). ``system`` lines have no author (e.g. a carried-over decision)."""
+
+    __tablename__ = "support_messages"
+    __table_args__ = (
+        UniqueConstraint("public_id", name="uq_support_messages_public_id"),
+        UniqueConstraint("source_kind", "source_ref", name="uq_support_messages_source"),
+        Index("ix_support_messages_thread", "thread_id", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    thread_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("support_threads.id", name="support_messages_thread_id_fkey"), nullable=False
+    )
+    author_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", name="support_messages_author_user_id_fkey"))
+    author_side: Mapped[str] = mapped_column(String(16), nullable=False)
+    body: Mapped[str] = mapped_column("text", Text, nullable=False)  # column `text`; `text()` stays usable
+    file_ids: Mapped[list[str]] = mapped_column(
+        ARRAY(Text).with_variant(JSON(), "sqlite"), nullable=False, server_default=text("'{}'")
+    )
+    filtered: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # 0093: a line only staff read (e.g. the other participant's or staff evidence carried over from a dispute)
+    staff_only: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    source_kind: Mapped[str | None] = mapped_column(String(32))
+    source_ref: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

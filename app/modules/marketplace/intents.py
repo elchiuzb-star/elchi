@@ -236,6 +236,9 @@ def open_thread_count(session: Session, intent: TripIntent) -> int:
 def create_intent(session: Session, *, owner_user_id: int, data: Any, now: datetime | None = None) -> TripIntent:
     """A new private request (version 1). Touches no listing, offer, referral attribution or booking history."""
     now = _now(now)
+    # Q138 (ADR-0026): saved requests answered driver listings, which are retired - history stays readable and
+    # closable, but nothing new is created, edited, reopened or compared.
+    raise DomainError(ErrorCode.TRIP_INTENT_RETIRED)
     identity_service.require_capability(
         identity_service.get_capabilities(session, owner_user_id, now=now), Capability.PROPOSAL_SUBMIT_AS_CLIENT)
     service = ServiceType(data.service_type)
@@ -254,6 +257,9 @@ def edit_intent(session: Session, *, intent_public_id: str, owner_user_id: int, 
     """A new version. A material change (ends, window, quantity, parcel, receiver) bumps ``terms_version`` and closes
     the request's open offers - only after the client acknowledged how many (409 ``TRIP_INTENT_OFFERS_AFFECTED``)."""
     now = _now(now)
+    # Q138 (ADR-0026): saved requests answered driver listings, which are retired - history stays readable and
+    # closable, but nothing new is created, edited, reopened or compared.
+    raise DomainError(ErrorCode.TRIP_INTENT_RETIRED)
     intent = _lock(session, get_own_intent(session, intent_public_id, owner_user_id).id)
     if intent.status == TripIntentStatus.BOOKED.value:  # never turns into another booking group silently
         raise DomainError(ErrorCode.TRIP_INTENT_BOOKED, details={"status": intent.status})
@@ -302,6 +308,9 @@ def reopen_intent(session: Session, *, intent_public_id: str, owner_user_id: int
     """Explicit "search again" after the booking was cancelled. A new version with a new ``terms_version``: none of the
     old offers can ever be accepted again, and none is reopened."""
     now = _now(now)
+    # Q138 (ADR-0026): saved requests answered driver listings, which are retired - history stays readable and
+    # closable, but nothing new is created, edited, reopened or compared.
+    raise DomainError(ErrorCode.TRIP_INTENT_RETIRED)
     identity_service.require_capability(
         identity_service.get_capabilities(session, owner_user_id, now=now), Capability.PROPOSAL_SUBMIT_AS_CLIENT)
     intent = _lock(session, get_own_intent(session, intent_public_id, owner_user_id).id)
@@ -457,6 +466,9 @@ def _gap_minutes(a_start: datetime, a_end: datetime, b_start: datetime, b_end: d
 
 def fit(session: Session, intent: TripIntent, listing: Listing, *, now: datetime | None = None) -> dict[str, Any]:
     """Read-only comparison of one driver offer with the request (nothing is reserved; submit/accept decide)."""
+    # Q138 (ADR-0026): saved requests answered driver listings, which are retired - history stays readable and
+    # closable, but nothing new is created, edited, reopened or compared.
+    raise DomainError(ErrorCode.TRIP_INTENT_RETIRED)
     from app.modules.marketplace import service as mp
     from app.modules.trips import service as trips_service
 
@@ -584,3 +596,22 @@ def intent_dto(session: Session, intent: TripIntent, *, now: datetime | None = N
         "offers": offers,
         "created_at": ensure_aware_utc(intent.created_at), "updated_at": ensure_aware_utc(intent.updated_at),
     }
+
+
+def retire_intent(session: Session, intent_id: int, *, now: datetime | None = None) -> bool:
+    """Q138 (ADR-0026, worker): close an ``active`` saved request - the driver listings it answered are retired.
+
+    Technical closure (reason ``driver_listing_retired``): no client fault, no penalty, open offers expire through the
+    outbox (``SKIP LOCKED``; the stale-thread sweep catches any it skipped). A booked request keeps its booking link.
+    """
+    now = _now(now)
+    intent = _lock(session, intent_id)
+    if intent.status != TripIntentStatus.ACTIVE.value:
+        return False
+    TRIP_INTENT.assert_transition(intent.status, TripIntentStatus.CLOSED.value, "close")
+    intent.status, intent.closed_reason, intent.booking_id = TripIntentStatus.CLOSED.value, "driver_listing_retired", None
+    intent.version += 1
+    intent.updated_at = now
+    session.flush()
+    close_open_threads(session, intent, reason="driver_listing_retired", now=now)
+    return True

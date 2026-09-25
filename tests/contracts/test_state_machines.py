@@ -108,8 +108,9 @@ def test_trip_completion_is_only_from_running_states() -> None:
     [
         ("parcel", "delivered", False, False, False),
         ("parcel", "returned", False, False, False),
-        ("parcel", "in_transit", False, False, True),
-        ("parcel", "picked_up", True, False, True),
+        # Q139 (ADR-0026): a parcel on the way has no driver step left - staff record its outcome, the trip completes
+        ("parcel", "in_transit", False, False, False),
+        ("parcel", "picked_up", True, False, False),
         ("parcel", "delivery_failed", False, False, True),
         ("parcel", "delivery_failed", True, False, False),  # D1
         ("parcel", "return_required", True, False, False),  # D1

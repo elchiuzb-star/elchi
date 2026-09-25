@@ -39,7 +39,7 @@ describe("effectiveFreshness", () => {
   });
 
   it("maps known status labels and falls back without leaking raw codes", () => {
-    expect(statusText("parcel.in_transit")).toBe("Jo'natma yo'lda");
+    expect(statusText("parcel.in_transit")).toBe("Haydovchi yo'lga chiqdi");
     expect(statusText("something.new")).toBe("Bron faol");
   });
 });
@@ -50,7 +50,7 @@ describe("PublicTrackingPage", () => {
     render(<PublicTrackingPage token="tok" now={() => NOW} />);
     expect(screen.getByText("Yuklanmoqda...")).toBeInTheDocument();
     expect(await screen.findByText("Jonli")).toBeInTheDocument();
-    expect(screen.getByTestId("tracking-status").textContent).toBe("Jo'natma yo'lda");
+    expect(screen.getByTestId("tracking-status").textContent).toBe("Haydovchi yo'lga chiqdi");
     expect(m.publicTracking).toHaveBeenCalledWith("tok");
     expect(screen.queryByTestId("tracking-stale")).toBeNull();
   });

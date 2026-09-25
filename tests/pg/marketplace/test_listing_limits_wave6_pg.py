@@ -26,6 +26,7 @@ from app.modules.marketplace.feed import service as feed_service
 from tests.pg.bookings.conftest import (  # noqa: F401  (shared A4 fixtures)
     BW,
     auth,
+    domain_error,
     bw,
     parcel_request_body,
     passenger_request_body,
@@ -45,41 +46,28 @@ def _create_listing(bw: BW, owner_id: int, body) -> str:  # noqa: ANN001, F811
         return marketplace_service.listing_public_id(listing)
 
 
-def test_parcel_above_the_pilot_limit_is_refused_with_the_limit(bw: BW) -> None:  # noqa: F811
-    listing_id = _create_listing(bw, bw.w.client_id, parcel_request_body(bw))
-    with bw.db.session() as session:
-        session.execute(
-            text("UPDATE parcel_listing_details SET weight_g = :w"), {"w": PARCEL_PILOT_MAX_WEIGHT_G + 1}
-        )
-        session.commit()
+def _draft_category(bw: BW, **limits: int):  # noqa: ANN202, F811
+    from app.modules.marketplace import parcel_catalog
+    from app.modules.marketplace.schemas import ParcelCategoryItemInput
 
+    item = {"code": "too_big", "name_uz": "Sinov", "icon_key": "box_large", "max_length_cm": 40, "max_width_cm": 30,
+            "max_height_cm": 20, "max_weight_g": 5_000, "max_volume_ml": 20_000, **limits}
     with bw.db.session() as session:
-        listing = marketplace_service.get_listing_by_public_id(session, listing_id)
-        with pytest.raises(DomainError) as refused:
-            marketplace_service.publish_listing(
-                session, listing_public_id=listing_id, actor_user_id=bw.w.client_id,
-                expected_version=listing.version,
-            )
-    assert refused.value.code is ErrorCode.VALIDATION_ERROR
-    assert refused.value.details["reason"] == "pilot_parcel_limit"
-    assert refused.value.details["limits"]["weight_g"] == PARCEL_PILOT_MAX_WEIGHT_G
+        return domain_error(lambda: parcel_catalog.create_version(
+            session, actor_user_id=bw.super_id, label="pilot-limit-check", source_note=None, synthetic=True,
+            items=[ParcelCategoryItemInput.model_validate(item)]))
 
 
-def test_oversized_box_is_refused_by_its_longest_side(bw: BW) -> None:  # noqa: F811
-    listing_id = _create_listing(bw, bw.w.client_id, parcel_request_body(bw))
-    with bw.db.session() as session:
-        session.execute(
-            text("UPDATE parcel_listing_details SET length_cm = :l"), {"l": PARCEL_PILOT_MAX_DIMENSION_CM + 10}
-        )
-        session.commit()
-    with bw.db.session() as session:
-        listing = marketplace_service.get_listing_by_public_id(session, listing_id)
-        with pytest.raises(DomainError) as refused:
-            marketplace_service.publish_listing(
-                session, listing_public_id=listing_id, actor_user_id=bw.w.client_id,
-                expected_version=listing.version,
-            )
-    assert refused.value.details["limits"]["dimension_cm"] == PARCEL_PILOT_MAX_DIMENSION_CM
+def test_a_category_above_the_pilot_weight_is_refused_with_the_limit(bw: BW) -> None:  # noqa: F811
+    """Q140 (ADR-0026): the sender no longer types a weight - the pilot limit guards the catalog's categories."""
+    refused = _draft_category(bw, max_weight_g=PARCEL_PILOT_MAX_WEIGHT_G + 1)
+    assert refused.code is ErrorCode.VALIDATION_ERROR and refused.details["reason"] == "pilot_parcel_limit"
+    assert refused.details["limits"]["max_weight_g"] == PARCEL_PILOT_MAX_WEIGHT_G
+
+
+def test_a_category_longer_than_the_pilot_box_is_refused_by_its_longest_side(bw: BW) -> None:  # noqa: F811
+    refused = _draft_category(bw, max_length_cm=PARCEL_PILOT_MAX_DIMENSION_CM + 10, max_volume_ml=20_000)
+    assert refused.details["limits"]["max_dimension_cm"] == PARCEL_PILOT_MAX_DIMENSION_CM
 
 
 def test_publish_rate_limit_stops_flooding_but_not_resuming(bw: BW) -> None:  # noqa: F811

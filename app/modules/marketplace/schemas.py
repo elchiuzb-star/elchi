@@ -64,9 +64,29 @@ class ContactDetails(ContractModel):
     phone: str = Field(min_length=5, max_length=32)
 
 
+class ParcelCategoryDTO(ContractModel):
+    """Q140 (ADR-0026): a size category from the server catalog - the same row the client picks and the driver sees."""
+
+    id: str
+    code: str
+    name_uz: str
+    name_ru: str | None = None
+    icon_key: str
+    max_length_cm: int
+    max_width_cm: int
+    max_height_cm: int
+    max_weight_g: int
+    max_volume_ml: int
+
+
 class ParcelDetails(ContractModel):
     """Request fields and trip-offer limits; completeness per kind is checked at publish."""
 
+    category_id: str | None = Field(
+        default=None, max_length=64,
+        description="Q140 (ADR-0026): the size category picked from GET /parcel-categories. Replaces typed dimensions.",
+    )
+    category: ParcelCategoryDTO | None = Field(default=None, description="Response-only: the agreed category and its limits.")
     parcel_type: ParcelType | None = Field(default=None, description="Q68: strict enum.")
     weight_g: StrictInt | None = Field(default=None, gt=0)
     length_cm: StrictInt | None = Field(default=None, gt=0)
@@ -287,6 +307,8 @@ class ListingPublicDTO(ContractModel):
     currency: Currency
     reputation: dict[str, Any] | None = Field(default=None, description="Owned by trust_support (A12); null until then.")
     parcel_type: ParcelType | None = None
+    # Q140: the driver sees the category and its limits before proposing.
+    parcel_category: ParcelCategoryDTO | None = None
     trip_id: str | None = None
     view_count: int = Field(
         default=0,
@@ -559,6 +581,18 @@ class ProposalPartyDTO(ContractModel):
     reputation: dict[str, Any] | None = None
 
 
+class ProposalDriverSummaryDTO(ContractModel):
+    """ADR-0026 (Q138, with Q40/Q43): what the request owner compares drivers by before choosing - the same anonymous
+    set competing drivers see on the offer board. No name, photo, plate, phone, make/model or any id."""
+
+    vehicle_class: str
+    seat_capacity: int
+    rating_bucket: RatingBucket | None = Field(
+        default=None, description="Null when there are too few ratings or the reputation is unknown - never invented.")
+    rating_count: int = 0
+    completed_bookings: int | None = None
+
+
 class ProposalThreadDTO(ContractModel):
     id: str
     listing_id: str
@@ -569,6 +603,8 @@ class ProposalThreadDTO(ContractModel):
     current_version: ProposalVersionDTO | None
     versions: list[ProposalVersionDTO] | None = None
     booking_id: str | None = Field(default=None, description="Set by the bookings module (A4) after accept.")
+    driver_summary: ProposalDriverSummaryDTO | None = Field(
+        default=None, description="ADR-0026: shown to the request owner only (anonymous comparison, Q40 set).")
     trip_intent_id: str | None = Field(
         default=None, description="ADR-0025: the client's saved request - shown to the client side only.")
 
@@ -786,3 +822,50 @@ class TripIntentFitDTO(ContractModel):
     price: TripIntentFitPriceDTO
     blockers: list[Literal["service_mismatch", "expired", "capacity_insufficient", "intent_not_active"]] = Field(
         default_factory=list, description="An offer from this request is refused while any of these is present.")
+
+
+# --- Q140 (ADR-0026): parcel size catalog ---------------------------------------------------------------------------------
+
+
+class ParcelCategoryCatalogDTO(ContractModel):
+    """What a sender picks from. ``confirmed=false`` = no approved catalog (production refuses new parcel business);
+    ``synthetic=true`` = demo/test values, never real tariffs."""
+
+    confirmed: bool
+    synthetic: bool = False
+    label: str | None = None
+    effective_from: UtcDateTime | None = None
+    items: list[ParcelCategoryDTO] = Field(default_factory=list)
+
+
+class ParcelCategoryItemInput(ContractModel):
+    code: str = Field(pattern=r"^[a-z][a-z0-9_]{1,31}$")
+    name_uz: str = Field(min_length=1, max_length=80)
+    name_ru: str | None = Field(default=None, max_length=80)
+    icon_key: str = Field(min_length=1, max_length=32)
+    max_length_cm: StrictInt = Field(gt=0, le=500)
+    max_width_cm: StrictInt = Field(gt=0, le=500)
+    max_height_cm: StrictInt = Field(gt=0, le=500)
+    max_weight_g: StrictInt = Field(gt=0, le=1_000_000)
+    max_volume_ml: StrictInt = Field(gt=0, le=125_000_000)
+    display_order: StrictInt | None = Field(default=None, ge=0, le=10_000)
+
+
+class ParcelCategoryVersionCreate(ContractModel):
+    label: str = Field(min_length=1, max_length=64)
+    source_note: str | None = Field(default=None, max_length=2000)
+    synthetic: StrictBool = Field(default=False, description="Demo/test values - never confirmable in production.")
+    items: list[ParcelCategoryItemInput] = Field(min_length=1, max_length=20)
+
+
+class ParcelCategoryVersionDTO(ContractModel):
+    id: str
+    label: str
+    status: Literal["draft", "active", "superseded"]
+    synthetic: bool
+    created_by: str
+    confirmed_by: str | None = None
+    confirmed_at: UtcDateTime | None = None
+    effective_from: UtcDateTime | None = None
+    version: int
+    items: list[ParcelCategoryDTO] = Field(default_factory=list)

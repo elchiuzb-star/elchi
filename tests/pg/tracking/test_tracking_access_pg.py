@@ -89,13 +89,14 @@ def test_staff_view_is_audited_without_coordinates(client: TestClient, tw: BW) -
     assert all("lat" not in json.dumps(a.details) for a in audits)
 
 
-def test_parcel_window_opens_only_at_pickup(tw: BW) -> None:
+def test_parcel_window_opens_only_when_the_parcel_is_on_the_way(tw: BW) -> None:
+    """Q81 with Q142 (ADR-0026): no pickup code any more - the parcel is on the way (and the window opens) at depart."""
     trip_id, trip_public, booking = parcel_booking(tw, "01K103AA")
     now = tw.base - timedelta(minutes=5)
     send(tw, start_session(tw, trip_public), [point(0, now)], now=now)
     err = domain_error(lambda: _view(tw, booking, now))
     assert err.code is ErrorCode.TRACKING_WINDOW_NOT_OPEN and err.details == {"reason": "parcel_not_picked_up"}
-    act(tw, booking.id, tw.w.driver_id, "pick_up", code=codes_for(tw, booking.id, tw.w.client_id)["pickup_code"], now=tw.base)
+    run_trip_action(tw, trip_id, tw.w.driver_id, "depart", now=tw.base)
     assert _view(tw, booking, tw.base + timedelta(seconds=5)).window.is_open
 
 
@@ -107,10 +108,10 @@ def test_l10_parcel_grant_before_pickup_is_valid_after_pickup(tw: BW) -> None:
         assert grant.valid_from == booking.pickup_window_start and grant.valid_until == booking.pickup_window_start + timedelta(minutes=15)
         s.commit()
     send(tw, start_session(tw, trip_public), [point(0, tw.base - timedelta(seconds=5))], now=tw.base)
-    act(tw, booking.id, tw.w.driver_id, "pick_up", code=codes_for(tw, booking.id, tw.w.client_id)["pickup_code"], now=tw.base)
+    run_trip_action(tw, trip_id, tw.w.driver_id, "depart", now=tw.base)
     with tw.db.session() as s:
         state = tracking_service.public_tracking_state(s, token=token, now=tw.base + timedelta(minutes=5))
-    assert state.grant_valid and state.dto is not None and state.dto.status_label == "parcel.picked_up"
+    assert state.grant_valid and state.dto is not None and state.dto.status_label == "parcel.in_transit"
 
 
 def _view(bw: BW, booking, now):  # noqa: ANN001, ANN202

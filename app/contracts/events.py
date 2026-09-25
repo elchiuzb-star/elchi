@@ -81,6 +81,8 @@ EVENT_PAYLOAD_ALLOWLIST: dict[EventType, frozenset[str]] = {
     E.SUPPORT_TICKET_OPENED: frozenset({"ticket_id", "kind", "booking_id", "trip_id"}),
     E.SUPPORT_SOS_RAISED: frozenset({"ticket_id", "booking_id", "trip_id"}),
     E.SUPPORT_TICKET_STATUS_CHANGED: frozenset({"ticket_id", "kind", "from_status", "to_status"}),
+    E.SUPPORT_THREAD_OPENED: frozenset({"thread_id", "booking_id", "requester_side"}),
+    E.SUPPORT_THREAD_REPLIED: frozenset({"thread_id", "booking_id", "status"}),
     E.RATING_PUBLISHED: frozenset({"booking_id", "service_type", "subject_side"}),
     E.DISPUTE_ESCALATION_DUE: frozenset({"booking_id", "dispute_type", "escalate_at"}),
     # no phone, name or code; amounts are reward values, never commission
@@ -157,6 +159,8 @@ EVENT_AUDIENCES: dict[EventType, frozenset[EventAudience]] = {
     E.SUPPORT_TICKET_OPENED: _STAFF,
     E.SUPPORT_SOS_RAISED: _STAFF,
     E.SUPPORT_TICKET_STATUS_CHANGED: _ALL,
+    E.SUPPORT_THREAD_OPENED: _STAFF,
+    E.SUPPORT_THREAD_REPLIED: _ALL,  # aggregate "user": delivered to the requester only
     E.RATING_PUBLISHED: _ALL,
     E.DISPUTE_ESCALATION_DUE: _STAFF,
     E.PROMO_REWARD_GRANTED: _STAFF,

@@ -237,6 +237,9 @@ def booking_view(
         ),
         created_at=ensure_aware_utc(booking.created_at),
         updated_at=ensure_aware_utc(booking.updated_at),
+        parcel_category=_parcel_category(session, booking),
+        quantity_amendable=rules.quantity_amendable(booking.service_type,
+                                                    from_request=booking.request_listing_id is not None),
     )
     if viewer_role == ViewerRole.CLIENT:
         client_promo = promo_booking.client_promo_view(session, booking)
@@ -337,3 +340,13 @@ def manifest_dto(session: Session, trip: Trip, entries: list) -> TripManifestDTO
             for o in occurrences
         ],
     )
+
+
+def _parcel_category(session: Session, booking: Booking) -> dict | None:
+    """Q140 (ADR-0026): the size category this booking was agreed on (frozen), for both parties."""
+    if booking.parcel_category_item_id is None:
+        return None
+    from app.modules.marketplace import parcel_catalog
+
+    return parcel_catalog.item_dto(parcel_catalog.get_item(session, booking.parcel_category_item_id))
+

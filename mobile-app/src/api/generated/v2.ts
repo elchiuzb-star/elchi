@@ -728,6 +728,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/admin/parcel-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Parcel Category Versions */
+        get: operations["list_parcel_category_versions_api_v2_admin_parcel_categories_get"];
+        put?: never;
+        /**
+         * Create Parcel Category Version
+         * @description Draft a catalog version (`platform.policy_manage`, super_admin). A draft applies to nobody.
+         */
+        post: operations["create_parcel_category_version_api_v2_admin_parcel_categories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/parcel-categories/{version_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Parcel Category Version
+         * @description Activate a drafted catalog - a different super_admin than its author; synthetic catalogs never in production.
+         */
+        post: operations["confirm_parcel_category_version_api_v2_admin_parcel_categories__version_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/admin/parcel-policies": {
         parameters: {
             query?: never;
@@ -1262,6 +1303,78 @@ export interface paths {
         patch: operations["admin_patch_stop_api_v2_admin_stops__stop_id__patch"];
         trace?: never;
     };
+    "/api/v2/admin/support-threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin List Support Threads */
+        get: operations["admin_list_support_threads_api_v2_admin_support_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/support-threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Get Support Thread */
+        get: operations["admin_get_support_thread_api_v2_admin_support_threads__thread_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/support-threads/{thread_id}/files/{file_ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Support Thread File
+         * @description ADR-0026: open one evidence file of a complaint thread - live staff session + ``ops.trust_review`` + the file
+         *     belongs to this thread; the view is audited and the answer is a short-lived signed link (no money or bonus effect).
+         */
+        get: operations["admin_support_thread_file_api_v2_admin_support_threads__thread_id__files__file_ref__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/support-threads/{thread_id}/{command}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Admin Support Thread Command */
+        post: operations["admin_support_thread_command_api_v2_admin_support_threads__thread_id___command__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/admin/support/tickets": {
         parameters: {
             query?: never;
@@ -1747,23 +1860,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/bookings/{booking_id}/disputes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Open Dispute */
-        post: operations["open_dispute_api_v2_bookings__booking_id__disputes_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/bookings/{booking_id}/messages": {
         parameters: {
             query?: never;
@@ -1793,6 +1889,28 @@ export interface paths {
         put?: never;
         /** Create Rating */
         post: operations["create_rating_api_v2_bookings__booking_id__ratings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/bookings/{booking_id}/support-thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Booking Support Thread */
+        get: operations["get_booking_support_thread_api_v2_bookings__booking_id__support_thread_get"];
+        put?: never;
+        /**
+         * Open Support Thread
+         * @description "Shikoyat qilish": the caller's open operator chat for this booking - an existing one, or a new one (200 either
+         *     way; a retry or a second tap never creates a duplicate).
+         */
+        post: operations["open_support_thread_api_v2_bookings__booking_id__support_thread_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2007,40 +2125,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/disputes/{dispute_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Dispute */
-        get: operations["get_dispute_api_v2_disputes__dispute_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/disputes/{dispute_id}/evidence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add Evidence */
-        post: operations["add_evidence_api_v2_disputes__dispute_id__evidence_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/districts": {
         parameters: {
             query?: never;
@@ -2160,23 +2244,6 @@ export interface paths {
         put?: never;
         /** Cancel Listing */
         post: operations["cancel_listing_api_v2_listings__listing_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/listings/{listing_id}/matches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Listing Matches */
-        get: operations["get_listing_matches_api_v2_listings__listing_id__matches_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2355,23 +2422,6 @@ export interface paths {
         };
         /** Get My Capabilities */
         get: operations["get_my_capabilities_api_v2_me_capabilities_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/me/disputes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List My Disputes */
-        get: operations["list_my_disputes_api_v2_me_disputes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2605,6 +2655,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/me/support-threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List My Support Threads */
+        get: operations["list_my_support_threads_api_v2_me_support_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/me/support/tickets": {
         parameters: {
             query?: never;
@@ -2784,6 +2851,26 @@ export interface paths {
         put?: never;
         /** Read Notification */
         post: operations["read_notification_api_v2_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/parcel-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Parcel Categories
+         * @description The size categories a sender picks from (no typed dimensions). ``confirmed=false`` = no approved catalog yet.
+         */
+        get: operations["parcel_categories_api_v2_parcel_categories_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3183,6 +3270,40 @@ export interface paths {
         get: operations["search_stops_api_v2_stops_search_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/support-threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Support Thread */
+        get: operations["get_support_thread_api_v2_support_threads__thread_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/support-threads/{thread_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Support Message */
+        post: operations["post_support_message_api_v2_support_threads__thread_id__messages_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4028,6 +4149,7 @@ export interface components {
             id: string;
             listing_ids: components["schemas"]["BookingListingIdsDTO"];
             no_show_review?: components["schemas"]["NoShowReviewDTO"] | null;
+            parcel_category?: components["schemas"]["ParcelCategoryDTO"] | null;
             parcel_contacts?: components["schemas"]["ParcelContactsDTO"] | null;
             /** @description Q6: the cargo photo of the request this booking came from - a short-lived signed link for the sender, the assigned driver and staff. Absent for a passenger booking or when none was uploaded. */
             parcel_photo?: components["schemas"]["MediaRefDTO"] | null;
@@ -4039,6 +4161,12 @@ export interface components {
             promo?: components["schemas"]["BookingPromoClientDTO"] | null;
             /** Quantity */
             quantity: number;
+            /**
+             * Quantity Amendable
+             * @description Q145 (ADR-0026): whether an amendment may change the quantity. False for every booking made on a client request (D9) and for parcels; the unit price can still be amended by agreement.
+             * @default false
+             */
+            quantity_amendable: boolean;
             /** Service Status */
             service_status: string;
             service_type: components["schemas"]["ServiceType"];
@@ -4131,6 +4259,7 @@ export interface components {
             id: string;
             listing_ids: components["schemas"]["BookingListingIdsDTO"];
             no_show_review?: components["schemas"]["NoShowReviewDTO"] | null;
+            parcel_category?: components["schemas"]["ParcelCategoryDTO"] | null;
             parcel_contacts?: components["schemas"]["ParcelContactsDTO"] | null;
             /** @description Q6: the cargo photo of the request this booking came from - a short-lived signed link for the sender, the assigned driver and staff. Absent for a passenger booking or when none was uploaded. */
             parcel_photo?: components["schemas"]["MediaRefDTO"] | null;
@@ -4142,6 +4271,12 @@ export interface components {
             promo?: components["schemas"]["BookingPromoDriverDTO"] | null;
             /** Quantity */
             quantity: number;
+            /**
+             * Quantity Amendable
+             * @description Q145 (ADR-0026): whether an amendment may change the quantity. False for every booking made on a client request (D9) and for parcels; the unit price can still be amended by agreement.
+             * @default false
+             */
+            quantity_amendable: boolean;
             /** Service Status */
             service_status: string;
             service_type: components["schemas"]["ServiceType"];
@@ -5194,6 +5329,13 @@ export interface components {
             /** Resolution Text */
             resolution_text?: string | null;
         };
+        /** DisputeCreate */
+        DisputeCreate: {
+            /** Comment */
+            comment?: string | null;
+            /** Reason */
+            reason: string;
+        };
         /** DisputeDTO */
         DisputeDTO: {
             /** Booking Id */
@@ -5225,13 +5367,6 @@ export interface components {
             type: components["schemas"]["DisputeType"];
             /** Version */
             version: number;
-        };
-        /** DisputeEvidenceCreate */
-        DisputeEvidenceCreate: {
-            /** File Ids */
-            file_ids?: string[];
-            /** Note */
-            note?: string | null;
         };
         /**
          * DisputeEvidenceDTO
@@ -6110,6 +6245,36 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[ParcelCategoryCatalogDTO] */
+        Envelope_ParcelCategoryCatalogDTO_: {
+            data: components["schemas"]["ParcelCategoryCatalogDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[ParcelCategoryVersionDTO] */
+        Envelope_ParcelCategoryVersionDTO_: {
+            data: components["schemas"]["ParcelCategoryVersionDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[ParcelPolicyDTO] */
         Envelope_ParcelPolicyDTO_: {
             data: components["schemas"]["ParcelPolicyDTO"];
@@ -6530,6 +6695,51 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[SupportFileLinkDTO] */
+        Envelope_SupportFileLinkDTO_: {
+            data: components["schemas"]["SupportFileLinkDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[SupportThreadAdminDTO] */
+        Envelope_SupportThreadAdminDTO_: {
+            data: components["schemas"]["SupportThreadAdminDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[SupportThreadDTO] */
+        Envelope_SupportThreadDTO_: {
+            data: components["schemas"]["SupportThreadDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[SupportTicketAdminDTO] */
         Envelope_SupportTicketAdminDTO_: {
             data: components["schemas"]["SupportTicketAdminDTO"];
@@ -6745,6 +6955,21 @@ export interface components {
         Envelope_Union_ListingDTO__ListingPublicDTO__: {
             /** Data */
             data: components["schemas"]["ListingDTO"] | components["schemas"]["ListingPublicDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[Union[SupportThreadDTO, NoneType]] */
+        Envelope_Union_SupportThreadDTO__NoneType__: {
+            data: components["schemas"]["SupportThreadDTO"] | null;
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -7284,6 +7509,22 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[list[ParcelCategoryVersionDTO]] */
+        Envelope_list_ParcelCategoryVersionDTO__: {
+            /** Data */
+            data: components["schemas"]["ParcelCategoryVersionDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[list[ParcelPolicyVersionDTO]] */
         Envelope_list_ParcelPolicyVersionDTO__: {
             /** Data */
@@ -7496,6 +7737,38 @@ export interface components {
         Envelope_list_StopDTO__: {
             /** Data */
             data: components["schemas"]["StopDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[SupportThreadAdminDTO]] */
+        Envelope_list_SupportThreadAdminDTO__: {
+            /** Data */
+            data: components["schemas"]["SupportThreadAdminDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[SupportThreadDTO]] */
+        Envelope_list_SupportThreadDTO__: {
+            /** Data */
+            data: components["schemas"]["SupportThreadDTO"][];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -8630,6 +8903,7 @@ export interface components {
             kind: components["schemas"]["ListingKind"];
             origin_point?: components["schemas"]["PointEndDTO"] | null;
             origin_stop?: components["schemas"]["StopRefDTO"] | null;
+            parcel_category?: components["schemas"]["ParcelCategoryDTO"] | null;
             parcel_type?: components["schemas"]["ParcelType"] | null;
             price_basis: components["schemas"]["PriceBasis"];
             /** Published At */
@@ -8716,38 +8990,6 @@ export interface components {
             /** Seq */
             seq: number;
             stop?: components["schemas"]["StopRefDTO"] | null;
-        };
-        /** MatchDTO */
-        MatchDTO: {
-            /** Comparable Total Minor */
-            comparable_total_minor?: number | null;
-            group: components["schemas"]["MatchGroup"];
-            /** Labels */
-            labels: string[];
-            listing: components["schemas"]["ListingPublicDTO"];
-            match: components["schemas"]["FeedMatchDTO"];
-            /** Ranking Version */
-            ranking_version: string;
-            /** Ready To Accept */
-            ready_to_accept: boolean;
-            reputation: components["schemas"]["FeedReputationDTO"];
-            trip_availability_summary?: components["schemas"]["TripAvailabilitySummaryDTO"] | null;
-        };
-        /** MatchEnvelope */
-        MatchEnvelope: {
-            /** Data */
-            data: components["schemas"]["MatchDTO"][];
-            /** Message */
-            message?: string | null;
-            meta: components["schemas"]["FeedPageMeta"];
-            /**
-             * Success
-             * @default true
-             * @constant
-             */
-            success: true;
-            /** Warnings */
-            warnings?: components["schemas"]["ApiWarning"][] | null;
         };
         /**
          * MatchGroup
@@ -8884,7 +9126,7 @@ export interface components {
          * @description Staff commands: ``POST /api/v2/admin/bookings/{id}/commands/{command}``.
          * @enum {string}
          */
-        OperatorBookingCommand: "confirm_no_show" | "reject_no_show" | "complete_with_evidence" | "drop_off" | "require_return" | "return_to_sender" | "resolve_custody_case" | "finalize_fee" | "cancel" | "reissue_proof_code";
+        OperatorBookingCommand: "confirm_no_show" | "reject_no_show" | "complete_with_evidence" | "drop_off" | "require_return" | "return_to_sender" | "resolve_custody_case" | "finalize_fee" | "cancel" | "reissue_proof_code" | "mark_delivered";
         /** OperatorBookingCommandRequest */
         OperatorBookingCommandRequest: {
             /** @description Q129, cancel only: the cause the operator decided (client, driver, platform, none = justified), with the reason as its basis. Absent: no fault is recorded and the promo cause stays undetermined (review). */
@@ -8904,7 +9146,7 @@ export interface components {
          * @description O4 operator queues, aggregated from the owning modules (no queue table of its own, §16).
          * @enum {string}
          */
-        OpsQueue: "awaiting_confirmation" | "no_show_review" | "custody_case" | "hold_escalation" | "finance_review" | "dispute" | "support_ticket" | "trust_review" | "unanswered_listing" | "stale_tracking" | "ineligible_driver_trip";
+        OpsQueue: "awaiting_confirmation" | "no_show_review" | "custody_case" | "hold_escalation" | "finance_review" | "dispute" | "support_ticket" | "support_thread" | "trust_review" | "unanswered_listing" | "stale_tracking" | "ineligible_driver_trip";
         /**
          * OpsQueueItemDTO
          * @description O4. ``summary`` is a short operator label: route, status and counts, never a phone or a name.
@@ -8990,6 +9232,116 @@ export interface components {
             /** Next Cursor */
             next_cursor?: string | null;
         };
+        /**
+         * ParcelCategoryCatalogDTO
+         * @description What a sender picks from. ``confirmed=false`` = no approved catalog (production refuses new parcel business);
+         *     ``synthetic=true`` = demo/test values, never real tariffs.
+         */
+        ParcelCategoryCatalogDTO: {
+            /** Confirmed */
+            confirmed: boolean;
+            /** Effective From */
+            effective_from?: string | null;
+            /** Items */
+            items?: components["schemas"]["ParcelCategoryDTO"][];
+            /** Label */
+            label?: string | null;
+            /**
+             * Synthetic
+             * @default false
+             */
+            synthetic: boolean;
+        };
+        /**
+         * ParcelCategoryDTO
+         * @description Q140 (ADR-0026): a size category from the server catalog - the same row the client picks and the driver sees.
+         */
+        ParcelCategoryDTO: {
+            /** Code */
+            code: string;
+            /** Icon Key */
+            icon_key: string;
+            /** Id */
+            id: string;
+            /** Max Height Cm */
+            max_height_cm: number;
+            /** Max Length Cm */
+            max_length_cm: number;
+            /** Max Volume Ml */
+            max_volume_ml: number;
+            /** Max Weight G */
+            max_weight_g: number;
+            /** Max Width Cm */
+            max_width_cm: number;
+            /** Name Ru */
+            name_ru?: string | null;
+            /** Name Uz */
+            name_uz: string;
+        };
+        /** ParcelCategoryItemInput */
+        ParcelCategoryItemInput: {
+            /** Code */
+            code: string;
+            /** Display Order */
+            display_order?: number | null;
+            /** Icon Key */
+            icon_key: string;
+            /** Max Height Cm */
+            max_height_cm: number;
+            /** Max Length Cm */
+            max_length_cm: number;
+            /** Max Volume Ml */
+            max_volume_ml: number;
+            /** Max Weight G */
+            max_weight_g: number;
+            /** Max Width Cm */
+            max_width_cm: number;
+            /** Name Ru */
+            name_ru?: string | null;
+            /** Name Uz */
+            name_uz: string;
+        };
+        /** ParcelCategoryVersionCreate */
+        ParcelCategoryVersionCreate: {
+            /** Items */
+            items: components["schemas"]["ParcelCategoryItemInput"][];
+            /** Label */
+            label: string;
+            /** Source Note */
+            source_note?: string | null;
+            /**
+             * Synthetic
+             * @description Demo/test values - never confirmable in production.
+             * @default false
+             */
+            synthetic: boolean;
+        };
+        /** ParcelCategoryVersionDTO */
+        ParcelCategoryVersionDTO: {
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Confirmed By */
+            confirmed_by?: string | null;
+            /** Created By */
+            created_by: string;
+            /** Effective From */
+            effective_from?: string | null;
+            /** Id */
+            id: string;
+            /** Items */
+            items?: components["schemas"]["ParcelCategoryDTO"][];
+            /** Label */
+            label: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "active" | "superseded";
+            /** Synthetic */
+            synthetic: boolean;
+            /** Version */
+            version: number;
+        };
         /** ParcelContactsDTO */
         ParcelContactsDTO: {
             /** Receiver Name */
@@ -9007,6 +9359,13 @@ export interface components {
              * @description Q68: strict enum.
              */
             accepted_parcel_types?: components["schemas"]["ParcelType"][];
+            /** @description Response-only: the agreed category and its limits. */
+            category?: components["schemas"]["ParcelCategoryDTO"] | null;
+            /**
+             * Category Id
+             * @description Q140 (ADR-0026): the size category picked from GET /parcel-categories. Replaces typed dimensions.
+             */
+            category_id?: string | null;
             /**
              * Declared Value Minor
              * @description Not insurance (spec §5.2).
@@ -9853,6 +10212,26 @@ export interface components {
             parcel_width_cm?: number | null;
         };
         /**
+         * ProposalDriverSummaryDTO
+         * @description ADR-0026 (Q138, with Q40/Q43): what the request owner compares drivers by before choosing - the same anonymous
+         *     set competing drivers see on the offer board. No name, photo, plate, phone, make/model or any id.
+         */
+        ProposalDriverSummaryDTO: {
+            /** Completed Bookings */
+            completed_bookings?: number | null;
+            /** @description Null when there are too few ratings or the reputation is unknown - never invented. */
+            rating_bucket?: components["schemas"]["RatingBucket"] | null;
+            /**
+             * Rating Count
+             * @default 0
+             */
+            rating_count: number;
+            /** Seat Capacity */
+            seat_capacity: number;
+            /** Vehicle Class */
+            vehicle_class: string;
+        };
+        /**
          * ProposalParcel
          * @description Parcel on a parcel trip-offer proposal; checked against the offer limits and trip cargo capacity.
          */
@@ -9980,6 +10359,8 @@ export interface components {
             client: components["schemas"]["ProposalPartyDTO"];
             current_version: components["schemas"]["ProposalVersionDTO"] | null;
             driver: components["schemas"]["ProposalPartyDTO"];
+            /** @description ADR-0026: shown to the request owner only (anonymous comparison, Q40 set). */
+            driver_summary?: components["schemas"]["ProposalDriverSummaryDTO"] | null;
             /** Id */
             id: string;
             /** Listing Id */
@@ -11048,6 +11429,172 @@ export interface components {
             /** Phone */
             phone?: string | null;
         };
+        /**
+         * SupportFileLinkDTO
+         * @description A short-lived signed link to one evidence file (existing signed-URL mechanism; expires on its own).
+         */
+        SupportFileLinkDTO: {
+            /** Content Type */
+            content_type: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Name */
+            name: string;
+            /** Ref */
+            ref: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * SupportFileRefDTO
+         * @description A thread file as staff see it: a readable label and an opaque reference - never the storage key.
+         */
+        SupportFileRefDTO: {
+            /** Message Id */
+            message_id: string;
+            /** Name */
+            name: string;
+            /** Ref */
+            ref: string;
+            /**
+             * Staff Only
+             * @default false
+             */
+            staff_only: boolean;
+        };
+        /** SupportMessageCreate */
+        SupportMessageCreate: {
+            /** Text */
+            text: string;
+        };
+        /** SupportMessageDTO */
+        SupportMessageDTO: {
+            /**
+             * Author
+             * @enum {string}
+             */
+            author: "me" | "operator" | "system" | "client" | "driver";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Has Files
+             * @default false
+             */
+            has_files: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Staff Only
+             * @default false
+             */
+            staff_only: boolean;
+            /** Text */
+            text: string;
+        };
+        /** SupportThreadAdminDTO */
+        SupportThreadAdminDTO: {
+            /** Assigned To */
+            assigned_to?: string | null;
+            /** Booking Id */
+            booking_id: string;
+            /**
+             * Carried Over From Dispute
+             * @default false
+             */
+            carried_over_from_dispute: boolean;
+            /** Closed At */
+            closed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Files */
+            files?: components["schemas"]["SupportFileRefDTO"][];
+            /** Id */
+            id: string;
+            /** Message Count */
+            message_count: number;
+            /** Messages */
+            messages?: components["schemas"]["SupportMessageDTO"][];
+            /**
+             * Requester Side
+             * @enum {string}
+             */
+            requester_side: "client" | "driver";
+            /** Requester User Id */
+            requester_user_id: string;
+            /**
+             * Staff Status
+             * @enum {string}
+             */
+            staff_status: "waiting" | "assigned" | "answered" | "closed";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /** Version */
+            version: number;
+        };
+        /** SupportThreadCommand */
+        SupportThreadCommand: {
+            /** Assignee Id */
+            assignee_id?: string | null;
+            /** Expected Version */
+            expected_version: number;
+            /** Text */
+            text?: string | null;
+        };
+        /** SupportThreadDTO */
+        SupportThreadDTO: {
+            /** Booking Id */
+            booking_id: string;
+            /** Closed At */
+            closed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Message Count */
+            message_count: number;
+            /** Messages */
+            messages?: components["schemas"]["SupportMessageDTO"][];
+            /**
+             * Requester Side
+             * @enum {string}
+             */
+            requester_side: "client" | "driver";
+            /**
+             * Staff Status
+             * @enum {string}
+             */
+            staff_status: "waiting" | "assigned" | "answered" | "closed";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /** Version */
+            version: number;
+        };
+        /**
+         * SupportThreadOpen
+         * @description The complaint button. ``text`` is optional: the thread can be opened first and written into after.
+         */
+        SupportThreadOpen: {
+            /** Text */
+            text?: string | null;
+        };
         /** SupportTicketAdminDTO */
         SupportTicketAdminDTO: {
             /** Acknowledged At */
@@ -11441,20 +11988,6 @@ export interface components {
             trip_id: string;
             /** Trip Version */
             trip_version: number;
-        };
-        /**
-         * TripAvailabilitySummaryDTO
-         * @description Remaining capacity on the matched segment (no vehicle identity, Q43).
-         */
-        TripAvailabilitySummaryDTO: {
-            /** Min Remaining Cargo Volume Ml */
-            min_remaining_cargo_volume_ml?: number | null;
-            /** Min Remaining Cargo Weight G */
-            min_remaining_cargo_weight_g?: number | null;
-            /** Min Remaining Seats */
-            min_remaining_seats?: number | null;
-            /** Seat Capacity */
-            seat_capacity?: number | null;
         };
         /** TripCreate */
         TripCreate: {
@@ -12220,14 +12753,6 @@ export interface components {
              */
             valid_until: string;
         };
-        /** DisputeCreate */
-        app__modules__trust_support__schemas__DisputeCreate: {
-            /** Description */
-            description: string;
-            /** Evidence File Ids */
-            evidence_file_ids?: string[];
-            type: components["schemas"]["DisputeType"];
-        };
         /** FeeQuoteDTO */
         app__modules__wallet__schemas__FeeQuoteDTO: {
             /** Commission Minor */
@@ -12241,13 +12766,6 @@ export interface components {
             policy_kind: components["schemas"]["CommissionPolicyKind"];
             /** Valid Until */
             valid_until?: string | null;
-        };
-        /** DisputeCreate */
-        app__schemas__dispute__DisputeCreate: {
-            /** Comment */
-            comment?: string | null;
-            /** Reason */
-            reason: string;
         };
     };
     responses: never;
@@ -15377,6 +15895,260 @@ export interface operations {
             };
         };
     };
+    list_parcel_category_versions_api_v2_admin_parcel_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_ParcelCategoryVersionDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_parcel_category_version_api_v2_admin_parcel_categories_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParcelCategoryVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ParcelCategoryVersionDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    confirm_parcel_category_version_api_v2_admin_parcel_categories__version_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ParcelCategoryVersionDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_parcel_policies_api_v2_admin_parcel_policies_get: {
         parameters: {
             query?: never;
@@ -18112,6 +18884,357 @@ export interface operations {
             };
         };
     };
+    admin_list_support_threads_api_v2_admin_support_threads_get: {
+        parameters: {
+            query?: {
+                status?: ("open" | "closed") | null;
+                assigned?: ("me" | "unassigned") | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_SupportThreadAdminDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    admin_get_support_thread_api_v2_admin_support_threads__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SupportThreadAdminDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    admin_support_thread_file_api_v2_admin_support_threads__thread_id__files__file_ref__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+                file_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SupportFileLinkDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    admin_support_thread_command_api_v2_admin_support_threads__thread_id___command__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                thread_id: string;
+                command: "assign" | "reply" | "close";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportThreadCommand"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SupportThreadAdminDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     admin_list_tickets_api_v2_admin_support_tickets_get: {
         parameters: {
             query?: {
@@ -20519,97 +21642,6 @@ export interface operations {
             };
         };
     };
-    open_dispute_api_v2_bookings__booking_id__disputes_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                booking_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["app__modules__trust_support__schemas__DisputeCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_DisputeDTO_"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
     list_booking_messages_api_v2_bookings__booking_id__messages_get: {
         parameters: {
             query?: {
@@ -20813,6 +21845,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_RatingDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_booking_support_thread_api_v2_bookings__booking_id__support_thread_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_Union_SupportThreadDTO__NoneType__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    open_support_thread_api_v2_bookings__booking_id__support_thread_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportThreadOpen"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SupportThreadDTO_"];
                 };
             };
             /** @description Bad Request */
@@ -21727,182 +22935,6 @@ export interface operations {
             };
         };
     };
-    get_dispute_api_v2_disputes__dispute_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                dispute_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_DisputeDTO_"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    add_evidence_api_v2_disputes__dispute_id__evidence_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                dispute_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DisputeEvidenceCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_DisputeDTO_"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
     list_districts_api_v2_districts_get: {
         parameters: {
             query?: {
@@ -22552,96 +23584,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_ListingDTO_"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    get_listing_matches_api_v2_listings__listing_id__matches_get: {
-        parameters: {
-            query?: {
-                sort?: components["schemas"]["FeedSort"];
-                include_alternatives?: boolean;
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                listing_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchEnvelope"];
                 };
             };
             /** @description Bad Request */
@@ -23754,92 +24696,6 @@ export interface operations {
             };
         };
     };
-    list_my_disputes_api_v2_me_disputes_get: {
-        parameters: {
-            query?: {
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_list_DisputeDTO__"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
     list_my_listings_api_v2_me_listings_get: {
         parameters: {
             query?: {
@@ -24780,6 +25636,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_list_SavedSearchDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_my_support_threads_api_v2_me_support_threads_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_SupportThreadDTO__"];
                 };
             };
             /** @description Bad Request */
@@ -25873,6 +26814,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    parcel_categories_api_v2_parcel_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_ParcelCategoryCatalogDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
             /** @description Too Many Requests */
@@ -27761,6 +28776,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_list_StopDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_support_thread_api_v2_support_threads__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SupportThreadDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    post_support_message_api_v2_support_threads__thread_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportMessageCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_SupportThreadDTO_"];
                 };
             };
             /** @description Bad Request */

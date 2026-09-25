@@ -83,6 +83,21 @@ def current_user_id(
     return user.id
 
 
+def active_session_user_id(
+    user_id: int = Depends(current_user_id),
+    token: str | None = Depends(_session_bearer),
+) -> int:
+    """Stricter than ``current_user_id`` for sensitive staff reads (ADR-0026: opening complaint evidence): the access
+    token must name a live login session (§17.6 ``sid``). ``current_user_id`` already refused a revoked or expired
+    session; a token without the claim - which only expires on its own - is not accepted here."""
+    from app.core.security import verify_token
+
+    payload = verify_token(token) if token else None
+    if not payload or not payload.get("sid"):
+        raise HTTPException(status_code=status_codes.HTTP_401_UNAUTHORIZED, detail="An active login session is required.")
+    return user_id
+
+
 
 
 def session_ref_of(request: Request) -> str | None:

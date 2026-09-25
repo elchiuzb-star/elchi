@@ -198,7 +198,8 @@ def test_promotion_jobs_and_reviews_work_under_the_application_role(app_setup) -
 
     conn, campaign, people, engine = app_setup
     jobs = [job for job in worker.SERVICE_JOBS if job.name.startswith("promotions.")]
-    assert len(jobs) == 8  # stage 5 added promotions.purge_rate_events; it too runs under the application role
+    # stage 5 added purge_rate_events, ADR-0026 (Q147) review_retired_parcel_enrollments; all run under the application role
+    assert len(jobs) == 9
     for job in jobs:
         ran, _ = worker.run_service_job(job, worker.resolve_service_function(job), engine=engine)
         assert ran, job.name

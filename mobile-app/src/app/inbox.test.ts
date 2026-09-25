@@ -11,7 +11,8 @@ describe("parseInboxLink", () => {
     expect(parseInboxLink("/proposals/prp_3")).toEqual({ kind: "proposal", id: "prp_3" });
     expect(parseInboxLink("/proposals/prp_3/messages")).toEqual({ kind: "proposal", id: "prp_3" });
     expect(parseInboxLink("/trips/trp_4")).toEqual({ kind: "trip", id: "trp_4" });
-    expect(parseInboxLink("/disputes/dsp_5")).toEqual({ kind: "dispute", id: "dsp_5" });
+    expect(parseInboxLink("/support-threads/sth_5")).toEqual({ kind: "support_thread", id: "sth_5" });
+    expect(parseInboxLink("/disputes/dsp_5")).toBeNull(); // ADR-0026: no dispute screen any more
   });
 
   it("tolerates an absolute or prefixed link and ignores what it has no screen for", () => {

@@ -29,9 +29,8 @@ PROOF_REISSUE_MIN_INTERVAL = timedelta(minutes=2)
 PROOF_REISSUE_WINDOW = timedelta(hours=24)
 PROOF_REISSUE_MAX_IN_WINDOW = 3  # self-service, per booking x proof kind, rolling window
 
-REISSUABLE_PROOF_KINDS: frozenset[ProofKind] = frozenset(
-    {ProofKind.BOARDING_CODE, ProofKind.PICKUP_CODE, ProofKind.DELIVERY_CODE, ProofKind.RETURN_CODE}
-)
+# Q139 (ADR-0026): parcel pickup/delivery/return codes are retired - only the passenger boarding code remains.
+REISSUABLE_PROOF_KINDS: frozenset[ProofKind] = frozenset({ProofKind.BOARDING_CODE})
 
 
 @dataclass(frozen=True, slots=True)

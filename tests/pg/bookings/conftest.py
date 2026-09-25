@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from tests.pg.marketplace.catalog_world import synthetic_category
+
 import re
 import threading
 import time
@@ -172,7 +174,7 @@ def parcel_request_body(bw: BW, *, origin: str = "A", destination: str = "C", un
             "price_basis": "total",
             "unit_price_minor": unit,
             "parcel": {
-                "parcel_type": "documents", "weight_g": 2_000, "length_cm": 20, "width_cm": 20, "height_cm": 20, "fragile": False,
+                "parcel_type": "documents", "category_id": synthetic_category(bw.db), "fragile": False,
                 "payer": payer, "sender": {"name": "Aziza Karimova", "phone": "+998900000201"},
                 "receiver": {"name": "Nodira Qosimova", "phone": "+998977777777"},
             },
@@ -287,6 +289,42 @@ def request_with_driver_proposal(bw: BW, *, seats: int = 2, trip_seats: int = 4,
     trip_id, trip_public = driver_trip(bw, driver_id, plate, seats=trip_seats)
     ref = propose(bw, listing, driver_id, trip_public_id=trip_public, quantity=seats)
     return listing, trip_id, trip_public, ref
+
+
+def request_proposal(bw: BW, trip_public: str, client_id: int, *, driver_id: int | None = None, quantity: int = 1,
+                     unit: int = 20_000_000, pickup: str = "A", dropoff: str = "D") -> ThreadRef:
+    """ADR-0026 (Q138): the only way to a booking - the client's request, the driver's proposal on its own trip.
+
+    Replaces the retired "client proposes on the driver's trip offer" setup; the client is the accepting party.
+    """
+    listing = publish_listing(bw, client_id, passenger_request_body(bw, seats=quantity, unit=unit, origin=pickup, destination=dropoff,
+                                                                    start=occurrence_window(bw, pickup)[0]))
+    return propose(bw, listing, driver_id or bw.w.driver_id, trip_public_id=trip_public, quantity=quantity, unit=unit,
+                   pickup=pickup, dropoff=dropoff)
+
+
+def booked(bw: BW, trip_public: str, client_id: int, **kwargs: object) -> Booking:
+    """A real accepted booking on ``trip_public`` through :func:`request_proposal` (client accepts)."""
+    return accept(bw, request_proposal(bw, trip_public, client_id, **kwargs), client_id)
+
+
+def legacy_offer_booking(bw: BW, trip_public: str, client_id: int, *, driver_id: int | None = None) -> Booking:
+    """A booking as the pre-ADR-0026 model left it: made on a driver's ``trip_offer`` (``supply_listing_id``).
+
+    Quantity amendments (D10) exist only for such bookings - D9 forbids changing a request booking's quantity, and no
+    new offer booking can be made (Q138; open question D-2 in ADR-0026). The rows are rewritten with SQL
+    (``session_replication_role = replica`` for this setup only) because no code path creates them any more.
+    """
+    driver_id = driver_id or bw.w.driver_id
+    booking = booked(bw, trip_public, client_id, driver_id=driver_id)
+    with bw.db.engine.begin() as conn:
+        conn.execute(text("SET LOCAL session_replication_role = replica"))
+        conn.execute(text("UPDATE listings SET kind = 'trip_offer', owner_user_id = :d, trip_id = :t WHERE id = :l"),
+                     {"d": driver_id, "t": booking.trip_id, "l": booking.request_listing_id})
+        conn.execute(text("UPDATE bookings SET supply_listing_id = request_listing_id, request_listing_id = NULL WHERE id = :b"),
+                     {"b": booking.id})
+    with bw.db.session() as s:
+        return s.get(Booking, booking.id)
 
 
 def trip_version(bw: BW, trip_id: int) -> int:

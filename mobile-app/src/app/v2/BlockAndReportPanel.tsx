@@ -155,6 +155,8 @@ export function ReportForm(props: {
   subjectType: ReportSubjectType;
   subjectId: string;
   onReported?: (report: ReportDTO) => void;
+  /** Q146 (ADR-0026): on a booking the heading says what this is - a safety report, not the support chat. */
+  title?: string;
 }) {
   const [reason, setReason] = useState<ReportReasonCode | "">("");
   const [details, setDetails] = useState("");
@@ -212,7 +214,7 @@ export function ReportForm(props: {
 
   return (
     <Card>
-      <strong className="text-[15px]">{translate("blockReport.formTitle", { subject: SUBJECT_LABEL[props.subjectType] })}</strong>
+      <strong className="text-[15px]">{props.title ?? translate("blockReport.formTitle", { subject: SUBJECT_LABEL[props.subjectType] })}</strong>
       <SelectField label={translate("common.reason")} value={reason} onChange={(value) => setReason(value as ReportReasonCode | "")}>
         <option value="">{translate("blockReport.chooseReason")}</option>
         {REPORT_REASONS.map(([value, label]) => (

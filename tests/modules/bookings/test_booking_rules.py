@@ -138,14 +138,19 @@ def test_actions_of_the_other_service_are_invalid() -> None:
     with pytest.raises(DomainError) as info:
         rules.action_target(ServiceType.PARCEL, BookingAction.BOARD, "awaiting_pickup")
     assert info.value.code is ErrorCode.INVALID_STATE_TRANSITION
-    assert rules.action_target(ServiceType.PARCEL, BookingAction.PICK_UP, "awaiting_pickup") == "picked_up"
+    # Q139 (ADR-0026): the driver's parcel ladder and the sender's confirmation are retired - refused for everyone
+    for action, status in ((BookingAction.PICK_UP, "awaiting_pickup"), (BookingAction.DELIVER, "in_transit"),
+                           (BookingAction.COMPLETE, "delivered"), (BookingAction.RETURN_TO_SENDER, "return_required")):
+        with pytest.raises(DomainError):
+            rules.action_target(ServiceType.PARCEL, action, status)
     assert rules.action_target(ServiceType.PASSENGER, BookingAction.REPORT_NO_SHOW, "awaiting_pickup") is None
 
 
-def test_separate_codes_per_action_and_driver_sees_none() -> None:
-    assert rules.ACTION_PROOF_KIND[BookingAction.PICK_UP] is ProofKind.PICKUP_CODE
-    assert rules.ACTION_PROOF_KIND[BookingAction.DELIVER] is ProofKind.DELIVERY_CODE
-    assert ProofKind.DELIVERY_CODE in rules.CLIENT_CODE_KINDS[ServiceType.PARCEL]
+def test_only_the_boarding_code_remains_and_the_driver_sees_none() -> None:
+    # Q139 (ADR-0026): parcel pickup/delivery/return codes are retired; the passenger boarding code stays.
+    assert rules.ACTION_PROOF_KIND == {BookingAction.BOARD: ProofKind.BOARDING_CODE}
+    assert rules.CLIENT_CODE_KINDS[ServiceType.PARCEL] == ()
+    assert rules.CLIENT_CODE_KINDS[ServiceType.PASSENGER] == (ProofKind.BOARDING_CODE,)
     assert all(ActorSide.DRIVER in rules.ACTION_SIDES[action] for action in rules.ACTION_PROOF_KIND)
 
 

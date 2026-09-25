@@ -192,6 +192,10 @@ class Booking(Base):
     baggage_ml: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     cargo_weight_g: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     cargo_volume_ml: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    # Q140 (ADR-0026): the parcel size category agreed on - frozen after insert (trigger 0092).
+    parcel_category_item_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("parcel_category_items.id", name="fk_bookings_parcel_category_item")
+    )
     price_basis: Mapped[str] = mapped_column(String(16), nullable=False)
     unit_price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     total_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)

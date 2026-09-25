@@ -99,8 +99,9 @@ def _upgrade(db: PgDatabase, target: str) -> str:
     return result.stdout + result.stderr
 
 
-def test_referral_revisions_are_the_single_head() -> None:
-    assert script_heads() == [STEPS[-1]]
+def test_referral_revisions_lead_to_the_single_head() -> None:
+    # ADR-0026 migration 20260924_0092 follows the referral steps; the head is still a single revision
+    assert script_heads() == ["20260925_0094"]
 
 
 def test_clean_database_has_every_expected_object(pg_empty_db: PgDatabase) -> None:
@@ -122,6 +123,7 @@ def test_stepwise_upgrade_from_previous_head_equals_a_clean_install(pg_empty_db:
         _upgrade(pg_empty_db, step)
         with pg_empty_db.engine.connect() as conn:
             assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == step
+    _upgrade(pg_empty_db, "head")  # later steps (0092/0093, ADR-0026) also widen promo CHECKs; they apply on top the same way
     assert _catalogue(pg_empty_db) == _catalogue(pg_db)  # pg_db: the session template, migrated to head in one go
 
 

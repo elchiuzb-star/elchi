@@ -27,6 +27,11 @@ def expire_enrollments(session: Session, *, limit: int = 100, now: datetime | No
     return qualification.expire_enrollments(session, limit=limit, now=now)
 
 
+def review_retired_parcel_enrollments(session: Session, *, limit: int = 100, now: datetime | None = None) -> int:
+    """ADR-0026 (Q147): promised parcel enrollments go to a person's review; nothing is granted or released here."""
+    return qualification.review_retired_parcel_enrollments(session, limit=limit, now=now)
+
+
 def expire_lots(session: Session, *, limit: int = 100, now: datetime | None = None) -> int:
     return len(service.expire_due_lots(session, limit=limit, now=now))
 

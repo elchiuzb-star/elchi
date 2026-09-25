@@ -23,6 +23,7 @@ import { panelsBMessages } from "./screens/panelsB";
 import { componentsMessages } from "./screens/components";
 import { promoHelpersMessages } from "./screens/promoHelpers";
 import { flowHelpersMessages } from "./screens/flowHelpers";
+import { adr0026Messages } from "./screens/adr0026";
 
 export interface Message {
   uz: string;
@@ -510,8 +511,8 @@ const baseMessages = {
     ru: "Изменение цены и комментария не закрывает открытые предложения.",
   },
   "listingOwner.materialWarning": {
-    uz: "Vaqt oynasini o'zgartirsangiz, bu e'londagi barcha ochiq takliflar yopiladi (muddati tugaydi). Haydovchilar yangi shartlarga qaytadan taklif yuboradi.",
-    ru: "Если изменить окно времени, все открытые предложения по объявлению закроются (истекут). Водители отправят новые предложения на новые условия.",
+    uz: "Vaqt oynasi yoki odamlar sonini o'zgartirsangiz, bu e'londagi barcha ochiq takliflar yopiladi (muddati tugaydi). Haydovchilar yangi shartlarga qaytadan taklif yuboradi.",
+    ru: "Если изменить окно времени или число людей, все открытые предложения по объявлению закроются (истекут). Водители отправят новые предложения на новые условия.",
   },
   "listingOwner.openOffers": { uz: "Ochiq takliflar: {count} ta.", ru: "Открытых предложений: {count}." },
   "listingOwner.materialConfirm": { uz: "Tushundim, saqlash", ru: "Понятно, сохранить" },
@@ -596,8 +597,8 @@ const baseMessages = {
   // --- safety, sharing and reputation mounts ----------------------------------------------------------------
   "safety.section": { uz: "Xavfsizlik", ru: "Безопасность" },
   "safety.sectionHint": {
-    uz: "Muammo bo'lsa, shu bron bo'yicha shikoyat yuboring yoki bu odamni bloklang. Bron majburiyatlari va qo'llab-quvvatlash davom etadi.",
-    ru: "Если что-то не так, отправьте жалобу по этой брони или заблокируйте этого человека. Обязательства по брони и поддержка сохраняются.",
+    uz: "Xavfli xatti-harakat, firibgarlik shubhasi yoki ilovadan tashqari aloqaga undash haqida xabar bering yoki bu odamni bloklang. Oddiy muammo uchun yuqoridagi «Yordam / shikoyat» chatidan foydalaning. Bron majburiyatlari davom etadi.",
+    ru: "Сообщите об опасном поведении, подозрении на мошенничество или попытке связаться вне приложения либо заблокируйте этого человека. С обычной проблемой пишите в чат «Помощь / жалоба» выше. Обязательства по брони сохраняются.",
   },
   "safety.counterpartyMissing": {
     uz: "Bronda ikkinchi tomon ko'rsatilmagan, shuning uchun bu yerda bloklab bo'lmaydi.",
@@ -645,6 +646,7 @@ export const messageSources = {
   components: componentsMessages,
   promoHelpers: promoHelpersMessages,
   flowHelpers: flowHelpersMessages,
+  adr0026: adr0026Messages,
 } as const;
 
 export const messages = {
@@ -661,6 +663,7 @@ export const messages = {
   ...componentsMessages,
   ...promoHelpersMessages,
   ...flowHelpersMessages,
+  ...adr0026Messages,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof messages;

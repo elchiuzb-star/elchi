@@ -255,6 +255,10 @@ class ParcelListingDetails(Base):
     sender_phone: Mapped[str | None] = mapped_column(String(32))
     receiver_name: Mapped[str | None] = mapped_column(String(120))
     receiver_phone: Mapped[str | None] = mapped_column(String(32))
+    # Q140 (ADR-0026): the parcel size category the client picked - an immutable catalog item row.
+    parcel_category_item_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("parcel_category_items.id", name="fk_parcel_listing_details_parcel_category_item")
+    )
     pickup_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pickup_window_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     dropoff_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -438,6 +442,10 @@ class ProposalVersion(Base):
     # Receiver contact of a trip-offer parcel proposal (migration 0054): only the proposing client sees it (Q43/Q44).
     receiver_name: Mapped[str | None] = mapped_column(String(120))
     receiver_phone: Mapped[str | None] = mapped_column(String(32))
+    # Q140 (ADR-0026): the parcel size category the client picked - an immutable catalog item row.
+    parcel_category_item_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("parcel_category_items.id", name="fk_proposal_versions_parcel_category_item")
+    )
 
 
 class ListingOfferLabel(Base):
@@ -609,3 +617,79 @@ class TripIntentVersion(Base):
     receiver_name: Mapped[str | None] = mapped_column(String(120))
     receiver_phone: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ParcelCategoryVersion(Base):
+    """Q140 (ADR-0026, migration 20260924_0092): the parcel size catalog a client picks from.
+
+    Same shape as the parcel policy: a draft is staff-only, ``active`` needs a *second* super_admin, only one version
+    is active. ``synthetic`` marks demo/test values that are never confirmable in production.
+    """
+
+    __tablename__ = "parcel_category_versions"
+    __table_args__ = (
+        UniqueConstraint("public_id", name="uq_parcel_category_versions_public_id"),
+        UniqueConstraint("label", name="uq_parcel_category_versions_label"),
+        Index(
+            "uq_parcel_category_versions_active",
+            "status",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+        {
+            "comment": (
+                "Q140: the parcel size catalog the client picks from (no typed dimensions). Draft is staff-only; "
+                "active needs a second super_admin. `synthetic` = demo/test values, never confirmable in production."
+            )
+        },
+    )
+
+    id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    label: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'draft'"))
+    synthetic: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    source_note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", name="parcel_category_versions_created_by_fkey"), nullable=False
+    )
+    confirmed_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", name="parcel_category_versions_confirmed_by_fkey")
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    effective_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+
+
+class ParcelCategoryItem(Base):
+    """One size category of a catalog version. Immutable (trigger): an agreement points at this row."""
+
+    __tablename__ = "parcel_category_items"
+    __table_args__ = (
+        UniqueConstraint("public_id", name="uq_parcel_category_items_public_id"),
+        UniqueConstraint("catalog_version_id", "code", name="uq_parcel_category_items_code"),
+        Index("ix_parcel_category_items_version", "catalog_version_id", "display_order", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    catalog_version_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("parcel_category_versions.id", name="parcel_category_items_catalog_version_id_fkey", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name_uz: Mapped[str] = mapped_column(String(80), nullable=False)
+    name_ru: Mapped[str | None] = mapped_column(String(80))
+    icon_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    max_length_cm: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_width_cm: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_height_cm: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_weight_g: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_volume_ml: Mapped[int] = mapped_column(Integer, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("100"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+

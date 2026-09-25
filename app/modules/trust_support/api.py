@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v2.web import (
     ERROR_RESPONSES,
+    active_session_user_id,
     current_user_id,
     decode_id_cursor,
     decode_time_id_cursor,
@@ -38,14 +39,16 @@ from app.contracts.enums import (
     TrustReviewStatus,
     TrustSignalType,
 )
-from app.contracts.ids import PublicIdPrefix, format_public_id
+from app.contracts.timeutil import ensure_aware_utc
 from app.contracts.trust import STRIKE_REVIEW_WINDOW
 from app.modules.bookings import service as bookings_service
 from app.modules.identity import service as identity_service
 from app.modules.marketplace.service import ContactFilterHit, record_contact_filter_hits
-from app.modules.trust_support import config, service
+from app.modules.trust_support import config, service, threads
 from app.modules.trust_support.models import (
     AbuseReport,
+    SupportMessage,
+    SupportThread,
     DisputeV2,
     FraudSignal,
     RatingV2,
@@ -60,9 +63,7 @@ from app.modules.trust_support.schemas import (
     BlockDTO,
     BookingLiveStateDTO,
     DisputeCommand,
-    DisputeCreate,
     DisputeDTO,
-    DisputeEvidenceCreate,
     DisputeEvidenceDTO,
     DisputeResolutionDTO,
     FraudSignalCommand,
@@ -76,6 +77,14 @@ from app.modules.trust_support.schemas import (
     StrikeDTO,
     SupportContactsDTO,
     SupportTicketAdminDTO,
+    SupportMessageCreate,
+    SupportMessageDTO,
+    SupportFileLinkDTO,
+    SupportFileRefDTO,
+    SupportThreadAdminDTO,
+    SupportThreadCommand,
+    SupportThreadDTO,
+    SupportThreadOpen,
     SupportTicketCommand,
     SupportTicketCreate,
     SupportTicketDTO,
@@ -256,56 +265,9 @@ def get_reputation(
 # --- S3-S8 disputes -----------------------------------------------------------------------------------------------------
 
 
-@router.post("/bookings/{booking_id}/disputes", response_model=Envelope[DisputeDTO], status_code=201, responses=ERROR_RESPONSES)
-def open_dispute(
-    booking_id: str, body: DisputeCreate, request: Request,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
-) -> JSONResponse:
-    def build(warnings: list[dict], hits: list[ContactFilterHit]) -> DisputeDTO:
-        dispute = service.open_dispute(
-            session, booking_public_id_value=booking_id, actor_user_id=user_id, dispute_type=body.type,
-            description=body.description, evidence_file_ids=body.evidence_file_ids, warnings=warnings, filter_hits=hits,
-        )
-        return dispute_dto(session, dispute)
-
-    return _run_filtered(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, build=build,
-                         success_status=201, resource_type="dispute")
-
-
-@router.get("/me/disputes", response_model=Envelope[list[DisputeDTO]], responses=ERROR_RESPONSES)
-def list_my_disputes(
-    cursor: str | None = Query(default=None, max_length=512), limit: int = Query(default=20, ge=1, le=MAX_PAGE_LIMIT),
-    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
-) -> Envelope[list[DisputeDTO]]:
-    scope = page_scope("GET /me/disputes")
-    rows = service.list_user_disputes(session, user_id, before=decode_time_id_cursor(cursor, scope), limit=limit + 1)
-    page, more = rows[:limit], len(rows) > limit
-    next_cursor = encode_page_cursor([page[-1].created_at, page[-1].id], scope) if more else None
-    return Envelope[list[DisputeDTO]](data=[dispute_dto(session, d) for d in page], meta=PageMeta(next_cursor=next_cursor, limit=limit))
-
-
-@router.get("/disputes/{dispute_id}", response_model=Envelope[DisputeDTO], responses=ERROR_RESPONSES)
-def get_dispute(dispute_id: str, user_id: int = Depends(current_user_id), session: Session = Depends(get_session)) -> Envelope[DisputeDTO]:
-    dispute, _, _ = service.get_dispute_for_viewer(session, dispute_id, user_id)
-    return Envelope[DisputeDTO](data=dispute_dto(session, dispute))
-
-
-@router.post("/disputes/{dispute_id}/evidence", response_model=Envelope[DisputeDTO], responses=ERROR_RESPONSES)
-def add_evidence(
-    dispute_id: str, body: DisputeEvidenceCreate, request: Request,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
-) -> JSONResponse:
-    def build(warnings: list[dict], hits: list[ContactFilterHit]) -> DisputeDTO:
-        dispute = service.add_dispute_evidence(
-            session, dispute_public_id_value=dispute_id, actor_user_id=user_id, note=body.note, file_ids=body.file_ids,
-            warnings=warnings, filter_hits=hits,
-        )
-        return dispute_dto(session, dispute)
-
-    return _run_filtered(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, build=build,
-                         resource_type="dispute")
+# ADR-0026 (Q141): the client/driver-facing dispute routes (POST /bookings/{id}/disputes, GET /me/disputes,
+# GET /disputes/{id}, POST /disputes/{id}/evidence) are removed - "Shikoyat qilish" opens the booking-bound operator
+# chat below. `disputes_v2` stays a staff-only internal record (admin routes), with its existing money/promo effects.
 
 
 @router.get("/admin/disputes", response_model=Envelope[list[DisputeDTO]], responses=ERROR_RESPONSES)
@@ -342,6 +304,171 @@ def admin_dispute_command(
 
     return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, handler=handler,
                        resource_type="dispute")
+
+
+# --- ADR-0026 (Q141): booking-bound operator chat --------------------------------------------------------------------------
+
+
+def _message_dto(message: SupportMessage, *, viewer_user_id: int | None) -> SupportMessageDTO:
+    if message.author_side == "system":
+        author = "system"
+    elif message.author_side == "operator":
+        author = "operator"
+    elif viewer_user_id is not None and message.author_user_id == viewer_user_id:
+        author = "me"
+    else:
+        author = message.author_side
+    return SupportMessageDTO(id=threads.message_public_id(message), author=author, text=message.body,
+                             has_files=bool(message.file_ids), created_at=message.created_at,
+                             staff_only=bool(message.staff_only) if viewer_user_id is None else False)
+
+
+def _thread_fields(thread: SupportThread, booking_pid: str, messages: list[SupportMessage], viewer: int | None,
+                   message_count: int | None = None) -> dict:
+    return {
+        "id": threads.thread_public_id(thread), "booking_id": booking_pid, "requester_side": thread.requester_side,
+        "status": thread.status, "staff_status": threads.staff_status(thread),
+        "message_count": thread.message_count if message_count is None else message_count,
+        "version": thread.version, "created_at": thread.created_at, "closed_at": thread.closed_at,
+        "messages": [_message_dto(m, viewer_user_id=viewer) for m in messages],
+    }
+
+
+def thread_dto(session: Session, view: threads.ThreadView, viewer_user_id: int) -> SupportThreadDTO:
+    # the requester's view: staff-only lines were already left out, and the count is of what they see
+    return SupportThreadDTO(**_thread_fields(view.thread, view.booking_public_id, view.messages, viewer_user_id,
+                                             message_count=len(view.messages)))
+
+
+def thread_admin_dto(session: Session, view: threads.ThreadView) -> SupportThreadAdminDTO:
+    thread = view.thread
+    return SupportThreadAdminDTO(
+        **_thread_fields(thread, view.booking_public_id, view.messages, None),
+        requester_user_id=identity_service.user_public_id(session, thread.requester_user_id),
+        assigned_to=identity_service.user_public_id(session, thread.assigned_to) if thread.assigned_to else None,
+        carried_over_from_dispute=thread.source_dispute_id is not None,
+        files=[SupportFileRefDTO(ref=f.ref, name=f.name, message_id=threads.message_public_id(f.message),
+                                 staff_only=bool(f.message.staff_only)) for f in threads.staff_files(view.messages)],
+    )
+
+
+@router.post("/bookings/{booking_id}/support-thread", response_model=Envelope[SupportThreadDTO], responses=ERROR_RESPONSES)
+def open_support_thread(
+    booking_id: str, body: SupportThreadOpen, request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> JSONResponse:
+    """"Shikoyat qilish": the caller's open operator chat for this booking - an existing one, or a new one (200 either
+    way; a retry or a second tap never creates a duplicate)."""
+    def build(warnings: list[dict], hits: list[ContactFilterHit]) -> SupportThreadDTO:
+        thread, _ = threads.open_or_get_thread(session, booking_public_id_value=booking_id, actor_user_id=user_id,
+                                               text_value=body.text, warnings=warnings, filter_hits=hits)
+        return thread_dto(session, threads.get_thread_for_user(session, threads.thread_public_id(thread), user_id), user_id)
+
+    return _run_filtered(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, build=build,
+                         resource_type="support_thread")
+
+
+@router.get("/bookings/{booking_id}/support-thread", response_model=Envelope[SupportThreadDTO | None], responses=ERROR_RESPONSES)
+def get_booking_support_thread(
+    booking_id: str, user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> Envelope[SupportThreadDTO | None]:
+    thread = threads.thread_for_booking(session, booking_id, user_id)
+    if thread is None:
+        return Envelope[SupportThreadDTO | None](data=None)
+    return Envelope[SupportThreadDTO | None](
+        data=thread_dto(session, threads.get_thread_for_user(session, threads.thread_public_id(thread), user_id), user_id))
+
+
+@router.get("/me/support-threads", response_model=Envelope[list[SupportThreadDTO]], responses=ERROR_RESPONSES)
+def list_my_support_threads(
+    limit: int = Query(default=20, ge=1, le=MAX_PAGE_LIMIT),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> Envelope[list[SupportThreadDTO]]:
+    rows = threads.list_user_threads(session, user_id, limit=limit)
+    counts = threads.visible_message_counts(session, [t.id for t in rows])
+    data = [SupportThreadDTO(**_thread_fields(t, threads._booking_pid(session, t), [], user_id,  # noqa: SLF001
+                                              message_count=counts.get(t.id, 0))) for t in rows]
+    return Envelope[list[SupportThreadDTO]](data=data)
+
+
+@router.get("/support-threads/{thread_id}", response_model=Envelope[SupportThreadDTO], responses=ERROR_RESPONSES)
+def get_support_thread(
+    thread_id: str, user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> Envelope[SupportThreadDTO]:
+    return Envelope[SupportThreadDTO](data=thread_dto(session, threads.get_thread_for_user(session, thread_id, user_id), user_id))
+
+
+@router.post("/support-threads/{thread_id}/messages", response_model=Envelope[SupportThreadDTO], status_code=201,
+             responses=ERROR_RESPONSES)
+def post_support_message(
+    thread_id: str, body: SupportMessageCreate, request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> JSONResponse:
+    def build(warnings: list[dict], hits: list[ContactFilterHit]) -> SupportThreadDTO:
+        threads.post_message(session, thread_public_id_value=thread_id, actor_user_id=user_id, text_value=body.text,
+                             warnings=warnings, filter_hits=hits)
+        return thread_dto(session, threads.get_thread_for_user(session, thread_id, user_id), user_id)
+
+    return _run_filtered(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, build=build,
+                         success_status=201, resource_type="support_message")
+
+
+@router.get("/admin/support-threads", response_model=Envelope[list[SupportThreadAdminDTO]], responses=ERROR_RESPONSES)
+def admin_list_support_threads(
+    status: Literal["open", "closed"] | None = Query(default="open"),
+    assigned: Literal["me", "unassigned"] | None = Query(default=None),
+    cursor: str | None = Query(default=None, max_length=512), limit: int = Query(default=20, ge=1, le=MAX_PAGE_LIMIT),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> Envelope[list[SupportThreadAdminDTO]]:
+    scope = page_scope("GET /admin/support-threads", status=status, assigned=assigned)
+    rows = threads.admin_list_threads(session, actor_user_id=user_id, status=status, assigned=assigned,
+                                      after_id=decode_id_cursor(cursor, scope), limit=limit + 1)
+    page, more = rows[:limit], len(rows) > limit
+    next_cursor = encode_page_cursor([page[-1].id], scope) if more else None
+    data = [thread_admin_dto(session, threads.ThreadView(t, threads._booking_pid(session, t), [])) for t in page]  # noqa: SLF001
+    return Envelope[list[SupportThreadAdminDTO]](data=data, meta=PageMeta(next_cursor=next_cursor, limit=limit))
+
+
+@router.get("/admin/support-threads/{thread_id}", response_model=Envelope[SupportThreadAdminDTO], responses=ERROR_RESPONSES)
+def admin_get_support_thread(
+    thread_id: str, user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> Envelope[SupportThreadAdminDTO]:
+    view = threads.admin_get_thread(session, thread_public_id_value=thread_id, actor_user_id=user_id)
+    session.commit()  # the staff-view audit row is kept even though this is a read
+    return Envelope[SupportThreadAdminDTO](data=thread_admin_dto(session, view))
+
+
+@router.get("/admin/support-threads/{thread_id}/files/{file_ref}", response_model=Envelope[SupportFileLinkDTO],
+            responses=ERROR_RESPONSES)
+def admin_support_thread_file(
+    thread_id: str, file_ref: str = Path(max_length=80),
+    user_id: int = Depends(active_session_user_id), session: Session = Depends(get_session),
+) -> Envelope[SupportFileLinkDTO]:
+    """ADR-0026: open one evidence file of a complaint thread - live staff session + ``ops.trust_review`` + the file
+    belongs to this thread; the view is audited and the answer is a short-lived signed link (no money or bonus effect)."""
+    name, link = threads.staff_file_link(session, thread_public_id_value=thread_id, file_ref=file_ref, actor_user_id=user_id)
+    session.commit()  # keep the audit row of the view
+    return Envelope[SupportFileLinkDTO](data=SupportFileLinkDTO(ref=file_ref, name=name, url=link["url"],
+                                                                expires_at=link["expires_at"], content_type=link["content_type"]))
+
+
+@router.post("/admin/support-threads/{thread_id}/{command}", response_model=Envelope[SupportThreadAdminDTO],
+             responses=ERROR_RESPONSES)
+def admin_support_thread_command(
+    thread_id: str, command: Literal["assign", "reply", "close"], body: SupportThreadCommand, request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> JSONResponse:
+    def handler() -> SupportThreadAdminDTO:
+        assignee = identity_service.resolve_user_id(session, body.assignee_id) if body.assignee_id else None
+        threads.staff_command(session, thread_public_id_value=thread_id, actor_user_id=user_id, command=command,
+                              expected_version=body.expected_version, text_value=body.text, assignee_user_id=assignee)
+        return thread_admin_dto(session, threads.admin_get_thread(session, thread_public_id_value=thread_id, actor_user_id=user_id))
+
+    return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=body, handler=handler,
+                       resource_type="support_thread")
 
 
 # --- S13-S17 support / SOS ------------------------------------------------------------------------------------------------

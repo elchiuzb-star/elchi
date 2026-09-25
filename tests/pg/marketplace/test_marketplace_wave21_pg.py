@@ -19,15 +19,30 @@ from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.timeutil import utc_now
 from app.modules.marketplace import service as marketplace_service
 from app.modules.marketplace.models import ProposalThread, ProposalVersion
-from app.modules.marketplace.schemas import ListingCreate, ParcelDetails, ProposalCounter, ProposalCreate
-from app.modules.marketplace.views import thread_dto
+from app.modules.marketplace.schemas import ListingCreate, ParcelDetails, ProposalCounter
 from tests.pg.identity.a1_world import World, passenger_request
 from tests.pg.marketplace.test_marketplace_pg import open_thread
-from tests.pg.marketplace.test_marketplace_wave15_pg import client_proposal, published_offer
+from tests.pg.marketplace.catalog_world import synthetic_category
 
 pytestmark = pytest.mark.pg
 
 MIGRATION_0054 = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "20260915_0054_marketplace_trips_hardening.py"
+
+
+def _parcel_request_pk(world: World) -> int:
+    body = ListingCreate.model_validate({
+        "kind": "request", "service_type": "parcel",
+        "origin_stop_id": world.stop_public_ids["A"], "destination_stop_id": world.stop_public_ids["C"],
+        "departure_window_start": world.base_time.isoformat(),
+        "departure_window_end": (world.base_time + timedelta(hours=2)).isoformat(),
+        "price_basis": "total", "unit_price_minor": 7_000_000,
+        "parcel": {"parcel_type": "box", "category_id": synthetic_category(world.db), "payer": "sender",
+                   "sender": {"name": "Aziza", "phone": "+998900000201"}, "receiver": {"name": "Olim", "phone": "+998900000999"}},
+    })
+    with world.db.session() as s:
+        pk = marketplace_service.create_listing(s, owner_user_id=world.client_id, data=body).id
+        s.commit()
+    return pk
 
 
 def _count(world: World, sql: str, **params: object) -> int:
@@ -146,9 +161,7 @@ def test_q68_strict_enums_in_schema_and_db_checks(world: World) -> None:
         passenger_pk = listing.id
         s.commit()
     assert warnings == []
-    offer_id, _, _ = published_offer(world, parcel=True)
-    with world.db.session() as s:
-        parcel_pk = marketplace_service.resolve_listing_id(s, offer_id)
+    parcel_pk = _parcel_request_pk(world)  # ADR-0026: a client's parcel request carries the same details row
     for statement, pk, constraint in (
         ("UPDATE passenger_listing_details SET amenities = ARRAY['konditsioner'] WHERE listing_id = :l", passenger_pk, "ck_passenger_listing_details_amenities"),
         ("UPDATE parcel_listing_details SET parcel_type = 'furniture' WHERE listing_id = :l", parcel_pk, "ck_parcel_listing_details_parcel_type"),
@@ -173,9 +186,7 @@ def test_0054_data_step_cleans_free_text_and_upgrade_is_idempotent(world: World)
     with world.db.session() as s:
         passenger_pk = marketplace_service.create_listing(s, owner_user_id=world.client_id, data=body).id
         s.commit()
-    offer_id, _, _ = published_offer(world, parcel=True)
-    with world.db.session() as s:
-        parcel_pk = marketplace_service.resolve_listing_id(s, offer_id)
+    parcel_pk = _parcel_request_pk(world)  # ADR-0026: a client's parcel request carries the same details row
     with world.db.engine.begin() as conn:  # pre-Q68 state: no CHECKs, free text rows
         for table, name in (
             ("passenger_listing_details", "ck_passenger_listing_details_amenities"),
@@ -270,39 +281,3 @@ def test_br7_offer_pages_are_filled_past_expired_threads(world: World) -> None:
 # --- receiver contact on trip-offer parcel proposals (card item 7) -----------------------------------------
 
 
-def test_trip_offer_parcel_receiver_is_stored_and_shown_only_to_the_client(world: World) -> None:
-    listing_id, _, _ = published_offer(world, parcel=True)
-    receiver = {"name": "Nodira Qosimova", "phone": "+998977777777"}
-    parcel = {"parcel_type": "box", "weight_g": 1_000, "length_cm": 10, "width_cm": 10, "height_cm": 10, "receiver": receiver}
-    body = ProposalCreate.model_validate(
-        {**client_proposal(world, pickup="A", hour=0, price_basis="total", unit_price_minor=4_000_000).model_dump(mode="json"), "parcel": parcel}
-    )
-    with world.db.session() as s:
-        thread = marketplace_service.submit_proposal(s, listing_public_id=listing_id, actor_user_id=world.client_id, data=body)
-        s.commit()
-        thread_public_id = marketplace_service.thread_public_id(thread)
-        assert marketplace_service.parcel_receiver(marketplace_service.current_version(s, thread)) == ("Nodira Qosimova", "+998977777777")
-        client_view = thread_dto(s, thread, viewer_user_id=world.client_id, include_versions=True)
-        driver_view = thread_dto(s, thread, viewer_user_id=world.driver_id, include_versions=True)
-    assert client_view.current_version.receiver.phone == "+998977777777"
-    assert driver_view.current_version.receiver is None and "+998977777777" not in driver_view.model_dump_json()
-
-    with world.db.session() as s:  # a driver counter carries the receiver; the driver cannot set one
-        with pytest.raises(DomainError) as info:
-            marketplace_service.counter_proposal(
-                s, thread_public_id_value=thread_public_id, actor_user_id=world.driver_id,
-                data=ProposalCounter.model_validate({"expected_revision": 1, "parcel": parcel}),
-            )
-        assert info.value.code is ErrorCode.VALIDATION_ERROR
-        s.rollback()
-        countered = marketplace_service.counter_proposal(
-            s, thread_public_id_value=thread_public_id, actor_user_id=world.driver_id,
-            data=ProposalCounter(expected_revision=1, unit_price_minor=4_500_000),
-        )
-        assert marketplace_service.parcel_receiver(marketplace_service.current_version(s, countered)) == ("Nodira Qosimova", "+998977777777")
-        s.commit()
-
-    request_parcel = {"parcel_type": "box", "weight_g": 1_000, "length_cm": 10, "width_cm": 10, "height_cm": 10, "receiver": receiver}
-    assert ProposalCreate.model_validate(  # schema accepts it; the service refuses a receiver on non trip-offer parcels
-        {**client_proposal(world).model_dump(mode="json"), "parcel": request_parcel}
-    ).parcel.receiver is not None

@@ -79,6 +79,7 @@ def test_step_from_the_previous_head_equals_a_clean_install(pg_empty_db: PgDatab
     _upgrade(pg_empty_db, REVISION)
     with pg_empty_db.engine.connect() as conn:
         assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == REVISION
+    _upgrade(pg_empty_db, "head")  # later revisions (0092, ADR-0026 retirement triggers) apply on top the same way
     assert _catalogue(pg_empty_db) == _catalogue(pg_db)
 
 

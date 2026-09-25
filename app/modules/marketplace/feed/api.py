@@ -37,7 +37,6 @@ from app.modules.marketplace.feed.schemas import (
     FeedPageMeta,
     FeedReputationDTO,
     MatchDTO,
-    MatchEnvelope,
     SavedSearchCreate,
     SavedSearchDTO,
     TripAvailabilitySummaryDTO,
@@ -251,31 +250,8 @@ def get_feed(
 # --- M2 ---------------------------------------------------------------------------------------------------------------
 
 
-@router.get("/listings/{listing_id}/matches", response_model=MatchEnvelope, responses=ERROR_RESPONSES)
-def get_listing_matches(
-    listing_id: str,
-    sort: FeedSort = Query(default=FeedSort.RECOMMENDED),
-    include_alternatives: bool = Query(default=False),
-    cursor: str | None = Query(default=None, max_length=512),
-    limit: int = Query(default=FEED_DEFAULT_LIMIT, ge=1, le=FEED_MAX_LIMIT),
-    user_id: int = Depends(current_user_id),
-    session: Session = Depends(get_session),
-) -> JSONResponse:
-    scope = page_scope("listing_matches", viewer=user_id, listing=listing_id, sort=sort.value, alternatives=include_alternatives)
-    page = feed_service.listing_matches(
-        session,
-        listing_public_id=listing_id,
-        viewer_user_id=user_id,
-        sort=sort,
-        include_alternatives=include_alternatives,
-        after_key=_decode_key(cursor, scope),
-        limit=limit,
-    )
-    items = [match_dto(session, item, page.ranking_version) for item in page.items]
-    return JSONResponse(content=envelope_body(items, _meta(page, scope)))
-
-
-# --- M3-M5 ------------------------------------------------------------------------------------------------------------
+# Q138 (ADR-0026): GET /listings/{id}/matches is removed - it paired a client request with driver listings (and a
+# driver listing with requests); with driver listings retired the driver's request feed is the only match surface.
 
 
 @router.post("/saved-searches", response_model=Envelope[SavedSearchDTO], status_code=201, responses=ERROR_RESPONSES)

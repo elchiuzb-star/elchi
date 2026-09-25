@@ -88,7 +88,6 @@ from app.contracts.state_machines import (
     CASH_COLLECTION,
     COMMISSION,
     CUSTODY_CASE,
-    DELIVERED_OPERATOR_QUEUE_AFTER,
     NO_SHOW_REVIEW,
     TRIP,
     TRIP_CANCEL_REFUSED_WITH_PENDING_NO_SHOW_REVIEW,
@@ -116,7 +115,7 @@ from app.modules.bookings.models import (
 from app.modules.identity import service as identity_service
 from app.modules.marketplace import intents as marketplace_intents
 from app.modules.marketplace import service as marketplace_service
-from app.modules.marketplace.models import Listing, ProposalThread, ProposalVersion
+from app.modules.marketplace.models import Listing, ProposalVersion
 from app.modules.marketplace.rules import check_proposal_quantity
 from app.modules.platform import service as platform_service
 from app.modules.promotions import booking as promo_booking
@@ -677,6 +676,10 @@ def accept_proposal(
         raise DomainError(code, details={"status": version.status})
     if side is ActorSide(version.author_side):
         raise DomainError(ErrorCode.NOT_PROPOSAL_RECIPIENT)  # AC05: the author never accepts its own version
+    if listing.kind == ListingKind.TRIP_OFFER.value:
+        # Q138 (ADR-0026): a negotiation left over on a retired driver listing never becomes a booking. Checked before
+        # any capacity, promo lot or hold is touched; the retire job closes such threads with a technical reason.
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"kind": ListingKind.TRIP_OFFER.value})
     # 4a. ADR-0025: the client's saved request (FOR NO KEY UPDATE, threads -> trip_intents): still active and on the
     # terms this offer was made against. A parallel accept of another offer of the same request waits here and is
     # refused once this one commits - before any capacity, promo lot or hold is touched.
@@ -685,6 +688,9 @@ def accept_proposal(
         # §5.2: a new parcel booking needs an approved prohibited-items policy (fail-closed in production).
         # Only the *new* obligation is gated; everything already accepted keeps running to its end.
         marketplace_service.assert_parcel_policy_ready(session)
+        from app.modules.marketplace import parcel_catalog
+
+        parcel_catalog.assert_catalog_ready(session)  # Q140
     if ensure_aware_utc(version.expires_at) <= now:
         raise DomainError(ErrorCode.PROPOSAL_EXPIRED)  # the frozen fee quote expires with it (AC43)
     # Q54: the agreement is compared on the listing's *terms* version (listings.version counts every edit).
@@ -827,6 +833,7 @@ def accept_proposal(
         baggage_ml=demand.baggage_ml,
         cargo_weight_g=demand.cargo_weight_g,
         cargo_volume_ml=demand.cargo_volume_ml,
+        parcel_category_item_id=version.parcel_category_item_id,  # Q140: frozen after insert (trigger 0092)
         price_basis=version.price_basis,
         unit_price_minor=version.unit_price_minor,
         total_minor=version.total_minor,
@@ -1464,7 +1471,19 @@ def _complete(session: Session, booking: Booking, *, command: str, actor_user_id
     session.flush()
     state = dispute_state(session, booking.id) if booking.commission_status == CommissionStatus.HELD.value else "clear"
     _promo_event(session, booking, "booking_completed", now, now)
-    if rules.capture_on_completion(commission_status=booking.commission_status, blocking_dispute_open=state != "clear"):
+    staff_parcel = booking.service_type == ServiceType.PARCEL.value and command == "complete_with_evidence"
+    if staff_parcel and booking.commission_status == CommissionStatus.HELD.value:
+        # Q144 (ADR-0026, interim while D-1 is open): a staff member records that a parcel was completed; that is not
+        # a finance decision. The commission stays held and waits in the finance queue - `finalize_fee`
+        # (`finance.fee_finalize`) captures it. An operator's booking command never moves money by itself.
+        reason_code = CommissionReviewReason.PARCEL_STAFF_COMPLETION
+        booking.finance_review_reason = reason_code.value
+        booking.finance_review_at = now
+        session.flush()
+        _emit(session, booking, EventType.COMMISSION_FINANCE_REVIEW_REQUIRED,
+              {"booking_id": booking_public_id(booking), "reason_code": reason_code.value,
+               "amount_minor": _held_commission_minor(session, booking), "currency": booking.currency}, now)
+    elif rules.capture_on_completion(commission_status=booking.commission_status, blocking_dispute_open=state != "clear"):
         _capture_fee(session, booking, actor_user_id=actor_user_id, side=ActorSide.SYSTEM, command_actor=None, now=now)
     elif state == "unavailable":
         reason_code = CommissionReviewReason.DISPUTE_MODULE_UNAVAILABLE
@@ -1723,6 +1742,7 @@ def operator_command(
     booking = lock_booking(session, snapshot.id)
     _check_version(booking.version, expected_version)
     service = ServiceType(booking.service_type)
+    status_before = booking.service_status
 
     if command is OperatorBookingCommand.COMPLETE_WITH_EVIDENCE:
         proof = _proof_row(session, booking, ProofKind.OPERATOR_EVIDENCE, lock=True)
@@ -1740,6 +1760,17 @@ def operator_command(
                             side=side, now=now, reason=reason)
         booking.service_ended_at = now
         _touch(booking, now)
+    elif command is OperatorBookingCommand.MARK_DELIVERED:
+        # Q139 (ADR-0026): the parcel outcome is a staff record with a reason (and optional evidence files); it is not
+        # completion and moves no money - completion stays `complete_with_evidence` (capture happens there, if at all).
+        if service is not ServiceType.PARCEL:
+            raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"command": command.value, "service_type": service.value})
+        _set_service_status(session, booking, target=PC.DELIVERED.value, command="mark_delivered",
+                            actor_user_id=actor_user_id, side=side, now=now, reason=reason)
+        booking.service_ended_at = now
+        _touch(booking, now)
+        session.flush()
+        _resolve_custody(session, booking, actor_user_id=actor_user_id, side=side, note=reason, now=now)
     elif command is OperatorBookingCommand.REQUIRE_RETURN:
         if service is not ServiceType.PARCEL:
             raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"command": command.value, "service_type": service.value})
@@ -1786,7 +1817,9 @@ def operator_command(
         _touch(booking, now)
     else:  # pragma: no cover - every command is handled above
         raise DomainError(ErrorCode.NOT_FOUND)
-    _audit_operator(session, booking, command, actor_user_id, reason)
+    _audit_operator(session, booking, command, actor_user_id, reason, service_status_from=status_before,
+                    service_status_to=booking.service_status, commission_status=booking.commission_status,
+                    evidence_file_ids=list(evidence_file_ids))
     session.flush()
     return booking
 
@@ -1802,10 +1835,13 @@ def _decide_review(session: Session, booking: Booking, review: NoShowReview, *, 
     session.flush()
 
 
-def _audit_operator(session: Session, booking: Booking, command: OperatorBookingCommand, actor_user_id: int, reason: str) -> None:
+def _audit_operator(session: Session, booking: Booking, command: OperatorBookingCommand, actor_user_id: int, reason: str,
+                    **basis: object) -> None:
+    """Every staff booking command leaves who, what, why and - for an outcome record - what it was based on
+    (Q144: the reason text, the evidence file references and the state it moved from)."""
     session.add(
         AuditLog(actor_id=actor_user_id, entity_type="booking", entity_id=None, action=f"booking_{command.value}",
-                 details={"booking_id": booking_public_id(booking), "reason": reason, "version": booking.version})
+                 details={"booking_id": booking_public_id(booking), "reason": reason, "version": booking.version, **basis})
     )
 
 
@@ -1908,6 +1944,13 @@ def trip_action(
         if pending:
             raise DomainError(ErrorCode.TRIP_HAS_UNRESOLVED_BOOKINGS, details={"bookings": pending, "reason": "bookings_still_confirmed"})
         previous = trips_service.transition_trip(session, trip=trip, target=target, command=action, reason=reason, now=now)
+        # Q139 (ADR-0026): a parcel has no driver "picked up" step any more - it is on the way with the trip. This is
+        # the trip's departure, not a claim that the parcel was handed over; delivery is recorded by an operator.
+        for booking in bookings:
+            if booking.service_type == ServiceType.PARCEL.value and booking.service_status == PC.AWAITING_PICKUP.value:
+                _set_service_status(session, booking, target=PC.IN_TRANSIT.value, command="trip_departed",
+                                    actor_user_id=None, side=ActorSide.SYSTEM, now=now)
+                _touch(booking, now)
     elif action == "complete":
         blocked = _unresolved_for_completion(session, bookings)
         if blocked:
@@ -2042,6 +2085,11 @@ def report_cash_receipt(
     side = participant_side(snapshot, actor_user_id)
     if side is None:
         raise DomainError(ErrorCode.NOT_FOUND)
+    if snapshot.service_type == ServiceType.PARCEL.value:
+        # Q139 (ADR-0026): no "I paid / I got the money" step for a parcel - the agreed price and the amount due are
+        # shown on the booking; nobody reports or confirms the cash in the app.
+        raise DomainError(ErrorCode.INVALID_STATE_TRANSITION,
+                          details={"machine": "cash_collection", "reason": "parcel_cash_receipts_retired"})
     booking = lock_booking(session, snapshot.id)
     _check_version(booking.version, expected_version)
     _promo_features_guard(session, booking, client_features, "report_cash_receipt", side)
@@ -2235,8 +2283,9 @@ def _amendment_terms(booking: Booking, changes: dict[str, Any]) -> tuple[int, in
     unit = int(changes.get("unit_price_minor", booking.unit_price_minor))
     if booking.service_type == ServiceType.PARCEL.value and quantity != 1:
         raise DomainError(ErrorCode.QUANTITY_MISMATCH, details={"required_quantity": 1, "quantity": quantity})
-    if booking.request_listing_id is not None and quantity != booking.quantity:
-        raise DomainError(ErrorCode.QUANTITY_MISMATCH, details={"required_quantity": booking.quantity, "quantity": quantity})  # D9
+    if quantity != booking.quantity and not rules.quantity_amendable(booking.service_type,
+                                                                     from_request=booking.request_listing_id is not None):
+        raise DomainError(ErrorCode.QUANTITY_MISMATCH, details={"required_quantity": booking.quantity, "quantity": quantity})  # D9, Q145
     if quantity == booking.quantity and unit == booking.unit_price_minor:
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"reason": "no_change"})
     total = money_total_minor(unit, quantity) if booking.price_basis == "per_seat" else money_total_minor(unit, 1)
@@ -2676,10 +2725,11 @@ def record_staff_contact_view(
 
 
 def _awaiting_confirmation_filter(now: datetime):  # noqa: ANN202 - SQL expression
-    """Passenger ``arrived`` 24 h (§9.5) and parcel ``delivered`` 24 h without sender confirmation (Q65)."""
+    """Passenger ``arrived`` 24 h without client confirmation (§9.5). Q139 (ADR-0026): a parcel has no sender
+    confirmation any more, so every parcel ``delivered`` is waiting for staff completion at once (no 24 h wait)."""
     return or_(
         (Booking.service_status == PB.ARRIVED.value) & (Booking.service_ended_at <= now - rules.CONFIRMATION_WINDOW),
-        (Booking.service_status == PC.DELIVERED.value) & (Booking.service_ended_at <= now - DELIVERED_OPERATOR_QUEUE_AFTER),
+        (Booking.service_type == ServiceType.PARCEL.value) & (Booking.service_status == PC.DELIVERED.value),
     )
 
 
@@ -2776,7 +2826,7 @@ def _not_signalled(event_type: EventType, id_column):  # noqa: ANN001, ANN202 - 
 
 def emit_confirmation_overdue_signals(session: Session, *, now: datetime | None = None, limit: int = SIGNAL_BATCH_LIMIT) -> int:
     """Worker (A10a): staff event ``booking.confirmation_overdue`` once per booking (dedup key) for passenger ``arrived``
-    and parcel ``delivered`` bookings unconfirmed for 24 h (§9.5, Q65) - the same set as the B12
+    unconfirmed for 24 h (§9.5) and every parcel ``delivered`` (Q139: staff complete it) - the same set as the B12
     ``awaiting_confirmation`` queue. Writes only outbox rows; no commit. Returns the number emitted."""
     now = _now(now)
     candidates = session.execute(
@@ -2788,7 +2838,8 @@ def emit_confirmation_overdue_signals(session: Session, *, now: datetime | None 
     emitted = 0
     for booking in candidates:
         key = f"{EventType.BOOKING_CONFIRMATION_OVERDUE.value}:{booking.id}"
-        window = DELIVERED_OPERATOR_QUEUE_AFTER if booking.service_status == PC.DELIVERED.value else rules.CONFIRMATION_WINDOW
+        # Q139 (ADR-0026): a parcel `delivered` waits for staff from the moment it was recorded (nobody else confirms)
+        window = timedelta(0) if booking.service_status == PC.DELIVERED.value else rules.CONFIRMATION_WINDOW
         platform_service.enqueue_event(
             session,
             EventEnvelope(EventType.BOOKING_CONFIRMATION_OVERDUE, "booking", booking_public_id(booking), booking.version, now, {

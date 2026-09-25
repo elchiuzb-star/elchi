@@ -37,17 +37,13 @@ def test_the_generated_client_types_are_not_stale() -> None:
 
 
 @pytest.mark.skipif(not CONNECTED_APP.is_file(), reason="mobile-app sources are not present")
-def test_the_count_reaches_a_screen_on_both_sides() -> None:
+def test_the_count_reaches_the_request_owner() -> None:
     source = CONNECTED_APP.read_text(encoding="utf-8")
     assert "viewCountLabel" in source, "the field is fetched and never shown"
     # The client's own request, in the list and on its detail screen, is drawn by ListingCard.
     card = source.split("function ListingCard", 1)[1].split("\nfunction ", 1)[0]
     assert "viewCountLabel(listing.view_count)" in card, "a client cannot see who looked at their request"
-    # The driver's own trip offers are drawn on the trip card.
-    opening = re.search(r'if \(screen === "driver-routes"(?: [^)]*)?\) \{', source)
-    assert opening
-    routes = source[opening.end():].split('\n    if (screen === "', 1)[0]
-    assert "viewCountLabel(offer.view_count)" in routes, "a driver cannot see who looked at their trip offer"
+    # ADR-0026 (Q138): drivers publish no listings, so there is no driver-side trip offer count to show any more.
 
 
 @pytest.mark.skipif(not CONNECTED_APP.is_file(), reason="mobile-app sources are not present")

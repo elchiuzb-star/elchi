@@ -27,7 +27,7 @@ export type SidebarItem = {
 export function clientSidebarItems(unread: number): SidebarItem[] {
   return [
     { id: "client-home", label: translate("nav.home"), description: translate("nav.homeHint"), icon: Home },
-    { id: "client-offers", label: translate("nav.driverOffers"), description: translate("nav.driverOffersHint"), icon: Truck },
+    // Q138 (ADR-0026): no driver listings to browse - clients publish requests and compare the offers they get.
     { id: "client-orders", label: translate("nav.orders"), description: translate("nav.ordersHint"), icon: Package },
     { id: "client-notifications", label: translate("nav.messages"), description: translate("nav.messagesHint"), icon: Bell, badge: unread },
     { id: "client-profile", label: translate("nav.profile"), description: translate("nav.profileHint"), icon: User },

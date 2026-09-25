@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.contracts.enums import (
     ActorSide,
@@ -34,6 +34,7 @@ from app.modules.geo.schemas import DistrictRefDTO
 from app.modules.marketplace.ports import get_ports
 from app.modules.marketplace.rules import MAX_PRICE_REVISIONS_PER_SIDE, display_name
 from app.modules.marketplace.schemas import (
+    ProposalDriverSummaryDTO,
     BaggageDetails,
     ContactDetails,
     FeeQuoteDTO,
@@ -126,7 +127,14 @@ def _parcel(row: ParcelListingDetails | None, *, photo_visible: bool) -> ParcelD
     # nor the key - a stored reference is not a public identifier.
     photo = parcel_photo_ref(row.photo_file_id) if photo_visible else None
 
+    category = None
+    if row.parcel_category_item_id is not None:
+        from app.modules.marketplace import parcel_catalog
+
+        category = parcel_catalog.item_dto(parcel_catalog.get_item(object_session(row), row.parcel_category_item_id))
     return ParcelDetails(
+        category_id=category["id"] if category else None,
+        category=category,
         parcel_type=row.parcel_type,
         weight_g=row.weight_g,
         length_cm=row.length_cm,
@@ -152,6 +160,15 @@ def _parcel(row: ParcelListingDetails | None, *, photo_visible: bool) -> ParcelD
         max_dimension_cm=row.max_dimension_cm,
         accepted_parcel_types=list(row.accepted_parcel_types or []),
     )
+
+
+def _category_of(session: Session, parcel: ParcelListingDetails | None) -> dict | None:
+    """Q140: the category and its limits, shown to the driver before proposing (no personal data in it)."""
+    if parcel is None or parcel.parcel_category_item_id is None:
+        return None
+    from app.modules.marketplace import parcel_catalog
+
+    return parcel_catalog.item_dto(parcel_catalog.get_item(session, parcel.parcel_category_item_id))
 
 
 def _trip_public_id(session: Session, trip_id: int | None) -> str | None:
@@ -268,6 +285,7 @@ def listing_public_dto(session: Session, listing: Listing) -> ListingPublicDTO:
         currency=Currency(listing.currency),
         reputation=None,
         parcel_type=ParcelType(parcel.parcel_type) if parcel and parcel.parcel_type else None,
+        parcel_category=_category_of(session, parcel),
         trip_id=_trip_public_id(session, listing.trip_id),
         view_count=listing.view_count,
         published_at=ensure_aware_utc(listing.published_at) if listing.published_at else None,
@@ -416,6 +434,30 @@ def thread_dto(
         versions=[_version_dto(session, thread, v, viewer_side, stops, policies) for v in versions] if include_versions else None,
         booking_id=_booking_id(session, thread),
         trip_intent_id=_trip_intent_id(session, thread) if viewer_side is ActorSide.CLIENT else None,
+        driver_summary=_driver_summary(session, thread, listing) if viewer_side is ActorSide.CLIENT else None,
+    )
+
+
+def _driver_summary(session: Session, thread: ProposalThread, listing: Listing) -> ProposalDriverSummaryDTO | None:
+    """ADR-0026: with no driver listings left, the client compares the answers to its own request by this - vehicle
+    class, seats and the rating bucket with its count (U6), exactly the anonymous Q40 set; nothing that identifies."""
+    if thread.trip_id is None:
+        return None
+    trip = session.get(Trip, thread.trip_id)
+    if trip is None:
+        return None
+    summary = None
+    try:
+        from app.modules.trust_support import service as trust_support_service
+
+        summary = trust_support_service.reputation_summaries(
+            session, [thread.driver_user_id], service_type=listing.service_type).get(thread.driver_user_id)
+    except Exception:  # noqa: BLE001 - an unknown reputation is shown as unknown, never as a default (AC36)
+        summary = None
+    return ProposalDriverSummaryDTO(
+        vehicle_class=vehicle_class(trip.seat_capacity), seat_capacity=trip.seat_capacity,
+        rating_bucket=_bucket_of(summary), rating_count=summary.rating_count if summary is not None else 0,
+        completed_bookings=summary.completed_bookings if summary is not None else None,
     )
 
 

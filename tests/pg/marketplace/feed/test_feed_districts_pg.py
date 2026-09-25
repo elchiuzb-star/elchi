@@ -166,7 +166,7 @@ def test_a_saved_search_remembers_the_district(world: World, districts: dict[str
     body = SavedSearchCreate.model_validate(
         {
             "service_type": "passenger",
-            "side": "offers",
+            "side": "requests",  # ADR-0026: a driver's search of client requests
             "origin_district_id": districts["C"],
             "destination_district_id": districts["D"],
             "time_window_start": world.base_time.isoformat(),
@@ -175,7 +175,7 @@ def test_a_saved_search_remembers_the_district(world: World, districts: dict[str
         }
     )
     with world.db.session() as s:
-        row = feed_service.create_saved_search(s, user_id=world.client_id, data=body)
+        row = feed_service.create_saved_search(s, user_id=world.driver_id, data=body)
         s.commit()
         assert row.origin_district_id is not None and row.origin_stop_id is None and row.origin_region_id is None
         stored = s.execute(

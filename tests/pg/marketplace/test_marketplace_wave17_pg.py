@@ -17,7 +17,6 @@ from app.modules.marketplace.views import listing_dto
 from tests.pg.identity.a1_world import World, passenger_request
 from tests.pg.marketplace.test_a1_api_pg import auth, client  # noqa: F401  (fixture)
 from tests.pg.marketplace.test_marketplace_pg import driver_trip, open_thread, proposal, published_request
-from tests.pg.marketplace.test_marketplace_wave15_pg import client_proposal, published_offer
 
 pytestmark = pytest.mark.pg
 
@@ -74,7 +73,7 @@ def test_r2a_enum_fields_are_strict_instead_of_filtered(world: World) -> None:
     parcel = {"parcel_type": "box @kuryer_uz", "weight_g": 1_000, "length_cm": 10, "width_cm": 10, "height_cm": 10}
     with pytest.raises(ValidationError):
         ProposalCreate.model_validate(
-            {**client_proposal(world, pickup="A", hour=0, price_basis="total", unit_price_minor=4_000_000).model_dump(mode="json"), "parcel": parcel}
+            {**proposal(world, None, quantity=1).model_dump(mode="json"), "price_basis": "total", "parcel": parcel}
         )
 
 
@@ -120,19 +119,6 @@ def test_n3_request_proposal_window_must_meet_its_own_pickup_window(world: World
     with world.db.session() as s, pytest.raises(DomainError) as info:
         marketplace_service.submit_proposal(s, listing_public_id=listing_id, actor_user_id=world.driver_id, data=late)
     assert info.value.code is ErrorCode.TIME_WINDOW_CONFLICT
-
-
-def test_n7_untyped_parcel_rejected_when_offer_restricts_types(world: World) -> None:
-    listing_id, _, _ = published_offer(world, parcel=True)  # accepted_parcel_types = ["box"]
-    body = ProposalCreate.model_validate(
-        {
-            **client_proposal(world, pickup="A", hour=0, price_basis="total", unit_price_minor=4_000_000).model_dump(mode="json"),
-            "parcel": {"weight_g": 1_000, "length_cm": 10, "width_cm": 10, "height_cm": 10},
-        }
-    )
-    with world.db.session() as s, pytest.raises(DomainError) as info:
-        marketplace_service.submit_proposal(s, listing_public_id=listing_id, actor_user_id=world.client_id, data=body)
-    assert info.value.code is ErrorCode.VALIDATION_ERROR and info.value.details == {"field": "parcel.parcel_type"}
 
 
 # --- Q53, Q54 ---------------------------------------------------------------------------------------

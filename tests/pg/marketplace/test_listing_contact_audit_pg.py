@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.pg.marketplace.catalog_world import synthetic_category
+
 from datetime import timedelta
 
 import pytest
@@ -34,7 +36,7 @@ def test_staff_listing_phone_view_is_audited_without_values(client, world: World
             "price_basis": "total",
             "unit_price_minor": 7_000_000,
             "parcel": {
-                "parcel_type": "documents", "weight_g": 500, "length_cm": 10, "width_cm": 10, "height_cm": 5, "payer": "sender",
+                "parcel_type": "documents", "category_id": synthetic_category(world.db), "payer": "sender",  # Q140
                 "sender": {"name": "Aziza Karimova", "phone": SENDER_PHONE},
                 "receiver": {"name": "Nodira Qosimova", "phone": RECEIVER_PHONE},
             },

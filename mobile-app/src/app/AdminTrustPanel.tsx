@@ -43,6 +43,7 @@ import {
 } from "../api/v2/admin-trust.api";
 import { newIdempotencyKey, type ApiWarning, type Schemas } from "../api/v2/http";
 import { capabilities, type CapabilitiesDTO } from "../api/v2/ops.api";
+import { parcelCategories, type ParcelCategoryDTO } from "../api/v2/marketplace.api";
 import { formatDateTime, formatMinor } from "../utils/v2Format";
 import { v2ErrorMessage, warningMessage } from "../utils/v2Errors";
 import { Inbox, Loader2, RefreshCw } from "./ui/icons";
@@ -247,6 +248,7 @@ const COMMAND_LABEL: Record<OperatorBookingCommand, string> = {
   finalize_fee: "Komissiyani yakunlash",
   cancel: "Bronni bekor qilish",
   reissue_proof_code: "Kodni qayta berish",
+  mark_delivered: "Yetkazildi deb qayd etish",
 };
 
 /** The server's `OPERATOR_COMMAND_CAPABILITY`, mirrored only to hide what would be refused anyway. */
@@ -259,6 +261,7 @@ export const COMMAND_CAPABILITY: Record<OperatorBookingCommand, string> = {
   return_to_sender: "ops.booking_command",
   resolve_custody_case: "ops.booking_command",
   reissue_proof_code: "ops.booking_command",
+  mark_delivered: "ops.booking_command",
   finalize_fee: "finance.fee_finalize",
   cancel: "ops.booking_cancel",
 };
@@ -271,12 +274,8 @@ const FAULT_LABEL: Array<["" | FaultSide, string]> = [
   ["none", "Hech kim aybdor emas (asosli bekor)"],
 ];
 
-const PROOF_LABEL: Array<[ProofKind, string]> = [
-  ["boarding_code", "Chiqish kodi"],
-  ["pickup_code", "Olib ketish kodi"],
-  ["delivery_code", "Topshirish kodi"],
-  ["return_code", "Qaytarish kodi"],
-];
+// ADR-0026 (Q139): only the passenger boarding code is still issued; parcel codes are retired.
+const PROOF_LABEL: Array<[ProofKind, string]> = [["boarding_code", "Chiqish kodi"]];
 
 /** Which commands make sense for this booking right now. The server still has the last word. */
 export function applicableCommands(booking: AdminBookingDTO): OperatorBookingCommand[] {
@@ -284,9 +283,11 @@ export function applicableCommands(booking: AdminBookingDTO): OperatorBookingCom
   if (booking.no_show_review?.status === "pending") out.push("confirm_no_show", "reject_no_show");
   out.push("complete_with_evidence");
   if (booking.service_type === "passenger") out.push("drop_off");
-  if (booking.service_type === "parcel") out.push("require_return", "return_to_sender", "resolve_custody_case");
+  // ADR-0026 (Q139): a parcel's outcome is recorded here - delivered (with a reason) or the return flow.
+  if (booking.service_type === "parcel") out.push("mark_delivered", "require_return", "return_to_sender", "resolve_custody_case");
   if (booking.commission_status === "held") out.push("finalize_fee");
-  out.push("reissue_proof_code", "cancel");
+  if (booking.service_type === "passenger") out.push("reissue_proof_code");
+  out.push("cancel");
   return out;
 }
 
@@ -1017,7 +1018,7 @@ export function tashkentIso(local: string): string | null {
 const EMPTY_FORM = {
   owner: "",
   consent: "",
-  kind: "request" as "request" | "trip_offer",
+  kind: "request" as const,  // Q138 (ADR-0026): drivers publish no listings - on-behalf is a client request only
   service: "passenger" as "passenger" | "parcel",
   tripId: "",
   originStop: "",
@@ -1028,7 +1029,7 @@ const EMPTY_FORM = {
   price: "",
   seats: "1",
   parcelType: "box" as (typeof PARCEL_TYPES)[number],
-  weightKg: "",
+  categoryId: "",
   comment: "",
 };
 
@@ -1040,13 +1041,13 @@ export function onBehalfBody(form: typeof EMPTY_FORM): ListingOnBehalfBody | nul
   if (!form.owner.trim() || form.consent.trim().length < 3 || !start || !end || !(price > 0)) return null;
   if (!form.originStop.trim() || !form.destinationStop.trim()) return null;
   if (form.service === "passenger" && !(seats >= 1 && seats <= 8)) return null;
-  const weight = form.weightKg.trim() ? Math.round(Number(form.weightKg) * 1000) : null;
+  if (form.service === "parcel" && !form.categoryId.trim()) return null;  // Q140: a size category, no typed weight
   return {
     owner_user_id: form.owner.trim(),
     consent_reference: form.consent.trim(),
     kind: form.kind,
     service_type: form.service,
-    trip_id: form.kind === "trip_offer" && form.tripId.trim() ? form.tripId.trim() : null,
+    trip_id: null,
     origin_stop_id: form.originStop.trim(),
     destination_stop_id: form.destinationStop.trim(),
     departure_window_start: start,
@@ -1063,13 +1064,17 @@ export function onBehalfBody(form: typeof EMPTY_FORM): ListingOnBehalfBody | nul
         : null,
     parcel:
       form.service === "parcel"
-        ? { parcel_type: form.parcelType, weight_g: weight && weight > 0 ? weight : null, fragile: false }
+        ? { parcel_type: form.parcelType, category_id: form.categoryId.trim(), fragile: false }
         : null,
   };
 }
 
 function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [categories, setCategories] = useState<ParcelCategoryDTO[]>([]);
+  useEffect(() => {
+    parcelCategories().then((catalog) => setCategories(catalog.items ?? [])).catch(() => setCategories([]));
+  }, []);
   const [created, setCreated] = useState<{ listing: AdminListingDTO; warnings: ApiWarning[] } | null>(null);
   const body = onBehalfBody(form);
   const set = <K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) =>
@@ -1106,23 +1111,12 @@ function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
             className={INPUT}
           />
         </Field>
-        <Field label="E'lon turi">
-          <select value={form.kind} onChange={(event) => set("kind", event.target.value as "request" | "trip_offer")} className={INPUT}>
-            <option value="request">So'rov (mijoz)</option>
-            <option value="trip_offer">Safar taklifi (haydovchi)</option>
-          </select>
-        </Field>
         <Field label="Xizmat">
           <select value={form.service} onChange={(event) => set("service", event.target.value as "passenger" | "parcel")} className={INPUT}>
             <option value="passenger">Yo'lovchi</option>
             <option value="parcel">Pochta</option>
           </select>
         </Field>
-        {form.kind === "trip_offer" ? (
-          <Field label="Safar ID">
-            <input value={form.tripId} onChange={(event) => set("tripId", event.target.value)} className={INPUT} />
-          </Field>
-        ) : null}
         <Field label="Jo'nash bekati ID *">
           <input aria-label="Jo'nash bekati" value={form.originStop} onChange={(event) => set("originStop", event.target.value)} className={INPUT} />
         </Field>
@@ -1167,8 +1161,13 @@ function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
                 ))}
               </select>
             </Field>
-            <Field label="Og'irligi (kg, ixtiyoriy)">
-              <input inputMode="decimal" value={form.weightKg} onChange={(event) => set("weightKg", event.target.value)} className={INPUT} />
+            <Field label="O'lcham toifasi *" hint="GET /parcel-categories dagi toifa (pct_...). Raqamli o'lcham kiritilmaydi (Q140).">
+              <select aria-label="O'lcham toifasi" value={form.categoryId} onChange={(event) => set("categoryId", event.target.value)} className={INPUT}>
+                <option value="">Tanlang</option>
+                {categories.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name_uz}</option>
+                ))}
+              </select>
             </Field>
           </>
         )}

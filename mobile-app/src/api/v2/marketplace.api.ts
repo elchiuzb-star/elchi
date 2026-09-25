@@ -200,83 +200,13 @@ export function rejectProposal(threadId: string, expectedRevision: number, reaso
   return v2Request<ProposalThreadDTO>(`/proposals/${threadId}/reject`, { method: "POST", body, idempotencyKey: newIdempotencyKey() });
 }
 
-/**
- * The client's half of the two-sided auction: the driver trip offers that serve this direction.
- *
- * ELCHI is a marketplace both ways round (Q92). The driver publishes a journey with their own starting price
- * and the client answers it with theirs, exactly as the client publishes a request and the driver answers that.
- * This is the same `/feed` the driver uses, asked from the other side - the server ranks it for a client
- * (`_client_components`) and hides offers from drivers this person cannot deal with.
- *
- * Each end is a stop or a district, like `requestsFeed`: a district widens the question from "this exact stop"
- * to "anywhere in this district", still answered on verified stops and the confirmed route order.
- */
-export function offersFeed(params: {
-  service_type?: string;
-  origin_stop_id?: string;
-  destination_stop_id?: string;
-  origin_district_id?: string;
-  destination_district_id?: string;
-  date_from?: string;
-  date_to?: string;
-  seats?: number;
-  limit?: number;
-  /** The near misses, as their own `alternative` group - the client's half of the same widening. */
-  include_alternatives?: boolean;
-}) {
-  const from = params.date_from ?? new Date().toISOString();
-  const to = params.date_to ?? new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
-  return v2RequestFull<FeedItemDTO[]>("/feed", {
-    query: {
-      side: "offers",
-      service_type: params.service_type ?? "parcel",
-      date_from: from,
-      date_to: to,
-      origin_stop_id: params.origin_stop_id,
-      destination_stop_id: params.destination_stop_id,
-      origin_district_id: params.origin_district_id,
-      destination_district_id: params.destination_district_id,
-      seats: params.seats,
-      limit: params.limit,
-      include_alternatives: params.include_alternatives ?? true,
-    },
-  });
-}
-
-export type MatchDTO = Schemas["MatchDTO"];
+export type ParcelCategoryDTO = Schemas["ParcelCategoryDTO"];
+export type ParcelCategoryCatalogDTO = Schemas["ParcelCategoryCatalogDTO"];
 
 /**
- * M2: what can serve **this** listing, ranked.
- *
- * Different from `/feed` in what it is asked with. The feed takes two ends the person just typed; this takes a
- * listing they already published, so the ranking is against the terms they actually committed to - their
- * window, their seat count, their price - and the client does not re-enter any of it. Only the owner may ask;
- * anyone else gets 404.
- *
- * Q88: a listing whose ends are places on the map is answered here too. It used to return an empty page,
- * because the absent stop ids were passed straight to the matcher.
+ * Q140 (ADR-0026): the parcel size categories a sender picks from - the client never types dimensions or weight.
+ * `confirmed=false` means no approved catalog yet; `synthetic=true` marks demo values (never real tariffs).
  */
-export function listingMatches(
-  listingId: string,
-  params: { sort?: string; limit?: number; cursor?: string; include_alternatives?: boolean } = {},
-) {
-  // Same reasoning as the feed: the near misses come back as their own group, after everything that really
-  // matches, so a published offer with no takers still shows its owner where to look.
-  const query = { ...params, include_alternatives: params.include_alternatives ?? true };
-  return v2RequestFull<MatchDTO[]>(`/listings/${listingId}/matches`, { query });
-}
-
-export function feed(params: {
-  side: string;
-  service_type?: string;
-  corridor_id?: string;
-  origin_stop_id?: string;
-  destination_stop_id?: string;
-  origin_district_id?: string;
-  destination_district_id?: string;
-  origin_region_id?: string;
-  destination_region_id?: string;
-  limit?: number;
-}) {
-  return v2RequestFull<FeedItemDTO[]>("/feed", { query: params });
+export function parcelCategories() {
+  return v2Request<ParcelCategoryCatalogDTO>("/parcel-categories");
 }

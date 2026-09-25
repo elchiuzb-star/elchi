@@ -294,3 +294,75 @@ class FraudSignalCommand(ContractModel):
     expected_version: StrictInt
     status: Literal["under_review", "dismissed", "confirmed"]
     note: str | None = Field(default=None, max_length=DECISION_NOTE_MAX_LENGTH)
+
+
+# --- ADR-0026 (Q141): booking-bound operator chat -------------------------------------------------------------------------
+
+SUPPORT_THREAD_TEXT_MAX_LENGTH = 4000
+
+
+class SupportThreadOpen(ContractModel):
+    """The complaint button. ``text`` is optional: the thread can be opened first and written into after."""
+
+    text: str | None = Field(default=None, max_length=SUPPORT_THREAD_TEXT_MAX_LENGTH)
+
+
+class SupportMessageCreate(ContractModel):
+    text: str = Field(min_length=1, max_length=SUPPORT_THREAD_TEXT_MAX_LENGTH)
+
+
+class SupportMessageDTO(ContractModel):
+    id: str
+    # to the requester: their own lines are "me"; staff lines are "operator"; carried-over decisions are "system"
+    author: Literal["me", "operator", "system", "client", "driver"]
+    text: str
+    has_files: bool = False
+    created_at: UtcDateTime
+    # staff view only (0093): the requester never receives such a line, so for them this is always false
+    staff_only: bool = False
+
+
+class SupportThreadDTO(ContractModel):
+    id: str
+    booking_id: str
+    requester_side: Literal["client", "driver"]
+    status: Literal["open", "closed"]
+    # waiting = no staff member has picked it up yet (the queue); assigned; answered; closed. No response time promised.
+    staff_status: Literal["waiting", "assigned", "answered", "closed"]
+    message_count: int
+    version: int
+    created_at: UtcDateTime
+    closed_at: UtcDateTime | None = None
+    messages: list[SupportMessageDTO] = Field(default_factory=list)
+
+
+class SupportFileRefDTO(ContractModel):
+    """A thread file as staff see it: a readable label and an opaque reference - never the storage key."""
+
+    ref: str
+    name: str
+    message_id: str
+    staff_only: bool = False
+
+
+class SupportFileLinkDTO(ContractModel):
+    """A short-lived signed link to one evidence file (existing signed-URL mechanism; expires on its own)."""
+
+    ref: str
+    name: str
+    url: str
+    expires_at: UtcDateTime
+    content_type: str
+
+
+class SupportThreadAdminDTO(SupportThreadDTO):
+    requester_user_id: str
+    assigned_to: str | None = None
+    carried_over_from_dispute: bool = False
+    files: list[SupportFileRefDTO] = Field(default_factory=list)
+
+
+class SupportThreadCommand(ContractModel):
+    expected_version: StrictInt = Field(ge=1)
+    text: str | None = Field(default=None, max_length=SUPPORT_THREAD_TEXT_MAX_LENGTH)
+    assignee_id: str | None = Field(default=None, max_length=64)

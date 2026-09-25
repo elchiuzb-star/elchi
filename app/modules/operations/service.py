@@ -519,7 +519,22 @@ def _trust_queue_items(
                 age_minutes=_age_minutes(row.created_at, now), summary=f"{row.kind} {row.status}",
             )
             for row in rows
-            if row.status in ("open", "in_progress")
+            # SupportTicketStatus has open / acknowledged / resolved - "in_progress" never existed, so an acknowledged
+            # (not yet resolved) ticket used to drop out of the queue.
+            if row.status in ("open", "acknowledged")
+        ]
+    if queue == OpsQueue.SUPPORT_THREAD.value:
+        from app.modules.trust_support import threads as support_threads
+
+        rows = support_threads.admin_list_threads(session, actor_user_id=actor_user_id, status="open", assigned=None,
+                                                  after_id=after_id, limit=limit)
+        return [
+            OpsQueueItem(
+                queue=queue, item_type="support_thread", item_id=support_threads.thread_public_id(row), corridor=None,
+                age_minutes=_age_minutes(row.created_at, now),
+                summary=f"{row.requester_side} {support_threads.staff_status(row)}",
+            )
+            for row in rows
         ]
     rows = trust_service.admin_list_reviews(
         session, actor_user_id=actor_user_id, status=None, signal_type=None, after_id=after_id, limit=limit

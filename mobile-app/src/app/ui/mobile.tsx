@@ -583,7 +583,7 @@ const STATUS_TONE: Record<string, Tone> = {
  * separate the hues, so the reference client doubles it with a shape that is present whatever the colour
  * does - the badge still reads as a distinct state in greyscale.
  */
-export function StatusBadge({ status }: { status?: string }) {
+export function StatusBadge({ status, label }: { status?: string; label?: string }) {
   const key = status ?? "";
   const tone = STATUS_TONE[key] ?? "neutral";
   return (
@@ -594,7 +594,7 @@ export function StatusBadge({ status }: { status?: string }) {
       )}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" aria-hidden="true" />
-      {statusLabel(key)}
+      {label ?? statusLabel(key)}
     </span>
   );
 }

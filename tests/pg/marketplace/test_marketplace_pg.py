@@ -12,12 +12,11 @@ from sqlalchemy.orm import Session
 from app.contracts.enums import FeatureFlagKey
 from app.contracts.errors import DomainError, ErrorCode
 from app.modules.marketplace import service as marketplace_service
-from app.modules.marketplace.models import ProposalThread, ProposalVersion
 from app.modules.marketplace.rules import PROPOSAL_MAX_TTL
-from app.modules.marketplace.schemas import ListingCancel, ListingCreate, ListingPatch, ProposalCounter, ProposalCreate
+from app.modules.marketplace.schemas import ListingCreate, ListingPatch, ProposalCounter, ProposalCreate
 from app.modules.trips import service as trips_service
 from tests.pg.harness import run_concurrently
-from tests.pg.identity.a1_world import World, make_trip, make_vehicle, passenger_offer, passenger_request
+from tests.pg.identity.a1_world import World, make_trip, make_vehicle, passenger_request
 
 pytestmark = pytest.mark.pg
 
@@ -128,16 +127,6 @@ def test_parcel_request_incomplete_cannot_publish(world: World) -> None:
             publish(world, s, marketplace_service.listing_public_id(listing), world.client_id)
         assert info.value.code is ErrorCode.LISTING_INCOMPLETE
         assert "parcel.receiver_phone" in info.value.details["missing"]
-
-
-def test_trip_offer_one_open_listing_per_trip_and_service(world: World) -> None:
-    _, trip_public_id = driver_trip(world)
-    with world.db.session() as s:
-        marketplace_service.create_listing(s, owner_user_id=world.driver_id, data=passenger_offer(world, trip_public_id, start=world.base_time))
-        s.commit()
-    with world.db.session() as s, pytest.raises(DomainError) as info:
-        marketplace_service.create_listing(s, owner_user_id=world.driver_id, data=passenger_offer(world, trip_public_id, start=world.base_time))
-    assert info.value.code is ErrorCode.DUPLICATE_LISTING
 
 
 # --- proposals -----------------------------------------------------------------------------------------

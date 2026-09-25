@@ -22,6 +22,11 @@ import {
   adminLegacyOrder,
   adminOutbox,
   adminParcelPolicies,
+  adminParcelCategoryVersions,
+  adminCreateParcelCategoryVersion,
+  adminConfirmParcelCategoryVersion,
+  type ParcelCategoryVersionDTO,
+  type ParcelCategoryItemInput,
   adminPatchCorridor,
   adminPatchStop,
   adminProviderQuota,
@@ -81,13 +86,14 @@ import {
 } from "./adminPlatform";
 import { ShieldAlert } from "./ui/icons";
 
-export type AdminPlatformTab = "flags" | "corridors" | "policy" | "outbox" | "system";
+export type AdminPlatformTab = "flags" | "corridors" | "policy" | "categories" | "outbox" | "system";
 type Tab = AdminPlatformTab;
 
 const TABS: Array<[Tab, string]> = [
   ["flags", "Flaglar"],
   ["corridors", "Koridor va bekatlar"],
   ["policy", "Pochta siyosati"],
+  ["categories", "Pochta o'lchamlari"],
   ["outbox", "Outbox"],
   ["system", "Tizim holati"],
 ];
@@ -952,6 +958,139 @@ function PolicyTab({ caps }: { caps: Caps }) {
   );
 }
 
+// --- parcel size categories (Q140, ADR-0026) -------------------------------------------------------------------------
+
+type CategoryForm = { code: string; name_uz: string; name_ru: string; icon_key: string; length: string; width: string; height: string; weightKg: string };
+const EMPTY_CATEGORY: CategoryForm = { code: "", name_uz: "", name_ru: "", icon_key: "box_small", length: "", width: "", height: "", weightKg: "" };
+const CATEGORY_ICONS: Array<[string, string]> = [["envelope", "Konvert"], ["box_small", "Kichik quti"], ["box_medium", "O'rta quti"], ["box_large", "Katta quti"], ["bag", "Sumka"]];
+const CATEGORY_STATUS: Record<string, string> = { draft: "Qoralama", active: "Amalda", superseded: "Almashtirilgan" };
+
+/** The typed row as the API item, or the reason it cannot be one. Volume is the box volume (1 cm³ = 1 ml). */
+export function categoryItemFromForm(form: CategoryForm): ParcelCategoryItemInput | string {
+  const [l, w, h] = [form.length, form.width, form.height].map((v) => Number(v));
+  const grams = Math.round(Number(form.weightKg.replace(",", ".")) * 1000);
+  if (!/^[a-z][a-z0-9_]{1,39}$/.test(form.code.trim())) return "Kod: lotin kichik harf, raqam, _ (2-40)";
+  if (form.name_uz.trim().length < 2) return "Nomi (uz) kerak";
+  if (![l, w, h].every((v) => Number.isInteger(v) && v > 0)) return "O'lchamlar butun sm, 0 dan katta";
+  if (!Number.isFinite(grams) || grams <= 0) return "Og'irlik chegarasi 0 dan katta";
+  return {
+    code: form.code.trim(), name_uz: form.name_uz.trim(), name_ru: form.name_ru.trim() || null, icon_key: form.icon_key,
+    max_length_cm: l, max_width_cm: w, max_height_cm: h, max_volume_ml: l * w * h, max_weight_g: grams,
+  };
+}
+
+function CategoriesTab({ caps }: { caps: Caps }) {
+  const versions = useLoad<ParcelCategoryVersionDTO[]>(() => adminParcelCategoryVersions(), []);
+  const [label, setLabel] = useState("");
+  const [sourceNote, setSourceNote] = useState("");
+  const [synthetic, setSynthetic] = useState(true);
+  const [items, setItems] = useState<ParcelCategoryItemInput[]>([]);
+  const [form, setForm] = useState<CategoryForm>(EMPTY_CATEGORY);
+  const action = useConfirmedAction(policyRefusalMessage);
+  const canManage = caps.has(PLATFORM_CAPABILITIES.policy);
+  const candidate = categoryItemFromForm(form);
+  const active = (versions.data ?? []).find((v) => v.status === "active");
+
+  function confirmVersion(v: ParcelCategoryVersionDTO) {
+    action.ask({
+      title: `«${v.label}» katalogini tasdiqlash`,
+      lines: [
+        `${(v.items ?? []).length} ta toifa; muallif: ${v.created_by}`,
+        v.synthetic ? "Bu SINTETIK katalog - production uni rad etadi." : "Tasdiqlangach jo'natuvchilar shu toifalarni ko'radi.",
+        "Mavjud bronlar o'z kelishilgan toifasini saqlaydi. Kim faollashtirgani audit jurnaliga yoziladi.",
+      ],
+      run: async (key) => {
+        await adminConfirmParcelCategoryVersion(v.id, v.version, key);
+        versions.reload();
+      },
+    });
+  }
+
+  function createDraft() {
+    action.ask({
+      title: "Katalog qoralamasini saqlash",
+      lines: [`«${label.trim()}»: ${items.length} ta toifa${synthetic ? " · sintetik" : ""}`, "Qoralama hech kimga amal qilmaydi - faollashtirilguncha."],
+      run: async (key) => {
+        await adminCreateParcelCategoryVersion({ label: label.trim(), source_note: sourceNote.trim() || null, synthetic, items }, key);
+        setLabel("");
+        setSourceNote("");
+        setItems([]);
+        versions.reload();
+      },
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      {versions.error && <ErrorText>{versions.error}</ErrorText>}
+      {!versions.data && !versions.error && <Loading />}
+      {versions.data && (
+        <p className={`rounded-[12px] px-3 py-2 text-sm ${active && !active.synthetic ? "bg-accent text-primary" : "bg-warning/10 text-warning"}`}>
+          {!active
+            ? "Tasdiqlangan katalog yo'q - yangi pochta so'rovlari yopiq."
+            : active.synthetic
+              ? `Amalda: «${active.label}» - SINTETIK (demo qiymatlar, tasdiqlangan tarif emas; production'da yopiq).`
+              : `Amalda: «${active.label}» (v${active.version}).`}
+        </p>
+      )}
+      {versions.data && versions.data.length === 0 && <Empty>Hali hech qanday katalog versiyasi yo'q.</Empty>}
+      {(versions.data ?? []).map((v) => (
+        <div key={v.id} className="space-y-1 rounded-[12px] border border-border bg-card p-3 text-sm">
+          <p className="font-semibold">{v.label} · {CATEGORY_STATUS[v.status] ?? v.status}{v.synthetic ? " · sintetik" : ""}</p>
+          <p className="text-xs text-muted-foreground">
+            Muallif: {v.created_by} · Tasdiqlagan: {v.confirmed_by ? `${v.confirmed_by} (${formatAdminDate(v.confirmed_at)})` : "hali yo'q"}
+          </p>
+          {(v.items ?? []).map((i) => (
+            <p key={i.id} className="rounded-[8px] bg-muted/50 px-2 py-1 text-xs">
+              <b>{i.name_uz}</b> ({i.code}) · {i.max_length_cm}×{i.max_width_cm}×{i.max_height_cm} sm · {i.max_weight_g / 1000} kg
+            </p>
+          ))}
+          {v.status === "draft" && canManage && <Btn tone="primary" disabled={action.busy} onClick={() => confirmVersion(v)}>Tasdiqlash…</Btn>}
+        </div>
+      ))}
+
+      {canManage && (
+        <div className="space-y-2 rounded-[14px] border border-dashed border-border p-4">
+          <p className="text-sm font-semibold">Yangi katalog (qoralama)</p>
+          <p className="text-xs text-muted-foreground">Qiymatlar tasdiqlangan manbadan kiritiladi. Demo qiymat bo'lsa «sintetik» belgisi qolsin.</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            <Field label="Versiya nomi" value={label} onChange={setLabel} placeholder="2026-09" />
+            <Field label="Manba izohi" value={sourceNote} onChange={setSourceNote} />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={synthetic} onChange={(event) => setSynthetic(event.target.checked)} />
+            Sintetik (demo/test qiymatlar)
+          </label>
+          {items.map((i, index) => (
+            <div key={`${i.code}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] bg-muted/50 px-2 py-1 text-sm">
+              <span>{i.code} · {i.name_uz} · {i.max_length_cm}×{i.max_width_cm}×{i.max_height_cm} sm · {i.max_weight_g / 1000} kg</span>
+              <Btn tone="danger" onClick={() => setItems(items.filter((_, j) => j !== index))}>Olib tashlash</Btn>
+            </div>
+          ))}
+          <div className="grid gap-2 md:grid-cols-4">
+            <Field label="Kod" value={form.code} onChange={(v) => setForm({ ...form, code: v })} placeholder="small_box" />
+            <Field label="Nomi (uz)" value={form.name_uz} onChange={(v) => setForm({ ...form, name_uz: v })} />
+            <Field label="Nomi (ru)" value={form.name_ru} onChange={(v) => setForm({ ...form, name_ru: v })} />
+            <Select label="Belgi" value={form.icon_key} onChange={(v) => setForm({ ...form, icon_key: v })} options={CATEGORY_ICONS} />
+            <Field label="Uzunlik, sm" value={form.length} onChange={(v) => setForm({ ...form, length: v })} />
+            <Field label="Kenglik, sm" value={form.width} onChange={(v) => setForm({ ...form, width: v })} />
+            <Field label="Balandlik, sm" value={form.height} onChange={(v) => setForm({ ...form, height: v })} />
+            <Field label="Og'irlik chegarasi, kg" value={form.weightKg} onChange={(v) => setForm({ ...form, weightKg: v })} />
+          </div>
+          {form.code && typeof candidate === "string" && <p className="text-xs text-destructive">{candidate}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Btn disabled={typeof candidate === "string"} onClick={() => { if (typeof candidate !== "string") { setItems([...items, candidate]); setForm(EMPTY_CATEGORY); } }}>
+              Toifani qo'shish
+            </Btn>
+            <Btn tone="primary" disabled={action.busy || label.trim().length < 2 || items.length === 0} onClick={createDraft}>Qoralamani saqlash…</Btn>
+          </div>
+        </div>
+      )}
+      {action.view}
+    </div>
+  );
+}
+
 // --- outbox ---------------------------------------------------------------------------------------------------------
 
 function OutboxTab({ caps }: { caps: Caps }) {
@@ -1125,6 +1264,7 @@ export function AdminPlatformPanel({ initialTab = "flags" }: AdminPlatformPanelP
           {tab === "flags" && <FlagsTab caps={has} />}
           {tab === "corridors" && <CorridorsTab caps={has} />}
           {tab === "policy" && <PolicyTab caps={has} />}
+          {tab === "categories" && <CategoriesTab caps={has} />}
           {tab === "outbox" && <OutboxTab caps={has} />}
           {tab === "system" && <SystemTab />}
         </>

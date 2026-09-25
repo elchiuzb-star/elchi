@@ -231,61 +231,28 @@ def test_escalation_worker_marks_due_disputes_once(bw: BW, hooks) -> None:  # no
     assert payload_for_audience(EventType.DISPUTE_ESCALATION_DUE, due[0].payload, EventAudience.CLIENT) is None
 
 
-def _evidence_upload(owner_id: int) -> str:
-    """A real private `dispute_evidence` upload of this user (wave 3.1: evidence is bound to its uploader)."""
-    from app.utils.file_access import sign_file_key
-    from app.utils.file_storage import store_upload_file
-    from app.utils.file_validation import DISPUTE_EVIDENCE_UPLOAD_TYPE, FileValidationResult
-
-    png = bytes.fromhex("89504e470d0a1a0a") + b"0" * 64
-    validated = FileValidationResult(
-        upload_type=DISPUTE_EVIDENCE_UPLOAD_TYPE, extension="png", mime_type="image/png", size_bytes=len(png),
-        original_filename="evidence.png", content=png,
-    )
-    return sign_file_key(store_upload_file(validated, owner_id=owner_id))
-
-
-def test_dispute_http_flow_events_and_evidence_append_only(bw: BW, hooks, trust_client, tmp_path, monkeypatch) -> None:  # noqa: ANN001
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "upload_dir", str(tmp_path / "uploads"))
+def test_user_dispute_routes_are_gone_and_the_staff_record_stays_internal(bw: BW, hooks, trust_client) -> None:  # noqa: ANN001
+    """ADR-0026 (Q141): clients and drivers complain in the booking's operator chat; the dispute form, its stages and
+    its screens are removed from the API. `disputes_v2` stays a staff-internal record (money hooks unchanged)."""
     booking = arrived_passenger(bw, "01T112AA")
-    booking_public = f"/api/v2/bookings/{bookings_service.booking_public_id(booking)}/disputes"
-    body = {"type": "service", "description": "Telefonim 90 123 45 67",
-            "evidence_file_ids": [_evidence_upload(bw.w.client_id)]}
-    first = trust_client.post(booking_public, json=body, headers=auth(bw.w.client_id, "client", "idem-key-dsp-1"))
-    assert first.status_code == 201, first.text
-    data = first.json()
-    assert data["warnings"][0]["code"] == "CONTACT_INFO_MASKED" and "123 45 67" not in data["data"]["description"]
-    replay = trust_client.post(booking_public, json=body, headers=auth(bw.w.client_id, "client", "idem-key-dsp-1"))
-    assert replay.status_code == 201 and replay.json()["data"]["id"] == data["data"]["id"]
-    again = trust_client.post(booking_public, json=body, headers=auth(bw.w.driver_id, "driver", "idem-key-dsp-2"))
-    assert again.status_code == 409 and again.json()["error"]["code"] == "DISPUTE_ALREADY_OPEN"
-    # masked-text hits survive as staff-only events (R2-b): the first command and the refused 409 attempt; not the replay
-    assert scalar(bw.db, "SELECT count(*) FROM outbox_events WHERE event_type = 'trust.contact_filter.hit'") == 2
-    # H0 wave 3.1: somebody else's upload cannot be attached as evidence.
-    stolen = trust_client.post(f"/api/v2/disputes/{data['data']['id']}/evidence",
-                               json={"note": "rasm", "file_ids": [_evidence_upload(bw.w.client_id)]},
-                               headers=auth(bw.w.driver_id, "driver", "idem-key-ev-0"))
-    assert stolen.status_code == 400 and stolen.json()["error"]["details"]["field"] == "file_ids"
-    evidence = trust_client.post(f"/api/v2/disputes/{data['data']['id']}/evidence",
-                                 json={"note": "rasm", "file_ids": [_evidence_upload(bw.w.driver_id)]},
-                                 headers=auth(bw.w.driver_id, "driver", "idem-key-ev-1"))
-    assert evidence.status_code == 200 and len(evidence.json()["data"]["evidence"]) == 2
-    mine = trust_client.get("/api/v2/me/disputes", headers=auth(bw.w.driver_id, "driver"))
-    assert [d["id"] for d in mine.json()["data"]] == [data["data"]["id"]]
+    public = bookings_service.booking_public_id(booking)
+    body = {"type": "service", "description": "Haydovchi kelmadi"}
+    for actor, role in ((bw.w.client_id, "client"), (bw.w.driver_id, "driver")):
+        assert trust_client.post(f"/api/v2/bookings/{public}/disputes", json=body,
+                                 headers=auth(actor, role, f"idem-dsp-{role}")).status_code in (404, 405)
+        assert trust_client.get("/api/v2/me/disputes", headers=auth(actor, role)).status_code == 404
+    dispute = open_dispute(bw, booking.id, bw.w.client_id)  # the internal record the staff tools and hooks still use
+    assert trust_client.get(f"/api/v2/disputes/{dispute}", headers=auth(bw.w.client_id, "client")).status_code == 404
+    assert trust_client.post(f"/api/v2/disputes/{dispute}/evidence", json={"note": "rasm", "file_ids": []},
+                             headers=auth(bw.w.client_id, "client", "idem-ev-1")).status_code == 404
     assert trust_client.get("/api/v2/admin/disputes", headers=auth(bw.w.client_id, "client")).status_code == 403
-    staff = trust_client.post(f"/api/v2/admin/disputes/{data['data']['id']}/start-review", json={"expected_version": 1},
+    staff = trust_client.post(f"/api/v2/admin/disputes/{dispute}/start-review", json={"expected_version": 1},
                               headers=auth(bw.operator_id, "operator", "idem-key-cmd-1"))
     assert staff.status_code == 200 and staff.json()["data"]["status"] == "under_review"
-    opened = rows(bw.db, "SELECT payload FROM outbox_events WHERE event_type = 'dispute.opened'")
-    assert [o.payload for o in opened] == [{"booking_id": bookings_service.booking_public_id(booking), "dispute_type": "service"}]
     for statement in ("UPDATE dispute_evidence SET note = 'x'", "DELETE FROM dispute_evidence"):
-        with pytest.raises(DBAPIError) as info:
-            with bw.db.engine.begin() as conn:
-                conn.exec_driver_sql(statement)
-        assert info.value.orig.diag.constraint_name == "append_only_violation"
-    from app.contracts.db_errors import map_db_error
-
-    assert map_db_error(sqlstate="23001", constraint="append_only_violation").code is ErrorCode.INTEGRITY_CONFLICT
-    assert payload_for_audience(EventType.DISPUTE_OPENED, opened[0].payload, EventAudience.CLIENT) is not None
+        with bw.db.engine.begin() as conn:  # append-only guard is still installed (rows or not, it refuses the statement)
+            trigger = conn.exec_driver_sql("SELECT count(*) FROM pg_trigger WHERE tgrelid = 'dispute_evidence'::regclass "
+                                           "AND NOT tgisinternal").scalar_one()
+        assert trigger >= 1, statement
+    assert payload_for_audience(EventType.DISPUTE_OPENED, {"booking_id": public, "dispute_type": "service"},
+                                EventAudience.CLIENT) is not None

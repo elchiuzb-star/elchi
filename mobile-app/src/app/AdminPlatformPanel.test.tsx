@@ -41,7 +41,7 @@ vi.mock("../api/v2/ops.api", () => caps);
 vi.mock("../api/v2/mfa.api", () => ({ stepUp: vi.fn() }));
 
 import { ApiError } from "../types/api";
-import { AdminLegacyOrderDetail, AdminPlatformPanel } from "./AdminPlatformPanel";
+import { AdminLegacyOrderDetail, AdminPlatformPanel, categoryItemFromForm } from "./AdminPlatformPanel";
 
 const ALL_CAPS = ["ops.view", "ops.feature_flag_manage", "ops.corridor_manage", "platform.policy_manage", "ops.booking_command"];
 
@@ -245,5 +245,24 @@ describe("system", () => {
     expect(await screen.findByText("Toshkent → Samarqand")).toBeInTheDocument();
     expect(screen.getByText("vaqti noma'lum")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /o'zgartir|bekor/i })).toBeNull();
+  });
+});
+
+describe("categoryItemFromForm (Q140 catalog draft)", () => {
+  const base = { code: "small_box", name_uz: "Kichik quti", name_ru: "", icon_key: "box_small", length: "30", width: "20", height: "20", weightKg: "5" };
+
+  it("turns the typed row into the API item with the box volume (1 cm3 = 1 ml)", () => {
+    expect(categoryItemFromForm(base)).toEqual({
+      code: "small_box", name_uz: "Kichik quti", name_ru: null, icon_key: "box_small",
+      max_length_cm: 30, max_width_cm: 20, max_height_cm: 20, max_volume_ml: 12_000, max_weight_g: 5_000,
+    });
+    expect(categoryItemFromForm({ ...base, weightKg: "0,5" })).toMatchObject({ max_weight_g: 500 });
+  });
+
+  it("refuses rows the server would refuse", () => {
+    expect(typeof categoryItemFromForm({ ...base, code: "Small Box" })).toBe("string");
+    expect(typeof categoryItemFromForm({ ...base, length: "12.5" })).toBe("string");
+    expect(typeof categoryItemFromForm({ ...base, weightKg: "" })).toBe("string");
+    expect(typeof categoryItemFromForm({ ...base, name_uz: "" })).toBe("string");
   });
 });

@@ -23,8 +23,8 @@ export const bookingViewMessages = {
   "bookingTracking.title": { uz: "Kuzatuv", ru: "Отслеживание" },
   "bookingTracking.progressTitle": { uz: "Holat kuzatuvi", ru: "Ход выполнения" },
   "bookingTracking.progressHint": {
-    uz: "Buyurtma bosqichlari — haydovchi belgilagan holatlar bo'yicha.",
-    ru: "Этапы заказа — по статусам, которые отметил водитель.",
+    uz: "Buyurtma bosqichlari — tizimda qayd etilgan holatlar bo'yicha.",
+    ru: "Этапы заказа — по статусам, записанным в системе.",
   },
   "bookingTracking.liveTitle": { uz: "Jonli joylashuv", ru: "Местоположение в реальном времени" },
   "bookingTracking.liveDisabled": {

@@ -268,7 +268,7 @@ class ServiceJob:
         return min(max(value, 5.0), 86400.0)
 
 
-# Q65: parcel `delivered` -> operator queue after state_machines.DELIVERED_OPERATOR_QUEUE_AFTER is part of
+# Q139 (ADR-0026): parcel `delivered` -> operator queue at once (no sender confirmation) is part of
 # A4's emit_confirmation_overdue_signals (passenger `arrived` + parcel `delivered`); the B12 queue itself is a query.
 # referral stage 3 (ADR-0023): qualification/grant intake, rechecks, expiry, review escalation, identity purge.
 PROMOTIONS_INTERVAL_ENV = "ELCHI_WORKER_PROMOTIONS_INTERVAL_SECONDS"
@@ -284,6 +284,9 @@ SERVICE_JOBS: tuple[ServiceJob, ...] = (
                EXPIRY_INTERVAL_ENV, DEFAULT_EXPIRY_INTERVAL_SECONDS),
     # ADR-0025: offers of a booked/closed/changed saved request that a command skipped (SKIP LOCKED)
     ServiceJob("marketplace.close_stale_intent_threads", "app.modules.marketplace.intents", "close_stale_intent_threads",
+               EXPIRY_INTERVAL_ENV, DEFAULT_EXPIRY_INTERVAL_SECONDS),
+    # ADR-0026 (Q138): close what is still open of the retired driver-listing model (listings, their offers, requests)
+    ServiceJob("marketplace.retire_driver_listings", "app.modules.marketplace.service", "retire_driver_listings",
                EXPIRY_INTERVAL_ENV, DEFAULT_EXPIRY_INTERVAL_SECONDS),
     ServiceJob("bookings.expire_due_amendments", "app.modules.bookings.service", "expire_due_amendments",
                EXPIRY_INTERVAL_ENV, DEFAULT_EXPIRY_INTERVAL_SECONDS),
@@ -321,6 +324,8 @@ SERVICE_JOBS: tuple[ServiceJob, ...] = (
     ServiceJob("promotions.recheck_granted", _PROMO, "recheck_granted",
                PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),
     ServiceJob("promotions.expire_enrollments", _PROMO, "expire_enrollments",
+               PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),
+    ServiceJob("promotions.review_retired_parcel_enrollments", _PROMO, "review_retired_parcel_enrollments",
                PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),
     ServiceJob("promotions.expire_lots", _PROMO, "expire_lots",
                PROMOTIONS_HOUSEKEEPING_INTERVAL_ENV, DEFAULT_PROMOTIONS_HOUSEKEEPING_INTERVAL_SECONDS),

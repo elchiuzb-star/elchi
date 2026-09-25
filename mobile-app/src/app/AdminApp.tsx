@@ -71,12 +71,13 @@ import { AdminVehiclesPanel } from "./AdminVehiclesPanel";
 import { AdminFinancePanel } from "./AdminFinancePanel";
 import { AdminPlatformPanel } from "./AdminPlatformPanel";
 import { AdminTrustPanel } from "./AdminTrustPanel";
+import { AdminSupportThreadsPanel } from "./AdminSupportThreadsPanel";
 
 type Section =
   | "overview" | "orders" | "drivers" | "clients" | "cities" | "tariffs" | "disputes"
   // Stage 2 (A9): the v2 marketplace sections. They read /api/v2 with this same staff session.
   | "opsQueues" | "disputesV2" | "support" | "metrics" | "legacyOrders" | "priceBands" | "promotions"
-  | "vehicles" | "finance" | "platform" | "trustOps"
+  | "vehicles" | "finance" | "platform" | "trustOps" | "supportThreads"
   | "users" | "security" | "notifications" | "audit" | "profile";
 
 const sectionLabels: Record<Section, string> = {
@@ -97,6 +98,7 @@ const sectionLabels: Record<Section, string> = {
   finance: "Moliya",
   platform: "Platforma sozlamalari",
   trustOps: "Ishonch va operatsiyalar",
+  supportThreads: "Shikoyat chatlari",
   legacyOrders: "Legacy (v1) arxiv",
   users: "Xodimlar",
   security: "Xavfsizlik (MFA)",
@@ -123,6 +125,7 @@ const navItems: Array<{ id: Section; icon: typeof Activity }> = [
   { id: "finance", icon: BarChart3 },
   { id: "platform", icon: SlidersHorizontal },
   { id: "trustOps", icon: Scale },
+  { id: "supportThreads", icon: LifeBuoy },
   { id: "legacyOrders", icon: Archive },
   { id: "users", icon: UserPlus },
   { id: "security", icon: ShieldCheck },
@@ -432,6 +435,7 @@ export default function AdminApp() {
       finance: [],
       platform: [],
       trustOps: [],
+      supportThreads: [],
 
       disputesV2: [],
       support: [],
@@ -608,6 +612,7 @@ export default function AdminApp() {
             {section === "finance" && <AdminFinancePanel />}
             {section === "platform" && <AdminPlatformPanel />}
             {section === "trustOps" && <AdminTrustPanel />}
+            {section === "supportThreads" && <AdminSupportThreadsPanel />}
             {section === "legacyOrders" && <AdminLegacyOrdersPanel />}
 
             {section === "audit" && (

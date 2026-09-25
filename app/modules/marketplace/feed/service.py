@@ -532,13 +532,21 @@ def _parcel_fit(session: Session, listing: Listing, availability: SegmentAvailab
     if availability is None:
         return NEUTRAL_FIT_SCORE
     shares: list[float] = []
-    if details is not None and details.weight_g:
-        remaining = availability.min_remaining_cargo_weight_g
-        if remaining <= 0 or details.weight_g > remaining:
-            return None
-        shares.append(details.weight_g / remaining)
-    if details is not None and details.length_cm and details.width_cm and details.height_cm:
+    weight_g, volume = (details.weight_g if details else None), None
+    if details is not None and details.parcel_category_item_id is not None:
+        # Q140 (ADR-0026): a category is measured by its limits - the same worst case the capacity check reserves.
+        from app.modules.marketplace import parcel_catalog
+
+        item = parcel_catalog.get_item(session, details.parcel_category_item_id)
+        weight_g, volume = item.max_weight_g, item.max_volume_ml
+    elif details is not None and details.length_cm and details.width_cm and details.height_cm:
         volume = parcel_volume_ml(details.length_cm, details.width_cm, details.height_cm)
+    if weight_g:
+        remaining = availability.min_remaining_cargo_weight_g
+        if remaining <= 0 or weight_g > remaining:
+            return None
+        shares.append(weight_g / remaining)
+    if volume:
         remaining = availability.min_remaining_cargo_volume_ml
         if remaining <= 0 or volume > remaining:
             return None
@@ -992,6 +1000,9 @@ def feed(
     now = _now(now)
     limit = max(1, min(int(limit), FEED_MAX_LIMIT))
     side, service = FeedSide(criteria.side), ServiceType(criteria.service_type)
+    if side is FeedSide.OFFERS:
+        # Q138 (ADR-0026): there are no driver listings for a client to browse - clients publish requests.
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"side": FeedSide.OFFERS.value})
     window = _check_window(criteria.date_from, criteria.date_to, field_name="date_to")
     if side is FeedSide.REQUESTS:
         # P9 visibility (Q40): only drivers who could make an offer see client requests.
@@ -1207,6 +1218,8 @@ def create_saved_search(session: Session, *, user_id: int, data: SavedSearchCrea
     service = ServiceType(data.service_type)
     if service is ServiceType.PARCEL and data.quantity != 1:
         raise _validation("quantity", "parcel_quantity_is_one")
+    if FeedSide(data.side) is FeedSide.OFFERS:
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"side": FeedSide.OFFERS.value})  # Q138: nothing to be told about
     if FeedSide(data.side) is FeedSide.REQUESTS:
         # Same P9/Q40 gate as the requests feed: 403 CAPABILITY_REQUIRED / DRIVER_NOT_ELIGIBLE.
         identity_service.require_capability(

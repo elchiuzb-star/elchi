@@ -28,6 +28,9 @@ export type ParcelPolicyVersionCreate = Schemas["ParcelPolicyVersionCreate"];
 export type ParcelPolicyItemCreate = Schemas["ParcelPolicyItemCreate"];
 export type ParcelPolicyDTO = Schemas["ParcelPolicyDTO"];
 export type ProviderQuotaDTO = Schemas["ProviderQuotaDTO"];
+export type ParcelCategoryVersionDTO = Schemas["ParcelCategoryVersionDTO"];
+export type ParcelCategoryVersionCreate = Schemas["ParcelCategoryVersionCreate"];
+export type ParcelCategoryItemInput = Schemas["ParcelCategoryItemInput"];
 export type LegacyOrderViewDTO = Schemas["LegacyOrderViewDTO"];
 export type RegionDTO = Schemas["RegionDTO"];
 export type DistrictDTO = Schemas["DistrictDTO"];
@@ -149,6 +152,26 @@ export function adminCreateParcelPolicy(body: ParcelPolicyVersionCreate, idempot
 /** A second super_admin approves; the author is refused (FORBIDDEN author_cannot_confirm_own_policy). */
 export function adminConfirmParcelPolicy(policyId: string, expectedVersion: number, idempotencyKey: string) {
   return v2AdminRequest<ParcelPolicyVersionDTO>(`/admin/parcel-policies/${policyId}/confirm`, {
+    method: "POST",
+    body: { expected_version: expectedVersion },
+    idempotencyKey,
+  });
+}
+
+// --- parcel size categories (Q140, ADR-0026) ----------------------------------------------------------------------
+
+/** Every catalog version, newest first. A draft applies to nobody; a synthetic one never passes production. */
+export function adminParcelCategoryVersions() {
+  return v2AdminRequest<ParcelCategoryVersionDTO[]>("/admin/parcel-categories");
+}
+
+export function adminCreateParcelCategoryVersion(body: ParcelCategoryVersionCreate, idempotencyKey: string) {
+  return v2AdminRequest<ParcelCategoryVersionDTO>("/admin/parcel-categories", { method: "POST", body, idempotencyKey });
+}
+
+/** A second super_admin activates the draft; bookings keep the category item they were agreed on. */
+export function adminConfirmParcelCategoryVersion(versionId: string, expectedVersion: number, idempotencyKey: string) {
+  return v2AdminRequest<ParcelCategoryVersionDTO>(`/admin/parcel-categories/${versionId}/confirm`, {
     method: "POST",
     body: { expected_version: expectedVersion },
     idempotencyKey,

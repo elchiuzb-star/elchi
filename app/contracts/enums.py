@@ -138,7 +138,7 @@ class Capability(StrEnum):
 NEW_BUSINESS_CAPABILITIES: frozenset[Capability] = frozenset(
     {
         Capability.LISTING_CREATE_REQUEST,
-        Capability.LISTING_CREATE_TRIP_OFFER,
+        # Q138 (ADR-0026): LISTING_CREATE_TRIP_OFFER is kept as a value for history, granted to nobody.
         Capability.PROPOSAL_SUBMIT_AS_CLIENT,
         Capability.PROPOSAL_SUBMIT_AS_DRIVER,
         Capability.TRIP_CREATE,
@@ -446,10 +446,13 @@ class OperatorBookingCommand(StrEnum):
     # Wave 2.1 (BR blocker 3): invalidate the current code of one proof kind and issue a new rotation
     # (``app.contracts.proofs``); the code owner can also do it self-service, rate-limited.
     REISSUE_PROOF_CODE = "reissue_proof_code"
+    # Q139 (ADR-0026): parcel outcome recorded by staff (no delivery code, no receiver confirmation).
+    MARK_DELIVERED = "mark_delivered"
 
 
 OPERATOR_COMMAND_CAPABILITY: dict[OperatorBookingCommand, Capability] = {
     OperatorBookingCommand.REISSUE_PROOF_CODE: Capability.OPS_BOOKING_COMMAND,
+    OperatorBookingCommand.MARK_DELIVERED: Capability.OPS_BOOKING_COMMAND,
     OperatorBookingCommand.CONFIRM_NO_SHOW: Capability.OPS_BOOKING_COMMAND,
     OperatorBookingCommand.REJECT_NO_SHOW: Capability.OPS_BOOKING_COMMAND,
     OperatorBookingCommand.COMPLETE_WITH_EVIDENCE: Capability.OPS_BOOKING_COMMAND,
@@ -599,6 +602,9 @@ class EventType(StrEnum):
     BOOKING_AMENDMENT_REQUESTED = "booking.amendment_requested"
     BOOKING_AMENDMENT_DECIDED = "booking.amendment_decided"
     SUPPORT_TICKET_STATUS_CHANGED = "support.ticket.status_changed"  # A12, to the requester
+    # ADR-0026 (Q141): the booking-bound operator chat. Payloads carry ids only - never the text.
+    SUPPORT_THREAD_OPENED = "support.thread.opened"  # staff only (the operator queue)
+    SUPPORT_THREAD_REPLIED = "support.thread.replied"  # to the requester only (staff wrote or closed the thread)
     RATING_PUBLISHED = "rating.published"  # A12 (§17.2)
     DISPUTE_ESCALATION_DUE = "dispute.escalation_due"  # A12 (§9.5, 48 h), staff only
     # referral stage 3 (ADR-0023): staff only until the stage-5 client shows rewards
@@ -720,6 +726,8 @@ class CommissionReviewReason(StrEnum):
     DISPUTE_MODULE_UNAVAILABLE = "dispute_module_unavailable"
     # wave 3.1 (0062): a blocking dispute was resolved after completion, so finance decides with finalize_fee.
     DISPUTE_RESOLVED = "dispute_resolved"
+    # Q144 (ADR-0026, 0093): a parcel completed by staff while the completion rule (D-1) is open - finance captures
+    PARCEL_STAFF_COMPLETION = "parcel_staff_completion"
 
 
 # --- wave 3 (16.09.2026): tracking (A6), communications (A7), trust & support (A12), feed (A5) -----------------
@@ -745,6 +753,7 @@ class OpsQueue(StrEnum):
     FINANCE_REVIEW = "finance_review"  # A4 (Q66/Q84)
     DISPUTE = "dispute"  # A12 open / under review
     SUPPORT_TICKET = "support_ticket"  # A12 open tickets and SOS
+    SUPPORT_THREAD = "support_thread"  # ADR-0026 (Q141): open booking-bound operator chats
     TRUST_REVIEW = "trust_review"  # A12 Q45 review queue
     # wave 6 (§16 operator panel): the three lists the spec names that had no queue yet. All read-only views of
     # existing rows - the operator acts through the owning module's own command, never from the queue itself.
