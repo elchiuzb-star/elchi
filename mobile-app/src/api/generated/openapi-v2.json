@@ -15447,7 +15447,8 @@
         "enum": [
           "shared_device_accounts",
           "self_dealing_device",
-          "repeated_pair_bookings"
+          "repeated_pair_bookings",
+          "suspicious_location"
         ],
         "title": "FraudSignalType",
         "type": "string"

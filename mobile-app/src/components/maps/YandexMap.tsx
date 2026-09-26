@@ -143,6 +143,43 @@ export function MapMarker({ point, label, title }: { point: LatLng; label?: stri
   return null;
 }
 
+/**
+ * The vehicle's last trusted position (§10.3-§10.4): a round dot, not a pin, so it never reads as a meeting place.
+ * `live=false` greys it out - an old point is shown as old, and it never moves on its own between server updates.
+ */
+export function MapVehicleDot({ point, live, title }: { point: LatLng; live: boolean; title?: string }) {
+  const map = useContext(MapContext);
+  const markerRef = useRef<MarkerHandle | null>(null);
+  const elementRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!map) return;
+    const element = document.createElement("div");
+    element.style.cssText =
+      "transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;" +
+      "border:3px solid var(--card);box-shadow:0 0 0 6px color-mix(in srgb, var(--primary) 22%, transparent)," +
+      "0 2px 6px rgba(15,23,42,.35);";
+    elementRef.current = element;
+    const marker = map.addMarker(point, element, title);
+    markerRef.current = marker;
+    return () => {
+      marker.remove();
+      markerRef.current = null;
+      elementRef.current = null;
+    };
+  }, [map, title]);
+
+  useEffect(() => {
+    if (elementRef.current) elementRef.current.style.background = live ? "var(--primary)" : "var(--muted-foreground)";
+  }, [live, map]);
+
+  useEffect(() => {
+    markerRef.current?.move(point);
+  }, [point.lat, point.lng]);
+
+  return null;
+}
+
 /** A route line. The points come from the server's geometry; this never invents one. */
 export function MapLine({ points, color }: { points: LatLng[]; color?: string }) {
   const map = useContext(MapContext);

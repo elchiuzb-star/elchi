@@ -8261,7 +8261,7 @@ export interface components {
          * @description §17.3 signals. Each one is a *question for a human*, never an automatic judgement.
          * @enum {string}
          */
-        FraudSignalType: "shared_device_accounts" | "self_dealing_device" | "repeated_pair_bookings";
+        FraudSignalType: "shared_device_accounts" | "self_dealing_device" | "repeated_pair_bookings" | "suspicious_location";
         /**
          * GeoGeocodeRequest
          * @description A typed address, optionally biased towards the area the person is already looking at.

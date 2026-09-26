@@ -818,6 +818,9 @@ class TrackingQualityFlag(StrEnum):
     MOCK_LOCATION = "mock_location"  # not trusted
     IMPLAUSIBLE_SPEED = "implausible_speed"  # not trusted
     OUT_OF_ORDER = "out_of_order"  # older than the live point: history only (AC28)
+    # Q149 location-spoofing signals (a browser cannot read Android's mock flag, so behaviour is checked instead):
+    ZERO_ACCURACY = "zero_accuracy"  # accuracy_m == 0: no real receiver reports it; not trusted
+    SPEED_MISMATCH = "speed_mismatch"  # device speed contradicts the movement between fixes; trusted, a signal only
 
 
 class TrackingPointRejectReason(StrEnum):
@@ -967,6 +970,7 @@ class FraudSignalType(StrEnum):
     SHARED_DEVICE_ACCOUNTS = "shared_device_accounts"  # several accounts push-registered from one device
     SELF_DEALING_DEVICE = "self_dealing_device"  # the client and the driver of one booking share a device
     REPEATED_PAIR_BOOKINGS = "repeated_pair_bookings"  # the same pair keeps booking each other
+    SUSPICIOUS_LOCATION = "suspicious_location"  # Q149: a tracking session kept sending spoofing-like points
 
 
 class FraudSignalStatus(StrEnum):

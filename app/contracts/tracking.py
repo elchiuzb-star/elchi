@@ -105,8 +105,53 @@ TRACKING_GRANT_MAX_TTL = timedelta(hours=24)
 TRACKING_SUBJECT_LABEL_KEY = "vehicle_carrying_your_booking"
 
 UNTRUSTED_QUALITY_FLAGS: frozenset[TrackingQualityFlag] = frozenset(
-    {TrackingQualityFlag.MOCK_LOCATION, TrackingQualityFlag.IMPLAUSIBLE_SPEED, TrackingQualityFlag.OUT_OF_ORDER}
+    {
+        TrackingQualityFlag.MOCK_LOCATION,
+        TrackingQualityFlag.IMPLAUSIBLE_SPEED,
+        TrackingQualityFlag.OUT_OF_ORDER,
+        TrackingQualityFlag.ZERO_ACCURACY,
+    }
 )
+
+# --- Q149 (25.09.2026): location-spoofing detection -----------------------------------------------------------------
+# A web client cannot read Android's "mock provider" bit, and anything a client asserts about itself can be forged, so
+# the server judges behaviour. Every signal is a question for a human (§10.4, §17.3): the point is stored, nothing is
+# blocked, no strike, no penalty. Pilot values, to be tuned in field tests.
+#
+# Device-reported speed vs the speed implied by two consecutive fixes: only compared over a short interval (an average
+# over minutes legitimately differs from an instant reading) and only when they disagree by a wide margin.
+SPEED_MISMATCH_MIN_DELTA_MPS = 15  # 54 km/h
+SPEED_MISMATCH_MIN_INTERVAL_SECONDS = 5
+SPEED_MISMATCH_MAX_INTERVAL_SECONDS = 30
+# Flags that count towards a `suspicious_location` fraud signal (out_of_order and low_accuracy are network/sky, not
+# spoofing, and do not count).
+SUSPICIOUS_QUALITY_FLAGS: frozenset[TrackingQualityFlag] = frozenset(
+    {
+        TrackingQualityFlag.MOCK_LOCATION,
+        TrackingQualityFlag.IMPLAUSIBLE_SPEED,
+        TrackingQualityFlag.ZERO_ACCURACY,
+        TrackingQualityFlag.SPEED_MISMATCH,
+    }
+)
+# One session with at least this many suspicious points inside the window opens one signal for operator review.
+SUSPICIOUS_LOCATION_MIN_POINTS = 3
+SUSPICIOUS_LOCATION_WINDOW = timedelta(hours=24)
+
+
+def is_speed_mismatch(reported_speed_mps: int | None, distance_m: int, elapsed_seconds: float, accuracy_m: int = 0) -> bool:
+    """Q149: the device's own speed contradicts the distance it moved (pure; A6 measures the distance).
+
+    The fix's accuracy widens the distance into a range ``[d - acc, d + acc]``: the reported speed is a mismatch only
+    when it lies outside the implied speed range by at least ``SPEED_MISMATCH_MIN_DELTA_MPS``, so GPS jitter in a
+    city canyon never reads as spoofing.
+    """
+    if reported_speed_mps is None or isinstance(reported_speed_mps, bool):
+        return False
+    if not SPEED_MISMATCH_MIN_INTERVAL_SECONDS <= elapsed_seconds <= SPEED_MISMATCH_MAX_INTERVAL_SECONDS:
+        return False
+    slowest = max(0, distance_m - accuracy_m) / elapsed_seconds
+    fastest = (distance_m + accuracy_m) / elapsed_seconds
+    return reported_speed_mps <= slowest - SPEED_MISMATCH_MIN_DELTA_MPS or reported_speed_mps >= fastest + SPEED_MISMATCH_MIN_DELTA_MPS
 
 
 def point_rejection(captured_at: datetime, received_at: datetime) -> TrackingPointRejectReason | None:

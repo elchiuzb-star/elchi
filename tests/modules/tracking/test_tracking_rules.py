@@ -160,3 +160,70 @@ def test_ws_subscription_parsing() -> None:
     assert sub.booking_id == "bkg_x" and sub.access_token == "jwt"
     assert parse_subscription({"action": "subscribe", "booking_id": "bkg_x"}, None) is None
     assert parse_subscription(["subscribe"], None) is None
+
+
+# --- Q149: location-spoofing signals ---------------------------------------------------------------------------------
+
+
+def classify_speed(at: datetime, lat: float, speed: int | None, *, acc: int = 10, live: rules.Fix | None = None,
+                   candidate: rules.Fix | None = None) -> rules.PointDecision:
+    return rules.classify_point(captured_at=at, lat=lat, lng=69.24, accuracy_m=acc, is_mock=False, live=live,
+                                candidate=candidate, speed_mps=speed)
+
+
+def test_q149_zero_accuracy_is_flagged_and_never_moves_the_marker() -> None:
+    decision = classify(T0, acc=0)
+    assert decision.flags == (Q.ZERO_ACCURACY,) and not decision.moves_live
+    assert Q.ZERO_ACCURACY in contract.SUSPICIOUS_QUALITY_FLAGS
+
+
+def test_q149_device_says_standing_while_the_fix_drives_away() -> None:
+    live = rules.Fix(T0, 41.3, 69.24)
+    moved = classify_speed(T0 + timedelta(seconds=10), 41.3027, 0, live=live)  # ~300 m in 10 s, device says 0 m/s
+    assert moved.flags == (Q.SPEED_MISMATCH,)
+    assert moved.moves_live  # a signal for review, not a veto: an honest car is never frozen by it
+
+
+def test_q149_device_says_fast_while_the_fix_stands_still() -> None:
+    live = rules.Fix(T0, 41.3, 69.24)
+    assert classify_speed(T0 + timedelta(seconds=20), 41.3, 25, live=live).flags == (Q.SPEED_MISMATCH,)
+
+
+def test_q149_honest_driving_and_jitter_are_not_mismatches() -> None:
+    live = rules.Fix(T0, 41.3, 69.24)
+    assert classify_speed(T0 + timedelta(seconds=10), 41.3027, 28, live=live).flags == ()  # 30 m/s, reports 28
+    # a 150 m jump in a city canyon with ±150 m accuracy while standing: jitter, not spoofing
+    jitter = classify_speed(T0 + timedelta(seconds=10), 41.30135, 0, acc=150, live=live)
+    assert Q.SPEED_MISMATCH not in jitter.flags
+    # an average over minutes legitimately differs from an instant reading: not compared
+    assert classify_speed(T0 + timedelta(minutes=5), 41.3, 25, live=live).flags == ()
+    # no speed from the device: nothing to compare
+    assert classify_speed(T0 + timedelta(seconds=10), 41.3027, None, live=live).flags == ()
+
+
+def test_q149_mismatch_is_measured_from_the_trusted_marker_not_a_spoofed_jump() -> None:
+    live = rules.Fix(T0, 41.3, 69.24)
+    spoofed_jump = rules.Fix(T0 + timedelta(seconds=10), 42.3, 69.24)  # the untrusted candidate after a teleport
+    # the honest point back next to the marker, standing: no mismatch although it is 111 km from the jump
+    back = classify_speed(T0 + timedelta(seconds=20), 41.3, 0, live=live, candidate=spoofed_jump)
+    assert Q.SPEED_MISMATCH not in back.flags
+
+
+@pytest.mark.parametrize(
+    "reported, distance, elapsed, accuracy, expected",
+    [(0, 300, 10, 10, True), (28, 300, 10, 10, False), (25, 0, 20, 10, True), (0, 150, 10, 150, False),
+     (None, 300, 10, 10, False), (0, 3000, 60, 10, False), (0, 300, 3, 10, False)],
+)
+def test_q149_speed_mismatch_contract(reported, distance, elapsed, accuracy, expected) -> None:  # noqa: ANN001
+    assert contract.is_speed_mismatch(reported, distance, elapsed, accuracy) is expected
+
+
+def test_q149_migration_accepts_every_flag_and_signal_type() -> None:
+    from app.contracts.enums import FraudSignalType
+
+    spec = importlib.util.spec_from_file_location("a0a_migration_0095", VERSIONS / "20260925_0095_tracking_spoofing_signals.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert set(module.QUALITY_FLAGS) == {flag.value for flag in Q}
+    assert set(module.FRAUD_SIGNAL_TYPES) == {kind.value for kind in FraudSignalType}
+    assert module.down_revision == "20260925_0094"

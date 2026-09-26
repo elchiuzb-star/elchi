@@ -289,6 +289,68 @@ def trip_tracking_summary(session: Session, trip_id: int, *, now: datetime | Non
     )
 
 
+@dataclass(frozen=True, slots=True)
+class SuspiciousSession:
+    """Q149: a writer session that kept sending spoofing-like points. Counts and public ids only (§15)."""
+
+    session_id: int
+    driver_user_id: int
+    trip_public_id: str
+    session_public_id: str
+    suspicious_points: int
+    total_points: int
+    flag_counts: dict[str, int]
+
+
+def suspicious_sessions(
+    session: Session, *, now: datetime | None = None, min_points: int | None = None, limit: int = 200
+) -> list[SuspiciousSession]:
+    """Q149 export for the trust scan (A12): sessions with at least ``SUSPICIOUS_LOCATION_MIN_POINTS`` points carrying a
+    spoofing flag, captured inside ``SUSPICIOUS_LOCATION_WINDOW``. Read-only; never a verdict (§10.4, §17.3)."""
+    now = _now(now)
+    since = now - contract.SUSPICIOUS_LOCATION_WINDOW
+    flags = sorted(flag.value for flag in contract.SUSPICIOUS_QUALITY_FLAGS)
+    per_flag = ", ".join(
+        f"count(*) FILTER (WHERE p.quality_flags @> ARRAY['{flag}']::TEXT[]) AS {flag}" for flag in flags
+    )
+    rows = session.execute(
+        text(
+            f"""
+            SELECT s.id, s.driver_user_id, s.public_id AS session_public, t.public_id AS trip_public,
+                   count(*) FILTER (WHERE p.quality_flags && CAST(:flags AS TEXT[])) AS suspicious,
+                   count(*) AS total, {per_flag}
+              FROM tracking_points p
+              JOIN tracking_sessions s ON s.id = p.session_id
+              JOIN trips t ON t.id = s.trip_id
+             WHERE p.captured_date >= :since_date AND p.captured_at >= :since
+             GROUP BY s.id, s.driver_user_id, s.public_id, t.public_id
+            HAVING count(*) FILTER (WHERE p.quality_flags && CAST(:flags AS TEXT[])) >= :min_points
+             ORDER BY s.id
+             LIMIT :limit
+            """
+        ),
+        {
+            "flags": flags,
+            "since": since,
+            "since_date": since.date(),
+            "min_points": min_points if min_points is not None else contract.SUSPICIOUS_LOCATION_MIN_POINTS,
+            "limit": limit,
+        },
+    ).mappings().all()
+    return [
+        SuspiciousSession(
+            session_id=row["id"],
+            driver_user_id=row["driver_user_id"],
+            trip_public_id=format_public_id(PublicIdPrefix.TRIP, row["trip_public"]),
+            session_public_id=format_public_id(PublicIdPrefix.TRACKING_SESSION, row["session_public"]),
+            suspicious_points=int(row["suspicious"]),
+            total_points=int(row["total"]),
+            flag_counts={flag: int(row[flag]) for flag in flags if row[flag]},
+        )
+        for row in rows
+    ]
+
+
 # --- K1 / K3 sessions -------------------------------------------------------------------------------------------------
 
 
@@ -569,7 +631,7 @@ def ingest_points(
             captured_at = ensure_aware_utc(point.captured_at)
             decision = rules.classify_point(
                 captured_at=captured_at, lat=point.lat, lng=point.lng, accuracy_m=point.accuracy_m, is_mock=point.is_mock,
-                live=live, candidate=candidate,
+                live=live, candidate=candidate, speed_mps=point.speed_mps,
             )
             fix = rules.Fix(captured_at, point.lat, point.lng)
             if decision.moves_live:

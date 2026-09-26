@@ -18,6 +18,22 @@ VITE_APP_ENV=development
 VITE_YANDEX_MAPS_API_KEY=your-yandex-js-api-key
 ```
 
+### Telefonda GPS sinovi (HTTPS)
+
+Brauzer joylashuvni faqat HTTPS sahifaga beradi (localhost bundan mustasno). Telefondan sinash uchun dev server
+HTTPS’da ishlashi va API bilan bir manbada bo‘lishi kerak — yangi paket qo‘shilmaydi:
+
+```bash
+mkcert -install && mkcert 192.168.0.104          # telefonga ham mkcert ildiz sertifikatini o'rnating
+# Git Bash: MSYS_NO_PATHCONV=1 bo'lmasa "/api/v1" Windows yo'liga aylanib ketadi
+MSYS_NO_PATHCONV=1 VITE_API_BASE_URL=/api/v1 \
+  ELCHI_DEV_HTTPS_CERT=192.168.0.104.pem ELCHI_DEV_HTTPS_KEY=192.168.0.104-key.pem \
+  ELCHI_DEV_API_PROXY=http://127.0.0.1:8000 npx vite --host 0.0.0.0
+```
+
+`/api` (jumladan `/api/v2/ws` WebSocket) vite proksisi orqali backendga boradi. Dala sinovi ro‘yxati:
+`docs/ops/GPS_FIELD_TEST.md`.
+
 ### Maps
 
 This client uses the **Yandex Maps JavaScript API**, loaded from `api-maps.yandex.ru`. "MapKit SDK" is the

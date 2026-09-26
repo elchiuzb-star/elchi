@@ -156,6 +156,7 @@ def classify_point(
     is_mock: bool,
     live: Fix | None,
     candidate: Fix | None,
+    speed_mps: int | None = None,
 ) -> PointDecision:
     """Quality flags of one accepted point (K2, §10.4, AC28). Points are processed in ``captured_at`` order.
 
@@ -165,6 +166,9 @@ def classify_point(
     * ``implausible_speed``: faster than ``MAX_PLAUSIBLE_SPEED_MPS`` from the live marker, unless it is plausible from a
       newer candidate (the newest in-order non-mock point, itself possibly flagged). The second consistent point after a
       jump is trusted again, so one wrong reference cannot freeze the marker forever; a single outlier never moves it.
+    * ``zero_accuracy`` (Q149): an accuracy of exactly 0 m - no phone receiver reports it; never trusted;
+    * ``speed_mismatch`` (Q149): the device's reported speed contradicts the movement from the newest in-order
+      live marker (5-30 s apart, >= 54 km/h difference beyond the accuracy). Stays trusted - a signal, not a veto.
     Only a trusted point strictly newer than the live marker moves it (``contract.is_trusted_for_live``).
     """
     captured_at = ensure_aware_utc(captured_at)
@@ -173,6 +177,8 @@ def classify_point(
         flags.append(TrackingQualityFlag.LOW_ACCURACY)
     if is_mock:
         flags.append(TrackingQualityFlag.MOCK_LOCATION)
+    if accuracy_m == 0:
+        flags.append(TrackingQualityFlag.ZERO_ACCURACY)
     in_order = live is None or captured_at >= live.captured_at
     if not in_order:
         flags.append(TrackingQualityFlag.OUT_OF_ORDER)
@@ -180,6 +186,13 @@ def classify_point(
         newer_candidate = candidate is not None and live.captured_at < candidate.captured_at < captured_at
         if not newer_candidate or _implausible(candidate, captured_at, lat, lng):
             flags.append(TrackingQualityFlag.IMPLAUSIBLE_SPEED)
+    # Measured from the live marker only (the newest *trusted* fix): measured from a spoofed jump, the honest point
+    # that follows it would itself look like a mismatch.
+    if in_order and not is_mock and speed_mps is not None and live is not None and captured_at > live.captured_at:
+        elapsed = (captured_at - live.captured_at).total_seconds()
+        moved = distance_m(live.lat, live.lng, lat, lng)
+        if contract.is_speed_mismatch(speed_mps, moved, elapsed, accuracy_m):
+            flags.append(TrackingQualityFlag.SPEED_MISMATCH)
     moves_live = contract.is_trusted_for_live(flags) and (live is None or captured_at > live.captured_at)
     becomes_candidate = (
         not is_mock and in_order and (candidate is None or captured_at > candidate.captured_at)

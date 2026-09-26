@@ -47,7 +47,7 @@ describe("effectiveFreshness", () => {
 describe("PublicTrackingPage", () => {
   it("shows loading, then a live position only when it is fresh", async () => {
     m.publicTracking.mockResolvedValue(dto(10, "fresh"));
-    render(<PublicTrackingPage token="tok" now={() => NOW} />);
+    render(<PublicTrackingPage token="tok" now={() => NOW} socketFactory={null} />);
     expect(screen.getByText("Yuklanmoqda...")).toBeInTheDocument();
     expect(await screen.findByText("Jonli")).toBeInTheDocument();
     expect(screen.getByTestId("tracking-status").textContent).toBe("Haydovchi yo'lga chiqdi");
@@ -57,7 +57,7 @@ describe("PublicTrackingPage", () => {
 
   it("never says live when the point is stale, even if the server said fresh", async () => {
     m.publicTracking.mockResolvedValue(dto(600, "fresh"));
-    render(<PublicTrackingPage token="tok" now={() => NOW} />);
+    render(<PublicTrackingPage token="tok" now={() => NOW} socketFactory={null} />);
     expect(await screen.findByText("Aloqa uzilgan")).toBeInTheDocument();
     expect(screen.queryByText("Jonli")).toBeNull();
     expect(screen.getByTestId("tracking-stale")).toBeInTheDocument();
@@ -65,18 +65,18 @@ describe("PublicTrackingPage", () => {
 
   it("shows no marker without a point", async () => {
     m.publicTracking.mockResolvedValue(dto(null, "no_data"));
-    render(<PublicTrackingPage token="tok" now={() => NOW} />);
+    render(<PublicTrackingPage token="tok" now={() => NOW} socketFactory={null} />);
     expect(await screen.findByTestId("tracking-no-point")).toBeInTheDocument();
     expect(screen.queryByText("Koordinatalar")).toBeNull();
   });
 
   it("treats 404 as a plain 'not available' and other errors with retry", async () => {
     m.publicTracking.mockRejectedValue(new ApiError(404, { code: "NOT_FOUND", message: "Topilmadi" }));
-    const { unmount } = render(<PublicTrackingPage token="bad" />);
+    const { unmount } = render(<PublicTrackingPage token="bad" socketFactory={null} />);
     expect(await screen.findByTestId("tracking-unavailable")).toBeInTheDocument();
     unmount();
     m.publicTracking.mockRejectedValue(new ApiError(500, { code: "SERVER_ERROR", message: "Server xatosi" }));
-    render(<PublicTrackingPage token="tok" />);
+    render(<PublicTrackingPage token="tok" socketFactory={null} />);
     expect(await screen.findByText("Qayta urinish")).toBeInTheDocument();
   });
 });

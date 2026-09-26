@@ -496,6 +496,32 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - Chatga ko'chirilgan eski nizolarda (0093) so'rovchi o'z matni, o'z dalil izohlari va qarorni ko'radi; boshqa ishtirokchi
   va xodim dalillari `staff_only`; foydalanuvchi DTO'sida fayl id/havolasi yo'q.
 
+**Haydovchi GPS nashri (25.09.2026):**
+- **Q148 (foydalanuvchi qarori; ADR-0010 §1 dagi «haydovchi (GPS’dan tashqari)… GPS uchun faqat foreground viewer» qismini
+  almashtiradi, §10.5 o‘zgarmaydi)** `mobile-app` haydovchi joylashuvini **faqat foreground**da yuboradi: ilova ochiq va ekran
+  yoniq turganda brauzer `watchPosition` → lokal outbox (`localStorage`, 24 soat / 20 000 nuqta, eskisi tashlanadi va sanaladi)
+  → K1 `platform=web` → K2 `points:batch` (≤100; nuqta faqat ACK’dan keyin o‘chiriladi). Web fon tracker sifatida taqdim
+  etilmaydi: «GPS faol» yozuvi yo‘q, panel «faqat ilova ochiq bo‘lganda» deydi, fondagi tab, navbatdagi va yetib bormagan
+  nuqtalarni ochiq aytadi; Wake Lock bo‘lsa so‘raladi. Fon tracking — native ilova vazifasi (ochiq). Sessiya safar
+  `boarding`/`in_progress`/`interrupted` holatida: `start_boarding`/`depart`da ochiladi, ruxsat allaqachon berilgan bo‘lsa
+  sahifa qayta ochilganda tiklanadi, `complete` oldidan navbat bo‘shatiladi; qayta ochilgan sahifa yangi sessiya oladi (§10.4),
+  eski sessiya ololmagan nuqtalar yangisiga qayta raqamlanadi. Ko‘ruvchi (bron ishtirokchisi, qabul qiluvchi havolasi): K8
+  WebSocket, uzilganda 15 s HTTP polling; marker faqat server nuqtasida, eskirgani kulrang va shunday ataladi. Brauzer mock
+  joylashuvni aniqlay olmaydi — `is_mock=false` «tekshirildi» degani emas. Chegaralar kontrakt bilan
+  `tests/test_mobile_gps_constants.py`da solishtiriladi. Real qurilma dala sinovi (AC27 dala qismi, §10.5) — ochiq.
+
+- **Q149 (foydalanuvchi qarori, 25.09.2026 — soxta joylashuvni aniqlash)** Brauzer Android mock bayrog‘ini o‘qiy olmaydi,
+  klient da’vosi soxtalashtiriladi — shuning uchun server nuqta **xulqini** tekshiradi (`rules.classify_point`): yangi
+  `zero_accuracy` (0 m aniqlik, ishonchsiz) va `speed_mismatch` (qurilma tezligi oxirgi ishonchli nuqtadan 5–30 s ichidagi
+  siljishga ≥ 15 m/s zid, aniqlik oralig‘i hisobga olinadi; ishonchli qoladi — faqat signal). Sessiyada 24 soatda ≥ 3 ta
+  shubhali nuqta (`mock_location`, `implausible_speed`, `zero_accuracy`, `speed_mismatch`) → operator navbatiga bitta
+  `suspicious_location` fraud signali (faqat hisoblar va public id, §15). Blok, jarima, strike yo‘q (§10.4, §17.3);
+  qiymatlar pilot, dala sinovida sozlanadi (`contract.SPEED_MISMATCH_*`, `SUSPICIOUS_LOCATION_*`). Migratsiya 0095.
+  Tabiiy tezlikdagi silliq soxta marshrut web’da aniqlanmasligi mumkin — qurilma attestatsiyasi native ilova ishi (ochiq).
+  Klient: ruxsat holati (oldindan rad → sessiya ochilmaydi; qayta ruxsat → o‘zi tiklanadi), HTTPS yo‘qligi, joylashuvsiz
+  oraliqlar (ekran qulfi/fon vs GPS yo‘q), batareya (`battery_pct` nuqtada, ≤ 20 % ogohlantirish), tik turgan telefon uchun
+  `getCurrentPosition` heartbeat. Dala sinovi ro‘yxati — `docs/ops/GPS_FIELD_TEST.md` (real telefon qismi ochiq).
+
 **Wave 3.1 dan keyin ochiq qolgan uch band yopilgan (24.09.2026 audit):** U6 `rating_bucket` — A-variant; ADR-0021 staff MFA — **Accepted** (faqat xodim faktorlarini ulash va `enforce_privileged` rejimi — go-live bandi); dalil fayllari — imzolangan havola bilan.
 
 ## 4. Kod tuzilishi

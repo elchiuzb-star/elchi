@@ -1663,12 +1663,13 @@ def _fraud_signal(
 def scan_fraud_signals(session: Session, *, now: datetime | None = None, limit: int = 200) -> int:
     """§17.3 scheduled scan (A10a worker). Returns how many **new** signals were opened. No commit, no verdict.
 
-    Three observations, all of them questions for a human:
+    Four observations, all of them questions for a human:
 
     * ``shared_device_accounts`` - one push device has belonged to several accounts (``device_account_links``);
     * ``self_dealing_device`` - the client and the driver of one booking share a device (§17.3 fake trips);
     * ``repeated_pair_bookings`` - the same client/driver pair completed an unusual number of bookings inside
-      ``REPEATED_PAIR_WINDOW``.
+      ``REPEATED_PAIR_WINDOW``;
+    * ``suspicious_location`` (Q149) - a tracking session sent several spoofing-like points (``tracking.suspicious_sessions``).
 
     Nothing is blocked, no rating changes and no money moves: the row lands in the operator queue (S12).
     """
@@ -1731,6 +1732,25 @@ def scan_fraud_signals(session: Session, *, now: datetime | None = None, limit: 
                 now=now,
             ):
                 opened += 1
+
+    # Q149: a tracking session that kept sending spoofing-like points (mock flag, impossible jumps, zero accuracy,
+    # speed contradicting movement). One signal per session; counts and public ids only - no coordinates (§15).
+    from app.modules.tracking import service as tracking_service
+
+    for suspect in tracking_service.suspicious_sessions(session, now=now, limit=limit):
+        if _fraud_signal(
+            session, signal_type=FraudSignalType.SUSPICIOUS_LOCATION, subject_user_id=suspect.driver_user_id,
+            window_key=f"tracking_session:{suspect.session_id}",
+            evidence={
+                "trip_id": [suspect.trip_public_id],
+                "tracking_session_id": [suspect.session_public_id],
+                "suspicious_points": suspect.suspicious_points,
+                "total_points": suspect.total_points,
+                **{f"flag_{flag}": count for flag, count in suspect.flag_counts.items()},
+            },
+            now=now,
+        ):
+            opened += 1
     return opened
 
 

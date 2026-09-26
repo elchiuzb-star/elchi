@@ -1,8 +1,8 @@
 /** Driver-side v2 calls (A9): trips, manifest, service actions, offers on client requests and the wallet.
  *
- * GPS is not published from here: the web client is a viewer only, the background tracker is the Android app
- * (ADR-0010 §1, spec §10.5). The wallet screens show the real hold and the pending top-up separately, because a
- * top-up request is not money yet (§9.2).
+ * GPS is not published from here: the foreground web publisher is `tracking.api.ts` + `app/v2/driverTracker.ts`
+ * (Q148); a background tracker remains a native-app task (spec §10.5). The wallet screens show the real hold and the
+ * pending top-up separately, because a top-up request is not money yet (§9.2).
  */
 import { newIdempotencyKey, v2Request, v2RequestFull, type Schemas, type V2Result } from "./http";
 import type { AnyBooking, FeedItemDTO, ProposalThreadDTO } from "./marketplace.api";

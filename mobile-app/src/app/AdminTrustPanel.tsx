@@ -648,6 +648,9 @@ const FRAUD_TYPE_LABEL: Record<string, string> = {
   shared_device_accounts: "Bir qurilmada bir nechta akkaunt",
   self_dealing_device: "O'zi bilan bitim (bir qurilma)",
   repeated_pair_bookings: "Bir juftlikning takroriy bronlari",
+  // Q149: the server saw spoofing-like points (mock flag, impossible jumps, 0 m accuracy, speed contradicting the
+  // movement). A browser cannot prove spoofing - this is a reason to look at the trip, not a finding.
+  suspicious_location: "Shubhali joylashuv nuqtalari (soxta GPS belgilari)",
 };
 
 function StatusFilter(props: { value: string; onChange: (value: string) => void; options: string[] }) {

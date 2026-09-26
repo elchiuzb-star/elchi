@@ -6,7 +6,9 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:800
 
 /** A server-relative link (e.g. a signed `/api/v1/files/...` URL) resolved against the API's own origin. */
 export function apiOriginUrl(path: string): string {
-  return new URL(path, API_BASE_URL).toString();
+  // A relative base (`/api/v1` behind the dev proxy, for HTTPS phone testing) resolves against the page itself.
+  const page = typeof window !== "undefined" ? window.location.href : "http://127.0.0.1/";
+  return new URL(path, new URL(API_BASE_URL, page)).toString();
 }
 
 type RequestOptions = Omit<RequestInit, "body"> & {

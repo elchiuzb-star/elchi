@@ -7,20 +7,17 @@
  * An unknown, revoked or expired link and a closed tracking window are the same "not available" (no difference is
  * revealed).
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { publicTracking, type PublicTrackingDTO, type TrackingFreshness } from "../../api/v2/safety.api";
-import { ApiError } from "../../types/api";
+import { publicSubscribeFrame } from "../../api/v2/tracking.api";
+import { effectiveFreshness as sharedEffectiveFreshness } from "../gpsOutbox";
 import { formatDateTime, minutesSince } from "../../utils/v2Format";
 import { v2ErrorMessage } from "../../utils/v2Errors";
 import { Badge, COLORS, Card, ErrorNote, Loading, Row, ScreenBody } from "../ui/mobile";
-import { useAsync } from "./useAsync";
+import { VehicleMap } from "./LiveTrackingMap";
+import { useLiveTracking, type LiveTrackingOptions } from "./useLiveTracking";
 import { translate } from "../../i18n";
-
-/** §10.4 buckets: <=30 s fresh, 31-120 s delayed, >120 s lost. */
-const FRESH_MAX_S = 30;
-const DELAYED_MAX_S = 120;
-const REFRESH_MS = 30_000;
 
 const STATUS_TEXT: Record<string, string> = {
   get "passenger.confirmed"() { return translate("publicTracking.status.passengerConfirmed"); },
@@ -43,17 +40,12 @@ export function statusText(label: string): string {
   return STATUS_TEXT[label] ?? translate("publicTracking.status.active");
 }
 
-const RANK: Record<TrackingFreshness, number> = { fresh: 0, delayed: 1, lost: 2, no_data: 3 };
-
 /**
  * The freshness shown on screen: the server's bucket, only ever made *worse* by the age of the last point on this
- * device's clock. Never better than the server said.
+ * device's clock. Never better than the server said (§10.4 buckets: <=30 s fresh, 31-120 s delayed, >120 s lost).
  */
 export function effectiveFreshness(data: PublicTrackingDTO, now: Date = new Date()): TrackingFreshness {
-  if (!data.last_point) return "no_data";
-  const age = (now.getTime() - new Date(data.last_point.captured_at).getTime()) / 1000;
-  const local: TrackingFreshness = age <= FRESH_MAX_S ? "fresh" : age <= DELAYED_MAX_S ? "delayed" : "lost";
-  return RANK[local] > RANK[data.freshness] ? local : data.freshness;
+  return sharedEffectiveFreshness(data, now);
 }
 
 const FRESHNESS_TEXT: Record<TrackingFreshness, [string, "ok" | "warn" | "danger" | "neutral"]> = {
@@ -63,15 +55,32 @@ const FRESHNESS_TEXT: Record<TrackingFreshness, [string, "ok" | "warn" | "danger
   get no_data(): [string, "neutral"] { return [translate("publicTracking.noData"), "neutral"]; },
 };
 
-export function PublicTrackingPage({ token, now }: { token: string; now?: () => Date }) {
-  const page = useAsync<PublicTrackingDTO>(() => publicTracking(token), [token]);
-  const reload = page.reload;
-
+export function PublicTrackingPage({
+  token,
+  now,
+  socketFactory,
+}: {
+  token: string;
+  now?: () => Date;
+  /** Tests pass `null` (no socket); the page itself uses the browser's WebSocket. */
+  socketFactory?: LiveTrackingOptions<PublicTrackingDTO>["socketFactory"];
+}) {
+  // K8 with the link token; K7 polling whenever the socket is not open (§10.3 step 5).
+  const [attempt, setAttempt] = useState(0);
+  const live = useLiveTracking<PublicTrackingDTO>({
+    subject: `${token}#${attempt}`,
+    fetchSnapshot: () => publicTracking(token),
+    subscribeFrame: () => publicSubscribeFrame(token),
+    windowOpen: (value) => value.last_point != null,
+    socketFactory,
+  });
+  // Re-evaluate the age of the last point between server updates, so "live" turns into "delayed" on its own.
+  const [, setTick] = useState(0);
   useEffect(() => {
-    const timer = window.setInterval(reload, REFRESH_MS);
+    const timer = window.setInterval(() => setTick((value) => value + 1), 5_000);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
+  const page = { data: live.data, error: live.error, loading: !live.data && !live.error && !live.gone };
 
   if (page.loading) {
     return (
@@ -81,7 +90,7 @@ export function PublicTrackingPage({ token, now }: { token: string; now?: () => 
     );
   }
   // A link that expired or was revoked while the page was open stops showing the old position.
-  const notFound = page.error instanceof ApiError && page.error.status === 404;
+  const notFound = live.gone;
   if (!page.data || notFound) {
     return (
       <ScreenBody>
@@ -93,7 +102,7 @@ export function PublicTrackingPage({ token, now }: { token: string; now?: () => 
             </span>
           </Card>
         ) : (
-          <ErrorNote message={page.error ? v2ErrorMessage(page.error) : null} onRetry={page.reload} />
+          <ErrorNote message={page.error ? v2ErrorMessage(page.error) : null} onRetry={() => setAttempt((value) => value + 1)} />
         )}
       </ScreenBody>
     );
@@ -128,6 +137,7 @@ export function PublicTrackingPage({ token, now }: { token: string; now?: () => 
                   : translate("publicTracking.minutesAgo", { minutes: String(ageMinutes) })
               }
             />
+            <VehicleMap point={point} live={freshness === "fresh"} />
             <Row label={translate("publicTracking.coordinates")} value={`${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`} />
             <Row label={translate("publicTracking.accuracy")} value={`±${point.accuracy_m} m`} />
             {point.low_accuracy ? (

@@ -24,6 +24,7 @@ import { componentsMessages } from "./screens/components";
 import { promoHelpersMessages } from "./screens/promoHelpers";
 import { flowHelpersMessages } from "./screens/flowHelpers";
 import { adr0026Messages } from "./screens/adr0026";
+import { liveTrackingMessages } from "./screens/liveTracking";
 
 export interface Message {
   uz: string;
@@ -647,6 +648,7 @@ export const messageSources = {
   promoHelpers: promoHelpersMessages,
   flowHelpers: flowHelpersMessages,
   adr0026: adr0026Messages,
+  liveTracking: liveTrackingMessages,
 } as const;
 
 export const messages = {
@@ -664,6 +666,7 @@ export const messages = {
   ...promoHelpersMessages,
   ...flowHelpersMessages,
   ...adr0026Messages,
+  ...liveTrackingMessages,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof messages;

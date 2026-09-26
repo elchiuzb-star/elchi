@@ -47,7 +47,9 @@ logger = logging.getLogger(__name__)
 SIGNAL_BATCH_LIMIT = 200
 RETENTION_LOCK_KEY = "tracking.retention"
 RETENTION_BATCH_LIMIT = 500
-UNTRUSTED_FLAGS_SQL = "ARRAY['mock_location', 'implausible_speed', 'out_of_order']::TEXT[]"
+UNTRUSTED_FLAGS_SQL = "ARRAY[{}]::TEXT[]".format(
+    ", ".join(f"'{flag.value}'" for flag in sorted(contract.UNTRUSTED_QUALITY_FLAGS, key=lambda flag: flag.value))
+)
 SIMPLIFY_TOLERANCE_DEG = 0.0001  # ~11 m
 
 

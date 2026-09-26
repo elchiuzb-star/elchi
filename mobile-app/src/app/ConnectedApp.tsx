@@ -163,6 +163,10 @@ import { ReputationCard } from "./v2/ReputationCard";
 import { ParcelPolicyNotice } from "./v2/ParcelPolicyNotice";
 import { ParcelCategoryLine, ParcelCategoryPicker, categoryLimitsText } from "./v2/ParcelCategoryPicker";
 import { DriverTripDetail } from "./v2/DriverTripDetail";
+import { BookingLiveTracking } from "./v2/BookingLiveTracking";
+import { DriverTrackingBar } from "./v2/DriverTrackingBar";
+import { driverTracker } from "./v2/driverTracker";
+import { trackableTrip } from "./gpsOutbox";
 import { StopSearch } from "./v2/StopSearch";
 import { bookingCounterparty, canShareListing, canShareTracking, routesThroughStop } from "./safetyMounts";
 import {
@@ -628,10 +632,6 @@ function proofCodeLabel(value: string): string {
 
 function trackingWindowText(reason: string): string {
   return translateDynamic(`trackingWindow.${reason}`) ?? translate("error.TRACKING_WINDOW_NOT_OPEN");
-}
-
-function trackingFreshnessLabel(value: string): string {
-  return translateDynamic(`trackingFreshness.${value}`) ?? value;
 }
 
 function proposalStatusLabel(value: string): string {
@@ -1909,6 +1909,37 @@ export function ConnectedApp() {
     const id = window.setInterval(() => setResendIn((left) => (left > 0 ? left - 1 : 0)), 1000);
     return () => window.clearInterval(id);
   }, [screen, resendIn]);
+
+  /**
+   * Q148: a running trip publishes the driver's GPS from this page while it is open (foreground only, §10.5). The
+   * publisher is one per page and outlives screen changes; its status bar sits above every driver screen.
+   */
+  const isDriverSession = auth.isAuthenticated && auth.user?.role === "driver";
+  const trackTrip = isDriverSession ? trackableTrip(trips) : null;
+
+  useEffect(() => {
+    if (!isDriverSession) return;
+    void listMyTrips({ limit: 30 }).then(setTrips).catch(() => undefined);
+  }, [isDriverSession, auth.user?.id]);
+
+  useEffect(() => {
+    const tracker = driverTracker();
+    if (!isDriverSession) {
+      // Logging out stops publishing on this device.
+      if (tracker.isRunning()) void tracker.stop();
+      return;
+    }
+    if (!trackTrip || tracker.getSnapshot().phase !== "idle") return;
+    // Resume without a tap only where the browser already allows location; otherwise the bar asks the driver.
+    const permissions = typeof navigator !== "undefined" ? navigator.permissions : undefined;
+    if (!permissions?.query) return;
+    void permissions
+      .query({ name: "geolocation" })
+      .then((status) => {
+        if (status.state === "granted" && tracker.getSnapshot().phase === "idle") void tracker.start(trackTrip.id);
+      })
+      .catch(() => undefined);
+  }, [isDriverSession, trackTrip?.id]);
 
 
   useEffect(() => {
@@ -5231,7 +5262,6 @@ export function ConnectedApp() {
       const thread = openBooking;
       const booking = thread.side === "driver" ? driverBooking : clientBooking;
       const back = () => go(thread.side === "driver" ? "driver-order-detail" : "client-booking-detail");
-      const liveOpen = Boolean(flags?.tracking_enabled && tracking?.window.is_open && tracking?.last_point);
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
           <TopBar title={translate("bookingTracking.title")} back={back} />
@@ -5259,42 +5289,14 @@ export function ConnectedApp() {
 
             <div className="rounded-[16px] border border-border bg-card p-4">
               <p className="text-[13px] font-semibold text-secondary-foreground">{translate("bookingTracking.liveTitle")}</p>
-              {trackingError && <p className="mt-1 text-[13px] text-destructive">{trackingError}</p>}
-              {!trackingError && !flags?.tracking_enabled && (
-                <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
-                  {translate("bookingTracking.liveDisabled")}
-                </p>
-              )}
-              {!trackingError && flags?.tracking_enabled && !liveOpen && (
-                <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
-                  {trackingWindowText(tracking?.window.reason ?? "")}
-                </p>
-              )}
-              {liveOpen && tracking?.last_point && (
-                <>
-                  <p className="mt-1 flex items-center gap-2 text-[14px] font-medium text-foreground">
-                    {/*
-                      The one thing on screen allowed to keep moving, and only while the fix really is current
-                      (AC27/AC28): a dot that kept pulsing over a stale point would be the app claiming a live
-                      GPS it does not have.
-                    */}
-                    <span
-                      className={cls(
-                        "h-2.5 w-2.5 shrink-0 rounded-full",
-                        tracking.freshness === "fresh" ? "el-live-dot bg-success" : "bg-slate-400",
-                      )}
-                    />
-                    {translate("bookingTracking.lastPoint", { time: formatDateTime(tracking.last_point.captured_at) })}
-                  </p>
-                  <p className="mt-1 text-[13px] text-muted-foreground">
-                    {tracking.last_point.lat.toFixed(5)}, {tracking.last_point.lng.toFixed(5)}
-                    {tracking.last_point.low_accuracy ? ` · ${translate("bookingTracking.lowAccuracy")}` : ""}
-                  </p>
-                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                    {translate("bookingTracking.sourceLine", { freshness: trackingFreshnessLabel(tracking.freshness) })}
-                  </p>
-                </>
-              )}
+              {/* K8 WebSocket with HTTP polling behind it; the window and the freshness are the server's (§10.3-§10.6). */}
+              <BookingLiveTracking
+                key={thread.id}
+                bookingId={thread.id}
+                initial={tracking}
+                trackingEnabled={Boolean(flags?.tracking_enabled)}
+                windowText={trackingWindowText}
+              />
             </div>
 
             {tracking?.eta_window_start && (
@@ -6083,7 +6085,14 @@ export function ConnectedApp() {
                     type="button"
                     disabled={busy}
                     onClick={() => void run(async () => {
+                      const tracker = driverTracker();
+                      const completing = nextAction[0] === "complete";
+                      // The last points leave while the session still takes them; `complete` then closes it.
+                      if (completing) await tracker.flush();
                       await tripAction(trip.id, nextAction[0], { expected_version: trip.version });
+                      if (completing && tracker.getSnapshot().tripId === trip.id) await tracker.finishTrip();
+                      // Boarding and departure are when a client may look for the car (§10.6): start publishing.
+                      if (!completing) void tracker.start(trip.id);
                       await loadDriverTrips();
                     }, translate("driverRoutes.tripStatusUpdated"))}
                     className="el-press mt-3 h-10 w-full rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
@@ -7095,6 +7104,7 @@ export function ConnectedApp() {
             {busy ? translate("common.loading") : error || message}
           </div>
         )}
+        {isDriverSession && <DriverTrackingBar tripId={trackTrip?.id ?? null} />}
         <div className="flex min-h-0 flex-1 flex-col">{content}</div>
         {/* One drawer for the whole client side, mounted over the shell rather than inside each screen, so
             it keeps its open state while `content` swaps underneath it. */}

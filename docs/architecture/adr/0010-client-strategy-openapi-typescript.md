@@ -21,6 +21,13 @@
 7. **Lockfile — bajarildi (Q11):** mobile-app paket menejeri — **npm** (`package-lock.json`). A0b `pnpm-lock.yaml` va `pnpm-workspace.yaml`ni olib tashladi; A0b hisobotiga ko‘ra `npm audit` 0 zaiflik, build va lint o‘tdi. `openapi-typescript` shu npm lockfile’ga pin qilinadi.
 8. **Pul/vaqt UI:** `*_minor` → so‘m formatlash va `Asia/Tashkent` displey bitta util’da (`src/utils/money.ts`, `date.ts` qayta yoziladi).
 
+## Qo‘shimcha (25.09.2026, Q148)
+1-banddagi «haydovchi (GPS’dan tashqari)… GPS uchun faqat foreground viewer» qoidasi foydalanuvchi qarori Q148 bilan
+almashtirildi: mobile-app haydovchi joylashuvini **foreground publisher** sifatida yuboradi (`src/api/v2/tracking.api.ts`,
+`src/app/gpsOutbox.ts`, `src/app/v2/driverTracker.ts`; K1 `platform=web`, K2 batch, K3). «Web/PWA fon tracker sifatida
+taqdim etilmaydi» qismi (§10.5) kuchda qoladi: ekran o‘chsa yoki tab fonga o‘tsa brauzer joylashuvni to‘xtatishi mumkin va
+UI buni ochiq aytadi. Ko‘ruvchi tomoni K8 WebSocket + HTTP polling zaxirasi bilan xaritada.
+
 ## Muqobillar
 | Vosita | Nega yo‘q |
 |---|---|

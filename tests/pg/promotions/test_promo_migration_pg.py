@@ -101,7 +101,7 @@ def _upgrade(db: PgDatabase, target: str) -> str:
 
 def test_referral_revisions_lead_to_the_single_head() -> None:
     # ADR-0026 migration 20260924_0092 follows the referral steps; the head is still a single revision
-    assert script_heads() == ["20260925_0094"]
+    assert script_heads() == ["20260925_0095"]
 
 
 def test_clean_database_has_every_expected_object(pg_empty_db: PgDatabase) -> None:
