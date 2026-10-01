@@ -22,11 +22,13 @@ public struct DriverProfileV1: Decodable, Hashable, Sendable {
     public let verificationStatus: String
     public let rating: Double?
     public let completedOrders: Int?
+    /// Legacy v1 counter (all orders ever taken on the old app), shown labelled as such.
+    public let totalOrders: Int?
     public let isAvailable: Bool
 
     public init(id: Int, user: User? = nil, fullName: String? = nil, carModel: String? = nil, carColor: String? = nil,
                 plateNumber: String? = nil, verificationStatus: String, rating: Double? = nil, completedOrders: Int? = nil,
-                isAvailable: Bool = false) {
+                totalOrders: Int? = nil, isAvailable: Bool = false) {
         self.id = id
         self.user = user
         self.fullName = fullName
@@ -36,6 +38,7 @@ public struct DriverProfileV1: Decodable, Hashable, Sendable {
         self.verificationStatus = verificationStatus
         self.rating = rating
         self.completedOrders = completedOrders
+        self.totalOrders = totalOrders
         self.isAvailable = isAvailable
     }
 
@@ -47,6 +50,7 @@ public struct DriverProfileV1: Decodable, Hashable, Sendable {
         case plateNumber = "plate_number"
         case verificationStatus = "verification_status"
         case completedOrders = "completed_orders"
+        case totalOrders = "total_orders"
         case isAvailable = "is_available"
     }
 }

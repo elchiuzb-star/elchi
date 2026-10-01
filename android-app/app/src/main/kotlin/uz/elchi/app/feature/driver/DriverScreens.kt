@@ -110,8 +110,15 @@ fun DriverShell(
         when (tab) {
             DriverTab.ROUTES -> work.trips.refresh()
             DriverTab.MATCHES -> work.feed.refresh()
-            DriverTab.ORDERS, DriverTab.HOME -> work.proposals.refresh(ProposalTab.OPEN)
-            DriverTab.PROFILE -> Unit
+            DriverTab.ORDERS -> {
+                work.proposals.refresh(ProposalTab.OPEN)
+                work.bookings.refresh()
+            }
+            DriverTab.HOME -> {
+                work.proposals.refresh(ProposalTab.OPEN)
+                work.trips.refresh()
+            }
+            DriverTab.PROFILE -> work.trips.refresh()
         }
     }
     Column(Modifier.fillMaxSize().background(c.page)) {
@@ -119,25 +126,30 @@ fun DriverShell(
             when (tab) {
                 DriverTab.HOME -> DriverHomeTab(driver, inbox, work, nav, onMatches = { onTab(DriverTab.MATCHES) })
                 DriverTab.ROUTES -> GatedTab(driver, t(R.string.driverRoutes_title), nav, onPlus = nav.onAddTrip, onRefresh = work.trips::refresh) {
-                    TripsList(work.trips, onAdd = nav.onAddTrip, onTrip = nav.onTrip)
+                    TripsList(work.trips, onAdd = nav.onAddTrip, onTrip = nav.onTrip, tracker = work.tracker)
                 }
                 DriverTab.MATCHES -> GatedTab(driver, t(R.string.driverFeed_title), nav, onRefresh = work.feed::refresh) {
                     FeedBody(work.feed, onSaved = nav.onSavedSearches, onOffer = nav.onOffer)
                 }
-                DriverTab.ORDERS -> GatedTab(driver, t(R.string.app_nav_orders), nav, onRefresh = { work.proposals.refresh(ProposalTab.OPEN) }) {
-                    ProposalsEntry(work.proposals, nav.onProposals)
-                    // Booking execution (the driver's orders) is Stage 09.
-                    EmptyState(DriverTab.ORDERS.icon, t(R.string.app_nav_orders), Modifier.padding(top = 12.dp), description = t(R.string.driver_tab_nextStage))
+                DriverTab.ORDERS -> GatedTab(driver, t(R.string.app_nav_orders), nav, onRefresh = { work.proposals.refresh(ProposalTab.OPEN); work.bookings.refresh() }) {
+                    DriverOrdersBody(work.bookings, work.proposals, nav.onProposals, nav.onBooking)
                 }
-                DriverTab.PROFILE -> DriverProfileTab(driver, session, nav)
+                DriverTab.PROFILE -> DriverProfileTab(driver, work, session, nav)
             }
         }
         BottomNav(tab, onTab)
     }
 }
 
-/** The work screens' shared state, one each per driver flow (trips, feed, offers). */
-class DriverWork(val trips: TripsViewModel, val feed: FeedViewModel, val proposals: ProposalsViewModel)
+/** The work screens' shared state, one each per driver flow (trips, feed, offers, bookings, profile numbers). */
+class DriverWork(
+    val trips: TripsViewModel,
+    val feed: FeedViewModel,
+    val proposals: ProposalsViewModel,
+    val bookings: DriverBookingsViewModel,
+    val stats: DriverStatsViewModel,
+    val tracker: uz.elchi.app.gps.DriverTracker,
+)
 
 /** 70dp bar, rounded top, the current tab in brand blue with a heavier label. */
 @Composable
@@ -284,10 +296,13 @@ private fun DriverHomeTab(driver: DriverViewModel, inbox: InboxViewModel, work: 
         pendingReferral?.let { code ->
             PendingReferralRow(t(R.string.driverHome_pendingReferral, "code" to code), driver::confirmReferral, loading = s.referralBusy)
         }
-        // The balance row: "—" while it loads or when it cannot be read, never a made-up zero.
+        // Q148: a running trip's GPS state, right on the home screen.
+        val trips by work.trips.state.collectAsStateWithLifecycle()
+        TripRules.trackable(trips.list)?.let { running -> uz.elchi.app.gps.DriverTrackingBar(work.tracker, running.id, inset = 0.dp) }
+        // The balance row (tap = "Komissiya balansi"): "—" while it loads or when it cannot be read, never a made-up zero.
         ListCard {
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 14.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = nav.onWallet).heightIn(min = 56.dp).padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -297,6 +312,7 @@ private fun DriverHomeTab(driver: DriverViewModel, inbox: InboxViewModel, work: 
                 Text(t(R.string.driverHome_commissionBalance), Modifier.weight(1f), style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text)
                 val wallet = s.wallet
                 Text(if (wallet is Load.Ready) soum(wallet.value) else "—", style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+                ElchiIconView(ElchiIcon.CHEV_R, c.placeholder, size = 18.dp)
             }
         }
         WithProfile(driver, s.profile) { profile ->
@@ -385,45 +401,19 @@ fun VerificationGate(status: DriverStatus, onDocuments: () -> Unit, onProfile: (
 
 // -- profile tab ------------------------------------------------------------------------------------------------
 
-/**
- * The driver's menu (not yet the full Stage 09 profile): who, the status, and the screens this stage has. The
- * client-only parts of the Stage 05 profile (account badge, bonus screen, order stats) are not here.
- */
+/** The full driver profile (Stage 09, [DriverProfileBody]) in the tab frame. */
 @Composable
-private fun DriverProfileTab(driver: DriverViewModel, session: Session, nav: DriverNav) {
+private fun DriverProfileTab(driver: DriverViewModel, work: DriverWork, session: Session, nav: DriverNav) {
     val s by driver.state.collectAsStateWithLifecycle()
-    val c = Elchi.colors
-    var confirmLogout by remember { mutableStateOf(false) }
-    TabFrame(title = t(R.string.app_nav_profile), refreshing = s.refreshing && s.profile is Load.Ready, onRefresh = driver::refresh) {
-        val profile = s.loaded
-        val name = profile?.fullName ?: profile?.user?.fullName ?: session.user.fullName
-        ElchiCard(padding = PaddingValues(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Box(Modifier.size(64.dp).clip(CircleShape).background(c.soft), contentAlignment = Alignment.Center) {
-                    val initials = ProfileRules.initials(name)
-                    if (initials != null) Text(initials, style = Elchi.type.title.copy(fontSize = 22.sp), color = c.softText)
-                    else ElchiIconView(ElchiIcon.USER, c.softText, size = 28.dp)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(name?.takeIf { it.isNotBlank() } ?: displayPhone(session.user.phone), style = Elchi.type.section.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold), color = c.text)
-                    if (!name.isNullOrBlank()) Text(displayPhone(session.user.phone), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = c.muted)
-                    s.status?.let { st -> Badge(statusText(st), DriverRules.statusTone(st), Modifier.padding(top = 4.dp)) }
-                }
-            }
-        }
-        if (s.profile is Load.Failed && profile == null) LoadFailed(t(R.string.driverProfileForm_title), (s.profile as Load.Failed).error, driver::refresh)
-
-        SectionTitle(t(R.string.driver_profile_menuTitle))
-        ListCard {
-            ListRow(t(R.string.driverProfileForm_title), icon = ElchiIcon.CAR, description = t(R.string.driverProfile_action_editHint), first = true, onClick = nav.onProfileForm)
-            ListRow(t(R.string.driverProfile_action_documents), icon = ElchiIcon.FILE, description = t(R.string.driverProfile_action_documentsHint), onClick = nav.onDocuments)
-            ListRow(t(R.string.notifications_title), icon = ElchiIcon.BELL, description = t(R.string.clientProfile_notificationsHint), onClick = nav.onNotifications)
-            ListRow(t(R.string.driverProfile_action_support), icon = ElchiIcon.HEAD, description = t(R.string.driverProfile_action_supportHint), onClick = nav.onHelp)
-            ListRow(t(R.string.support_myThreads), icon = ElchiIcon.CHAT, description = t(R.string.support_myThreadsHint), onClick = nav.onThreads)
-            ListRow(t(R.string.safety_centerTitle), icon = ElchiIcon.BLOCK, description = t(R.string.safety_centerDescription), onClick = nav.onSafety)
-            ListRow(t(R.string.driverProfile_action_settings), icon = ElchiIcon.SETTINGS, description = t(R.string.driverProfile_action_settingsHint), onClick = nav.onSettings)
-            ListRow(t(R.string.driverProfile_action_logout), icon = ElchiIcon.LOGOUT, description = t(R.string.driverProfile_action_logoutHint), style = ListRowStyle.DANGER, onClick = { confirmLogout = true })
-        }
+    TabFrame(
+        title = t(R.string.app_nav_profile),
+        refreshing = s.refreshing && s.profile is Load.Ready,
+        onRefresh = {
+            driver.refresh()
+            work.stats.refresh()
+            work.trips.refresh()
+        },
+    ) {
+        DriverProfileBody(driver, work.stats, work.trips, session, nav)
     }
-    if (confirmLogout) LogoutConfirm(onConfirm = { confirmLogout = false; nav.onSignOut() }, onDismiss = { confirmLogout = false })
 }

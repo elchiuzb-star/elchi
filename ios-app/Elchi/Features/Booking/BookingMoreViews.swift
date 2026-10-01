@@ -5,8 +5,8 @@ import UIKit
 
 /// The current agreement, a new price with a reason (a parcel is one consignment: only the price changes), and the
 /// history with the answers the client may give. A change takes effect only once the other side accepts it.
-struct AmendmentView: View {
-    let booking: BookingModel
+struct AmendmentView<Host: BookingScreenHost>: View {
+    let booking: Host
     let onBack: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
@@ -19,14 +19,14 @@ struct AmendmentView: View {
 
     var body: some View {
         ScreenScaffold(title: strings.t("amendment.title"), backLabel: strings.t("common.back"), onBack: onBack, banner: banner) {
-            if let dto = booking.booking.value {
+            if let dto = booking.bookingBase {
                 ElchiCard {
                     CardRow(strings.t("amendment.currentTerms"),
                             "\(dto.quantity) × \(strings.money(dto.unitPriceMinor)) = \(strings.money(dto.totalMinor))", first: true,
                             detail: strings.t("amendment.takesEffectNote"))
                 }
                 ForEach(model.warnings, id: \.code) { Note(strings.warningText($0), tone: .warn) }
-                if BookingActions.of(dto.serviceStatus).canAmend {
+                if AmendmentActions.amendable(dto.serviceStatus, side: booking.side) {
                     form(dto)
                 } else {
                     Note(strings.t("client.amendment.onlyConfirmed"), tone: .gray)
@@ -61,7 +61,7 @@ struct AmendmentView: View {
 
     /// An open amendment blocks a new one (one at a time): the form says so instead of letting the server refuse.
     private func openOne(_ dto: ClientBookingDTO) -> AmendmentDTO? {
-        model.items.value?.first { AmendmentActions.of($0, bookingStatus: dto.serviceStatus, now: now).open }
+        model.items.value?.first { AmendmentActions.of($0, bookingStatus: dto.serviceStatus, now: now, side: booking.side).open }
     }
 
     @ViewBuilder
@@ -120,11 +120,11 @@ struct AmendmentView: View {
                 Text(strings.t("amendment.empty")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
             }
             ForEach(items, id: \.id) { amendment in
-                let actions = AmendmentActions.of(amendment, bookingStatus: dto.serviceStatus, now: now)
+                let actions = AmendmentActions.of(amendment, bookingStatus: dto.serviceStatus, now: now, side: booking.side)
                 let busy = model.busy == amendment.id
                 ItemCard(title: "\(amendment.newQuantity) × \(strings.money(amendment.newUnitPriceMinor))",
-                         badge: strings.status(AmendmentActions.status(amendment, bookingStatus: dto.serviceStatus, now: now)),
-                         sub: strings.t(amendment.authorSide == "client" ? "amendment.mine" : "amendment.theirs"),
+                         badge: strings.status(AmendmentActions.status(amendment, bookingStatus: dto.serviceStatus, now: now, side: booking.side)),
+                         sub: strings.t(amendment.authorSide == booking.side ? "amendment.mine" : "amendment.theirs"),
                          lines: reasonLine(amendment), right: strings.money(amendment.newTotalMinor)) {
                     if let error = model.error, model.errorFor == amendment.id, model.busy == nil {
                         Note(strings.amendmentErrorText(error), tone: .err).padding(.top, 6)
@@ -151,7 +151,7 @@ struct AmendmentView: View {
         var lines: [ItemLine] = []
         if case .string(let text)? = amendment.changes["reason"], !text.isEmpty { lines.append(ItemLine(text)) }
         if amendment.status == "proposed", let expires = ServerTime.parse(amendment.expiresAt), let left = Countdown.left(until: expires, now: now),
-           booking.booking.value?.serviceStatus == "confirmed" {
+           AmendmentActions.amendable(booking.bookingBase?.serviceStatus ?? "", side: booking.side) {
             lines.append(ItemLine(strings.t("client.amendment.expiresIn", ("time", strings.duration(hours: left.hours, minutes: left.minutes))), tone: .warn))
         }
         return lines
@@ -162,8 +162,9 @@ struct AmendmentView: View {
 
 /// The safety menu (Q146: apart from "Yordam / shikoyat"): a report about this booking (the eight reason codes,
 /// optional details - contacts are masked), and block, behind a confirmation. Unblocking is not offered here.
-struct SafetyView: View {
-    let booking: BookingModel
+struct SafetyView<Host: SafetyHost>: View {
+    let booking: Host
+    var texts = BookingSideTexts.client
     let onBack: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
@@ -173,7 +174,7 @@ struct SafetyView: View {
 
     var body: some View {
         ScreenScaffold(title: strings.t("safety.menuTitle"), backLabel: strings.t("common.back"), onBack: onBack) {
-            Note(strings.t("client.safety.note"), tone: .gray)
+            Note(strings.t(texts.safetyNote), tone: .gray)
             SectionTitle(strings.t("safety.reportTitle"))
             if booking.report != nil {
                 Note(strings.t("blockReport.sentNote"), tone: .ok, title: strings.t("blockReport.sentTitle"))
@@ -197,10 +198,10 @@ struct SafetyView: View {
             }
 
             SectionTitle(strings.t("blockReport.blockTitle"), description: strings.t("blockReport.blockNote"))
-            if booking.booking.value?.driver == nil {
+            if !booking.counterpartyKnown {
                 Note(strings.t("safety.counterpartyMissing"), tone: .gray)
             } else if booking.blocked {
-                Note(strings.t("client.safety.blocked"), tone: .ok)
+                Note(strings.t(texts.blockedNote), tone: .ok)
             } else {
                 if let error = booking.commandError, booking.failed == .block, booking.running == nil {
                     Note(strings.errorText(error), tone: .err)
@@ -215,7 +216,7 @@ struct SafetyView: View {
             if confirmBlock {
                 DialogOverlay(dismissLabel: strings.t("confirmDialog.back"), onDismiss: { if booking.running != .block { confirmBlock = false } }) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(strings.t("client.safety.blockConfirmTitle")).font(ElchiFont.poppins(19, .medium, relativeTo: .title2)).foregroundStyle(c.text)
+                        Text(strings.t(texts.blockConfirmTitle)).font(ElchiFont.poppins(19, .medium, relativeTo: .title2)).foregroundStyle(c.text)
                             .accessibilityAddTraits(.isHeader)
                         Text(strings.t("blockReport.blockNote")).font(ElchiFont.secondary).foregroundStyle(c.muted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -238,8 +239,9 @@ struct SafetyView: View {
 
 /// Five stars, an optional comment (moderated before it is published; contacts masked), "Bahoni yuborish" and
 /// "Keyinroq". Done - or already rated, or no longer allowed - goes back to the booking, which then says so.
-struct RatingView: View {
-    let booking: BookingModel
+struct RatingView<Host: RatingHost>: View {
+    let booking: Host
+    var texts = BookingSideTexts.client
     let onBack: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
@@ -247,7 +249,7 @@ struct RatingView: View {
     @State private var comment = ""
 
     var body: some View {
-        ScreenScaffold(title: strings.t("rating.titleDriver"), backLabel: strings.t("common.back"), onBack: onBack) {
+        ScreenScaffold(title: strings.t(texts.ratingTitle), backLabel: strings.t("common.back"), onBack: onBack) {
             Text(strings.t("bookingRating.prompt")).font(ElchiFont.poppins(18, .medium, relativeTo: .title3)).foregroundStyle(c.text)
                 .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 12)
                 .accessibilityAddTraits(.isHeader)

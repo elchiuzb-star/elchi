@@ -697,6 +697,8 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
     @Environment(\.elchi) private var c
     /// The app's banner (Stage 06), drawn under the top bar when the app provides one.
     @Environment(BannerCenter.self) private var banners: BannerCenter?
+    /// A line the screen's owner puts under the bar (the driver's GPS bar on a running trip's screens).
+    @Environment(\.screenAccessory) private var accessory
 
     public init(title: String, right: String? = nil, rightIcon: ElchiIcon? = nil, onRight: (() -> Void)? = nil, leading: ElchiIcon = .back,
                 backLabel: String, onBack: (() -> Void)?, showsFooter: Bool = true, banner: (text: String, tone: Tone)? = nil,
@@ -740,6 +742,7 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
             }
             .frame(height: 64)
             .padding(.horizontal, 16)
+            if let accessory { accessory }
             if let banners { BannerHost(center: banners) }
             if let banner { Banner(banner.text, tone: banner.tone).id(banner.text) }
             ScrollView {
@@ -1589,7 +1592,7 @@ public struct StatTiles: View {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.label).font(ElchiFont.caption).foregroundStyle(c.muted).lineLimit(1).minimumScaleFactor(0.8)
-                    Text(item.value).font(ElchiFont.poppins(18, .semibold)).foregroundStyle(c.text).lineLimit(1)
+                    Text(item.value).font(ElchiFont.poppins(18, .semibold)).foregroundStyle(c.text).lineLimit(1).minimumScaleFactor(0.6)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1606,14 +1609,18 @@ public struct AvatarCard: View {
     let initials: String?
     let name: String
     let phone: String?
-    let badge: (text: String, tone: Tone)?
+    let badges: [(text: String, tone: Tone)]
     @Environment(\.elchi) private var c
 
     public init(initials: String?, name: String, phone: String?, badge: (text: String, tone: Tone)? = nil) {
+        self.init(initials: initials, name: name, phone: phone, badges: badge.map { [$0] } ?? [])
+    }
+
+    public init(initials: String?, name: String, phone: String?, badges: [(text: String, tone: Tone)]) {
         self.initials = initials
         self.name = name
         self.phone = phone
-        self.badge = badge
+        self.badges = badges
     }
 
     public var body: some View {
@@ -1631,7 +1638,12 @@ public struct AvatarCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(name).font(ElchiFont.poppins(18, .semibold)).foregroundStyle(c.text).lineLimit(2)
                 if let phone { Text(phone).font(ElchiFont.poppins(13)).foregroundStyle(c.muted) }
-                if let badge { Badge(badge.text, tone: badge.tone).padding(.top, 4) }
+                if !badges.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(Array(badges.enumerated()), id: \.offset) { _, badge in Badge(badge.text, tone: badge.tone) }
+                    }
+                    .padding(.top, 4)
+                }
             }
             Spacer(minLength: 0)
         }

@@ -43,12 +43,20 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Posilka rasmini olish uchun kamera kerak.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Ilova fonda yoki ekran o'chiq bo'lsa ham safar joylashuvini yuborish uchun «Har doim» ruxsati kerak. Joylashuv faqat boshlangan safar davomida yuboriladi va safar tugashi bilan to'xtaydi.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Safar davomida mijozlar mashinangizni xaritada ko'rishi uchun joylashuvingiz kerak. Joylashuv faqat boshlangan safar davomida yuboriladi.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Poppins-Regular.ttf</string>
 		<string>Poppins-Medium.ttf</string>
 		<string>Poppins-SemiBold.ttf</string>
 		<string>Poppins-Bold.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
 	</array>
 </dict>
 </plist>

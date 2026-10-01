@@ -146,7 +146,7 @@ fun BookingDetailScreen(
 }
 
 @Composable
-private fun BookingNotices(s: BookingViewModel.State) {
+internal fun BookingNotices(s: BookingViewModel.State) {
     s.notice?.let {
         val text = t(
             when (it) {
@@ -157,6 +157,7 @@ private fun BookingNotices(s: BookingViewModel.State) {
                 BookingNotice.AMENDMENT_REJECTED -> R.string.amendment_rejected
                 BookingNotice.AMENDMENT_WITHDRAWN -> R.string.amendment_withdrawn
                 BookingNotice.RATED -> R.string.client_bookingDetail_rated
+                BookingNotice.ARRIVED -> R.string.driver_booking_arrived
             },
         )
         Banner(text, Tone.OK)
@@ -432,13 +433,13 @@ private fun RatingEntry(s: BookingViewModel.State, onRate: () -> Unit) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BookingCancelSheet(vm: BookingViewModel, s: BookingViewModel.State, booking: BookingClientDTO, ru: Boolean, onDismiss: () -> Unit) {
+internal fun BookingCancelSheet(vm: BookingViewModel, s: BookingViewModel.State, booking: BookingClientDTO, ru: Boolean, onDismiss: () -> Unit) {
     val c = Elchi.colors
     val title = t(R.string.bookingCancel_title)
     // The server's own policy line is the authority, but it comes in Uzbek only; Russian keeps the dictionary text.
     val body = booking.cancellationPolicySummary?.takeIf { !ru && it.isNotBlank() } ?: t(R.string.bookingCancel_body)
     val reasonLabel = t(R.string.bookingCancel_reasonLabel)
-    val reasons = BookingRules.CLIENT_CANCEL_REASONS.map { it to (tOrNull("bookingCancel.reason.$it") ?: it) }
+    val reasons = vm.cancelReasons.map { it to (tOrNull("bookingCancel.reason.$it") ?: it) }
     val commentLabel = t(R.string.bookingCancel_commentLabel)
     val commentHint = t(R.string.app_bookingCancel_commentHint)
     val confirm = t(R.string.bookingCancel_confirm)
@@ -578,14 +579,14 @@ private fun AmendmentForm(vm: BookingViewModel, s: BookingViewModel.State, booki
 /** One amendment of the history: the new terms, whose it is, its status; the answers only while it is live. */
 @Composable
 private fun AmendmentItem(vm: BookingViewModel, s: BookingViewModel.State, amendment: AmendmentDTO, bookingStatus: String, now: Instant) {
-    val actions = BookingRules.amendmentActions(amendment, bookingStatus, now)
+    val actions = BookingRules.amendmentActions(amendment, bookingStatus, now, vm.side.wire)
     val status = BookingRules.amendmentDisplayStatus(amendment, now)
     val busy = s.amendBusy == amendment.id
     val otherBusy = s.amendBusy != null && !busy
     val promo = amendment.promo as? BookingPromoClientDTO
     ItemCard(
         title = "${amendment.newQuantity} × ${soum(amendment.newUnitPriceMinor)}",
-        sub = t(if (amendment.authorSide == "client") R.string.amendment_mine else R.string.amendment_theirs),
+        sub = t(if (amendment.authorSide == vm.side.wire) R.string.amendment_mine else R.string.amendment_theirs),
         badge = (tOrNull(BookingRules.amendmentStatusKey(status)) ?: status) to BookingRules.amendmentTone(status),
         lines = listOfNotNull(
             // A driver's proposal left from before boarding: still "proposed" on the server, but it can no longer apply.
@@ -646,7 +647,7 @@ fun RatingScreen(vm: BookingViewModel, onBack: () -> Unit, onDone: () -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(s.rated, s.ratingRefusal) { if (s.rated || s.ratingRefusal != null) onDone() }
     StepScaffold(
-        title = t(R.string.rating_titleDriver),
+        title = t(if (vm.side == BookingSide.DRIVER) R.string.rating_titleClient else R.string.rating_titleDriver),
         onBack = onBack,
         footer = {
             s.ratingError?.let { Note(errorText(it), tone = Tone.ERR) }
@@ -685,6 +686,7 @@ fun RatingScreen(vm: BookingViewModel, onBack: () -> Unit, onDone: () -> Unit) {
 fun SafetyScreen(vm: BookingViewModel, onBack: () -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
     var confirmBlock by rememberSaveable { mutableStateOf(false) }
+    val driverSide = vm.side == BookingSide.DRIVER
     LaunchedEffect(s.blocked) { if (s.blocked) confirmBlock = false }
     StepScaffold(title = t(R.string.safety_menuTitle), onBack = onBack) {
         Note(t(R.string.client_safety_note), tone = Tone.GRAY)
@@ -709,11 +711,11 @@ fun SafetyScreen(vm: BookingViewModel, onBack: () -> Unit) {
         }
         SectionTitle(t(R.string.blockReport_blockTitle), description = t(R.string.blockReport_blockNote))
         when {
-            s.blocked -> Note(t(R.string.client_safety_blocked), tone = Tone.OK)
-            s.value?.driver == null -> Note(t(R.string.safety_counterpartyMissing), tone = Tone.GRAY)
+            s.blocked -> Note(t(if (driverSide) R.string.driver_safety_blocked else R.string.client_safety_blocked), tone = Tone.OK)
+            vm.counterpartId(s) == null -> Note(t(R.string.safety_counterpartyMissing), tone = Tone.GRAY)
             confirmBlock -> ElchiCard(bordered = true, padding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(t(R.string.client_safety_blockConfirmTitle), style = Elchi.type.bodyStrong, color = Elchi.colors.text)
+                    Text(t(if (driverSide) R.string.driver_safety_blockConfirmTitle else R.string.client_safety_blockConfirmTitle), style = Elchi.type.bodyStrong, color = Elchi.colors.text)
                     s.blockError?.let { Note(errorText(it), tone = Tone.ERR) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ElchiButton(t(R.string.client_safety_blockConfirm), vm::block, Modifier.weight(1f).height(48.dp), ButtonVariant.DANGER, ButtonSize.MEDIUM, loading = s.blocking, horizontalPadding = 10.dp)

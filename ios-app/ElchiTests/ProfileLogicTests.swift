@@ -67,7 +67,8 @@ struct InboxTests {
         #expect(Inbox.target("/proposals/prt_3/messages") == .proposal("prt_3"))
         #expect(Inbox.target("/support-threads/sth_4") == .supportThread("sth_4"))
         #expect(Inbox.target("/trips/trp_5") == .trip("trp_5"))
-        #expect(Inbox.target("/wallet") == nil)
+        #expect(Inbox.target("/wallet") == .wallet) // Stage 09: the driver's top-up decision opens the wallet
+        #expect(Inbox.target("/settings") == nil)
         #expect(Inbox.target(nil) == nil)
         #expect(Inbox.target("") == nil)
     }

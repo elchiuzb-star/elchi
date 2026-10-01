@@ -220,7 +220,12 @@ class ProfileViewModel(
  * switched off (`403 FEATURE_DISABLED`, `promotions_enabled`) only the balance stays: code, entry and campaigns
  * hide and the screen says the programme is off. Nothing here promises a parcel reward (Q131/Q147).
  */
-class BonusViewModel(private val api: ElchiApi, private val referral: PendingReferral? = null) : ViewModel() {
+class BonusViewModel(
+    private val api: ElchiApi,
+    private val referral: PendingReferral? = null,
+    /** `client` (Stage 05 "Bonuslar") or `driver` (Stage 09 "Kredit va taklif kodi"). */
+    val audience: String = AUDIENCE,
+) : ViewModel() {
 
     data class State(
         val balance: Load<PromoBalanceDTO> = Load.Loading,
@@ -234,13 +239,14 @@ class BonusViewModel(private val api: ElchiApi, private val referral: PendingRef
         val enterError: Throwable? = null,
         val accepted: Boolean = false,
         val copied: Boolean = false,
+        val audience: String = AUDIENCE,
     ) {
-        val hasAttribution: Boolean get() = (referrals as? Load.Ready)?.value?.attributions?.any { it.audience == AUDIENCE } == true
+        val hasAttribution: Boolean get() = (referrals as? Load.Ready)?.value?.attributions?.any { it.audience == audience } == true
         val normalized: String? get() = PromoRules.normalizeCode(entered)
     }
 
     // A code kept from a link (`elchi.../r/<code>`) is already in the field; the person still confirms it.
-    private val _state = MutableStateFlow(State(entered = referral?.pending?.value?.let(PromoRules::typedCode).orEmpty()))
+    private val _state = MutableStateFlow(State(entered = referral?.pending?.value?.let(PromoRules::typedCode).orEmpty(), audience = audience))
     val state: StateFlow<State> = _state.asStateFlow()
     private val keys = ActionKeys()
 
@@ -294,10 +300,10 @@ class BonusViewModel(private val api: ElchiApi, private val referral: PendingRef
         val s = _state.value
         val code = s.normalized ?: return
         if (s.entering) return
-        val scope = "attribute:$code"
+        val scope = "attribute:$audience:$code"
         _state.update { it.copy(entering = true, enterError = null) }
         viewModelScope.launch {
-            val result = attempt { api.attribute(AttributionRequest(audience = AUDIENCE, code = code), keys.key(scope)) }
+            val result = attempt { api.attribute(AttributionRequest(audience = audience, code = code), keys.key(scope)) }
             keys.settle(scope, result.exceptionOrNull())
             // Made, or refused for good: the kept code is forgotten; the programme being off keeps it for later.
             referral?.let { if (ReferralRules.forgetAfter(result.exceptionOrNull(), code, it.pending.value)) it.forget() }
@@ -313,6 +319,7 @@ class BonusViewModel(private val api: ElchiApi, private val referral: PendingRef
 
     companion object {
         const val AUDIENCE = "client"
+        const val DRIVER_AUDIENCE = "driver"
         private const val CODE_SCOPE = "referral-code"
     }
 }

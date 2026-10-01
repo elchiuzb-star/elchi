@@ -82,8 +82,10 @@ internal fun commandLabel(command: TripCommand): String = tOrNull(command.labelK
 
 /** The Routes tab body (the gate is the caller's): the private plans, the add button, the next step per card. */
 @Composable
-internal fun TripsList(vm: TripsViewModel, onAdd: () -> Unit, onTrip: (String) -> Unit) {
+internal fun TripsList(vm: TripsViewModel, onAdd: () -> Unit, onTrip: (String) -> Unit, tracker: uz.elchi.app.gps.DriverTracker? = null) {
     val s by vm.state.collectAsStateWithLifecycle()
+    // Q148: the running trip's GPS bar above the list (it asks the permission an auto-start needs).
+    if (tracker != null) uz.elchi.app.gps.DriverTrackingBar(tracker, TripRules.trackable(s.list)?.id, inset = 0.dp)
     when (val trips = s.trips) {
         Load.Loading -> LoadingState(count = 3)
         is Load.Failed -> LoadFailed(t(R.string.driverRoutes_title), trips.error, vm::refresh)
@@ -291,12 +293,14 @@ private fun RoutePicker(s: AddTripViewModel.State, vm: AddTripViewModel, ru: Boo
 
 /** `driver-trip-detail`: header, stops, free room per segment, the manifest, and the commands. */
 @Composable
-fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit) {
+fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.elchi.app.gps.DriverTracker? = null, onBooking: (String) -> Unit = {}) {
     val s by vm.state.collectAsStateWithLifecycle()
     var reasonFor by remember { mutableStateOf<TripCommand?>(null) }
+    val running = (s.trip as? Load.Ready)?.value?.takeIf { TripRules.publishable(it.status) }?.id
     StepScaffold(
         title = t(R.string.trip_detailsTitle),
         onBack = onBack,
+        banner = if (tracker != null) ({ uz.elchi.app.gps.DriverTrackingBar(tracker, running) }) else null,
         onRefresh = vm::refresh,
         refreshing = s.refreshing && s.trip is Load.Ready,
     ) {
@@ -307,7 +311,7 @@ fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit) {
                 TripHeader(trip.value)
                 TripStops(trip.value)
                 Availability(s, trip.value)
-                Manifest(s)
+                Manifest(s, onBooking)
                 TripCommands(trip.value, s.busy, s.opensAt, onCommand = { command -> if (command.needsReason) reasonFor = command else vm.act(command) }, onRefresh = vm::refresh)
             }
         }
@@ -398,7 +402,7 @@ private fun Availability(s: TripDetailViewModel.State, trip: TripDTO) {
 }
 
 @Composable
-private fun Manifest(s: TripDetailViewModel.State) {
+private fun Manifest(s: TripDetailViewModel.State, onBooking: (String) -> Unit) {
     val ru = appRu()
     ElchiCard {
         CardHeader(t(R.string.tripDetail_manifestTitle))
@@ -415,7 +419,7 @@ private fun Manifest(s: TripDetailViewModel.State) {
                 if (rows.isEmpty()) {
                     Text(t(R.string.tripDetail_manifestEmpty), Modifier.padding(vertical = 10.dp), style = Elchi.type.label, color = Elchi.colors.muted)
                 } else {
-                    rows.forEachIndexed { i, (key, item, pickup) -> ManifestRow(key, item, pickup, first = i == 0) }
+                    rows.forEachIndexed { i, (key, item, pickup) -> ManifestRow(key, item, pickup, first = i == 0, onOpen = { onBooking(item.bookingId) }) }
                 }
             }
         }
@@ -423,7 +427,7 @@ private fun Manifest(s: TripDetailViewModel.State) {
 }
 
 @Composable
-private fun ManifestRow(key: String, item: ManifestItemDTO, pickup: Boolean, first: Boolean) {
+private fun ManifestRow(key: String, item: ManifestItemDTO, pickup: Boolean, first: Boolean, onOpen: () -> Unit) {
     val what = when {
         item.serviceType == ServiceType.PARCEL -> item.parcelSummary ?: t(R.string.tripDetail_parcel)
         else -> t(R.string.tripDetail_seats, "count" to (item.seats ?: 1))
@@ -435,7 +439,8 @@ private fun ManifestRow(key: String, item: ManifestItemDTO, pickup: Boolean, fir
     } else {
         null
     }
-    CardRow(key, listOfNotNull("${item.clientFirstName} — $what", status).joinToString(" · "), first = first, detail = phone)
+    // Stage 09: the booking (its chat, "Keldim", support) opens from its manifest row.
+    CardRow(key, listOfNotNull("${item.clientFirstName} — $what", status).joinToString(" · "), first = first, detail = phone, trailing = t(R.string.driverBooking_messages), onTrailing = onOpen)
 }
 
 @Composable

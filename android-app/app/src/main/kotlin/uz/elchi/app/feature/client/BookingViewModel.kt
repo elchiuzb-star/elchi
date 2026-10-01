@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uz.elchi.app.api.ApiException
 import uz.elchi.app.api.BookingClientDTO
+import uz.elchi.app.api.DriverBookingDTO
 import uz.elchi.app.api.ElchiJson
 import uz.elchi.app.api.FilesApi
 import uz.elchi.app.api.generated.AmendmentAccept
@@ -23,6 +24,10 @@ import uz.elchi.app.api.generated.AmendmentDTO
 import uz.elchi.app.api.generated.AmendmentDecision
 import uz.elchi.app.api.generated.ApiWarning
 import uz.elchi.app.api.generated.BlockCreate
+import uz.elchi.app.api.generated.BookingAction
+import uz.elchi.app.api.generated.BookingActionRequest
+import uz.elchi.app.api.generated.BookingPromoDriverDTO
+import uz.elchi.app.api.generated.PromoDriverAckInput
 import uz.elchi.app.api.generated.BookingCancel
 import uz.elchi.app.api.generated.BookingPromoClientDTO
 import uz.elchi.app.api.generated.ContactDetails
@@ -42,7 +47,10 @@ import java.time.Instant
 import java.util.UUID
 
 /** What a booking command left to say once (a banner on the detail screen), then cleared. */
-enum class BookingNotice { DRIVER_CHOSEN, CANCELLED, AMENDMENT_SENT, AMENDMENT_ACCEPTED, AMENDMENT_REJECTED, AMENDMENT_WITHDRAWN, RATED }
+enum class BookingNotice { DRIVER_CHOSEN, CANCELLED, AMENDMENT_SENT, AMENDMENT_ACCEPTED, AMENDMENT_REJECTED, AMENDMENT_WITHDRAWN, RATED, ARRIVED }
+
+/** Whose booking screen this is: the client's (Stage 04) or the assigned driver's (Stage 09, the same screens reused). */
+enum class BookingSide(val wire: String) { CLIENT("client"), DRIVER("driver") }
 
 /**
  * Stage 04, one booking of the signed-in client (scoped to its detail screen, shared with the amendment, rating and
@@ -56,6 +64,9 @@ class BookingViewModel(
     private val apiBase: String,
     val bookingId: String,
     private val now: () -> Instant = Instant::now,
+    val side: BookingSide = BookingSide.CLIENT,
+    /** The driver's booking commands (the generated call builds a wrong path, [BookingActionsApi]). */
+    private val actions: uz.elchi.app.api.BookingActionsApi? = null,
 ) : ViewModel() {
 
     data class State(
@@ -108,6 +119,13 @@ class BookingViewModel(
         val blocking: Boolean = false,
         val blockError: Throwable? = null,
         val blocked: Boolean = false,
+        // driver side (Stage 09)
+        /** The driver's own view: the client, the receiver after departure, the commission (Q103). */
+        val driverView: DriverBookingDTO? = null,
+        /** When the driver's "Keldim" was recorded (`GET /bookings/{id}/tracking` `driver_arrived_at`): sent once. */
+        val arrivedAt: String? = null,
+        val arriving: Boolean = false,
+        val arriveError: Throwable? = null,
     ) {
         val value: BookingClientDTO? get() = (booking as? Load.Ready)?.value
         val amendmentList: List<AmendmentDTO> get() = (amendments as? Load.Ready)?.value.orEmpty()
@@ -135,8 +153,23 @@ class BookingViewModel(
 
     fun consumeNotice() = _state.update { it.copy(notice = null, warnings = emptyList()) }
 
+    /** The cancel reasons of this side (`BookingCancel.reason_code`). */
+    val cancelReasons: List<String> get() = if (side == BookingSide.DRIVER) DRIVER_CANCEL_REASONS else BookingRules.CLIENT_CANCEL_REASONS
+
+    /** The other party of the booking (reputation, block): the driver for the client, the client for the driver. */
+    fun counterpartId(s: State = _state.value): String? = if (side == BookingSide.DRIVER) s.driverView?.client?.id else s.value?.driver?.id
+
+    /** The shared part for the reused screens; on the driver side the driver's own view is kept next to it. */
+    private fun decode(json: kotlinx.serialization.json.JsonElement): BookingClientDTO? {
+        if (side == BookingSide.CLIENT) return BookingClientDTO.fromJson(json)
+        val driverView = DriverBookingDTO.fromJson(json) ?: return null
+        val shared = BookingClientDTO.anySide(json) ?: return null
+        _state.update { it.copy(driverView = driverView) }
+        return shared
+    }
+
     private suspend fun fetchBooking(): BookingClientDTO =
-        BookingClientDTO.fromJson(api.getBooking(bookingId).data) ?: throw ApiException(0, ApiException.SERVER, "not a client booking")
+        decode(api.getBooking(bookingId).data) ?: throw ApiException(0, ApiException.SERVER, "not this side's booking")
 
     private suspend fun loadBooking() {
         try {
@@ -154,7 +187,7 @@ class BookingViewModel(
     /** The side reads that hang off the booking: each once, each allowed to fail without failing the screen. */
     private fun afterBooking(booking: BookingClientDTO) {
         loadPhoto(booking)
-        booking.driver?.id?.takeIf { it != reputationFor }?.let { driverId ->
+        counterpartId()?.takeIf { it != reputationFor }?.let { driverId ->
             reputationFor = driverId
             viewModelScope.launch {
                 try {
@@ -168,8 +201,9 @@ class BookingViewModel(
                 }
             }
         }
+        if (side == BookingSide.DRIVER) loadArrival(booking)
         // The receiver is the client's own entry on its request (the booking shows it only to the driver).
-        booking.listingIds?.request?.takeIf { it != receiverFor }?.let { listingId ->
+        booking.listingIds?.request?.takeIf { it != receiverFor && side == BookingSide.CLIENT }?.let { listingId ->
             receiverFor = listingId
             viewModelScope.launch {
                 runCatching { ElchiJson.decodeFromJsonElement(ListingDTO.serializer(), api.getListing(listingId).data).parcel?.receiver }
@@ -228,7 +262,7 @@ class BookingViewModel(
     }
 
     private fun setBooking(json: kotlinx.serialization.json.JsonElement) {
-        BookingClientDTO.fromJson(json)?.let { booking ->
+        decode(json)?.let { booking ->
             _state.update { it.copy(booking = Load.Ready(booking)) }
             afterBooking(booking)
         }
@@ -236,7 +270,7 @@ class BookingViewModel(
 
     // -- cancel (booking-cancel sheet) --------------------------------------------------------------------------
 
-    fun openCancel() = _state.update { it.copy(cancelReason = BookingRules.CLIENT_CANCEL_REASONS.first(), cancelComment = "", cancelError = null, cancelDone = false) }
+    fun openCancel() = _state.update { it.copy(cancelReason = cancelReasons.first(), cancelComment = "", cancelError = null, cancelDone = false) }
 
     fun setCancelReason(code: String) = _state.update { it.copy(cancelReason = code, cancelError = null) }
 
@@ -324,7 +358,7 @@ class BookingViewModel(
         viewModelScope.launch {
             try {
                 keyed("rate:${s.stars}:${comment.orEmpty()}") { key ->
-                    api.createRating(bookingId, RatingCreate(comment = comment, stars = s.stars.toLong(), subjectSide = DRIVER), key)
+                    api.createRating(bookingId, RatingCreate(comment = comment, stars = s.stars.toLong(), subjectSide = if (side == BookingSide.DRIVER) CLIENT else DRIVER), key)
                 }
                 _state.update { it.copy(rating = false, rated = true, notice = BookingNotice.RATED) }
             } catch (e: CancellationException) {
@@ -387,8 +421,11 @@ class BookingViewModel(
      */
     fun acceptAmendment(amendment: AmendmentDTO) = amendCommand(amendment.id, "amend-accept:${amendment.id}:${amendment.version}") { key ->
         val promo = amendment.promo as? BookingPromoClientDTO
-        val consent = promo?.let { PromoConsentInput(cashDueMinor = it.cashDueMinor, passengerBonusMinor = it.passengerDiscountMinor) }
-        val result = api.acceptAmendment(amendment.id, AmendmentAccept(expectedVersion = amendment.version, promoConsent = consent), key)
+        val consent = promo?.takeIf { side == BookingSide.CLIENT }?.let { PromoConsentInput(cashDueMinor = it.cashDueMinor, passengerBonusMinor = it.passengerDiscountMinor) }
+        // Q125: the driver confirms exactly the cash and commission it was shown (discounted bookings only).
+        val ack = (amendment.promo as? BookingPromoDriverDTO)?.takeIf { side == BookingSide.DRIVER }
+            ?.let { PromoDriverAckInput(cashToCollectMinor = it.cashToCollectMinor, commissionChargedMinor = it.commissionChargedMinor) }
+        val result = api.acceptAmendment(amendment.id, AmendmentAccept(expectedVersion = amendment.version, promoConsent = consent, promoDriverAck = ack), key)
         setBooking(result.data)
         _state.update { it.copy(notice = BookingNotice.AMENDMENT_ACCEPTED, warnings = result.warnings) }
     }
@@ -456,9 +493,9 @@ class BookingViewModel(
         }
     }
 
-    /** `POST /blocks {user_id}`: the driver of this booking. The booking itself and support go on (Q15). */
+    /** `POST /blocks {user_id}`: the other party of this booking. The booking itself and support go on (Q15). */
     fun block() {
-        val driverId = _state.value.value?.driver?.id ?: return
+        val driverId = counterpartId() ?: return
         if (_state.value.blocking) return
         _state.update { it.copy(blocking = true, blockError = null) }
         viewModelScope.launch {
@@ -473,6 +510,44 @@ class BookingViewModel(
         }
     }
 
+    // -- driver: "Keldim" (Stage 09) ------------------------------------------------------------------------------
+
+    /** Whether the driver's "Keldim" is already recorded: the booking DTO does not carry it, the tracking view does. */
+    private fun loadArrival(booking: BookingClientDTO) {
+        if (_state.value.arrivedAt != null || booking.serviceStatus !in ARRIVE_STATUSES) return
+        viewModelScope.launch {
+            runCatching { api.getBookingTracking(bookingId).data.driverArrivedAt }
+                .onSuccess { at -> if (at != null) _state.update { it.copy(arrivedAt = at) } }
+                .onFailure { if (it is CancellationException) throw it }
+        }
+    }
+
+    /**
+     * `POST /bookings/{id}/actions/arrive_at_pickup {expected_version}` - a signal for the client (Q44), not a status
+     * change; the server records it once.
+     */
+    fun arrive() {
+        val s = _state.value
+        val booking = s.value ?: return
+        val actions = actions ?: return
+        if (s.arriving || side != BookingSide.DRIVER) return
+        _state.update { it.copy(arriving = true, arriveError = null) }
+        viewModelScope.launch {
+            try {
+                val result = keyed("arrive:${booking.id}:${booking.version}") { key ->
+                    actions.act(booking.id, BookingAction.ARRIVE_AT_PICKUP, BookingActionRequest(expectedVersion = booking.version), key)
+                }
+                setBooking(result.data)
+                _state.update { it.copy(arriving = false, arrivedAt = it.arrivedAt ?: now().toString(), notice = BookingNotice.ARRIVED) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(arriving = false, arriveError = e) }
+                if (e is ApiException && e.code in RELOAD_ON) loadBooking()
+            }
+        }
+    }
+
     init {
         refresh()
     }
@@ -480,6 +555,13 @@ class BookingViewModel(
     companion object {
         const val NEW_AMENDMENT = "new"
         private const val DRIVER = "driver"
+        private const val CLIENT = "client"
+
+        /** The driver's own cancel reasons (`bookingCancel.reason.<code>`); `other` last. */
+        val DRIVER_CANCEL_REASONS = listOf("trip_changed", "vehicle_problem", "client_unreachable", "other")
+
+        /** Before the service starts (server `PRE_SERVICE_STATUSES`): "Keldim" is possible. */
+        val ARRIVE_STATUSES = setOf("confirmed", "awaiting_pickup")
         private const val PHOTO_MAX_PX = 1200
         private const val COMMENT_MAX = 1000
         private const val REASON_MAX = 500

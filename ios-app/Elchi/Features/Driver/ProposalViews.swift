@@ -1,27 +1,5 @@
 import SwiftUI
 
-// MARK: - Buyurtmalar (orders tab)
-
-/// The driver's orders tab: "Takliflarim" on top (the offers the driver sent); bookings themselves are Stage 09.
-struct DriverOrdersTab: View {
-    let proposals: DriverProposalsModel
-    let onProposals: () -> Void
-    @Environment(LocaleStore.self) private var strings
-
-    var body: some View {
-        DriverTabScreen(title: strings.t("app.nav.orders")) {
-            ElchiList {
-                ListRow(icon: .tag, title: strings.t("proposals.title"), description: strings.t("proposals.emptyDriver"),
-                        trailing: proposals.openCount.map { $0 > 0 ? "\($0)" : nil } ?? nil, first: true, action: onProposals)
-                    .accessibilityIdentifier("elchi.driver.proposals")
-            }
-            EmptyState(icon: .clip, title: strings.t("driver.tab.nextStage"))
-        }
-        .refreshable { await proposals.load(.open) }
-        .task { await proposals.load(.open) }
-    }
-}
-
 // MARK: - Takliflarim
 
 /// Open · Accepted · Closed. Each card: route, window, current price, whose turn it is, the countdown (the list is
@@ -102,6 +80,8 @@ struct ProposalCard: View {
 struct DriverThreadView: View {
     let model: DriverThreadModel
     let onBack: () -> Void
+    /// Stage 09: the booking an accepted thread became.
+    var onOpenBooking: ((String) -> Void)? = nil
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @State private var now = Date()
@@ -162,8 +142,15 @@ struct DriverThreadView: View {
         }
         ForEach(model.warnings, id: \.code) { Note(strings.priceWarningText($0), tone: .warn) }
         if thread.state == "accepted" || thread.bookingId != nil {
-            Note(strings.t("driver.proposals.bookingCreated", ("id", bookingId ?? thread.bookingId ?? "—")), tone: .ok)
-                .accessibilityIdentifier("elchi.thread.booked")
+            if let id = bookingId ?? thread.bookingId, let onOpenBooking {
+                Note(strings.t("driver.proposals.bookingReady"), tone: .ok)
+                    .accessibilityIdentifier("elchi.thread.booked")
+                ElchiButton(strings.t("driverBooking.title"), variant: .soft, icon: .clip) { onOpenBooking(id) }
+                    .accessibilityIdentifier("elchi.thread.openBooking")
+            } else {
+                Note(strings.t("driver.proposals.bookingCreated", ("id", bookingId ?? thread.bookingId ?? "—")), tone: .ok)
+                    .accessibilityIdentifier("elchi.thread.booked")
+            }
         }
         if actions.open { answers(actions, thread) }
         history(thread)

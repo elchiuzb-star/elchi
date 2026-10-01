@@ -171,6 +171,8 @@ public enum ChatTimeline {
 
     /// The quick replies a client may send (Q100: never `price_agreed` in a booking chat).
     public static let clientQuickReplies: [QuickReplyCode] = [.atStop, .clarifyStop]
+    /// The driver's (§16): on the way, at the stop, which stop.
+    public static let driverQuickReplies: [QuickReplyCode] = [.arrivingIn5Min, .atStop, .clarifyStop]
 
     /// Seconds to wait after `RATE_LIMITED`, from `details.retry_after_s`.
     public static func retryAfter(_ error: Error) -> Int? {
@@ -224,18 +226,25 @@ public struct AmendmentActions: Equatable, Sendable {
     public let canReject: Bool
     public let canWithdraw: Bool
 
-    public static func of(_ amendment: AmendmentDTO, bookingStatus: String, now: Date = Date()) -> AmendmentActions {
+    /// Whether the booking still takes a change - for both sides only while `confirmed`: the server creates one in
+    /// `awaiting_pickup` too, but its accept refuses every change once the trip left `planned` (`trip_not_planned`),
+    /// and awaiting_pickup means the trip is boarding (the web offers it there - not copied).
+    public static func amendable(_ bookingStatus: String, side: String = "client") -> Bool {
+        bookingStatus == "confirmed"
+    }
+
+    public static func of(_ amendment: AmendmentDTO, bookingStatus: String, now: Date = Date(), side: String = "client") -> AmendmentActions {
         let expired = ServerTime.parse(amendment.expiresAt).map { now >= $0 } ?? false
-        let open = amendment.status == "proposed" && !expired && bookingStatus == "confirmed"
-        let theirs = amendment.authorSide != "client"
+        let open = amendment.status == "proposed" && !expired && amendable(bookingStatus, side: side)
+        let theirs = amendment.authorSide != side
         return AmendmentActions(open: open, canAccept: open && theirs, canReject: open && theirs, canWithdraw: open && !theirs)
     }
 
     /// The status badge: key and tone (a proposed one the clock has closed reads as expired).
-    public static func status(_ amendment: AmendmentDTO, bookingStatus: String, now: Date = Date()) -> StatusLabel {
+    public static func status(_ amendment: AmendmentDTO, bookingStatus: String, now: Date = Date(), side: String = "client") -> StatusLabel {
         let expired = ServerTime.parse(amendment.expiresAt).map { now >= $0 } ?? false
         let status = amendment.status != "proposed" ? amendment.status : expired ? "expired"
-            : bookingStatus != "confirmed" ? "closed" : "proposed"
+            : !amendable(bookingStatus, side: side) ? "closed" : "proposed"
         switch status {
         case "proposed": return StatusLabel(key: "status.proposed", raw: status, tone: .warn)
         case "accepted": return StatusLabel(key: "client.amendment.statusAccepted", raw: status, tone: .ok)

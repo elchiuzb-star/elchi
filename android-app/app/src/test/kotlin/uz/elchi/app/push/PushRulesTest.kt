@@ -72,10 +72,19 @@ class PushRulesTest {
     }
 
     @Test
-    fun `a driver always goes the inbox way`() {
+    fun `a driver's push opens its booking, chat, offer, trip and wallet`() {
         assertEquals("elchi://notifications?event=support.thread.replied", PushRules.link(msg("support.thread.replied", "usr_4"), MobileRole.DRIVER))
-        assertEquals("elchi://notifications?event=booking.accepted&ref=bkg_1", PushRules.link(msg("booking.accepted", "bkg_1"), MobileRole.DRIVER))
+        assertEquals("elchi://bookings/bkg_1", PushRules.link(msg("booking.accepted", "bkg_1"), MobileRole.DRIVER))
+        assertEquals("elchi://bookings/bkg_1/messages", PushRules.link(msg("chat.message.created", "bkg_1"), MobileRole.DRIVER))
+        assertEquals("elchi://proposals/prp_2", PushRules.link(msg("proposal.countered", "prp_2"), MobileRole.DRIVER))
+        assertEquals("elchi://trips/trp_3", PushRules.link(msg("trip.departed", "trp_3"), MobileRole.DRIVER))
+        assertEquals("elchi://wallet", PushRules.link(msg("wallet.topup.approved", "top_4"), MobileRole.DRIVER))
+        assertEquals("elchi://wallet", PushRules.link(msg("wallet.balance.changed", "wal_5"), MobileRole.DRIVER))
+        // A listing is a client screen; no role at all = the inbox way.
+        assertEquals("elchi://notifications?event=listing.updated&ref=lst_6", PushRules.link(msg("listing.updated", "lst_6"), MobileRole.DRIVER))
         assertEquals("elchi://notifications?event=booking.accepted&ref=bkg_1", PushRules.link(msg("booking.accepted", "bkg_1"), null))
+        // A client never gets the driver's trip or wallet link.
+        assertEquals("elchi://notifications?event=trip.departed&ref=trp_3", PushRules.link(msg("trip.departed", "trp_3"), MobileRole.CLIENT))
     }
 
     @Test

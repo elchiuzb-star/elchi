@@ -6,8 +6,8 @@ import SwiftUI
 /// the state in words (fresh / delayed / lost / none - re-aged on this phone, never better than the server said),
 /// the map (placeholder without a key, then the coordinates), the last point's time, accuracy and source. When the
 /// window is closed, the reason as a grey note. No ETA: the pilot has none.
-struct BookingTrackingView: View {
-    let booking: BookingModel
+struct BookingTrackingView<Host: BookingScreenHost>: View {
+    let booking: Host
     let onBack: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
@@ -18,7 +18,7 @@ struct BookingTrackingView: View {
 
     var body: some View {
         ScreenScaffold(title: strings.t("bookingTracking.title"), backLabel: strings.t("common.back"), onBack: onBack) {
-            if let dto = booking.booking.value { ladder(dto) }
+            if let dto = booking.bookingBase { ladder(dto) }
             SectionTitle(strings.t("bookingTracking.liveTitle"))
             live
         } footer: {

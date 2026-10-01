@@ -112,6 +112,17 @@ data class BookingClientDTO(
         fun fromJson(element: JsonElement): BookingClientDTO? =
             runCatching { ElchiJson.decodeFromJsonElement(serializer(), element) }.getOrNull()?.takeIf { it.viewerSide == null || it.viewerSide == CLIENT }
 
+        /**
+         * The fields both sides share, from either view (the driver screens reuse the Stage 04 amendment, tracking and
+         * safety screens). The driver's `promo` is another shape (Q103), so it is left out here - never read as the
+         * client's cash due.
+         */
+        fun anySide(element: JsonElement): BookingClientDTO? {
+            val obj = element as? kotlinx.serialization.json.JsonObject ?: return null
+            val shared = if (obj["viewer_side"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content } == CLIENT) obj else kotlinx.serialization.json.JsonObject(obj - "promo")
+            return runCatching { ElchiJson.decodeFromJsonElement(serializer(), shared) }.getOrNull()
+        }
+
         const val CLIENT = "client"
     }
 }

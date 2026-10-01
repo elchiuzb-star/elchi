@@ -17,6 +17,13 @@ final class TripsModel {
     /// The last refusal per trip, shown on its card and detail (the boarding window, unresolved bookings…).
     private(set) var refusals: [String: Error] = [:]
     private var details: [String: TripDetailModel] = [:]
+    /// Stage 09 GPS: runs before a command is sent (the last points go out before `complete`).
+    var beforeCommand: (@MainActor (TripCommand, TripDTO) async -> Void)?
+    /// Stage 09 GPS: runs after the server accepted a command (publishing starts on boarding / departure, ends with
+    /// the trip).
+    var afterCommand: (@MainActor (TripCommand, TripDTO) async -> Void)?
+    /// Every time the list was read (the GPS resumes a running trip on app start).
+    var onLoaded: (@MainActor ([TripDTO]) async -> Void)?
 
     init(api: ElchiAPI, banners: BannerCenter, keys: ActionKeys) {
         self.api = api
@@ -26,11 +33,16 @@ final class TripsModel {
 
     func load() async {
         do {
-            trips = .loaded(try await api.listMyTrips(limit: 50).data)
+            let list = try await api.listMyTrips(limit: 50).data
+            trips = .loaded(list)
+            await onLoaded?(list)
         } catch {
             if trips.value == nil { trips = .failed(error) }
         }
     }
+
+    /// The running trip that should be publishing (boarding / in progress / interrupted), if any.
+    var trackable: TripDTO? { trips.value.flatMap(GpsPoints.trackableTrip) }
 
     /// The trips an offer can be made from (planned, cutoff ahead), freshly read.
     func offerable(now: Date = Date()) async -> [TripDTO] {
@@ -74,6 +86,7 @@ final class TripsModel {
         defer { running = nil }
         let action = "trip:\(trip.id):\(command.rawValue):\(trip.version)"
         let text = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+        await beforeCommand?(command, trip)
         do {
             let updated = try await api.tripAction(tripId: trip.id, action: command.rawValue,
                                                    body: TripActionRequest(expectedVersion: trip.version, reason: text?.isEmpty == false ? text : nil),
@@ -81,6 +94,7 @@ final class TripsModel {
             keys.settle(action)
             replace(updated)
             banners.ok("driverRoutes.tripStatusUpdated")
+            await afterCommand?(command, updated)
             await details[trip.id]?.load()
             return true
         } catch {

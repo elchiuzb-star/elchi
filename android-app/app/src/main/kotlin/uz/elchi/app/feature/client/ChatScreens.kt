@@ -101,13 +101,18 @@ private fun ChatFrame(
     onPill: () -> Unit,
     right: String? = null,
     onRight: (() -> Unit)? = null,
+    /** A strip under the title that stays put (the driver's GPS bar while the trip runs). */
+    top: (@Composable () -> Unit)? = null,
     footer: (@Composable () -> Unit)?,
     content: LazyListScope.() -> Unit,
 ) {
     val c = Elchi.colors
     SystemBarIcons(dark = !c.isDark)
     Column(Modifier.fillMaxSize().background(c.page).imePadding()) {
-        Column(Modifier.statusBarsPadding()) { TitleBar(onBack, t(R.string.common_back), title, right = right, onRight = onRight) }
+        Column(Modifier.statusBarsPadding()) {
+            TitleBar(onBack, t(R.string.common_back), title, right = right, onRight = onRight)
+            top?.invoke()
+        }
         Box(Modifier.weight(1f)) {
             PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
@@ -154,7 +159,13 @@ private fun ChatFrame(
  * arrives while the reader is further up shows the "Yangi xabar" pill instead of moving the list.
  */
 @Composable
-fun BookingChatScreen(vm: BookingChatViewModel, onBack: () -> Unit) {
+fun BookingChatScreen(
+    vm: BookingChatViewModel,
+    onBack: () -> Unit,
+    /** The driver's chat (Stage 09): its quick replies, the other side named "Mijoz", the GPS bar on top. */
+    side: BookingSide = BookingSide.CLIENT,
+    top: (@Composable () -> Unit)? = null,
+) {
     val s by vm.state.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
     val atEnd by remember { derivedStateOf { list.atEnd() } }
@@ -176,6 +187,7 @@ fun BookingChatScreen(vm: BookingChatViewModel, onBack: () -> Unit) {
         onRefresh = vm::refresh,
         unseen = if (atEnd) 0 else s.unseen,
         onPill = { vm.markSeen() },
+        top = top,
         footer = when {
             chat == null -> null
             !chat.writable -> ({ Note(t(R.string.chat_closedBody), tone = Tone.GRAY, title = t(R.string.chat_closedTitle)) })
@@ -188,8 +200,8 @@ fun BookingChatScreen(vm: BookingChatViewModel, onBack: () -> Unit) {
                         placeholder = t(R.string.bookingChat_placeholder),
                         sendLabel = t(R.string.common_send),
                         onSend = vm::sendDraft,
-                        // Q100: the client's quick replies; "price agreed" is never offered in a booking chat.
-                        chips = listOf(QuickReplyCode.AT_STOP, QuickReplyCode.CLARIFY_STOP).map { code -> t(quickReplyLabel(code)) to { vm.sendQuick(code) } },
+                        // Q100: each side's quick replies; "price agreed" is never offered in a booking chat.
+                        chips = quickReplies(side).map { code -> t(quickReplyLabel(code)) to { vm.sendQuick(code) } },
                         hint = t(R.string.bookingChat_autoMaskNote),
                     )
                 }
@@ -212,12 +224,18 @@ fun BookingChatScreen(vm: BookingChatViewModel, onBack: () -> Unit) {
         }
         items(s.messages, key = { it.id }) { message ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                MessageBubble(message)
+                MessageBubble(message, side)
                 s.warnings[message.id]?.let { WarningNotes(it) }
             }
         }
         items(s.outgoing, key = { "out-${it.localId}" }) { message -> OutgoingBubble(message, onRetry = { vm.retry(message.localId) }, onDiscard = { vm.discard(message.localId) }) }
     }
+}
+
+/** The client: "Bekatdaman", "Bekatni aniqlashtiraylik"; the driver also "5 daqiqada yetaman" (design booking-chat). */
+internal fun quickReplies(side: BookingSide): List<QuickReplyCode> = when (side) {
+    BookingSide.CLIENT -> listOf(QuickReplyCode.AT_STOP, QuickReplyCode.CLARIFY_STOP)
+    BookingSide.DRIVER -> listOf(QuickReplyCode.ARRIVING_IN_5_MIN, QuickReplyCode.AT_STOP, QuickReplyCode.CLARIFY_STOP)
 }
 
 private fun quickReplyLabel(code: QuickReplyCode): Int = when (code) {
@@ -228,7 +246,7 @@ private fun quickReplyLabel(code: QuickReplyCode): Int = when (code) {
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessageDTO) {
+private fun MessageBubble(message: ChatMessageDTO, side: BookingSide) {
     val hidden = message.moderationStatus == ChatModerationStatus.HIDDEN_BY_STAFF
     // A quick reply is a code: its words come from this app's dictionary, in the reader's language.
     val text = when {
@@ -243,7 +261,7 @@ private fun MessageBubble(message: ChatMessageDTO) {
             else -> BubbleKind.THEIRS
         },
         text = text,
-        label = if (!message.isMine && !hidden) t(R.string.safety_driverTitle) else null,
+        label = if (!message.isMine && !hidden) t(if (side == BookingSide.DRIVER) R.string.safety_clientTitle else R.string.safety_driverTitle) else null,
         time = chatTime(message.createdAt),
     )
 }

@@ -76,23 +76,37 @@ class DeepLinkRulesTest {
             // Another host, or plain http.
             "https://evil.example/r/AB2CD3EF", "http://www.elchigo.uz/r/AB2CD3EF",
             // Unknown or malformed in-app paths.
-            "elchi://trips/1", "elchi://bookings", "elchi://bookings/1/other", "elchi://bookings/1/messages/x",
+            "elchi://trips", "elchi://wallet/1", "elchi://bookings", "elchi://bookings/1/other", "elchi://bookings/1/messages/x",
             "elchi://listings/a%2Fb", "elchi://support-threads/${"x".repeat(65)}",
             "mailto:a@b.uz",
         ).forEach { raw -> assertEquals(raw, DeepLinkTarget.Unsupported, parse(raw)) }
     }
 
     @Test
-    fun `a driver opens only the support thread and the referral`() {
+    fun `a driver opens its bookings, offers, trips and wallet - not a client listing`() {
         val referral = DeepLinkTarget.Referral("AB2CD3EF")
         val thread = DeepLinkTarget.SupportThread("t1")
         assertEquals(referral, DeepLinkRules.forRole(referral, MobileRole.DRIVER))
         assertEquals(thread, DeepLinkRules.forRole(thread, MobileRole.DRIVER))
+        listOf(DeepLinkTarget.Booking("1"), DeepLinkTarget.BookingChat("1"), DeepLinkTarget.Proposal("1"), DeepLinkTarget.Trip("1"), DeepLinkTarget.Wallet).forEach {
+            assertEquals(it, DeepLinkRules.forRole(it, MobileRole.DRIVER))
+        }
+        assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(DeepLinkTarget.Listing("1"), MobileRole.DRIVER))
         listOf(DeepLinkTarget.Booking("1"), DeepLinkTarget.BookingChat("1"), DeepLinkTarget.Listing("1"), DeepLinkTarget.Proposal("1")).forEach {
-            assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(it, MobileRole.DRIVER))
             assertEquals(it, DeepLinkRules.forRole(it, MobileRole.CLIENT))
         }
+        // The trip and the wallet are driver screens.
+        assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(DeepLinkTarget.Trip("1"), MobileRole.CLIENT))
+        assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(DeepLinkTarget.Wallet, MobileRole.CLIENT))
         assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(thread, null))
+    }
+
+    @Test
+    fun `trip and wallet links parse and map to the inbox targets`() {
+        assertEquals(DeepLinkTarget.Trip("trp_1"), parse("elchi://trips/trp_1"))
+        assertEquals(DeepLinkTarget.Wallet, parse("elchi://wallet"))
+        assertEquals(InboxTarget.Trip("trp_1"), DeepLinkRules.inboxTarget(DeepLinkTarget.Trip("trp_1")))
+        assertEquals(InboxTarget.Wallet, DeepLinkRules.inboxTarget(DeepLinkTarget.Wallet))
     }
 
     @Test

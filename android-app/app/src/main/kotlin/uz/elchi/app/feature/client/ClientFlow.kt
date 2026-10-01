@@ -195,7 +195,7 @@ fun ClientFlow(container: AppContainer, session: Session) {
             is InboxTarget.Listing -> nav.navigate(ListingDetail(target.id))
             is InboxTarget.Proposal -> target.listingId?.let { nav.navigate(ListingDetail(it)) } ?: toOrdersTop()
             is InboxTarget.SupportThread -> nav.navigate(SupportThread(target.id))
-            is InboxTarget.Trip -> Unit
+            is InboxTarget.Trip, InboxTarget.Wallet -> Unit
         }
     }
 
@@ -221,7 +221,7 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 // A push tap: the inbox row of the same event carries the real link (not in this effect's scope:
                 // taking the link restarts the effect and would cancel the read).
                 if (event == null) toInbox() else scope.launch {
-                    val resolved = inbox.openLatest(event, allowed.ref)?.takeUnless { it is InboxTarget.Trip }
+                    val resolved = inbox.openLatest(event, allowed.ref)?.takeUnless { it is InboxTarget.Trip || it is InboxTarget.Wallet }
                     when {
                         resolved != null -> openTarget(resolved)
                         PushRules.fallsBackToThreads(event) -> nav.navigate(SupportThreads) { launchSingleTop = true }

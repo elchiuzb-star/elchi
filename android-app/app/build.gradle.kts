@@ -101,6 +101,8 @@ dependencies {
     // FCM push (ADR-0022): data-only messages, the app builds the notification itself. No Analytics.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // Driver GPS publishing (Stage 09): fused location for the foreground service.
+    implementation(libs.play.services.location)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

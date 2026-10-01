@@ -63,7 +63,7 @@ public enum DeepLinkRules {
         case .listing(let id)?: return .listing(id)
         case .proposal(let id)?: return .proposal(id)
         case .supportThread(let id)?: return .supportThread(id)
-        case .trip?, nil: return .unsupported
+        case .trip?, .wallet?, nil: return .unsupported
         }
     }
 
@@ -76,8 +76,8 @@ public enum DeepLinkRules {
         return ReferralCode.normalize(segments[2].removingPercentEncoding)
     }
 
-    /// A client has every in-app screen the links name; a driver only the operator chat (Stage 08+ brings the rest);
-    /// signed out, the target waits for sign-in.
+    /// A client has every in-app screen the links name; a driver (Stage 09) its bookings and their chat, its offer
+    /// threads and the operator chat - never a client's listing; signed out, the target waits for sign-in.
     public static func action(_ target: DeepLinkTarget, audience: LinkAudience) -> LinkAction {
         switch target {
         case .unsupported, .referral: return .unsupported
@@ -87,8 +87,8 @@ public enum DeepLinkRules {
         case .signedOut: return .holdForSignIn
         case .client: return .open(target)
         case .driver:
-            if case .supportThread = target { return .open(target) }
-            return .unsupported
+            if case .listing = target { return .unsupported }
+            return .open(target)
         }
     }
 

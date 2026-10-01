@@ -60,15 +60,21 @@ object PushRules {
      *   ([resolveLink]). That is how a chat message (aggregate = the chat thread, `cht_...`, which no screen opens by
      *   id) reaches the booking chat, and an operator reply (aggregate = the requester, `usr_...`) its conversation:
      *   the inbox row the server wrote for the same event carries the real link;
-     * - a driver has only the inbox and the operator conversations in the app so far, so always the inbox way.
+     * - a driver (Stage 09): `bkg_` -> its booking, `prp_` -> its offer thread, `trp_` -> the trip, `wal_` / `top_`
+     *   -> the commission balance; a listing is not a driver screen, so the inbox way.
      */
     fun link(message: PushMessage, role: MobileRole?): String {
         val id = message.aggregateId
-        if (role == MobileRole.CLIENT && id != null) {
-            when (id.substringBefore('_', missingDelimiterValue = "")) {
-                "bkg" -> return if (message.eventType == CHAT_MESSAGE) "elchi://bookings/$id/messages" else "elchi://bookings/$id"
-                "lst" -> return "elchi://listings/$id"
-                "prp" -> return "elchi://proposals/$id"
+        if (id != null) {
+            val prefix = id.substringBefore('_', missingDelimiterValue = "")
+            if (prefix == "bkg" && role != null) return if (message.eventType == CHAT_MESSAGE) "elchi://bookings/$id/messages" else "elchi://bookings/$id"
+            if (prefix == "prp" && role != null) return "elchi://proposals/$id"
+            if (role == MobileRole.CLIENT && prefix == "lst") return "elchi://listings/$id"
+            if (role == MobileRole.DRIVER) {
+                when (prefix) {
+                    "trp" -> return "elchi://trips/$id"
+                    "wal", "top" -> return "elchi://wallet"
+                }
             }
         }
         return resolveLink(message)

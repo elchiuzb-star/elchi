@@ -12,6 +12,11 @@ struct BookingChatView: View {
     /// When the booking was made: the first line of the conversation ("Kelishuv tuzildi · 27.09, 08:12").
     let agreedAt: Date?
     let onBack: () -> Void
+    /// The quick replies this side may send (Q100: the client `at_stop`, `clarify_stop`; the driver also
+    /// `arriving_in_5_min`).
+    var quickReplies: [QuickReplyCode] = ChatTimeline.clientQuickReplies
+    /// Who writes on the other side ("Haydovchi" for the client, "Mijoz" for the driver).
+    var peerLabelKey = "safety.driverTitle"
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @Environment(\.scenePhase) private var scenePhase
@@ -119,7 +124,7 @@ struct BookingChatView: View {
     private func bubble(_ message: ChatMessageDTO) -> some View {
         let hidden = message.moderationStatus == .hiddenByStaff
         let kind: ChatBubble.Kind = hidden ? .hidden : message.isMine ? .mine : .theirs
-        let label: String? = hidden || message.isMine ? nil : strings.t(message.authorSide == .driver ? "safety.driverTitle" : "support.operator")
+        let label: String? = hidden || message.isMine ? nil : strings.t(message.authorSide == .driver || message.authorSide == .client ? peerLabelKey : "support.operator")
         return ChatBubble(kind, text: strings.chatText(message), label: label, time: strings.messageTime(message.createdAt))
     }
 
@@ -159,7 +164,7 @@ struct BookingChatView: View {
         return VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(ChatTimeline.clientQuickReplies, id: \.rawValue) { code in
+                    ForEach(quickReplies, id: \.rawValue) { code in
                         Button { Task { await model.send(quickReply: code) } } label: {
                             Text(strings.t("quickReply.\(code.rawValue)")).font(ElchiFont.poppins(13, .medium)).foregroundStyle(c.softText)
                                 .padding(.horizontal, 14).frame(minHeight: 36)

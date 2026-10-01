@@ -20,6 +20,9 @@ yandex-mapkit = "4.45.0-lite"
 # only - no Analytics artifact is declared.
 firebase-bom = "34.19.0"
 google-services = "4.5.0"
+# Driver GPS (Stage 09, Q148): FusedLocationProviderClient for the location foreground service. Google Maven,
+# maven-metadata lastUpdated 2026-06-25 (21.4.0 = latest).
+play-services-location = "21.4.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx" }
@@ -44,6 +47,7 @@ junit = { module = "junit:junit", version.ref = "junit" }
 yandex-mapkit = { module = "com.yandex.android:maps.mobile", version.ref = "yandex-mapkit" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "play-services-location" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

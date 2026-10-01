@@ -154,9 +154,11 @@ struct BonusView: View {
 
     var body: some View {
         @Bindable var model = model
-        ScreenScaffold(title: strings.t("promoScreen.titleClient"), backLabel: strings.t("common.back"), onBack: onBack) {
-            Note(strings.t("promoScreen.bonusNotMoney"), tone: .warn)
-            SectionTitle(strings.t("promoScreen.myBonuses"))
+        let driver = model.audience == "driver"
+        ScreenScaffold(title: strings.t(driver ? "promoScreen.titleDriver" : "promoScreen.titleClient"), backLabel: strings.t("common.back"),
+                       onBack: onBack) {
+            Note(strings.t(driver ? "promoScreen.creditNotMoney" : "promoScreen.bonusNotMoney"), tone: .warn)
+            SectionTitle(strings.t(driver ? "promoScreen.myCredit" : "promoScreen.myBonuses"))
             balance
             if model.programOff {
                 Note(strings.t(PromoLogic.programOffKey(hasBuckets: !model.buckets.isEmpty)), tone: .gray)
@@ -203,7 +205,8 @@ struct BonusView: View {
             ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await model.load() } }
         case .loaded:
             if model.buckets.isEmpty {
-                EmptyState(icon: .gift, title: strings.t("promoScreen.noBonusTitle"), description: strings.t("promoScreen.noBonusSubtitle"))
+                EmptyState(icon: .gift, title: strings.t(model.audience == "driver" ? "driver.bonus.noCreditTitle" : "promoScreen.noBonusTitle"),
+                           description: strings.t(model.audience == "driver" ? "driver.bonus.noCreditSubtitle" : "promoScreen.noBonusSubtitle"))
             } else {
                 ForEach(model.buckets, id: \.self) { bucket in
                     ElchiCard {
@@ -230,7 +233,16 @@ struct BonusView: View {
                         .foregroundStyle(c.text).textSelection(.enabled)
                         .accessibilityLabel(code.code.map(String.init).joined(separator: " "))
                     if PromoLogic.showsLink(code), let url = code.shareUrl {
+                        // The driver shows the link as a QR to the person next to them (web BonusScreen role=driver).
+                        if model.audience == "driver", let qr = QRCode.image(url) {
+                            Image(uiImage: qr).interpolation(.none).resizable().scaledToFit().frame(width: 180, height: 180)
+                                .padding(10).background(.white, in: RoundedRectangle(cornerRadius: 12))
+                                .accessibilityLabel(strings.t("promoScreen.qrAria"))
+                        }
                         Text(url).font(ElchiFont.poppins(13)).foregroundStyle(c.accentText).multilineTextAlignment(.center)
+                        if model.audience == "driver" {
+                            Text(strings.t("promoScreen.qrNote")).font(ElchiFont.caption).foregroundStyle(c.muted).multilineTextAlignment(.center)
+                        }
                     } else {
                         Text(strings.t("promoScreen.linkNotReady")).font(ElchiFont.caption).foregroundStyle(c.muted)
                             .multilineTextAlignment(.center)

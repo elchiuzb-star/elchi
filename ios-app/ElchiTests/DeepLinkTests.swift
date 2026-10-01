@@ -65,10 +65,11 @@ struct DeepLinkRulesTests {
             #expect(DeepLinkRules.action(target, audience: .client) == .open(target))
             #expect(DeepLinkRules.action(target, audience: .signedOut) == .holdForSignIn)
         }
-        #expect(DeepLinkRules.action(.supportThread("s"), audience: .driver) == .open(.supportThread("s")))
-        for target in all.dropLast() {
-            #expect(DeepLinkRules.action(target, audience: .driver) == .unsupported)
+        // Stage 09: the driver has booking, chat, offer-thread and operator-chat screens; never a client's listing.
+        for target in all where target != .listing("l") {
+            #expect(DeepLinkRules.action(target, audience: .driver) == .open(target))
         }
+        #expect(DeepLinkRules.action(.listing("l"), audience: .driver) == .unsupported)
         #expect(DeepLinkRules.action(.unsupported, audience: .client) == .unsupported)
     }
 
@@ -164,10 +165,13 @@ struct DeepLinkCenterTests {
         #expect(banners.current == nil)
     }
 
-    @Test func driverCannotOpenABooking() {
+    @Test func driverOpensABookingButNotAListing() {
         let (links, banners, _, suite) = center()
         defer { UserDefaults().removePersistentDomain(forName: suite) }
         links.handle(URL(string: "elchi://bookings/bkg_1")!)
+        #expect(links.takePending(for: .driver) == .open(.booking("bkg_1")))
+        #expect(links.takePending(for: .driver) == nil)
+        links.handle(URL(string: "elchi://listings/lst_1")!)
         #expect(links.takePending(for: .driver) == .unsupported)
         guard case .key(let key)? = banners.current?.message else { Issue.record("no banner"); return }
         #expect(key == "link.unsupported")

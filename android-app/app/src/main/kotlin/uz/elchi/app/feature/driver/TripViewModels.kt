@@ -39,21 +39,47 @@ internal suspend fun <T> tryCall(block: suspend () -> T): Result<T> = try {
 /** A trip command's refusal for the banner: `error.<CODE>` (incl. TRIP_HAS_UNRESOLVED_BOOKINGS, SCHEDULE_CONFLICT). */
 internal fun tripBanner(error: Throwable): BannerText = BannerText.Error(error)
 
+/** What a trip command means for GPS publishing (the driver's tracker; a fake in tests). */
+interface TripGps {
+    /** Before `complete`: deliver what is queued while the session still accepts it. */
+    suspend fun beforeComplete(tripId: String)
+
+    /** After a successful command. */
+    fun after(tripId: String, effect: GpsEffect)
+}
+
+/** [TripGps] on the app's one publisher. */
+class TrackerTripGps(private val tracker: uz.elchi.app.gps.DriverTracker) : TripGps {
+    override suspend fun beforeComplete(tripId: String) = tracker.flushBeforeComplete(tripId)
+
+    override fun after(tripId: String, effect: GpsEffect) {
+        when (effect) {
+            GpsEffect.START -> tracker.autoStart(tripId)
+            GpsEffect.FINISH -> tracker.tripEnded(tripId)
+            GpsEffect.NONE -> Unit
+        }
+    }
+}
+
 /**
  * Runs one trip command (`POST /trips/{id}/actions/{action}` with the trip's version and an Idempotency-Key that
  * survives a retry of the same press). Returns the new trip, or the failure after the banner said it.
  */
-internal class TripCommandRunner(private val api: ElchiApi, private val banners: BannerCenter) {
+internal class TripCommandRunner(private val api: ElchiApi, private val banners: BannerCenter, private val gps: TripGps? = null) {
     private val keys = ActionKeys()
 
     suspend fun run(trip: TripDTO, command: TripCommand, reason: String?): Result<TripDTO> {
         val scope = "${trip.id}:${command.wire}:${trip.version}"
         banners.startAction()
+        // Q148: the last points leave while the session still takes them; `complete` then closes it.
+        if (command == TripCommand.COMPLETE) gps?.beforeComplete(trip.id)
         val result = tryCall {
             api.tripAction(trip.id, command.wire, TripActionRequest(expectedVersion = trip.version, reason = reason?.trim()?.takeIf { it.isNotEmpty() }), keys.key(scope)).data
         }
         keys.settle(scope, result.exceptionOrNull())
         banners.endAction()
+        // Boarding and departure are when a client may look for the car (§10.6): publishing starts; the end stops it.
+        if (result.isSuccess) gps?.after(trip.id, TripRules.gpsEffect(command))
         result
             .onSuccess { banners.show(BannerTone.OK, BannerText.Key("driverRoutes.tripStatusUpdated")) }
             .onFailure { e ->
@@ -72,7 +98,7 @@ internal class TripCommandRunner(private val api: ElchiApi, private val banners:
  * "Yo'nalishlarim": the driver's private trip plans (Q138 - never shown to clients). One per driver flow: the
  * offer screen reads the same list to pick a trip from.
  */
-class TripsViewModel(private val api: ElchiApi, banners: BannerCenter) : ViewModel() {
+class TripsViewModel(private val api: ElchiApi, banners: BannerCenter, gps: TripGps? = null) : ViewModel() {
     data class State(
         val trips: Load<List<TripDTO>> = Load.Loading,
         val refreshing: Boolean = false,
@@ -86,7 +112,7 @@ class TripsViewModel(private val api: ElchiApi, banners: BannerCenter) : ViewMod
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
-    private val runner = TripCommandRunner(api, banners)
+    private val runner = TripCommandRunner(api, banners, gps)
 
     init {
         refresh()
@@ -284,6 +310,7 @@ class TripDetailViewModel(
     banners: BannerCenter,
     private val tripId: String,
     private val onChanged: () -> Unit,
+    gps: TripGps? = null,
 ) : ViewModel() {
     data class State(
         val trip: Load<TripDTO> = Load.Loading,
@@ -296,7 +323,7 @@ class TripDetailViewModel(
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
-    private val runner = TripCommandRunner(api, banners)
+    private val runner = TripCommandRunner(api, banners, gps)
 
     init {
         refresh()

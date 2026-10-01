@@ -83,7 +83,7 @@ import uz.elchi.app.ui.theme.tone
  * are the settings' theme choice (the chosen tile outlined in brand, a radio for TalkBack).
  */
 @Composable
-internal fun <T> StatTiles(items: List<Triple<T, String, String>>, selected: T? = null, onSelect: ((T) -> Unit)? = null) {
+internal fun <T> StatTiles(items: List<Triple<T, String, String>>, selected: T? = null, onSelect: ((T) -> Unit)? = null, compact: Boolean = false) {
     val c = Elchi.colors
     // Equal heights even when a label wraps ("Как на устройстве").
     Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -104,7 +104,8 @@ internal fun <T> StatTiles(items: List<Triple<T, String, String>>, selected: T? 
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(label, style = Elchi.type.caption, color = c.muted, maxLines = 2)
-                Text(big, style = Elchi.type.section.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold, lineHeight = 23.sp), color = c.text, maxLines = 1)
+                // [compact]: words, not numbers ("Tasdiqlangan") - a smaller size so a whole word fits a third of the row.
+                Text(big, style = Elchi.type.section.copy(fontSize = if (compact) 14.sp else 18.sp, fontWeight = FontWeight.SemiBold, lineHeight = 23.sp), color = c.text, maxLines = 1)
             }
         }
     }
@@ -217,16 +218,19 @@ fun ProfileScreen(vm: ProfileViewModel, session: Session, onBack: () -> Unit, na
 @Composable
 fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
-    StepScaffold(title = t(R.string.promoScreen_titleClient), onBack = onBack, onRefresh = vm::refresh, refreshing = false) {
-        Note(t(R.string.promoScreen_bonusNotMoney), tone = Tone.WARN)
+    // Stage 09: the driver's "Kredit va taklif kodi" is the same screen with the driver's words and credit.
+    val driver = vm.audience == BonusViewModel.DRIVER_AUDIENCE
+    StepScaffold(title = t(if (driver) R.string.promoScreen_titleDriver else R.string.promoScreen_titleClient), onBack = onBack, onRefresh = vm::refresh, refreshing = false) {
+        Note(t(if (driver) R.string.promoScreen_creditNotMoney else R.string.promoScreen_bonusNotMoney), tone = Tone.WARN)
 
-        SectionTitle(t(R.string.promoScreen_myBonuses))
-        val buckets = (s.balance as? Load.Ready)?.value?.let { PromoRules.clientBuckets(it.buckets) }
+        SectionTitle(t(if (driver) R.string.promoScreen_myCredit else R.string.promoScreen_myBonuses))
+        val buckets = (s.balance as? Load.Ready)?.value?.let { if (driver) PromoRules.driverBuckets(it.buckets) else PromoRules.clientBuckets(it.buckets) }
         when (val balance = s.balance) {
             Load.Loading -> SkeletonCard(t(R.string.common_loading))
             is Load.Failed -> LoadFailed(t(R.string.promoScreen_myBonuses), balance.error, vm::refresh)
             is Load.Ready -> if (buckets.isNullOrEmpty()) {
-                EmptyState(ElchiIcon.GIFT, t(R.string.promoScreen_noBonusTitle), description = t(R.string.promoScreen_noBonusSubtitle))
+                if (driver) EmptyState(ElchiIcon.GIFT, t(R.string.driver_bonus_noCreditTitle), description = t(R.string.driver_bonus_noCreditSubtitle))
+                else EmptyState(ElchiIcon.GIFT, t(R.string.promoScreen_noBonusTitle), description = t(R.string.promoScreen_noBonusSubtitle))
             } else {
                 buckets.forEach { BucketCard(it) }
             }

@@ -316,7 +316,7 @@ struct ClientFlow: View {
             }
         case .supportThread(let id):
             path.append(.supportThread(id))
-        case .trip:
+        case .trip, .wallet:
             break
         }
     }

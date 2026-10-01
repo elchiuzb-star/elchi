@@ -7,18 +7,25 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import uz.elchi.app.api.AccountApi
 import uz.elchi.app.api.AuthApi
+import uz.elchi.app.api.BookingActionsApi
 import uz.elchi.app.api.DriverApi
 import uz.elchi.app.api.FilesApi
 import uz.elchi.app.api.GeoApi
 import uz.elchi.app.api.HttpTransport
 import uz.elchi.app.api.LegacyOrdersApi
 import uz.elchi.app.api.OkHttpLiveSocketFactory
+import uz.elchi.app.api.WalletApi
 import uz.elchi.app.api.trackingSocketUrl
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.deeplink.DeepLinkCenter
 import uz.elchi.app.deeplink.DeepLinkRules
 import uz.elchi.app.deeplink.ReferralStore
 import uz.elchi.app.feature.entry.FirstRunStore
+import uz.elchi.app.gps.AndroidTrackerPlatform
+import uz.elchi.app.gps.AppVisibility
+import uz.elchi.app.gps.DriverTracker
+import uz.elchi.app.gps.ElchiTrackerApi
+import uz.elchi.app.gps.FileTrackerStorage
 import uz.elchi.app.i18n.LocaleStore
 import uz.elchi.app.push.PushNotifier
 import uz.elchi.app.push.PushRegistrar
@@ -36,6 +43,7 @@ class ElchiApplication : Application() {
         super.onCreate()
         MapKitSupport.setKey()
         container = AppContainer(this)
+        registerActivityLifecycleCallbacks(container.visibility)
         container.pushNotifier.ensureChannel()
         container.push.start()
     }
@@ -54,6 +62,8 @@ class AppContainer(app: Application) {
     val files = FilesApi(transport)
     val legacyOrders = LegacyOrdersApi(transport)
     val driver = DriverApi(transport)
+    val wallet = WalletApi(transport)
+    val bookingActions = BookingActionsApi(transport)
     val api = ElchiApi(transport)
     val apiBase: String = BuildConfig.API_BASE_URL
 
@@ -80,4 +90,19 @@ class AppContainer(app: Application) {
     /** FCM (ADR-0022): the token's registration on the server, and the notifications built from data messages. */
     val push = PushRegistrar(app, api, sessions, appScope)
     val pushNotifier = PushNotifier(app) { locale.state.value }
+
+    /** Whether an activity of the app is started (the GPS bar's background gaps). */
+    val visibility = AppVisibility()
+
+    /**
+     * The driver's GPS publisher (Stage 09, Q148): one per process, it outlives screens; its state lives on one
+     * thread (a single-lane dispatcher), the outbox in the app's files.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val tracker = DriverTracker(
+        api = ElchiTrackerApi(api),
+        storage = FileTrackerStorage(app),
+        platform = AndroidTrackerPlatform(app, visibility),
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1)),
+    )
 }

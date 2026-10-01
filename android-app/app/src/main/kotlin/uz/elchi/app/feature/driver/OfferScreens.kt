@@ -359,7 +359,7 @@ private fun ThreadCard(thread: ProposalThreadDTO, now: Instant, ru: Boolean, onC
 
 /** One negotiation: the latest state, its history, and the moves allowed by the turn (web `auction.ts`). */
 @Composable
-fun ProposalThreadScreen(vm: ProposalThreadViewModel, onBack: () -> Unit) {
+fun ProposalThreadScreen(vm: ProposalThreadViewModel, onBack: () -> Unit, onBooking: (String) -> Unit = {}) {
     val s by vm.state.collectAsStateWithLifecycle()
     val now by rememberNow()
     val ru = appRu()
@@ -397,8 +397,10 @@ fun ProposalThreadScreen(vm: ProposalThreadViewModel, onBack: () -> Unit) {
                     OfferRules.secondsLeft(t0, now)?.let { Text(expiresText(it), style = Elchi.type.caption, color = Elchi.colors.tone(Tone.WARN).fg) }
                 }
                 vm.sentWarnings.forEach { WarningNote(it) }
-                if (s.bookingId != null || t0.bookingId != null) {
-                    Note(t(R.string.driver_proposals_bookingCreated, "id" to (s.bookingId ?: t0.bookingId ?: "—")), tone = Tone.OK)
+                (s.bookingId ?: t0.bookingId)?.let { bookingId ->
+                    // Stage 09: the booking exists as a screen now - its chat is where the meeting point is agreed (Q100).
+                    Note(t(R.string.driver_proposals_bookingReady), tone = Tone.OK)
+                    ElchiButton(t(R.string.driverBooking_title), { onBooking(bookingId) }, Modifier.fillMaxWidth(), ButtonVariant.SOFT, icon = ElchiIcon.CLIP)
                 }
                 if (s.notice == ThreadNotice.TERMS_CHANGED) Note(t(R.string.client_listingBids_termsChanged), tone = Tone.WARN)
                 if (actions.open && actions.theirTurn && v != null) {

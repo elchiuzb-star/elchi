@@ -54,7 +54,7 @@ class TrackingViewModel(
 
     private suspend fun loadBooking() {
         try {
-            val booking = BookingClientDTO.fromJson(api.getBooking(bookingId).data) ?: throw ApiException(0, ApiException.SERVER, "not a client booking")
+            val booking = BookingClientDTO.anySide(api.getBooking(bookingId).data) ?: throw ApiException(0, ApiException.SERVER, "not a booking")
             _state.update { it.copy(booking = Load.Ready(booking)) }
         } catch (e: CancellationException) {
             throw e

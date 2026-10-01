@@ -18,6 +18,12 @@ sealed interface DeepLinkTarget {
     data class Proposal(val id: String) : DeepLinkTarget
     data class SupportThread(val id: String) : DeepLinkTarget
 
+    /** `elchi://trips/{id}`: the driver's trip (the GPS notification's tap, a trip push). */
+    data class Trip(val id: String) : DeepLinkTarget
+
+    /** `elchi://wallet`: the driver's commission balance (a top-up push). */
+    data object Wallet : DeepLinkTarget
+
     /** `elchi://support-threads`: the operator conversations list (a push about a reply names no thread). */
     data object SupportThreads : DeepLinkTarget
 
@@ -75,6 +81,7 @@ object DeepLinkRules {
         if (!inApp) return DeepLinkTarget.Unsupported
         if (parts == listOf("notifications")) return inbox(query)
         if (parts == listOf("support-threads")) return DeepLinkTarget.SupportThreads
+        if (parts == listOf("wallet")) return DeepLinkTarget.Wallet
         val id = parts.getOrNull(1)?.takeIf { ID.matches(it) } ?: return DeepLinkTarget.Unsupported
         return when {
             parts.size == 2 && parts[0] == "bookings" -> DeepLinkTarget.Booking(id)
@@ -82,6 +89,7 @@ object DeepLinkRules {
             parts.size == 2 && parts[0] == "listings" -> DeepLinkTarget.Listing(id)
             parts.size == 2 && parts[0] == "proposals" -> DeepLinkTarget.Proposal(id)
             parts.size == 2 && parts[0] == "support-threads" -> DeepLinkTarget.SupportThread(id)
+            parts.size == 2 && parts[0] == "trips" -> DeepLinkTarget.Trip(id)
             else -> DeepLinkTarget.Unsupported
         }
     }
@@ -103,14 +111,18 @@ object DeepLinkRules {
         rawPath.orEmpty().split('/').filter { it.isNotEmpty() }.map { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
 
     /**
-     * What the signed-in role can open. A client has every in-app screen the inbox has; a driver so far only the
-     * operator conversations and the inbox (bookings, listings and proposals are client screens until the driver
-     * stages build theirs). A referral is for both roles.
+     * What the signed-in role can open. A client has every in-app screen the inbox has except the driver's trip and
+     * wallet; a driver (Stage 09) its bookings and their chat, its offers, trips, wallet, the operator conversations
+     * and the inbox - not a client's listing. A referral is for both roles.
      */
     fun forRole(target: DeepLinkTarget, role: MobileRole?): DeepLinkTarget = when (role) {
-        MobileRole.CLIENT -> target
+        MobileRole.CLIENT -> when (target) {
+            is DeepLinkTarget.Trip, DeepLinkTarget.Wallet -> DeepLinkTarget.Unsupported
+            else -> target
+        }
         MobileRole.DRIVER -> when (target) {
-            is DeepLinkTarget.Referral, is DeepLinkTarget.SupportThread, DeepLinkTarget.SupportThreads, is DeepLinkTarget.Inbox -> target
+            is DeepLinkTarget.Referral, is DeepLinkTarget.SupportThread, DeepLinkTarget.SupportThreads, is DeepLinkTarget.Inbox,
+            is DeepLinkTarget.Booking, is DeepLinkTarget.BookingChat, is DeepLinkTarget.Proposal, is DeepLinkTarget.Trip, DeepLinkTarget.Wallet -> target
             else -> DeepLinkTarget.Unsupported
         }
         null -> DeepLinkTarget.Unsupported
@@ -124,6 +136,8 @@ object DeepLinkRules {
         // A link carries no listing id: the inbox's fallback, the orders list.
         is DeepLinkTarget.Proposal -> InboxTarget.Proposal(target.id, listingId = null)
         is DeepLinkTarget.SupportThread -> InboxTarget.SupportThread(target.id)
+        is DeepLinkTarget.Trip -> InboxTarget.Trip(target.id)
+        DeepLinkTarget.Wallet -> InboxTarget.Wallet
         is DeepLinkTarget.Referral, DeepLinkTarget.SupportThreads, is DeepLinkTarget.Inbox, DeepLinkTarget.Unsupported -> null
     }
 }

@@ -29,6 +29,8 @@ data class DriverProfileDTO(
     @SerialName("plate_number") val plateNumber: String? = null,
     @SerialName("verification_status") val verificationStatus: String = "new",
     @SerialName("completed_orders") val completedOrders: Long? = null,
+    /** v1 orders of the legacy app (Stage 09 profile "Jami (eski)"); not v2 bookings. */
+    @SerialName("total_orders") val totalOrders: Long? = null,
     @SerialName("is_available") val isAvailable: Boolean = false,
 )
 

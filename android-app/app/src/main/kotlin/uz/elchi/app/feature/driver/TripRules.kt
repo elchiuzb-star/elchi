@@ -30,6 +30,9 @@ enum class TripCommand(val wire: String, val labelKey: String, val needsReason: 
     CANCEL("cancel", "driver.trip.cancel", true),
 }
 
+/** A trip command's meaning for the GPS publisher (Q148): board/depart start it, complete/cancel end it. */
+enum class GpsEffect { START, FINISH, NONE }
+
 /** "Yo'nalish qo'shish" as typed: picks by id, numbers as text. The departure is Tashkent wall time. */
 data class TripForm(
     val vehicleId: String? = null,
@@ -84,6 +87,19 @@ object TripRules {
 
     fun isActive(status: TripStatus): Boolean =
         status == TripStatus.PLANNED || status == TripStatus.BOARDING || status == TripStatus.IN_PROGRESS || status == TripStatus.INTERRUPTED
+
+    fun gpsEffect(command: TripCommand): GpsEffect = when (command) {
+        TripCommand.START_BOARDING, TripCommand.DEPART -> GpsEffect.START
+        TripCommand.COMPLETE, TripCommand.CANCEL -> GpsEffect.FINISH
+        TripCommand.INTERRUPT, TripCommand.RESUME -> GpsEffect.NONE
+    }
+
+    /** Statuses in which the server accepts a writer session (`rules.PUBLISHABLE_TRIP_STATUSES`). */
+    fun publishable(status: TripStatus): Boolean = status == TripStatus.BOARDING || status == TripStatus.IN_PROGRESS || status == TripStatus.INTERRUPTED
+
+    /** The trip that should be publishing now: a running one, the earliest planned start first (web `trackableTrip`). */
+    fun trackable(trips: List<TripDTO>): TripDTO? =
+        trips.filter { publishable(it.status) }.minByOrNull { OrderRules.parseInstant(it.plannedStartAt) ?: Instant.MAX }
 
     /** Live trips first (soonest first), then the history (latest first). */
     fun ordered(trips: List<TripDTO>): List<TripDTO> {

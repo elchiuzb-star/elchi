@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+: asked once on the signed-in home screen (push/NotificationPermission.kt), never at launch. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Yandex MapKit declares precise location; Stage 02 never asks for it (places are picked on the map), so the
-         app does not claim it. The driver's GPS stage adds location deliberately, with its own explanation. -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />
+    <!-- Driver GPS publishing (Stage 09, Q148): asked only by the driver's GPS bar, never at launch. A client never
+         sees the question. Approximate-only is accepted and said (driver.gps.preciseOff). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- The location foreground service is started while the app is visible, so it keeps while-in-use access in the
+         background without ACCESS_BACKGROUND_LOCATION (not declared on purpose). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <application
         android:name=".ElchiApplication"
@@ -30,7 +34,7 @@
             </intent-filter>
             <!-- In-app paths (the inbox's links and push taps): elchi://bookings/{id}[/messages],
                  elchi://listings/{id}, elchi://proposals/{id}, elchi://support-threads[/{id}], elchi://notifications,
-                 elchi://r/{code}. -->
+                 elchi://trips/{id}, elchi://wallet (driver; the GPS notification's tap), elchi://r/{code}. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -41,6 +45,8 @@
                 <data android:host="proposals" />
                 <data android:host="support-threads" />
                 <data android:host="notifications" />
+                <data android:host="trips" />
+                <data android:host="wallet" />
                 <data android:host="r" />
             </intent-filter>
             <!-- Referral App Link (Q107): https://<link host>/r/<code> only. /t/ and /e/ stay in the browser until the
@@ -55,6 +61,12 @@
                 <data android:pathPrefix="/r/" />
             </intent-filter>
         </activity>
+        <!-- Driver GPS (Stage 09, Q148): keeps publishing while the app is in the background, with an ongoing
+             notification (tap = the trip, "To'xtatish" = stop). Started only from the visible app. -->
+        <service
+            android:name=".gps.LocationService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
         <!-- FCM (ADR-0022): data-only messages; the app builds the notification itself. -->
         <service
             android:name=".push.ElchiMessagingService"

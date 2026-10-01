@@ -10,6 +10,8 @@ public enum InboxTarget: Equatable, Sendable {
     case proposal(String)
     case trip(String)
     case supportThread(String)
+    /// A driver's top-up was decided (`/wallet`).
+    case wallet
 }
 
 public enum Inbox {
@@ -21,6 +23,7 @@ public enum Inbox {
         (regex(#"^/trips/([^/?#]+)/?$"#), { .trip($0[0] ?? "") }),
         // ADR-0026: an operator answer leads into the person's own support chat.
         (regex(#"^/support-threads/([^/?#]+)/?$"#), { .supportThread($0[0] ?? "") }),
+        (regex(#"^/wallet(/[^?#]*)?/?$"#), { _ in .wallet }),
     ]
 
     private static func regex(_ pattern: String) -> NSRegularExpression {
@@ -156,6 +159,11 @@ public enum PromoLogic {
     /// The client's own buckets (the passenger bonus); a driver credit never shows on the client's screen.
     public static func clientBuckets(_ balance: PromoBalanceDTO) -> [PromoBucketDTO] {
         balance.buckets.filter { $0.instrument == .passengerBonus }
+    }
+
+    /// The audience's own buckets: the client's passenger bonus, the driver's credit (never each other's).
+    public static func buckets(_ balance: PromoBalanceDTO, audience: String) -> [PromoBucketDTO] {
+        audience == "driver" ? balance.buckets.filter { $0.instrument == .driverCredit } : clientBuckets(balance)
     }
 
     /// `403 FEATURE_DISABLED` (flag `promotions_enabled`): the referral programme is off.

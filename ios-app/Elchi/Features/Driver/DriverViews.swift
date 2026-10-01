@@ -12,6 +12,8 @@ struct DriverTabScreen<Content: View>: View {
     let content: Content
     @Environment(\.elchi) private var c
     @Environment(BannerCenter.self) private var banners: BannerCenter?
+    /// The GPS bar on the trips tab while a trip runs (Stage 09).
+    @Environment(\.screenAccessory) private var accessory
 
     init(title: String, bell: BellButton? = nil, plus: (label: String, action: () -> Void)? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -34,6 +36,7 @@ struct DriverTabScreen<Content: View>: View {
             }
             .frame(height: 64)
             .padding(.horizontal, 16)
+            if let accessory { accessory }
             if let banners { BannerHost(center: banners) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) { content }
@@ -80,8 +83,7 @@ struct BellButton: View {
 // MARK: - Home
 
 /// Driver home: balance (Q22: visible before approval), the verification status in words (never the raw code), the
-/// availability switch (locked until approved) and the next step. Not built here: the saved-referral-code row (needs
-/// referral deep links, Q107) and the GPS bar (Stage 09).
+/// availability switch (locked until approved) and the next step. The balance row opens "Komissiya balansi" (Stage 09).
 struct DriverHomeView: View {
     let driver: DriverModel
     let inbox: InboxModel
@@ -96,6 +98,8 @@ struct DriverHomeView: View {
     let onMatches: () -> Void
     /// Stage 08: "Takliflarim" (the offers the driver sent).
     var onProposals: () -> Void = {}
+    /// Stage 09: "Komissiya balansi".
+    var onWallet: () -> Void = {}
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
@@ -127,7 +131,7 @@ struct DriverHomeView: View {
     @ViewBuilder
     private func content(_ status: DriverVerification) -> some View {
         ElchiList {
-            ListRow(icon: .wallet, title: strings.t("driverHome.commissionBalance"), description: balance, chevron: false, first: true, action: nil)
+            ListRow(icon: .wallet, title: strings.t("driverHome.commissionBalance"), description: balance, first: true, action: onWallet)
         }
         .accessibilityIdentifier("elchi.driver.balance")
         StatusCard(label: strings.t("driver.home.verificationLabel"), value: strings.verificationLabel(status), tone: status.tone,
@@ -258,52 +262,6 @@ struct DriverGatedTab: View {
         }
         .refreshable { await driver.loadProfile() }
         .task { await driver.loadProfile() }
-    }
-}
-
-// MARK: - Profile tab (menu)
-
-/// Who is signed in (name, phone, verification badge) and the menu. The client's profile screen (its account badge,
-/// order figures and the client bonus) is not shown to a driver; the driver's credit screen is Stage 09.
-struct DriverProfileMenu: View {
-    enum Action { case form, documents, notifications, help, threads, safety, settings, logout }
-
-    let driver: DriverModel
-    let session: Session
-    let onAction: (Action) -> Void
-    @Environment(LocaleStore.self) private var strings
-
-    var body: some View {
-        DriverTabScreen(title: strings.t("driverProfile.title")) {
-            let profile = driver.profile.value
-            let name = [profile?.fullName, profile?.user?.fullName, session.user.fullName]
-                .compactMap { $0?.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
-            let phone = UzPhone.display(session.user.phone)
-            let status = driver.status
-            AvatarCard(initials: Initials.of(name), name: name ?? phone, phone: name == nil ? nil : phone,
-                       badge: status.map { (strings.verificationLabel($0), $0.tone) })
-            SectionTitle(strings.t("driver.profile.menuTitle"))
-            ElchiList {
-                row(.car, "driverProfileForm.title",
-                    VehicleLock.isLocked(profile) ? "driverProfileForm.vehicleLockedTitle" : "driverProfile.action.editHint", .form, first: true)
-                row(.file, "driverProfile.action.documents", "driverProfile.action.documentsHint", .documents)
-                row(.bell, "notifications.title", "clientProfile.notificationsHint", .notifications)
-                row(.head, "driverProfile.action.support", "driverProfile.action.supportHint", .help)
-                row(.chat, "support.myThreads", "support.myThreadsHint", .threads)
-                row(.block, "safety.centerTitle", "safety.centerDescription", .safety)
-                row(.settings, "driverProfile.action.settings", "driverProfile.action.settingsHint", .settings)
-                ListRow(icon: .logout, title: strings.t("driverProfile.action.logout"), description: strings.t("driverProfile.action.logoutHint"),
-                        danger: true) { onAction(.logout) }
-                    .accessibilityIdentifier("elchi.driver.menu.logout")
-            }
-        }
-        .refreshable { await driver.loadProfile() }
-        .task { await driver.loadProfile() }
-    }
-
-    private func row(_ icon: ElchiIcon, _ title: String, _ hint: String, _ action: Action, first: Bool = false) -> some View {
-        ListRow(icon: icon, title: strings.t(title), description: strings.t(hint), first: first) { onAction(action) }
-            .accessibilityIdentifier("elchi.driver.menu.\(action)")
     }
 }
 

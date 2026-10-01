@@ -903,5 +903,200 @@
   "driver.bid.priceBand": {
     "uz": "Odatdagi oraliq: {floor} – {ceiling}",
     "ru": "Обычный диапазон: {floor} – {ceiling}"
+  },
+  "status.awaiting_second_approval": {
+    "uz": "Ikkinchi tasdiq kutilmoqda",
+    "ru": "Ожидает второго подтверждения"
+  },
+  "status.delivery_failed": {
+    "uz": "Yetkazib bo'lmadi",
+    "ru": "Не удалось доставить"
+  },
+  "status.return_required": {
+    "uz": "Qaytarish kerak",
+    "ru": "Требуется возврат"
+  },
+  "status.returned": {
+    "uz": "Qaytarildi",
+    "ru": "Возвращено"
+  },
+  "driver.wallet.requisitesNote": {
+    "uz": "Bank rekvizitlarini olish uchun «Yordam» bo'limida operatorga yozing. To'lov maqsadida telefon raqamingizni ko'rsating.",
+    "ru": "Чтобы получить банковские реквизиты, напишите оператору в разделе «Помощь». В назначении платежа укажите свой номер телефона.",
+    "_why": "Stage 09 design shows bank requisites, but none exist in the system; we never invent account numbers."
+  },
+  "driver.wallet.payerReference": {
+    "uz": "To'lovchi ma'lumoti (ixtiyoriy)",
+    "ru": "Данные плательщика (необязательно)"
+  },
+  "driver.profile.editHint": {
+    "uz": "Ism; avtomobil qulflangan — o'zgartirish operator orqali",
+    "ru": "Имя; автомобиль заблокирован — изменения через оператора"
+  },
+  "driver.profile.settingsHint": {
+    "uz": "Ko'rinish, til va akkaunt",
+    "ru": "Оформление, язык и аккаунт"
+  },
+  "driver.profile.complaints": {
+    "uz": "Shikoyat",
+    "ru": "Жалобы"
+  },
+  "driver.gps.notificationTitle": {
+    "uz": "Elchi joylashuvni yubormoqda",
+    "ru": "Elchi передаёт геолокацию"
+  },
+  "driver.gps.notificationText": {
+    "uz": "Safar davomida mijozlar mashinangizni xaritada ko'radi.",
+    "ru": "Во время поездки клиенты видят вашу машину на карте."
+  },
+  "driver.gps.channelName": {
+    "uz": "Safar joylashuvi",
+    "ru": "Геолокация поездки"
+  },
+  "driver.gps.backgroundOn": {
+    "uz": "Ilova fonda bo'lsa ham joylashuv yuboriladi.",
+    "ru": "Геолокация передаётся, даже когда приложение свёрнуто.",
+    "_why": "Q148: background tracking is the native apps' job; say it only when it is really on."
+  },
+  "driver.gps.backgroundPermission": {
+    "uz": "Fonda yuborish uchun joylashuvga «Har doim» ruxsat bering.",
+    "ru": "Чтобы передавать в фоне, разрешите доступ к геолокации «Всегда»."
+  },
+  "driver.gps.backgroundDenied": {
+    "uz": "Fonda ruxsat yo'q: joylashuv faqat ilova ochiq bo'lganda yuboriladi.",
+    "ru": "Нет фонового доступа: геолокация передаётся только при открытом приложении."
+  },
+  "driver.gps.preciseOff": {
+    "uz": "Aniq joylashuv o'chirilgan — mijozlar mashinani noaniq ko'radi. Sozlamalarda «Aniq joylashuv»ni yoqing.",
+    "ru": "Точная геолокация выключена — клиенты видят машину неточно. Включите «Точную геолокацию» в настройках."
+  },
+  "driver.booking.arrived": {
+    "uz": "Keldim — mijozga xabar yuborildi",
+    "ru": "Я на месте — клиенту отправлено уведомление"
+  },
+  "driver.gps.permissionHint": {
+    "uz": "Telefon sozlamalari → Elchi → Joylashuv: «Ilovadan foydalanganda» yoki «Har doim»ni tanlang. Ruxsat berilishi bilan yuborish o'zi davom etadi.",
+    "ru": "Настройки телефона → Elchi → Геопозиция: выберите «При использовании» или «Всегда». Как только доступ появится, отправка продолжится сама."
+  },
+  "driver.gps.unavailable": {
+    "uz": "Telefonda joylashuv xizmati o'chiq yoki mavjud emas.",
+    "ru": "Службы геолокации на телефоне выключены или недоступны."
+  },
+  "driver.wallet.method.bank_transfer": {
+    "uz": "Bank o'tkazmasi",
+    "ru": "Банковский перевод"
+  },
+  "driver.wallet.method.cash_desk": {
+    "uz": "Kassa orqali",
+    "ru": "Через кассу"
+  },
+  "driver.wallet.methodLabel": {
+    "uz": "To'lov usuli",
+    "ru": "Способ оплаты"
+  },
+  "driver.wallet.noteLabel": {
+    "uz": "Izoh (ixtiyoriy)",
+    "ru": "Комментарий (необязательно)"
+  },
+  "driver.wallet.transactionsTitle": {
+    "uz": "Amallar tarixi",
+    "ru": "История операций"
+  },
+  "driver.wallet.transactionsEmpty": {
+    "uz": "Hali amal yo'q",
+    "ru": "Операций пока нет"
+  },
+  "driver.wallet.balanceAfter": {
+    "uz": "Qoldiq: {amount}",
+    "ru": "Остаток: {amount}"
+  },
+  "driver.wallet.kind.topup": {
+    "uz": "Balans to'ldirildi",
+    "ru": "Пополнение баланса"
+  },
+  "driver.wallet.kind.commission_capture": {
+    "uz": "Komissiya ushlandi",
+    "ru": "Списана комиссия"
+  },
+  "driver.wallet.kind.reversal": {
+    "uz": "Komissiya qaytarildi",
+    "ru": "Комиссия возвращена"
+  },
+  "driver.wallet.kind.adjustment": {
+    "uz": "Tuzatish",
+    "ru": "Корректировка"
+  },
+  "driver.wallet.chartTitle": {
+    "uz": "Ushlangan komissiya · 7 kun",
+    "ru": "Списанная комиссия · 7 дней"
+  },
+  "driver.wallet.amountInvalid": {
+    "uz": "Summani so'mda kiriting (0 dan katta).",
+    "ru": "Введите сумму в сумах (больше 0)."
+  },
+  "driver.booking.arrivedSent": {
+    "uz": "«Keldim» yuborilgan — mijoz xabardor.",
+    "ru": "«Я на месте» отправлено — клиент уведомлён."
+  },
+  "driver.booking.commission": {
+    "uz": "ELCHI komissiyasi",
+    "ru": "Комиссия ELCHI"
+  },
+  "driver.booking.commissionValue": {
+    "uz": "{amount} ({percent}%) — balansingizdan",
+    "ru": "{amount} ({percent}%) — с вашего баланса"
+  },
+  "driver.booking.inTransitNote": {
+    "uz": "Haydovchi yo'lga chiqdi. Jo'natma yetkazilgani yoki qaytarilishini operator qayd etadi — kod va tasdiq kerak emas.",
+    "ru": "Водитель в пути. Доставку или возврат посылки отмечает оператор — код и подтверждение не нужны."
+  },
+  "driver.booking.clientFallback": {
+    "uz": "Mijoz",
+    "ru": "Клиент"
+  },
+  "driver.booking.clientTitle": {
+    "uz": "Mijoz",
+    "ru": "Клиент"
+  },
+  "driver.booking.rateNote": {
+    "uz": "Baholash yakunlangandan keyin 7 kun ochiq.",
+    "ru": "Оценить можно в течение 7 дней после завершения."
+  },
+  "driver.orders.filterActive": {
+    "uz": "Faol",
+    "ru": "Активные"
+  },
+  "driver.orders.filterHistory": {
+    "uz": "Tarix",
+    "ru": "История"
+  },
+  "driver.profile.totalLegacy": {
+    "uz": "Jami (eski)",
+    "ru": "Всего (старые)"
+  },
+  "driver.safety.blocked": {
+    "uz": "Mijoz bloklandi. Mavjud bron va qo'llab-quvvatlash davom etadi.",
+    "ru": "Клиент заблокирован. Текущая бронь и поддержка продолжаются."
+  },
+  "driver.safety.blockConfirmTitle": {
+    "uz": "Mijozni bloklaysizmi?",
+    "ru": "Заблокировать клиента?"
+  },
+  "driver.proposals.bookingReady": {
+    "uz": "Bron yaratildi — mijoz bilan chat ochildi.",
+    "ru": "Бронь создана — чат с клиентом открыт."
+  },
+  "driver.bonus.noCreditTitle": {
+    "uz": "Hozircha kredit yo'q",
+    "ru": "Кредита пока нет"
+  },
+  "driver.bonus.noCreditSubtitle": {
+    "uz": "Kredit faqat kampaniya shartlari bajarilgandan keyin paydo bo'ladi va komissiyangizni kamaytiradi.",
+    "ru": "Кредит появляется только после выполнения условий кампании и уменьшает вашу комиссию."
+  },
+  "driver.gps.permissionPrompt": {
+    "uz": "Telefon joylashuvga ruxsat so'raydi — «Ilovadan foydalanganda»ni tanlang va aniq joylashuvni yoqing.",
+    "ru": "Телефон запросит доступ к геолокации — выберите «Только при использовании приложения» и включите точное местоположение.",
+    "_why": "Native replacement for driverTracking.permissionPrompt, which talks about a browser."
   }
 }

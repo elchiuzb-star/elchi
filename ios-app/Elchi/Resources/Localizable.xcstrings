@@ -8892,6 +8892,176 @@
         }
       }
     },
+    "driver.bonus.noCreditSubtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кредит появляется только после выполнения условий кампании и уменьшает вашу комиссию."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kredit faqat kampaniya shartlari bajarilgandan keyin paydo bo'ladi va komissiyangizni kamaytiradi."
+          }
+        }
+      }
+    },
+    "driver.bonus.noCreditTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кредита пока нет"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hozircha kredit yo'q"
+          }
+        }
+      }
+    },
+    "driver.booking.arrived": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Я на месте — клиенту отправлено уведомление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keldim — mijozga xabar yuborildi"
+          }
+        }
+      }
+    },
+    "driver.booking.arrivedSent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Я на месте» отправлено — клиент уведомлён."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Keldim» yuborilgan — mijoz xabardor."
+          }
+        }
+      }
+    },
+    "driver.booking.clientFallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz"
+          }
+        }
+      }
+    },
+    "driver.booking.clientTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz"
+          }
+        }
+      }
+    },
+    "driver.booking.commission": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Комиссия ELCHI"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ELCHI komissiyasi"
+          }
+        }
+      }
+    },
+    "driver.booking.commissionValue": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{amount} ({percent}%) — с вашего баланса"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{amount} ({percent}%) — balansingizdan"
+          }
+        }
+      }
+    },
+    "driver.booking.inTransitNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Водитель в пути. Доставку или возврат посылки отмечает оператор — код и подтверждение не нужны."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi yo'lga chiqdi. Jo'natma yetkazilgani yoki qaytarilishini operator qayd etadi — kod va tasdiq kerak emas."
+          }
+        }
+      }
+    },
+    "driver.booking.rateNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оценить можно в течение 7 дней после завершения."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baholash yakunlangandan keyin 7 kun ochiq."
+          }
+        }
+      }
+    },
     "driver.docs.fileHintImage": {
       "extractionState": "manual",
       "localizations": {
@@ -9266,6 +9436,176 @@
         }
       }
     },
+    "driver.gps.backgroundDenied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет фонового доступа: геолокация передаётся только при открытом приложении."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonda ruxsat yo'q: joylashuv faqat ilova ochiq bo'lganda yuboriladi."
+          }
+        }
+      }
+    },
+    "driver.gps.backgroundOn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Геолокация передаётся, даже когда приложение свёрнуто."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ilova fonda bo'lsa ham joylashuv yuboriladi."
+          }
+        }
+      }
+    },
+    "driver.gps.backgroundPermission": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чтобы передавать в фоне, разрешите доступ к геолокации «Всегда»."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonda yuborish uchun joylashuvga «Har doim» ruxsat bering."
+          }
+        }
+      }
+    },
+    "driver.gps.channelName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Геолокация поездки"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar joylashuvi"
+          }
+        }
+      }
+    },
+    "driver.gps.notificationText": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Во время поездки клиенты видят вашу машину на карте."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar davomida mijozlar mashinangizni xaritada ko'radi."
+          }
+        }
+      }
+    },
+    "driver.gps.notificationTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elchi передаёт геолокацию"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elchi joylashuvni yubormoqda"
+          }
+        }
+      }
+    },
+    "driver.gps.permissionHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки телефона → Elchi → Геопозиция: выберите «При использовании» или «Всегда». Как только доступ появится, отправка продолжится сама."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon sozlamalari → Elchi → Joylashuv: «Ilovadan foydalanganda» yoki «Har doim»ni tanlang. Ruxsat berilishi bilan yuborish o'zi davom etadi."
+          }
+        }
+      }
+    },
+    "driver.gps.permissionPrompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон запросит доступ к геолокации — выберите «Только при использовании приложения» и включите точное местоположение."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon joylashuvga ruxsat so'raydi — «Ilovadan foydalanganda»ni tanlang va aniq joylashuvni yoqing."
+          }
+        }
+      }
+    },
+    "driver.gps.preciseOff": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Точная геолокация выключена — клиенты видят машину неточно. Включите «Точную геолокацию» в настройках."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aniq joylashuv o'chirilgan — mijozlar mashinani noaniq ko'radi. Sozlamalarda «Aniq joylashuv»ni yoqing."
+          }
+        }
+      }
+    },
+    "driver.gps.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Службы геолокации на телефоне выключены или недоступны."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefonda joylashuv xizmati o'chiq yoki mavjud emas."
+          }
+        }
+      }
+    },
     "driver.home.availableOn": {
       "extractionState": "manual",
       "localizations": {
@@ -9296,6 +9636,74 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tasdiqlash holati"
+          }
+        }
+      }
+    },
+    "driver.orders.filterActive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Активные"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faol"
+          }
+        }
+      }
+    },
+    "driver.orders.filterHistory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "История"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tarix"
+          }
+        }
+      }
+    },
+    "driver.profile.complaints": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Жалобы"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shikoyat"
+          }
+        }
+      }
+    },
+    "driver.profile.editHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Имя; автомобиль заблокирован — изменения через оператора"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ism; avtomobil qulflangan — o'zgartirish operator orqali"
           }
         }
       }
@@ -9334,6 +9742,40 @@
         }
       }
     },
+    "driver.profile.settingsHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оформление, язык и аккаунт"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ko'rinish, til va akkaunt"
+          }
+        }
+      }
+    },
+    "driver.profile.totalLegacy": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Всего (старые)"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jami (eski)"
+          }
+        }
+      }
+    },
     "driver.proposals.bookingCreated": {
       "extractionState": "manual",
       "localizations": {
@@ -9347,6 +9789,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bron yaratildi: {id}. Bronni bajarish keyingi bosqichda qo'shiladi."
+          }
+        }
+      }
+    },
+    "driver.proposals.bookingReady": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бронь создана — чат с клиентом открыт."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bron yaratildi — mijoz bilan chat ochildi."
           }
         }
       }
@@ -9381,6 +9840,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Safar rejasi faqat sizga ko'rinadi: mos e'lonlarga taklif berish uchun kerak."
+          }
+        }
+      }
+    },
+    "driver.safety.blockConfirmTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заблокировать клиента?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijozni bloklaysizmi?"
+          }
+        }
+      }
+    },
+    "driver.safety.blocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент заблокирован. Текущая бронь и поддержка продолжаются."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz bloklandi. Mavjud bron va qo'llab-quvvatlash davom etadi."
           }
         }
       }
@@ -9534,6 +10027,261 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chiqish oynasi {time} da ochiladi."
+          }
+        }
+      }
+    },
+    "driver.wallet.amountInvalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите сумму в сумах (больше 0)."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summani so'mda kiriting (0 dan katta)."
+          }
+        }
+      }
+    },
+    "driver.wallet.balanceAfter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остаток: {amount}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qoldiq: {amount}"
+          }
+        }
+      }
+    },
+    "driver.wallet.chartTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Списанная комиссия · 7 дней"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ushlangan komissiya · 7 kun"
+          }
+        }
+      }
+    },
+    "driver.wallet.kind.adjustment": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Корректировка"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tuzatish"
+          }
+        }
+      }
+    },
+    "driver.wallet.kind.commission_capture": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Списана комиссия"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Komissiya ushlandi"
+          }
+        }
+      }
+    },
+    "driver.wallet.kind.reversal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Комиссия возвращена"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Komissiya qaytarildi"
+          }
+        }
+      }
+    },
+    "driver.wallet.kind.topup": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пополнение баланса"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balans to'ldirildi"
+          }
+        }
+      }
+    },
+    "driver.wallet.method.bank_transfer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Банковский перевод"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bank o'tkazmasi"
+          }
+        }
+      }
+    },
+    "driver.wallet.method.cash_desk": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Через кассу"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kassa orqali"
+          }
+        }
+      }
+    },
+    "driver.wallet.methodLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Способ оплаты"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To'lov usuli"
+          }
+        }
+      }
+    },
+    "driver.wallet.noteLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Комментарий (необязательно)"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Izoh (ixtiyoriy)"
+          }
+        }
+      }
+    },
+    "driver.wallet.payerReference": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данные плательщика (необязательно)"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To'lovchi ma'lumoti (ixtiyoriy)"
+          }
+        }
+      }
+    },
+    "driver.wallet.requisitesNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чтобы получить банковские реквизиты, напишите оператору в разделе «Помощь». В назначении платежа укажите свой номер телефона."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bank rekvizitlarini olish uchun «Yordam» bo'limida operatorga yozing. To'lov maqsadida telefon raqamingizni ko'rsating."
+          }
+        }
+      }
+    },
+    "driver.wallet.transactionsEmpty": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Операций пока нет"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hali amal yo'q"
+          }
+        }
+      }
+    },
+    "driver.wallet.transactionsTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "История операций"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Amallar tarixi"
           }
         }
       }
@@ -26844,6 +27592,23 @@
         }
       }
     },
+    "status.awaiting_second_approval": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидает второго подтверждения"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikkinchi tasdiq kutilmoqda"
+          }
+        }
+      }
+    },
     "status.bidding": {
       "extractionState": "manual",
       "localizations": {
@@ -26942,6 +27707,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Yetkazildi"
+          }
+        }
+      }
+    },
+    "status.delivery_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось доставить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yetkazib bo'lmadi"
           }
         }
       }
@@ -27180,6 +27962,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rad etilgan"
+          }
+        }
+      }
+    },
+    "status.return_required": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Требуется возврат"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qaytarish kerak"
+          }
+        }
+      }
+    },
+    "status.returned": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Возвращено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qaytarildi"
           }
         }
       }

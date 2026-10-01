@@ -32,6 +32,9 @@ sealed interface InboxTarget {
     data class Proposal(val id: String, val listingId: String?) : InboxTarget
     data class Trip(val id: String) : InboxTarget
     data class SupportThread(val id: String) : InboxTarget
+
+    /** `/wallet`: a top-up decided, the balance moved (driver only). */
+    data object Wallet : InboxTarget
 }
 
 /** How an item's time reads: today "10:24", yesterday "Kecha, 08:12", older "12 sen". */
@@ -53,6 +56,7 @@ object InboxRules {
         Regex("^/proposals/([^/?#]+)(/messages)?/?$") to { m, params -> InboxTarget.Proposal(m.groupValues[1], param(params, "listing_id")) },
         Regex("^/trips/([^/?#]+)/?$") to { m, _ -> InboxTarget.Trip(m.groupValues[1]) },
         Regex("^/support-threads/([^/?#]+)/?$") to { m, _ -> InboxTarget.SupportThread(m.groupValues[1]) },
+        Regex("^/wallet/?$") to { _, _ -> InboxTarget.Wallet },
     )
 
     /** Where [link] leads, or null when this app has no screen for it (the tap then only marks the item read). */
@@ -188,6 +192,9 @@ object PromoRules {
 
     /** The client's own buckets (instrument = client bonus); a driver credit is never shown here. */
     fun clientBuckets(buckets: List<PromoBucketDTO>): List<PromoBucketDTO> = buckets.filter { it.instrument == PromoInstrument.PASSENGER_BONUS }
+
+    /** The driver's credit (`driver_credit`, Q103): it only lowers commission - never money. */
+    fun driverBuckets(buckets: List<PromoBucketDTO>): List<PromoBucketDTO> = buckets.filter { it.instrument == PromoInstrument.DRIVER_CREDIT }
 
     /** The five states in reading order; "expired" includes reversed amounts (both are gone for good). */
     fun bucketRows(bucket: PromoBucketDTO): List<BucketRow> = listOf(

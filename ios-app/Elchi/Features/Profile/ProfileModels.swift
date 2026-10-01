@@ -161,11 +161,14 @@ final class BonusModel {
 
     /// The code kept from an `elchigo.uz/r/<code>` link: it fills the field and goes after a final server answer.
     private let links: DeepLinkCenter?
+    /// `client` (Stage 05: the passenger bonus) or `driver` (Stage 09: the driver credit).
+    let audience: String
 
-    init(api: ElchiAPI, keys: ActionKeys, links: DeepLinkCenter? = nil) {
+    init(api: ElchiAPI, keys: ActionKeys, links: DeepLinkCenter? = nil, audience: String = "client") {
         self.api = api
         self.keys = keys
         self.links = links
+        self.audience = audience
     }
 
     func load() async {
@@ -212,21 +215,21 @@ final class BonusModel {
         }
     }
 
-    var buckets: [PromoBucketDTO] { balance.value.map(PromoLogic.clientBuckets) ?? [] }
+    var buckets: [PromoBucketDTO] { balance.value.map { PromoLogic.buckets($0, audience: audience) } ?? [] }
 
     /// The entry field goes once a code has been accepted for this person (the first attribution is final).
-    var hasAttribution: Bool { referrals.value?.attributions.contains { $0.audience == "client" } == true || accepted }
+    var hasAttribution: Bool { referrals.value?.attributions.contains { $0.audience == audience } == true || accepted }
 
     var normalized: String? { ReferralCode.normalize(entered) }
 
     func submitCode() async {
         guard let code = normalized, !entering else { return }
-        let action = "attribute:client:\(code)"
+        let action = "attribute:\(audience):\(code)"
         entering = true
         enterError = nil
         defer { entering = false }
         do {
-            _ = try await api.attribute(body: AttributionRequest(audience: "client", code: code), idempotencyKey: keys.key(action))
+            _ = try await api.attribute(body: AttributionRequest(audience: audience, code: code), idempotencyKey: keys.key(action))
             keys.settle(action)
             accepted = true
             entered = ""
