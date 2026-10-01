@@ -13,7 +13,6 @@ import uz.elchi.app.api.GeoApi
 import uz.elchi.app.api.HttpTransport
 import uz.elchi.app.api.LegacyOrdersApi
 import uz.elchi.app.api.OkHttpLiveSocketFactory
-import uz.elchi.app.api.WalletApi
 import uz.elchi.app.api.trackingSocketUrl
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.deeplink.DeepLinkCenter
@@ -61,7 +60,6 @@ class AppContainer(app: Application) {
     val files = FilesApi(transport)
     val legacyOrders = LegacyOrdersApi(transport)
     val driver = DriverApi(transport)
-    val wallet = WalletApi(transport)
     val api = ElchiApi(transport)
     val apiBase: String = BuildConfig.API_BASE_URL
 

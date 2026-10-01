@@ -13188,7 +13188,9 @@ export interface operations {
     create_commission_policy_api_v2_admin_commission_policies_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -13252,7 +13254,9 @@ export interface operations {
     confirm_commission_policy_api_v2_admin_commission_policies__policy_id__confirm_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 policy_id: string;
             };
@@ -13287,7 +13291,9 @@ export interface operations {
     end_commission_policy_api_v2_admin_commission_policies__policy_id__end_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 policy_id: string;
             };
@@ -14950,7 +14956,9 @@ export interface operations {
     create_adjustment_api_v2_admin_ledger_adjustments_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15023,7 +15031,9 @@ export interface operations {
     approve_adjustment_admin_api_v2_admin_ledger_adjustments__adjustment_id__approve_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 adjustment_id: string;
             };
@@ -15058,7 +15068,9 @@ export interface operations {
     reject_adjustment_admin_api_v2_admin_ledger_adjustments__adjustment_id__reject_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 adjustment_id: string;
             };
@@ -15093,7 +15105,9 @@ export interface operations {
     withdraw_adjustment_admin_api_v2_admin_ledger_adjustments__adjustment_id__withdraw_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 adjustment_id: string;
             };
@@ -19467,7 +19481,9 @@ export interface operations {
     approve_topup_admin_api_v2_admin_topups__topup_id__approve_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 topup_id: string;
             };
@@ -19502,7 +19518,9 @@ export interface operations {
     reject_topup_admin_api_v2_admin_topups__topup_id__reject_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 topup_id: string;
             };
@@ -30221,7 +30239,9 @@ export interface operations {
     create_my_topup_api_v2_wallet_topups_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

@@ -1685,13 +1685,13 @@ class ElchiApi(private val transport: ApiTransport) {
     /**
      * Create My Topup
      */
-    suspend fun createMyTopup(body: TopupCreate): ApiResult<TopupDTO> =
+    suspend fun createMyTopup(body: TopupCreate, idempotencyKey: String): ApiResult<TopupDTO> =
         transport.send(
             method = "POST",
             path = "/wallet/topups",
             query = listOf(),
             body = transport.encode(TopupCreate.serializer(), body),
-            idempotencyKey = null,
+            idempotencyKey = idempotencyKey,
             result = TopupDTO.serializer(),
         )
 

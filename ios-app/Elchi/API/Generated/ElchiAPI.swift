@@ -1561,13 +1561,13 @@ public struct ElchiAPI: Sendable {
     }
 
     /// Create My Topup
-    public func createMyTopup(body: TopupCreate) async throws -> APIResult<TopupDTO> {
+    public func createMyTopup(body: TopupCreate, idempotencyKey: String) async throws -> APIResult<TopupDTO> {
         try await transport.send(
             method: "POST",
             path: "/wallet/topups",
             query: [],
             body: body,
-            idempotencyKey: nil,
+            idempotencyKey: idempotencyKey,
             as: TopupDTO.self
         )
     }

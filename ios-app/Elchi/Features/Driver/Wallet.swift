@@ -76,16 +76,6 @@ public enum WalletLogic {
     public static func kindKey(_ line: LedgerLineDTO) -> String { "driver.wallet.kind.\(line.kind)" }
 }
 
-// MARK: - Hand-written call
-
-extension ElchiAPI {
-    /// `POST /wallet/topups` with the Idempotency-Key the server requires (the generated call sends none).
-    func createTopup(body: TopupCreate, idempotencyKey: String) async throws -> TopupDTO {
-        try await transport.send(method: "POST", path: "/wallet/topups", query: [], body: body, idempotencyKey: idempotencyKey,
-                                 as: TopupDTO.self).data
-    }
-}
-
 // MARK: - Komissiya balansi
 
 @MainActor @Observable
@@ -176,7 +166,7 @@ final class WalletModel {
         sendError = nil
         defer { sending = false }
         do {
-            _ = try await api.createTopup(body: body, idempotencyKey: keys.key(action))
+            _ = try await api.createMyTopup(body: body, idempotencyKey: keys.key(action)).data
             keys.settle(action)
             amountText = ""
             payerReference = ""

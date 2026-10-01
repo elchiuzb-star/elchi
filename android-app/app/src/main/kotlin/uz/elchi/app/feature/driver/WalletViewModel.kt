@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import uz.elchi.app.api.WalletApi
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.api.generated.LedgerLineDTO
 import uz.elchi.app.api.generated.TopupDTO
@@ -21,11 +20,10 @@ import uz.elchi.app.ui.components.BannerTone
 
 /**
  * "Komissiya balansi": `GET /wallet`, `/wallet/topups`, `/wallet/transactions` (cursor), and the top-up request
- * (`POST /wallet/topups` with an Idempotency-Key, [WalletApi]). Read again on every visit.
+ * (`POST /wallet/topups` with an Idempotency-Key). Read again on every visit.
  */
 class WalletViewModel(
     private val api: ElchiApi,
-    private val walletApi: WalletApi,
     private val banners: BannerCenter,
     private val onChanged: () -> Unit = {},
 ) : ViewModel() {
@@ -97,7 +95,7 @@ class WalletViewModel(
         _state.update { it.copy(sending = true, sendError = null) }
         banners.startAction()
         viewModelScope.launch {
-            val result = tryCall { walletApi.createTopup(body, keys.key(scope)).data }
+            val result = tryCall { api.createMyTopup(body, keys.key(scope)).data }
             keys.settle(scope, result.exceptionOrNull())
             banners.endAction()
             result

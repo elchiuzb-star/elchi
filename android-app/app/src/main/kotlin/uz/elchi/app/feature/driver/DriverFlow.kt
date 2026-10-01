@@ -384,7 +384,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
             BookingTrackingScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<Wallet> {
-            val vm: WalletViewModel = viewModel(factory = viewModelFactory { initializer { WalletViewModel(container.api, container.wallet, container.banners, driver::refresh) } })
+            val vm: WalletViewModel = viewModel(factory = viewModelFactory { initializer { WalletViewModel(container.api, container.banners, driver::refresh) } })
             WalletScreen(vm = vm, onBack = { nav.popBackStack() }, onHelp = { nav.navigate(Help) })
         }
         composable<DriverBonus> {

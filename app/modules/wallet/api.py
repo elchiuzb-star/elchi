@@ -21,7 +21,7 @@ from collections.abc import Callable
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Header
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import Date, cast, func, select
@@ -470,7 +470,8 @@ def list_my_transactions(
 
 @router.post("/wallet/topups", response_model=Envelope[TopupDTO], status_code=201)
 def create_my_topup(
-    payload: TopupCreate, request: Request, user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
+    payload: TopupCreate, request: Request, user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     def handler(caps: frozenset[Capability]) -> CommandResult:
         topup = wallet_service.create_topup(
@@ -534,6 +535,7 @@ def list_topups_admin(
 def approve_topup_admin(
     topup_id: str, payload: TopupApprove, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     def handler(caps: frozenset[Capability]) -> CommandResult:
         topup = _by_public_id(db, TopupRequest, topup_id, PublicIdPrefix.TOPUP)
@@ -553,6 +555,7 @@ def approve_topup_admin(
 def reject_topup_admin(
     topup_id: str, payload: TopupReject, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     def handler(caps: frozenset[Capability]) -> CommandResult:
         topup = _by_public_id(db, TopupRequest, topup_id, PublicIdPrefix.TOPUP)
@@ -575,6 +578,7 @@ def reject_topup_admin(
 def create_adjustment(
     payload: LedgerAdjustmentCreate, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     def handler(caps: frozenset[Capability]) -> CommandResult:
         wallet = _by_public_id(db, WalletAccount, payload.wallet_id, PublicIdPrefix.WALLET)
@@ -651,6 +655,7 @@ def get_adjustment(
 def approve_adjustment_admin(
     adjustment_id: str, payload: AdjustmentApprove, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     def handler(caps: frozenset[Capability]) -> CommandResult:
         adjustment = _adjustment_by_public_id(db, adjustment_id)
@@ -668,6 +673,7 @@ def approve_adjustment_admin(
 def reject_adjustment_admin(
     adjustment_id: str, payload: AdjustmentReject, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     """W17 (proposed): close a pending adjustment request with a reason."""
 
@@ -687,6 +693,7 @@ def reject_adjustment_admin(
 def withdraw_adjustment_admin(
     adjustment_id: str, payload: AdjustmentWithdraw, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     """W17a (proposed, Q49): the requester withdraws their own pending adjustment request."""
 
@@ -864,6 +871,7 @@ def list_commission_policies(
 def create_commission_policy(
     payload: CommissionPolicyCreate, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     def handler(caps: frozenset[Capability]) -> CommandResult:
         corridor = _corridor_internal_id(db, payload.scope.corridor_id)
@@ -894,6 +902,7 @@ def get_commission_policy(
 def end_commission_policy(
     policy_id: str, payload: CommissionPolicyEnd, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     def handler(caps: frozenset[Capability]) -> CommandResult:
         policy = _by_public_id(db, CommissionPolicy, policy_id, PublicIdPrefix.COMMISSION_POLICY)
@@ -911,6 +920,7 @@ def end_commission_policy(
 def confirm_commission_policy(
     policy_id: str, payload: CommissionPolicyConfirm, request: Request,
     user: User = Depends(get_current_active_user), db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),  # read by _command; declared for the OpenAPI
 ) -> JSONResponse:
     """W19 (proposed, decision 28): super_admin confirms the migration-seeded global rate once."""
 
