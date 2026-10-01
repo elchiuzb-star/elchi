@@ -329,7 +329,7 @@ class BonusViewModel(
  * `DELETE /blocks/{user_id}` with an `Idempotency-Key`; a refusal keeps the row and says why - never a fake success
  * (the backend currently refuses it, `IDEMPOTENCY_KEY_REQUIRED`, see the report).
  */
-class SafetyCenterViewModel(private val api: ElchiApi, private val account: AccountApi) : ViewModel() {
+class SafetyCenterViewModel(private val api: ElchiApi) : ViewModel() {
 
     data class State(
         val blocks: Load<List<BlockDTO>> = Load.Loading,
@@ -382,7 +382,7 @@ class SafetyCenterViewModel(private val api: ElchiApi, private val account: Acco
         val scope = "unblock:$userId"
         _state.update { it.copy(unblocking = userId, unblockError = null) }
         viewModelScope.launch {
-            val result = attempt { account.unblock(userId, keys.key(scope)) }
+            val result = attempt { api.deleteBlock(userId, keys.key(scope)) }
             keys.settle(scope, result.exceptionOrNull())
             result.fold(
                 { _state.update { s -> s.copy(unblocking = null, blocks = (s.blocks as? Load.Ready)?.let { Load.Ready(it.value.filterNot { b -> b.userId == userId }) } ?: s.blocks) } },

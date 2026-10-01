@@ -7,7 +7,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import uz.elchi.app.api.AccountApi
 import uz.elchi.app.api.AuthApi
-import uz.elchi.app.api.BookingActionsApi
 import uz.elchi.app.api.DriverApi
 import uz.elchi.app.api.FilesApi
 import uz.elchi.app.api.GeoApi
@@ -63,7 +62,6 @@ class AppContainer(app: Application) {
     val legacyOrders = LegacyOrdersApi(transport)
     val driver = DriverApi(transport)
     val wallet = WalletApi(transport)
-    val bookingActions = BookingActionsApi(transport)
     val api = ElchiApi(transport)
     val apiBase: String = BuildConfig.API_BASE_URL
 

@@ -447,7 +447,7 @@ DTO: `EventDTO {id (evt_), event_type, aggregate_type, aggregate_id, aggregate_v
 | S7 | `GET /admin/disputes` | `ops.view` | `?status&type&cursor` | `list[DisputeDTO]` | — | — | — | §16 |
 | S8 | `POST /admin/disputes/{dispute_id}/{command}` | `start_review`: `ops.dispute_resolve` (operator+); `resolve`/`reject`: **`ops.dispute_decide` (admin+, wave 3.1 — v1 Q13/Q38 pariteti)**; moliyaviy buyruqda + `finance.adjustment` | `DisputeCommand` (+ `cash_outcome?`) | `DisputeDTO` | Y | Y | `INVALID_STATE_TRANSITION`, `VERSION_CONFLICT`, `CAPABILITY_REQUIRED`, `VALIDATION_ERROR` (`cash_outcome`) | AC25, AC26 |
 | S9 | `POST /blocks` | Auth | `BlockCreate` | `BlockDTO` | Y | — | — | §8.1 |
-| S10 | `DELETE /blocks/{user_id}` | Auth | — | `{}` | — | — | — | — |
+| S10 | `DELETE /blocks/{user_id}` | Auth | — | `{}` | Y | — | `IDEMPOTENCY_KEY_REQUIRED` | — |
 | S11 | `POST /reports` | Auth | `ReportCreate` | `ReportDTO` | Y | — | `RATE_LIMITED` | §17.3 |
 | S12 | `GET /admin/reports` \| `GET /admin/fraud-signals` | `ops.view` | cursor | `list[ReportDTO]` \| `list[FraudSignalDTO]` | — | — | — | §17.3 |
 

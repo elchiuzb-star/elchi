@@ -208,17 +208,17 @@ class OfferRulesTest {
     }
 
     @Test
-    fun `accept sends the version and the terms version - 1 first, then the server's`() {
+    fun `accept sends the version and the thread's listing terms version`() {
         val v = S08.version("prv_7", ActorSide.CLIENT)
-        val first = OfferRules.acceptBody(v, null)
-        assertEquals("prv_7", first.proposalVersionId)
-        assertEquals(1L, first.expectedListingTermsVersion)
-        assertNull(first.expectedListingVersion) // the server wants one of the two aliases, equal if both
-        assertNull(first.promoDriverAck)
-        val mismatch = ApiException(409, "PROPOSAL_CHANGED", "x", buildJsonObject { put("reason", "listing_terms_version_mismatch"); put("current_listing_terms_version", 2) })
-        assertEquals(2L, OfferRules.termsVersionFrom(mismatch))
-        assertEquals(2L, OfferRules.acceptBody(v, OfferRules.termsVersionFrom(mismatch)).expectedListingTermsVersion)
-        assertNull(OfferRules.termsVersionFrom(ApiException(409, "PROPOSAL_CHANGED", "x", buildJsonObject { put("reason", "listing_terms_changed") })))
+        val body = OfferRules.acceptBody(S08.thread(v, listingTermsVersion = 3), v)
+        assertEquals("prv_7", body.proposalVersionId)
+        assertEquals(3L, body.expectedListingTermsVersion)
+        assertNull(body.expectedListingVersion) // the server wants one of the two aliases, equal if both
+        assertNull(body.promoDriverAck)
+        val mismatch = ApiException(409, "PROPOSAL_CHANGED", "x", buildJsonObject { put("reason", "listing_terms_version_mismatch"); put("current_listing_terms_version", 4) })
+        assertTrue(OfferRules.termsChanged(mismatch))
+        assertTrue(OfferRules.needsRefresh(mismatch))
+        assertFalse(OfferRules.termsChanged(ApiException(409, "VERSION_CONFLICT", "x")))
         assertEquals("bkg_1", OfferRules.bookingId(buildJsonObject { put("id", "bkg_1") }))
         assertNull(OfferRules.bookingId(null))
     }

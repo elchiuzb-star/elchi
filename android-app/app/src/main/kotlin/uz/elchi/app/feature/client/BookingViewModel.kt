@@ -65,8 +65,6 @@ class BookingViewModel(
     val bookingId: String,
     private val now: () -> Instant = Instant::now,
     val side: BookingSide = BookingSide.CLIENT,
-    /** The driver's booking commands (the generated call builds a wrong path, [BookingActionsApi]). */
-    private val actions: uz.elchi.app.api.BookingActionsApi? = null,
 ) : ViewModel() {
 
     data class State(
@@ -529,13 +527,12 @@ class BookingViewModel(
     fun arrive() {
         val s = _state.value
         val booking = s.value ?: return
-        val actions = actions ?: return
         if (s.arriving || side != BookingSide.DRIVER) return
         _state.update { it.copy(arriving = true, arriveError = null) }
         viewModelScope.launch {
             try {
                 val result = keyed("arrive:${booking.id}:${booking.version}") { key ->
-                    actions.act(booking.id, BookingAction.ARRIVE_AT_PICKUP, BookingActionRequest(expectedVersion = booking.version), key)
+                    api.bookingAction(booking.id, BookingAction.ARRIVE_AT_PICKUP, BookingActionRequest(expectedVersion = booking.version), key)
                 }
                 setBooking(result.data)
                 _state.update { it.copy(arriving = false, arrivedAt = it.arrivedAt ?: now().toString(), notice = BookingNotice.ARRIVED) }

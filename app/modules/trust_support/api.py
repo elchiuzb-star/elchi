@@ -651,16 +651,18 @@ def list_blocks(
 @router.delete("/blocks/{blocked_user_id}", response_model=Envelope[EmptyDTO], responses=ERROR_RESPONSES)
 def delete_block(
     request: Request, blocked_user_id: str = Path(max_length=64),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
 ) -> JSONResponse:
-    """S10. Idempotent: removing a block that is not there is a success, not a 404."""
+    """S10. Idempotent: removing a block that is not there is a success, not a 404. Like every v2 command it
+    takes the user action's ``Idempotency-Key`` (ADR-0005; a missing key is ``400 IDEMPOTENCY_KEY_REQUIRED``)."""
 
     def handler() -> EmptyDTO:
         service.unblock_user(session, actor_user_id=user_id, blocked_public_id=blocked_user_id)
         return EmptyDTO()
 
-    return run_command(request, session, actor_user_id=user_id, idempotency_key=None, body=None, handler=handler,
-                       resource_type="user_block")
+    return run_command(request, session, actor_user_id=user_id, idempotency_key=idempotency_key, body=None,
+                       handler=handler, resource_type="user_block")
 
 
 @router.post("/reports", response_model=Envelope[ReportDTO], status_code=201, responses=ERROR_RESPONSES)

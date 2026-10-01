@@ -222,28 +222,20 @@ object OfferRules {
     )
 
     /**
-     * `POST /proposals/{id}/accept`. The listing's terms version is not visible to a driver (`ListingPublicDTO` has
-     * no `terms_version`, nor does the proposal version), so [termsVersion] is the server's answer to an earlier
-     * attempt ([termsVersionFrom]) or 1 - the version every listing starts at, bumped only by a material edit,
-     * which also expires every open offer (Q20). A driver ack goes with a promo quote when there is one.
+     * `POST /proposals/{id}/accept` against the listing terms version the thread shows (Q54,
+     * `ProposalThreadDTO.listing_terms_version`). A driver ack goes with a promo quote when there is one.
      */
-    fun acceptBody(version: ProposalVersionDTO, termsVersion: Long?): AcceptRequest {
+    fun acceptBody(thread: ProposalThreadDTO, version: ProposalVersionDTO): AcceptRequest {
         val promo = driverPromo(version)
         return AcceptRequest(
-            expectedListingTermsVersion = termsVersion ?: INITIAL_TERMS_VERSION,
+            expectedListingTermsVersion = thread.listingTermsVersion,
             promoDriverAck = promo?.let { PromoDriverAckInput(cashToCollectMinor = it.cashToCollectMinor, commissionChargedMinor = it.commissionChargedMinor) },
             proposalVersionId = version.id,
         )
     }
 
-    /** `PROPOSAL_CHANGED {reason: listing_terms_version_mismatch, current_listing_terms_version}`. */
-    fun termsVersionFrom(error: Throwable): Long? {
-        val api = error as? ApiException ?: return null
-        if (api.code != "PROPOSAL_CHANGED") return null
-        val details = api.details as? JsonObject ?: return null
-        if ((details["reason"] as? JsonPrimitive)?.contentOrNull != "listing_terms_version_mismatch") return null
-        return (details["current_listing_terms_version"] as? JsonPrimitive)?.longOrNull
-    }
+    /** `409 PROPOSAL_CHANGED`: the terms moved under the driver - read the thread again and ask to confirm again. */
+    fun termsChanged(error: Throwable): Boolean = (error as? ApiException)?.code == "PROPOSAL_CHANGED"
 
     /** The booking an accept created (`BookingDTO.id`); the body is a union, read loosely. */
     fun bookingId(body: JsonElement?): String? = ((body as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull
@@ -253,6 +245,5 @@ object OfferRules {
         (error as? ApiException)?.code in setOf("VERSION_CONFLICT", "PROPOSAL_CHANGED", "PROPOSAL_EXPIRED", "INVALID_STATE_TRANSITION")
 
     private val HALF_WINDOW: Duration = Duration.ofMinutes(30)
-    const val INITIAL_TERMS_VERSION = 1L
     const val PRICE_OUTSIDE_REFERENCE = "PRICE_OUTSIDE_REFERENCE"
 }

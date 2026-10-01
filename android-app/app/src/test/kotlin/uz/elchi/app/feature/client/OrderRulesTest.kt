@@ -36,7 +36,7 @@ class OrderRulesTest {
         promo: String = "null",
         withVersion: Boolean = true,
     ): ProposalThreadDTO {
-        val version = """{"id":"prv_$id","revision":2,"author_side":"$author","status":"$status","status_reason":null,
+        val version = """{"id":"prv_$id","listing_terms_version":2,"revision":2,"author_side":"$author","status":"$status","status_reason":null,
             "pickup_point":{"lat":41.3,"lng":69.2,"district":{"id":"dst_a","name_uz":"Chilonzor"},"address":"Toshkent, Chilonzor"},
             "dropoff_stop":{"id":"stp_b","name_uz":"Buxoro avtovokzali","name_ru":"Бухарский автовокзал"},
             "pickup_window_start":"$pickupStart","pickup_window_end":"2026-09-30T07:00:00Z","quantity":1,"price_basis":"total",
@@ -44,7 +44,7 @@ class OrderRulesTest {
             "demand":{"baggage_ml":0,"cargo_weight_g":5000,"cargo_volume_ml":12000},"promo_quote":$promo,
             "price_revisions_left":{"client":$clientLeft,"driver":3}}"""
         val summary = """{"vehicle_class":"car","seat_capacity":4,"rating_bucket":${bucket?.let { "\"$it\"" } ?: "null"},"rating_count":$ratings,"completed_bookings":3}"""
-        val json = """{"id":"$id","listing_id":"lst_1","state":"$state","client":{"side":"client","label":"Mijoz"},
+        val json = """{"id":"$id","listing_id":"lst_1","listing_terms_version":2,"state":"$state","client":{"side":"client","label":"Mijoz"},
             "driver":{"side":"driver","label":"Haydovchi #3"},"current_version":${if (withVersion) version else "null"},"driver_summary":$summary}"""
         return ElchiJson.decodeFromString(ProposalThreadDTO.serializer(), json)
     }

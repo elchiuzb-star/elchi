@@ -3845,13 +3845,15 @@ public struct ProposalThreadDTO: Codable, Hashable, Sendable {
     public var driverSummary: ProposalDriverSummaryDTO?
     public var id: String
     public var listingId: String
+    /// Q54: the listing's current terms version - what either party sends as expected_listing_terms_version on accept (only parties see the thread).
+    public var listingTermsVersion: Int
     public var state: String
     public var tripId: String?
     /// ADR-0025: the client's saved request - shown to the client side only.
     public var tripIntentId: String?
     public var versions: [ProposalVersionDTO]?
 
-    public init(bookingId: String? = nil, client: ProposalPartyDTO, currentVersion: ProposalVersionDTO? = nil, driver: ProposalPartyDTO, driverSummary: ProposalDriverSummaryDTO? = nil, id: String, listingId: String, state: String, tripId: String? = nil, tripIntentId: String? = nil, versions: [ProposalVersionDTO]? = nil) {
+    public init(bookingId: String? = nil, client: ProposalPartyDTO, currentVersion: ProposalVersionDTO? = nil, driver: ProposalPartyDTO, driverSummary: ProposalDriverSummaryDTO? = nil, id: String, listingId: String, listingTermsVersion: Int, state: String, tripId: String? = nil, tripIntentId: String? = nil, versions: [ProposalVersionDTO]? = nil) {
         self.bookingId = bookingId
         self.client = client
         self.currentVersion = currentVersion
@@ -3859,6 +3861,7 @@ public struct ProposalThreadDTO: Codable, Hashable, Sendable {
         self.driverSummary = driverSummary
         self.id = id
         self.listingId = listingId
+        self.listingTermsVersion = listingTermsVersion
         self.state = state
         self.tripId = tripId
         self.tripIntentId = tripIntentId
@@ -3873,6 +3876,7 @@ public struct ProposalThreadDTO: Codable, Hashable, Sendable {
         case driverSummary = "driver_summary"
         case id = "id"
         case listingId = "listing_id"
+        case listingTermsVersion = "listing_terms_version"
         case state = "state"
         case tripId = "trip_id"
         case tripIntentId = "trip_intent_id"
@@ -3891,6 +3895,8 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
     /// Only shown to the driver side.
     public var feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO?
     public var id: String
+    /// Q54: the listing terms version this version was made against. Accept succeeds only while it equals the thread's listing_terms_version.
+    public var listingTermsVersion: Int
     public var message: String?
     public var pickupPoint: PointEndDTO?
     public var pickupStop: StopRefDTO?
@@ -3913,7 +3919,7 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
     public var totalMinor: Int
     public var unitPriceMinor: Int
 
-    public init(authorSide: ActorSide, createdAt: String, currency: Currency, demand: ProposalDemandDTO, dropoffPoint: PointEndDTO? = nil, dropoffStop: StopRefDTO? = nil, expiresAt: String, feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO? = nil, id: String, message: String? = nil, pickupPoint: PointEndDTO? = nil, pickupStop: StopRefDTO? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, priceRevisionsLeft: PriceRevisionsLeftDTO, promoConfirmation: String? = nil, promoQuote: ProposalPromo? = nil, promoUnavailableReason: String? = nil, quantity: Int, receiver: ContactDetails? = nil, revision: Int, status: ProposalStatus, statusReason: String? = nil, totalMinor: Int, unitPriceMinor: Int) {
+    public init(authorSide: ActorSide, createdAt: String, currency: Currency, demand: ProposalDemandDTO, dropoffPoint: PointEndDTO? = nil, dropoffStop: StopRefDTO? = nil, expiresAt: String, feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO? = nil, id: String, listingTermsVersion: Int, message: String? = nil, pickupPoint: PointEndDTO? = nil, pickupStop: StopRefDTO? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, priceRevisionsLeft: PriceRevisionsLeftDTO, promoConfirmation: String? = nil, promoQuote: ProposalPromo? = nil, promoUnavailableReason: String? = nil, quantity: Int, receiver: ContactDetails? = nil, revision: Int, status: ProposalStatus, statusReason: String? = nil, totalMinor: Int, unitPriceMinor: Int) {
         self.authorSide = authorSide
         self.createdAt = createdAt
         self.currency = currency
@@ -3923,6 +3929,7 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
         self.expiresAt = expiresAt
         self.feeQuote = feeQuote
         self.id = id
+        self.listingTermsVersion = listingTermsVersion
         self.message = message
         self.pickupPoint = pickupPoint
         self.pickupStop = pickupStop
@@ -3952,6 +3959,7 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
         case expiresAt = "expires_at"
         case feeQuote = "fee_quote"
         case id = "id"
+        case listingTermsVersion = "listing_terms_version"
         case message = "message"
         case pickupPoint = "pickup_point"
         case pickupStop = "pickup_stop"

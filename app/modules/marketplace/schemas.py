@@ -568,6 +568,10 @@ class ProposalVersionDTO(ContractModel):
     receiver: ContactDetails | None = Field(
         default=None, description="Trip-offer parcel receiver; only the client side sees it (Q43/Q44), never the driver."
     )
+    listing_terms_version: int = Field(
+        description="Q54: the listing terms version this version was made against. Accept succeeds only while it "
+        "equals the thread's listing_terms_version."
+    )
 
 
 class ProposalPartyDTO(ContractModel):
@@ -607,6 +611,9 @@ class ProposalThreadDTO(ContractModel):
         default=None, description="ADR-0026: shown to the request owner only (anonymous comparison, Q40 set).")
     trip_intent_id: str | None = Field(
         default=None, description="ADR-0025: the client's saved request - shown to the client side only.")
+    listing_terms_version: int = Field(
+        description="Q54: the listing's current terms version - what either party sends as "
+        "expected_listing_terms_version on accept (only parties see the thread).")
 
 
 class ListingOfferDTO(ContractModel):

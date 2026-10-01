@@ -1669,7 +1669,8 @@ export interface paths {
         post?: never;
         /**
          * Delete Block
-         * @description S10. Idempotent: removing a block that is not there is a success, not a 404.
+         * @description S10. Idempotent: removing a block that is not there is a success, not a 404. Like every v2 command it
+         *     takes the user action's ``Idempotency-Key`` (ADR-0005; a missing key is ``400 IDEMPOTENCY_KEY_REQUIRED``).
          */
         delete: operations["delete_block_api_v2_blocks__blocked_user_id__delete"];
         options?: never;
@@ -10365,6 +10366,11 @@ export interface components {
             id: string;
             /** Listing Id */
             listing_id: string;
+            /**
+             * Listing Terms Version
+             * @description Q54: the listing's current terms version - what either party sends as expected_listing_terms_version on accept (only parties see the thread).
+             */
+            listing_terms_version: number;
             /** State */
             state: string;
             /** Trip Id */
@@ -10398,6 +10404,11 @@ export interface components {
             fee_quote?: components["schemas"]["app__modules__marketplace__schemas__FeeQuoteDTO"] | null;
             /** Id */
             id: string;
+            /**
+             * Listing Terms Version
+             * @description Q54: the listing terms version this version was made against. Accept succeeds only while it equals the thread's listing_terms_version.
+             */
+            listing_terms_version: number;
             /** Message */
             message: string | null;
             pickup_point?: components["schemas"]["PointEndDTO"] | null;
@@ -20582,7 +20593,9 @@ export interface operations {
     delete_block_api_v2_blocks__blocked_user_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 blocked_user_id: string;
             };

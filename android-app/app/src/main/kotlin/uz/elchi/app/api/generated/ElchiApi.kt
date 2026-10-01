@@ -100,15 +100,16 @@ class ElchiApi(private val transport: ApiTransport) {
     /**
      * Delete Block
      *
-     * S10. Idempotent: removing a block that is not there is a success, not a 404.
+     * S10. Idempotent: removing a block that is not there is a success, not a 404. Like every v2 command it
+     * takes the user action's ``Idempotency-Key`` (ADR-0005; a missing key is ``400 IDEMPOTENCY_KEY_REQUIRED``).
      */
-    suspend fun deleteBlock(blockedUserId: String): ApiResult<EmptyDTO> =
+    suspend fun deleteBlock(blockedUserId: String, idempotencyKey: String): ApiResult<EmptyDTO> =
         transport.send(
             method = "DELETE",
             path = "/blocks/${blockedUserId}",
             query = listOf(),
             body = null,
-            idempotencyKey = null,
+            idempotencyKey = idempotencyKey,
             result = EmptyDTO.serializer(),
         )
 

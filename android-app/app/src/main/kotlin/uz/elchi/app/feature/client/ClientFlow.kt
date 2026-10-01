@@ -491,7 +491,7 @@ fun ClientFlow(container: AppContainer, session: Session) {
             BonusScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<SafetyCenter> {
-            val vm: SafetyCenterViewModel = viewModel(factory = viewModelFactory { initializer { SafetyCenterViewModel(container.api, container.account) } })
+            val vm: SafetyCenterViewModel = viewModel(factory = viewModelFactory { initializer { SafetyCenterViewModel(container.api) } })
             SafetyCenterScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<Help> {

@@ -1798,6 +1798,10 @@ data class ProposalThreadDTO(
     @SerialName("driver_summary") val driverSummary: ProposalDriverSummaryDTO? = null,
     @SerialName("id") val id: String,
     @SerialName("listing_id") val listingId: String,
+    /**
+     * Q54: the listing's current terms version - what either party sends as expected_listing_terms_version on accept (only parties see the thread).
+     */
+    @SerialName("listing_terms_version") val listingTermsVersion: Long,
     @SerialName("state") val state: String,
     @SerialName("trip_id") val tripId: String? = null,
     /**
@@ -1821,6 +1825,10 @@ data class ProposalVersionDTO(
      */
     @SerialName("fee_quote") val feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO? = null,
     @SerialName("id") val id: String,
+    /**
+     * Q54: the listing terms version this version was made against. Accept succeeds only while it equals the thread's listing_terms_version.
+     */
+    @SerialName("listing_terms_version") val listingTermsVersion: Long,
     @SerialName("message") val message: String? = null,
     @SerialName("pickup_point") val pickupPoint: PointEndDTO? = null,
     @SerialName("pickup_stop") val pickupStop: StopRefDTO? = null,

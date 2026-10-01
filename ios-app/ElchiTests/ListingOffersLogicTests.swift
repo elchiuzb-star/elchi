@@ -18,11 +18,11 @@ enum Fixture {
                        label: String = "Haydovchi #3") -> ProposalThreadDTO {
         let bucketJSON = bucket.map { "\"\($0)\"" } ?? "null"
         return decode(ProposalThreadDTO.self, """
-            {"id":"\(id)","listing_id":"lst_1","state":"\(state)","booking_id":null,
+            {"id":"\(id)","listing_id":"lst_1","listing_terms_version":2,"state":"\(state)","booking_id":null,
              "client":{"side":"client","label":"Mijoz"},"driver":{"side":"driver","label":"\(label)"},
              "driver_summary":{"vehicle_class":"car","seat_capacity":4,"rating_bucket":\(bucketJSON),"rating_count":\(ratings),"completed_bookings":3},
              "current_version":{"id":"prv_\(id)","revision":1,"author_side":"\(author)","status":"\(status)","created_at":"2026-09-29T09:00:00Z",
-               "currency":"UZS","demand":{"baggage_ml":0,"cargo_volume_ml":12000,"cargo_weight_g":5000},
+               "listing_terms_version":2,"currency":"UZS","demand":{"baggage_ml":0,"cargo_volume_ml":12000,"cargo_weight_g":5000},
                "expires_at":"\(expires)","pickup_window_start":"\(pickupStart)","pickup_window_end":"2026-09-30T07:00:00Z",
                "price_basis":"total","price_revisions_left":{"client":\(clientLeft),"driver":2},"quantity":1,
                "total_minor":\(total),"unit_price_minor":\(total)}}

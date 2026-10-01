@@ -15,6 +15,7 @@
 		08BD698F703AA7CB9213A2B1 /* BookingTrackingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AADBA05767DAFA193B2463D /* BookingTrackingModel.swift */; };
 		0968CCBD469E0B2A550AB0DA /* StringsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7384394017524FA15DF071D /* StringsTests.swift */; };
 		0B19439F2B8C1CC7920D3672 /* QRCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9686E5749DA84DBAE2EA4E4D /* QRCode.swift */; };
+		0D0F8636B54D7904AC144FE4 /* DriverFollowUpUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D95D7506CA7B2EA68859F3A7 /* DriverFollowUpUITests.swift */; };
 		0F0BE7A1DAFDB2C143221FB7 /* OrdersViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DF7FCD39ADC1768511A03B /* OrdersViews.swift */; };
 		11905C39329C4734ACB37693 /* LegacyViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 774BCD9CFE33E4643559CF3B /* LegacyViews.swift */; };
 		1297D18503791FFB432D328A /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0851D80624E40B0809EEA2C3 /* API.swift */; };
@@ -244,6 +245,7 @@
 		D2F21911C1D356BA08C5B415 /* BookingChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingChatModel.swift; sourceTree = "<group>"; };
 		D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkUITests.swift; sourceTree = "<group>"; };
 		D5EAC1FDC11AD6AF973FC47B /* OrdersFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersFormatting.swift; sourceTree = "<group>"; };
+		D95D7506CA7B2EA68859F3A7 /* DriverFollowUpUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverFollowUpUITests.swift; sourceTree = "<group>"; };
 		DA17164718156721D6DFFECE /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
 		DB27E951E104397C9F951A02 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		DEE319893889166112F6E6BC /* SessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionState.swift; sourceTree = "<group>"; };
@@ -290,6 +292,7 @@
 				82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */,
 				014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */,
 				D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */,
+				D95D7506CA7B2EA68859F3A7 /* DriverFollowUpUITests.swift */,
 				B2160348ED04BD003F9E3DB5 /* DriverMarketUITests.swift */,
 				AEF518C44CC1D2EF0004AE1A /* DriverStage09UITests.swift */,
 				9EC1A51C8AC6A8C2978AEF47 /* DriverUITests.swift */,
@@ -871,6 +874,7 @@
 				83F9D384A561FA388327AF8B /* ClientProfileUITests.swift in Sources */,
 				3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */,
 				576267B94BCD44FF6630D0FE /* DeepLinkUITests.swift in Sources */,
+				0D0F8636B54D7904AC144FE4 /* DriverFollowUpUITests.swift in Sources */,
 				1892199932721362DD3ED2A3 /* DriverMarketUITests.swift in Sources */,
 				D0A51D3A01375760DA1A9EAD /* DriverStage09UITests.swift in Sources */,
 				13C7C6513818905DAD73B95E /* DriverUITests.swift in Sources */,

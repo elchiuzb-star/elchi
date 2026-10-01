@@ -343,6 +343,7 @@ def _version_dto(
         expires_at=ensure_aware_utc(version.expires_at),
         created_at=ensure_aware_utc(version.created_at),
         message=version.message,
+        listing_terms_version=version.listing_terms_version,
         demand=ProposalDemandDTO(
             baggage_ml=version.baggage_ml,
             cargo_weight_g=version.cargo_weight_g,
@@ -435,6 +436,7 @@ def thread_dto(
         booking_id=_booking_id(session, thread),
         trip_intent_id=_trip_intent_id(session, thread) if viewer_side is ActorSide.CLIENT else None,
         driver_summary=_driver_summary(session, thread, listing) if viewer_side is ActorSide.CLIENT else None,
+        listing_terms_version=listing.terms_version,
     )
 
 

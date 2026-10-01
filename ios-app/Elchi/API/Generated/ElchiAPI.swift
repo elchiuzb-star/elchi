@@ -91,14 +91,15 @@ public struct ElchiAPI: Sendable {
 
     /// Delete Block
     ///
-    /// S10. Idempotent: removing a block that is not there is a success, not a 404.
-    public func deleteBlock(blockedUserId: String) async throws -> APIResult<EmptyDTO> {
+    /// S10. Idempotent: removing a block that is not there is a success, not a 404. Like every v2 command it
+    /// takes the user action's ``Idempotency-Key`` (ADR-0005; a missing key is ``400 IDEMPOTENCY_KEY_REQUIRED``).
+    public func deleteBlock(blockedUserId: String, idempotencyKey: String) async throws -> APIResult<EmptyDTO> {
         try await transport.send(
             method: "DELETE",
             path: "/blocks/\(blockedUserId)",
             query: [],
             body: Optional<JSONValue>.none,
-            idempotencyKey: nil,
+            idempotencyKey: idempotencyKey,
             as: EmptyDTO.self
         )
     }

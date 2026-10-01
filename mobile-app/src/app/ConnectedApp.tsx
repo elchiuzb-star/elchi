@@ -4556,10 +4556,11 @@ export function ConnectedApp() {
                         <PrimaryButton
                           disabled={busy}
                           onClick={() => void run(async () => {
-                            const listing = await getListing(thread.listing_id);
+                            // The thread carries the listing's current terms version for both parties; a driver cannot
+                            // read terms_version from the public listing view.
                             const promo = mySide === "client" ? consentBody(acceptConsent[thread.id] ?? NO_CONSENT) : undefined;
                             const shown = mySide === "driver" && version.promo_quote?.view === "driver" ? version.promo_quote : null;
-                            const body = acceptBody(version.id, listing.terms_version, promo, shown
+                            const body = acceptBody(version.id, thread.listing_terms_version, promo, shown
                               ? { cash_to_collect_minor: shown.cash_to_collect_minor, commission_charged_minor: shown.commission_charged_minor }
                               : undefined);
                             const booking = await oncePerAction(`accept:${thread.id}:${version.id}`,

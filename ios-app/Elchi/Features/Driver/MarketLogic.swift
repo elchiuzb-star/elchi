@@ -503,17 +503,11 @@ public enum ProposalStatusLine {
     }
 }
 
-/// How the accept's `expected_listing_terms_version` is found (Q54). The driver cannot read `ListingDTO.terms_version`
-/// (a non-owner gets `ListingPublicDTO`, without it), and no proposal DTO carries it. So: a value the listing JSON
-/// happens to carry, else one the server named in an earlier `PROPOSAL_CHANGED`, else 1 (a listing that was never
-/// edited in a way that voids offers); a mismatch comes back as `PROPOSAL_CHANGED {current_listing_terms_version}`,
-/// which the driver confirms again with that value.
+/// The accept's `expected_listing_terms_version` (Q54) is `ProposalThreadDTO.listing_terms_version` - the listing's
+/// current terms version as the thread reports it. Should the listing change between the read and the accept, the
+/// server answers `PROPOSAL_CHANGED {current_listing_terms_version}`: the thread is read again (bringing the new
+/// version) and the driver confirms once more.
 public enum ListingTerms {
-    public static func version(listingJSON: JSONValue?, learned: Int?) -> Int {
-        if case .number(let value)? = listingJSON?["terms_version"] { return Int(value) }
-        return learned ?? 1
-    }
-
     /// `PROPOSAL_CHANGED {reason: listing_terms_version_mismatch, current_listing_terms_version}` -> that version.
     public static func current(from error: Error) -> Int? {
         guard let error = error as? APIError, error.code == "PROPOSAL_CHANGED",

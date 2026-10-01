@@ -621,10 +621,8 @@ final class DriverThreadModel {
     private(set) var busy: String?
     private(set) var error: Error?
     private(set) var warnings: [ApiWarning] = []
-    /// The listing as the driver may read it (public view): names, and a terms version should the server ever add it.
+    /// The listing as the driver may read it (public view): names.
     private(set) var listingJSON: JSONValue?
-    /// A terms version the server named in `PROPOSAL_CHANGED` (the driver confirms the accept again with it).
-    private(set) var learnedTerms: Int?
     /// After `PROPOSAL_CHANGED` on accept: the thread was read again and the driver must confirm once more.
     private(set) var confirmAgain = false
 
@@ -661,11 +659,11 @@ final class DriverThreadModel {
     /// The advice the offer was sent with (`PRICE_OUTSIDE_REFERENCE`, `CONTACT_INFO_MASKED`): shown on the thread.
     func adopt(_ warnings: [ApiWarning]) { self.warnings = warnings }
 
-    /// Accepts the client's current version at the listing terms version the driver can know (see `ListingTerms`).
+    /// Accepts the client's current version at the thread's `listing_terms_version` (see `ListingTerms`).
     /// Returns the booking id. On `PROPOSAL_CHANGED` the thread is read again and the driver confirms once more.
     func accept() async -> String? {
         guard let thread = thread.value, let version = thread.currentVersion, busy == nil else { return nil }
-        let terms = ListingTerms.version(listingJSON: listingJSON, learned: learnedTerms)
+        let terms = thread.listingTermsVersion
         var ack: PromoDriverAckInput?
         if case .driver(let quote)? = version.promoQuote {
             ack = PromoDriverAckInput(cashToCollectMinor: quote.cashToCollectMinor, commissionChargedMinor: quote.commissionChargedMinor)
@@ -687,10 +685,7 @@ final class DriverThreadModel {
         } catch {
             keys.settle(action, after: error)
             self.error = error
-            if let current = ListingTerms.current(from: error) {
-                learnedTerms = current
-                confirmAgain = true
-            }
+            if ListingTerms.current(from: error) != nil { confirmAgain = true }
             await afterRefusal(error)
             return nil
         }

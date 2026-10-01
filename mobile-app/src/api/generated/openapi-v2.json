@@ -21435,6 +21435,11 @@
             "title": "Listing Id",
             "type": "string"
           },
+          "listing_terms_version": {
+            "description": "Q54: the listing's current terms version - what either party sends as expected_listing_terms_version on accept (only parties see the thread).",
+            "title": "Listing Terms Version",
+            "type": "integer"
+          },
           "state": {
             "title": "State",
             "type": "string"
@@ -21484,7 +21489,8 @@
           "state",
           "client",
           "driver",
-          "current_version"
+          "current_version",
+          "listing_terms_version"
         ],
         "title": "ProposalThreadDTO",
         "type": "object"
@@ -21545,6 +21551,11 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "listing_terms_version": {
+            "description": "Q54: the listing terms version this version was made against. Accept succeeds only while it equals the thread's listing_terms_version.",
+            "title": "Listing Terms Version",
+            "type": "integer"
           },
           "message": {
             "anyOf": [
@@ -21715,7 +21726,8 @@
           "created_at",
           "message",
           "demand",
-          "price_revisions_left"
+          "price_revisions_left",
+          "listing_terms_version"
         ],
         "title": "ProposalVersionDTO",
         "type": "object"
@@ -39861,7 +39873,7 @@
     },
     "/api/v2/blocks/{blocked_user_id}": {
       "delete": {
-        "description": "S10. Idempotent: removing a block that is not there is a success, not a 404.",
+        "description": "S10. Idempotent: removing a block that is not there is a success, not a 404. Like every v2 command it\ntakes the user action's ``Idempotency-Key`` (ADR-0005; a missing key is ``400 IDEMPOTENCY_KEY_REQUIRED``).",
         "operationId": "delete_block_api_v2_blocks__blocked_user_id__delete",
         "parameters": [
           {
@@ -39872,6 +39884,22 @@
               "maxLength": 64,
               "title": "Blocked User Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
             }
           }
         ],

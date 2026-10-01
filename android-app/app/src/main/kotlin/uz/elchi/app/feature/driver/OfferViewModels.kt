@@ -60,12 +60,6 @@ class ProposalsViewModel(private val api: ElchiApi) : ViewModel() {
     /** Set by the offer screen right before it opens the thread. */
     var lastSent: SentOffer? = null
 
-    /**
-     * Q54: the listing terms version the server named on a refused accept, per listing (a driver cannot read it
-     * anywhere else - see [OfferRules.acceptBody]).
-     */
-    val termsVersions: MutableMap<String, Long> = mutableMapOf()
-
     init {
         refresh(ProposalTab.OPEN)
     }
@@ -349,15 +343,14 @@ class ProposalThreadViewModel(
     }
 
     /**
-     * Accept the client's version (AC05: never one's own). On `PROPOSAL_CHANGED listing_terms_version_mismatch` the
-     * server's current terms version is kept, the thread is read again and the driver is asked to confirm again.
+     * Accept the client's version (AC05: never one's own). It carries the thread's `listing_terms_version`; on
+     * `409 PROPOSAL_CHANGED` (the terms moved meanwhile) the thread is read again and the driver confirms again.
      */
     fun accept() {
         val t = current() ?: return
         val v = t.currentVersion ?: return
         if (_state.value.busy) return
-        val terms = proposals.termsVersions[t.listingId]
-        val body = OfferRules.acceptBody(v, terms)
+        val body = OfferRules.acceptBody(t, v)
         val scope = "accept:${v.id}:${body.expectedListingTermsVersion}"
         _state.update { it.copy(busy = true, notice = null, reconfirm = false) }
         banners.startAction()
@@ -375,9 +368,7 @@ class ProposalThreadViewModel(
                     refresh()
                 }
                 .onFailure { e ->
-                    val current = OfferRules.termsVersionFrom(e)
-                    if (current != null) {
-                        proposals.termsVersions[t.listingId] = current
+                    if (OfferRules.termsChanged(e)) {
                         _state.update { it.copy(notice = ThreadNotice.TERMS_CHANGED, reconfirm = true) }
                         banners.show(BannerTone.WARN, BannerText.Key("client.listingBids.termsChanged"))
                     } else {

@@ -112,6 +112,42 @@ def test_block_is_idempotent_and_can_be_lifted(bw: BW) -> None:  # noqa: F811
         assert trust_service.blocked_between(session, bw.w.client_id, bw.w.driver_id) is False
 
 
+def test_unblock_over_the_mounted_app_takes_an_idempotency_key(bw: BW) -> None:  # noqa: F811
+    """S10 over HTTP: the route used to pass ``idempotency_key=None`` to ``run_command`` and always answered
+    400 IDEMPOTENCY_KEY_REQUIRED, so no client could ever lift a block. With the user action's key it succeeds and
+    a retry with the same key is a replay; without a key it is the usual ADR-0005 400."""
+    from fastapi.testclient import TestClient
+
+    from app.db.session import get_db
+    from app.main import app
+
+    def override_db():  # noqa: ANN202
+        session = bw.db.session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        http = TestClient(app)
+        driver_pid = _user_public_id(bw, bw.w.driver_id)
+        created = http.post("/api/v2/blocks", json={"user_id": driver_pid},
+                            headers=auth(bw.w.client_id, "client", "s9-block-0001"))
+        assert created.status_code == 201, created.text
+        missing = http.delete(f"/api/v2/blocks/{driver_pid}", headers=auth(bw.w.client_id, "client"))
+        assert missing.status_code == 400 and missing.json()["error"]["code"] == "IDEMPOTENCY_KEY_REQUIRED"
+        lifted = http.delete(f"/api/v2/blocks/{driver_pid}", headers=auth(bw.w.client_id, "client", "s10-unblock-0001"))
+        assert lifted.status_code == 200, lifted.text
+        replay = http.delete(f"/api/v2/blocks/{driver_pid}", headers=auth(bw.w.client_id, "client", "s10-unblock-0001"))
+        assert replay.status_code == 200 and replay.headers.get("Idempotent-Replayed") == "true"
+        assert http.get("/api/v2/blocks", headers=auth(bw.w.client_id, "client")).json()["data"] == []
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+    with bw.db.session() as session:
+        assert trust_service.blocked_between(session, bw.w.client_id, bw.w.driver_id) is False
+
+
 def test_blocking_yourself_is_a_validation_error(bw: BW) -> None:  # noqa: F811
     with bw.db.session() as session, pytest.raises(DomainError) as refused:
         trust_service.block_user(

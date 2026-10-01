@@ -44,9 +44,9 @@ export function blockUser(userId: string, idempotencyKey: string = newIdempotenc
   return v2Request<BlockDTO>("/blocks", { method: "POST", body: { user_id: userId }, idempotencyKey });
 }
 
-/** Idempotent on the server: removing a block that is not there is a success. */
-export function unblockUser(userId: string) {
-  return v2Request<Record<string, never>>(`/blocks/${encodeURIComponent(userId)}`, { method: "DELETE" });
+/** Idempotent on the server: removing a block that is not there is a success. The command needs an Idempotency-Key. */
+export function unblockUser(userId: string, idempotencyKey: string = newIdempotencyKey()) {
+  return v2Request<Record<string, never>>(`/blocks/${encodeURIComponent(userId)}`, { method: "DELETE", idempotencyKey });
 }
 
 // --- S11 reports: `details` passes the server contact filter, warnings come back in the envelope (Q43) --------------

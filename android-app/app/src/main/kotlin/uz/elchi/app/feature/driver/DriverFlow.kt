@@ -273,7 +273,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
             SupportChatScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<SafetyCenter> {
-            val vm: SafetyCenterViewModel = viewModel(factory = viewModelFactory { initializer { SafetyCenterViewModel(container.api, container.account) } })
+            val vm: SafetyCenterViewModel = viewModel(factory = viewModelFactory { initializer { SafetyCenterViewModel(container.api) } })
             SafetyCenterScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<Settings> {
@@ -429,7 +429,7 @@ private fun driverBookingViewModel(owner: NavBackStackEntry, id: String, contain
         viewModelStoreOwner = owner,
         key = "driver-booking-$id",
         factory = viewModelFactory {
-            initializer { BookingViewModel(container.api, container.files, container.apiBase, id, side = BookingSide.DRIVER, actions = container.bookingActions) }
+            initializer { BookingViewModel(container.api, container.files, container.apiBase, id, side = BookingSide.DRIVER) }
         },
     )
 

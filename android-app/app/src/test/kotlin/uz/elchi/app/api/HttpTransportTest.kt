@@ -17,6 +17,8 @@ import org.junit.Test
 import uz.elchi.app.api.generated.BookingPromo
 import uz.elchi.app.api.generated.BookingPromoDriverDTO
 import uz.elchi.app.api.generated.ElchiApi
+import uz.elchi.app.api.generated.BookingAction
+import uz.elchi.app.api.generated.BookingActionRequest
 import uz.elchi.app.api.generated.Role
 import uz.elchi.app.session.AuthUser
 import uz.elchi.app.session.Session
@@ -147,11 +149,21 @@ class HttpTransportTest {
     @Test
     fun `unblock sends DELETE with an idempotency key`() = runTest {
         server.enqueue(json(200, """{"success":true,"data":{}}"""))
-        AccountApi(transport).unblock("usr_7", "key-1")
+        ElchiApi(transport).deleteBlock("usr_7", "key-1")
         val request = server.takeRequest()
         assertEquals("DELETE", request.method)
         assertEquals("/api/v2/blocks/usr_7", request.url.encodedPath)
         assertEquals("key-1", request.headers["Idempotency-Key"])
+    }
+
+    @Test
+    fun `a booking action puts the wire value into the path`() = runTest {
+        server.enqueue(json(200, """{"success":true,"data":{"id":"bkg_1"}}"""))
+        ElchiApi(transport).bookingAction("bkg_1", BookingAction.ARRIVE_AT_PICKUP, BookingActionRequest(expectedVersion = 4), "key-2")
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/api/v2/bookings/bkg_1/actions/arrive_at_pickup", request.url.encodedPath)
+        assertEquals("key-2", request.headers["Idempotency-Key"])
     }
 
     @Test

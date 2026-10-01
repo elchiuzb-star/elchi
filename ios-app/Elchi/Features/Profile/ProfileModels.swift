@@ -308,7 +308,7 @@ final class SafetyCenterModel {
         unblockErrors[block.userId] = nil
         defer { unblocking = nil }
         do {
-            try await api.unblock(userId: block.userId, idempotencyKey: keys.key(action))
+            _ = try await api.deleteBlock(blockedUserId: block.userId, idempotencyKey: keys.key(action))
             keys.settle(action)
             if case .loaded(let list) = blocks { blocks = .loaded(list.filter { $0.userId != block.userId }) }
         } catch {

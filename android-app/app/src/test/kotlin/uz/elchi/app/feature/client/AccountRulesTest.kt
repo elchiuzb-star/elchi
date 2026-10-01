@@ -149,8 +149,8 @@ class AccountRulesTest {
 
     private fun thread(id: String, author: String, state: String = "open"): ProposalThreadDTO = ElchiJson.decodeFromString(
         ProposalThreadDTO.serializer(),
-        """{"id":"$id","listing_id":"lst_1","state":"$state","client":{"side":"client","label":"Mijoz"},"driver":{"side":"driver","label":"Haydovchi #1"},
-        "current_version":{"id":"prv_$id","revision":1,"author_side":"$author","status":"active","pickup_window_start":"2026-10-01T04:00:00Z",
+        """{"id":"$id","listing_id":"lst_1","listing_terms_version":1,"state":"$state","client":{"side":"client","label":"Mijoz"},"driver":{"side":"driver","label":"Haydovchi #1"},
+        "current_version":{"id":"prv_$id","listing_terms_version":1,"revision":1,"author_side":"$author","status":"active","pickup_window_start":"2026-10-01T04:00:00Z",
         "pickup_window_end":"2026-10-01T06:00:00Z","quantity":1,"price_basis":"total","unit_price_minor":100,"total_minor":100,"currency":"UZS",
         "expires_at":"2026-09-30T12:00:00Z","created_at":"2026-09-30T09:00:00Z","demand":{"baggage_ml":0,"cargo_weight_g":0,"cargo_volume_ml":0},"price_revisions_left":{"client":3,"driver":3}}}""",
     )

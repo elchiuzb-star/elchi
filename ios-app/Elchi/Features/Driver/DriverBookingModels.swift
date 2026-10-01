@@ -158,8 +158,8 @@ final class DriverBookingModel {
         clearNotice()
         defer { arriving = false }
         do {
-            let result = try await api.bookingCommand(bookingId: dto.id, action: .arriveAtPickup,
-                                                     body: BookingActionRequest(expectedVersion: dto.base.version), idempotencyKey: keys.key(action))
+            let result = try await api.bookingAction(bookingId: dto.id, action: .arriveAtPickup,
+                                                    body: BookingActionRequest(expectedVersion: dto.base.version), idempotencyKey: keys.key(action))
             keys.settle(action)
             if let fresh = DriverBookingDTO.from(result.data) { apply(fresh) }
             arrivedSent = true
@@ -287,14 +287,4 @@ extension DriverBookingModel: BookingScreenHost, SafetyHost, RatingHost {
     var bookingBase: ClientBookingDTO? { booking.value?.base }
     var side: String { "driver" }
     var counterpartyKnown: Bool { booking.value?.client != nil }
-}
-
-extension ElchiAPI {
-    /// `POST /bookings/{id}/actions/{action}` with the action's wire name: the generated `bookingAction` interpolates
-    /// the enum itself into the path (`actions/arriveAtPickup` -> 400), so the path is built here.
-    func bookingCommand(bookingId: String, action: BookingAction, body: BookingActionRequest, idempotencyKey: String) async throws
-        -> APIResult<JSONValue> {
-        try await transport.send(method: "POST", path: "/bookings/\(bookingId)/actions/\(action.rawValue)", query: [], body: body,
-                                 idempotencyKey: idempotencyKey, as: JSONValue.self)
-    }
 }

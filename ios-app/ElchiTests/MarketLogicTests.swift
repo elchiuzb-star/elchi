@@ -54,15 +54,15 @@ enum MarketFixture {
     static func version(author: ActorSide, status: ProposalStatus = .active, revision: Int = 1, expires: Date = Date().addingTimeInterval(3600),
                         driverLeft: Int = 3, total: Int = 12_000_000) -> ProposalVersionDTO {
         ProposalVersionDTO(authorSide: author, createdAt: iso(Date()), currency: .uzs,
-                           demand: ProposalDemandDTO(baggageMl: 0, cargoVolumeMl: 12_000, cargoWeightG: 5000), expiresAt: iso(expires), id: "prv_\(revision)",
+                           demand: ProposalDemandDTO(baggageMl: 0, cargoVolumeMl: 12_000, cargoWeightG: 5000), expiresAt: iso(expires), id: "prv_\(revision)", listingTermsVersion: 2,
                            pickupWindowEnd: iso(at(2026, 10, 2, 10)), pickupWindowStart: iso(at(2026, 10, 2, 9)), priceBasis: .total,
                            priceRevisionsLeft: PriceRevisionsLeftDTO(client: 3, driver: driverLeft), quantity: 1, revision: revision, status: status,
                            totalMinor: total, unitPriceMinor: total)
     }
 
-    static func thread(_ version: ProposalVersionDTO?, state: String = "open", booking: String? = nil) -> ProposalThreadDTO {
+    static func thread(_ version: ProposalVersionDTO?, state: String = "open", booking: String? = nil, terms: Int = 2) -> ProposalThreadDTO {
         ProposalThreadDTO(bookingId: booking, client: ProposalPartyDTO(label: "Mijoz", side: .client), currentVersion: version,
-                          driver: ProposalPartyDTO(label: "Haydovchi #1", side: .driver), id: "prp_1", listingId: "lst_1", state: state)
+                          driver: ProposalPartyDTO(label: "Haydovchi #1", side: .driver), id: "prp_1", listingId: "lst_1", listingTermsVersion: terms, state: state)
     }
 
     static func offer(_ label: String, total: Int, mine: Bool = false) -> ListingOfferDTO {
@@ -417,10 +417,10 @@ struct DriverNegotiationTests {
 }
 
 struct TermsVersionTests {
-    @Test func fromListingThenLearnedThenOne() {
-        #expect(ListingTerms.version(listingJSON: .object(["terms_version": .number(3)]), learned: 2) == 3)
-        #expect(ListingTerms.version(listingJSON: .object(["id": .string("lst_1")]), learned: 2) == 2)
-        #expect(ListingTerms.version(listingJSON: nil, learned: nil) == 1)
+    @Test func threadCarriesTheListingTermsVersion() {
+        let thread = MarketFixture.thread(MarketFixture.version(author: .client), terms: 3)
+        #expect(thread.listingTermsVersion == 3)
+        #expect(MarketFixture.thread(nil).listingTermsVersion == 2)
     }
 
     @Test func mismatchNamesTheCurrentVersion() {

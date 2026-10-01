@@ -8,7 +8,7 @@ import XCTest
 ///    booking.
 /// 2. `test2_Profile` - figures, rename, the drawer shows the new name.
 /// 3. `test3_Bonus` - whatever state the programme is in (dev: off).
-/// 4. `test4_Safety` - blocks and reports; "Chiqarish" shows the backend's refusal and keeps the row.
+/// 4. `test4_Safety` - blocks and reports; "Chiqarish" unblocks (`DELETE /blocks/{id}`) and the row goes.
 /// 5. `test5_Support` - a ticket sent and listed; "Murojaatlarim" -> the thread with the operator's reply.
 /// 6. `test6_Settings` - three appearance modes, the language switch, the logout confirm ("Qolish").
 /// 7. `test7_RussianDark`, `test7b_UzbekDark` - the screens in the other language and theme.
@@ -149,9 +149,9 @@ final class ClientProfileUITests: ClientUITestCase {
         let confirm = app.buttons["elchi.unblock.confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
-        waitFor("Blokdan chiqarib bo'lmadi", timeout: 20)
-        waitFor("Bloklangan:")
-        snap("32-unblock-failed")
+        waitGone("Bloklangan:", timeout: 20)
+        waitFor("Siz hech kimni bloklamagansiz.")
+        snap("32-unblocked")
     }
 
     func test5_Support() {

@@ -14,7 +14,7 @@ from sqlalchemy import text
 
 from app.db.session import get_db
 from app.main import app
-from tests.pg.bookings.conftest import BW, auth, listing_version, request_with_driver_proposal, scalar
+from tests.pg.bookings.conftest import BW, auth, counter, listing_version, request_with_driver_proposal, scalar
 
 pytestmark = pytest.mark.pg
 
@@ -55,3 +55,28 @@ def test_accept_idempotent_replay_over_mounted_app(bw: BW, mounted: TestClient) 
     with bw.db.session() as db:
         routes = db.execute(text("SELECT route FROM idempotency_records WHERE route LIKE '%/accept%'")).scalars().all()
     assert routes and all("/api/v2/proposals/" in route for route in routes), routes
+
+
+def test_driver_reads_the_listing_terms_version_from_the_thread_and_accepts_with_it(bw: BW, mounted: TestClient) -> None:
+    """Q54: the accepting driver sees only ``ListingPublicDTO`` (no terms_version), so the thread it is a party to
+    carries it; accepting with exactly that value succeeds without a 409 PROPOSAL_CHANGED round trip."""
+    listing, _, _, ref = request_with_driver_proposal(bw)
+    ref = counter(bw, ref, bw.w.client_id, unit=18_500_000)  # the client's counter is now the driver's to accept
+
+    read = mounted.get(f"/api/v2/proposals/{ref.thread_id}", headers=auth(bw.w.driver_id, "driver"))
+    assert read.status_code == 200, read.text
+    thread = read.json()["data"]
+    assert thread["listing_terms_version"] == listing_version(bw, listing)
+    assert thread["current_version"]["listing_terms_version"] == thread["listing_terms_version"]
+    client_view = mounted.get(f"/api/v2/proposals/{ref.thread_id}", headers=auth(bw.w.client_id, "client")).json()["data"]
+    assert client_view["listing_terms_version"] == thread["listing_terms_version"]
+    assert "fee_quote" not in client_view["current_version"] or client_view["current_version"]["fee_quote"] is None  # Q16
+
+    accepted = mounted.post(
+        f"/api/v2/proposals/{ref.thread_id}/accept",
+        json={"proposal_version_id": thread["current_version"]["id"],
+              "expected_listing_terms_version": thread["listing_terms_version"]},
+        headers=auth(bw.w.driver_id, "driver", "mounted-driver-accept-0001"),
+    )
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["data"]["id"].startswith("bkg_")

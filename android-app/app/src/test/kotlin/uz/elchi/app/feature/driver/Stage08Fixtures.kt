@@ -160,6 +160,7 @@ object S08 {
         expires: String = "2026-10-01T12:00:00Z",
         total: Long = 11_000_000,
         driverLeft: Long = 2,
+        listingTermsVersion: Long = 1,
     ) = ProposalVersionDTO(
         authorSide = author,
         createdAt = "2026-10-01T06:00:00Z",
@@ -167,6 +168,7 @@ object S08 {
         demand = ProposalDemandDTO(baggageMl = 0, cargoVolumeMl = 12_000, cargoWeightG = 5_000),
         expiresAt = expires,
         id = id,
+        listingTermsVersion = listingTermsVersion,
         pickupPoint = PointEndDTO(address = "Toshkent, Amir Temur 2", district = DistrictRefDTO("dst_tash", "Toshkent shahri"), lat = 41.31, lng = 69.28),
         dropoffPoint = PointEndDTO(address = "Samarqand, Amir Temur 18", district = DistrictRefDTO("dst_sam", "Samarqand"), lat = 39.65, lng = 66.96),
         pickupWindowEnd = "2026-10-02T06:00:00Z",
@@ -180,13 +182,14 @@ object S08 {
         unitPriceMinor = total,
     )
 
-    fun thread(current: ProposalVersionDTO?, state: String = "open", bookingId: String? = null, versions: List<ProposalVersionDTO>? = null) = ProposalThreadDTO(
+    fun thread(current: ProposalVersionDTO?, state: String = "open", bookingId: String? = null, versions: List<ProposalVersionDTO>? = null, listingTermsVersion: Long = 1) = ProposalThreadDTO(
         bookingId = bookingId,
         client = ProposalPartyDTO(label = "Mijoz", side = ActorSide.CLIENT),
         currentVersion = current,
         driver = ProposalPartyDTO(label = "Haydovchi #2", side = ActorSide.DRIVER),
         id = "prt_1",
         listingId = "lst_1",
+        listingTermsVersion = listingTermsVersion,
         state = state,
         versions = versions,
     )
