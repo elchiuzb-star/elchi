@@ -123,7 +123,7 @@ public struct ElchiAPI: Sendable {
     public func bookingAction(bookingId: String, action: BookingAction, body: BookingActionRequest, idempotencyKey: String) async throws -> APIResult<JSONValue> {
         try await transport.send(
             method: "POST",
-            path: "/bookings/\(bookingId)/actions/\(action)",
+            path: "/bookings/\(bookingId)/actions/\(action.rawValue)",
             query: [],
             body: body,
             idempotencyKey: idempotencyKey,
@@ -242,7 +242,7 @@ public struct ElchiAPI: Sendable {
     public func reissueBookingCode(bookingId: String, kind: ProofKind, body: ProofReissueRequest, idempotencyKey: String) async throws -> APIResult<BookingCodesDTO> {
         try await transport.send(
             method: "POST",
-            path: "/bookings/\(bookingId)/codes/\(kind)/reissue",
+            path: "/bookings/\(bookingId)/codes/\(kind.rawValue)/reissue",
             query: [],
             body: body,
             idempotencyKey: idempotencyKey,

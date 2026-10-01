@@ -135,7 +135,7 @@ class ElchiApi(private val transport: ApiTransport) {
     suspend fun bookingAction(bookingId: String, action: BookingAction, body: BookingActionRequest, idempotencyKey: String): ApiResult<JsonElement> =
         transport.send(
             method = "POST",
-            path = "/bookings/${bookingId}/actions/${action}",
+            path = "/bookings/${bookingId}/actions/${action.value}",
             query = listOf(),
             body = transport.encode(BookingActionRequest.serializer(), body),
             idempotencyKey = idempotencyKey,
@@ -263,7 +263,7 @@ class ElchiApi(private val transport: ApiTransport) {
     suspend fun reissueBookingCode(bookingId: String, kind: ProofKind, body: ProofReissueRequest, idempotencyKey: String): ApiResult<BookingCodesDTO> =
         transport.send(
             method = "POST",
-            path = "/bookings/${bookingId}/codes/${kind}/reissue",
+            path = "/bookings/${bookingId}/codes/${kind.value}/reissue",
             query = listOf(),
             body = transport.encode(ProofReissueRequest.serializer(), body),
             idempotencyKey = idempotencyKey,

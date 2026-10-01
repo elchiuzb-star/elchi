@@ -357,8 +357,10 @@ def kotlin_endpoints(ops: list[dict]) -> str:
         for name, t in op["query_params"]:
             params.append(f"{kt_ident(camel(name))}: {kt_type(t)}" + (" = null" if t.optional else ""))
         path = op["path"]
-        for name, _ in op["path_params"]:
-            path = path.replace("{" + name + "}", "${" + camel(name) + "}")
+        for name, t in op["path_params"]:
+            # An enum path segment must carry its wire value, not the Kotlin constant name.
+            wire = ".value" if kt_type(t) not in ("String", "Int", "Long", "Boolean") else ""
+            path = path.replace("{" + name + "}", "${" + camel(name) + wire + "}")
         query = ", ".join(f"\"{n}\" to {kt_ident(camel(n))}" for n, _ in op["query_params"])
         result = op["result"]
         text = op["summary"] + (("\n\n" + op["description"]) if op["description"] else "")
@@ -558,8 +560,10 @@ def swift_endpoints(ops: list[dict]) -> str:
         for name, t in op["query_params"]:
             params.append(f"{sw_ident(camel(name))}: {sw_type(t)}" + (" = nil" if t.optional else ""))
         path = op["path"]
-        for name, _ in op["path_params"]:
-            path = path.replace("{" + name + "}", "\\(" + camel(name) + ")")
+        for name, t in op["path_params"]:
+            # An enum path segment must carry its wire value, not the Swift case name.
+            wire = ".rawValue" if sw_type(t) not in ("String", "Int", "Int64", "Bool") else ""
+            path = path.replace("{" + name + "}", "\\(" + camel(name) + wire + ")")
         query = ", ".join(f"(\"{n}\", {sw_ident(camel(n))})" for n, _ in op["query_params"])
         result = op["result"]
         text = op["summary"] + (("\n\n" + op["description"]) if op["description"] else "")
