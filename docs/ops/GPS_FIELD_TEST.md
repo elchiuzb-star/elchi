@@ -85,3 +85,41 @@ Brauzer Android’ning «mock provider» bayrog‘ini o‘qiy olmaydi, klient ay
 uchun web’da aniqlash **xulq-atvorga** asoslangan: sakrash, imkonsiz tezlik, tabiiy bo‘lmagan aniqlik va tezlik
 ziddiyati. Tabiiy tezlikdagi silliq soxta marshrutni ishonchli aniqlash uchun qurilma attestatsiyasi (native ilova,
 Play Integrity) kerak — bu ochiq cheklov.
+
+## 4. Native ilovalar (Android, iOS) — real telefondagi dala sinovi (Q148: fon rejimi native ilova ishi)
+
+Sinov hali o‘tkazilmagan: emulyator va simulyatorda fon rejimi, oflayn navbat va ACK tekshirilgan; real telefon
+natijasi shu yerga yoziladi. Yozilgan har band uchun: telefon modeli, OS versiyasi, sana, natija, dalil
+(`tracking_points` qatorlari yoki skrinshot).
+
+**Tayyorgarlik**
+- Backend telefon yeta oladigan manzilda (LAN IP yoki staging); `tracking_enabled` yoqilgan; worker ishlayapti.
+- Android: debug APK (`uz.elchi.app.dev`), joylashuv ruxsati «Ilovadan foydalanganda», aniq joylashuv yoqilgan.
+- iOS: development build (Apple Team ID kerak), joylashuv «Ilovadan foydalanganda», keyin «Har doim».
+- Sinov haydovchisi tasdiqlangan, safar 60 daqiqa ichida boshlanadigan qilib rejalashtirilgan, bitta pochta broni bor.
+- Kuzatuvchi: mijoz ilovasi yoki `elchigo.uz/t/<token>` havolasi ikkinchi telefonda.
+
+**Qadamlar**
+1. «Chiqishni boshlash» → ruxsat oynasi chiqadi → panel «Joylashuv yuborilmoqda»; Android’da doimiy bildirishnoma
+   («Elchi joylashuvni yubormoqda», «To‘xtatish»), iOS’da ko‘k indikator (faqat «Har doim» bilan).
+2. Yurish (≥ 10 daqiqa, shahar ichida): kuzatuvchida marker 30 s ichida yangilanadi (Jonli); `is_mock=false`.
+3. Ilovani fonga o‘tkazish (Home) va ekranni qulflash, ≥ 5 daqiqa yurish: nuqtalar kelishda davom etadi
+   (`tracking_points.received_at`), bo‘shliq bo‘lsa vaqtini yozing.
+4. Aloqasiz hudud yoki samolyot rejimi 2–3 daqiqa: panel «Internet yo‘q: N ta nuqta…»; aloqa tiklangach hammasi
+   yetib boradi, takror yo‘q (seq takrorlanmaydi).
+5. Ilovani butunlay yopib qayta ochish: yangi sessiya ochiladi, eski sessiya yetkaza olmagan nuqtalar yangisiga
+   qayta raqamlanadi; xarita uzilishsiz davom etadi.
+6. Batareya ≤ 20 %: ogohlantirish satri; batareya tejash rejimida yuborish chastotasi qanday o‘zgarishini yozing
+   (OEM cheklovlari: Xiaomi/Samsung «Battery optimization» — ilovani istisnoga qo‘shish kerakmi).
+7. «Yo‘lga chiqdim» → «Safarni yakunlash»: yakunlashdan oldin navbat bo‘shatiladi, sessiya yopiladi, bildirishnoma/
+   indikator yo‘qoladi.
+8. Soxta joylashuv ilovasi (Android developer options → mock location app): nuqtalar `mock_location` bilan belgilanadi,
+   kuzatuvchida marker siljimaydi, 3 ta shubhali nuqtadan keyin operator navbatida bitta signal (§3).
+
+**Do‘kon talablari (chiqarishdan oldin)**
+- Google Play: Play Console’da `location` foreground-service turi deklaratsiyasi, qisqa video (safar boshlanishi,
+  panel, bildirishnoma, to‘xtatish) va ilova ichidagi aniq tushuntirish. `ACCESS_BACKGROUND_LOCATION` so‘ralmaydi.
+- App Store: `UIBackgroundModes: location` uchun ko‘rib chiquvchiga izoh — faqat haydovchi boshlagan safar davomida,
+  ko‘rinadigan panel va «To‘xtatish», yakunlash/bekor qilish/chiqishda to‘xtaydi, joylashuv faqat posilka kuzatuvi
+  uchun; demo haydovchi akkaunti va boshlanadigan safar beriladi; «Har doim» faqat «Foydalanganda» berilgandan keyin
+  so‘raladi.
