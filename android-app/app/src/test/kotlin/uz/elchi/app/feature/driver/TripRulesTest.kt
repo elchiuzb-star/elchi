@@ -1,0 +1,145 @@
+package uz.elchi.app.feature.driver
+
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import uz.elchi.app.api.ApiException
+import uz.elchi.app.api.generated.TripStatus
+import uz.elchi.app.ui.theme.Tone
+import java.time.Instant
+import java.time.LocalDateTime
+
+class TripRulesTest {
+    private val now: Instant = Instant.parse("2026-10-01T06:00:00Z") // 11:00 in Tashkent
+
+    @Test
+    fun `next action follows the state machine and finished trips have none`() {
+        assertEquals(TripCommand.START_BOARDING, TripRules.nextAction(TripStatus.PLANNED))
+        assertEquals(TripCommand.DEPART, TripRules.nextAction(TripStatus.BOARDING))
+        assertEquals(TripCommand.COMPLETE, TripRules.nextAction(TripStatus.IN_PROGRESS))
+        assertNull(TripRules.nextAction(TripStatus.INTERRUPTED))
+        assertNull(TripRules.nextAction(TripStatus.COMPLETED))
+        assertNull(TripRules.nextAction(TripStatus.CANCELLED))
+        assertNull(TripRules.nextAction(TripStatus.UNKNOWN))
+    }
+
+    @Test
+    fun `pause resume and cancel only where the server allows them`() {
+        assertEquals(listOf(TripCommand.START_BOARDING, TripCommand.CANCEL), TripRules.detailCommands(TripStatus.PLANNED))
+        assertEquals(listOf(TripCommand.DEPART, TripCommand.INTERRUPT, TripCommand.CANCEL), TripRules.detailCommands(TripStatus.BOARDING))
+        assertEquals(listOf(TripCommand.COMPLETE, TripCommand.INTERRUPT), TripRules.detailCommands(TripStatus.IN_PROGRESS))
+        assertEquals(listOf(TripCommand.RESUME, TripCommand.CANCEL), TripRules.detailCommands(TripStatus.INTERRUPTED))
+        assertEquals(emptyList<TripCommand>(), TripRules.detailCommands(TripStatus.COMPLETED))
+        assertTrue(TripCommand.INTERRUPT.needsReason && TripCommand.RESUME.needsReason && TripCommand.CANCEL.needsReason)
+        assertFalse(TripCommand.START_BOARDING.needsReason)
+    }
+
+    @Test
+    fun `status tones and ordering put live trips first`() {
+        assertEquals(Tone.OK, TripRules.statusTone(TripStatus.PLANNED))
+        assertEquals(Tone.OK, TripRules.statusTone(TripStatus.BOARDING))
+        assertEquals(Tone.BLUE, TripRules.statusTone(TripStatus.IN_PROGRESS))
+        assertEquals(Tone.WARN, TripRules.statusTone(TripStatus.INTERRUPTED))
+        assertEquals(Tone.GRAY, TripRules.statusTone(TripStatus.COMPLETED))
+        val old = S08.trip("a", TripStatus.COMPLETED, start = "2026-09-20T04:00:00Z")
+        val older = S08.trip("b", TripStatus.CANCELLED, start = "2026-09-10T04:00:00Z")
+        val later = S08.trip("c", TripStatus.PLANNED, start = "2026-10-05T04:00:00Z")
+        val sooner = S08.trip("d", TripStatus.BOARDING, start = "2026-10-01T06:30:00Z")
+        assertEquals(listOf("d", "c", "a", "b"), TripRules.ordered(listOf(older, later, old, sooner)).map { it.id })
+    }
+
+    @Test
+    fun `boarding window error gives the opening time, other errors do not`() {
+        val tooEarly = ApiException(409, "INVALID_STATE_TRANSITION", "x", buildJsonObject { put("reason", "boarding_window_not_open"); put("opens_at", "2026-10-02T03:00:00+00:00") })
+        assertEquals(Instant.parse("2026-10-02T03:00:00Z"), TripRules.boardingOpensAt(tooEarly))
+        assertEquals("08:00", DriverTime.clock(TripRules.boardingOpensAt(tooEarly)!!))
+        assertNull(TripRules.boardingOpensAt(ApiException(409, "INVALID_STATE_TRANSITION", "x", buildJsonObject { put("reason", "other") })))
+        assertNull(TripRules.boardingOpensAt(ApiException(409, "VERSION_CONFLICT", "x")))
+        assertTrue(TripRules.needsRefresh(ApiException(409, "VERSION_CONFLICT", "x")))
+        assertTrue(TripRules.needsRefresh(ApiException(409, "TRIP_HAS_UNRESOLVED_BOOKINGS", "x")))
+        assertFalse(TripRules.needsRefresh(ApiException(0, ApiException.NETWORK, "x")))
+    }
+
+    @Test
+    fun `vehicle limit error marks the field and gives the limit in the form's unit`() {
+        val kg = ApiException(409, "VEHICLE_NOT_ELIGIBLE", "x", buildJsonObject { put("field", "cargo_capacity_weight_g"); put("requested", 90_000); put("vehicle_limit", 80_000) })
+        assertEquals(TripFormIssue.CARGO_KG, TripRules.vehicleLimitIssue(kg))
+        assertEquals(80L, TripRules.vehicleLimit(kg))
+        val seats = ApiException(409, "VEHICLE_NOT_ELIGIBLE", "x", buildJsonObject { put("field", "seat_capacity"); put("requested", 6); put("vehicle_limit", 4) })
+        assertEquals(TripFormIssue.SEATS, TripRules.vehicleLimitIssue(seats))
+        assertEquals(4L, TripRules.vehicleLimit(seats))
+        assertNull(TripRules.vehicleLimitIssue(ApiException(409, "VEHICLE_NOT_ELIGIBLE", "x", buildJsonObject { put("reason", "vehicle_not_approved") })))
+    }
+
+    @Test
+    fun `route labels, stop filter and approved cars`() {
+        assertEquals("512", TripRules.km(512_463))
+        assertEquals("564", TripRules.km(563_607))
+        assertEquals("8,5", TripRules.hours(30_748))
+        assertEquals("4", TripRules.hours(14_400))
+        val a = S08.route("a", stops = listOf("stp_tash" to 0L, "stp_jiz" to 1L, "stp_sam" to 2L))
+        val b = S08.route("b", stops = listOf("stp_tash" to 0L, "stp_sam" to 2L))
+        assertEquals(listOf("a"), TripRules.routesThrough(listOf(a, b), "stp_jiz").map { it.id })
+        assertEquals(listOf("a", "b"), TripRules.routesThrough(listOf(a, b), null).map { it.id })
+        assertEquals(listOf("veh_ok"), TripRules.approvedVehicles(listOf(S08.vehicle("pending", id = "veh_p"), S08.vehicle(id = "veh_ok"))).map { it.id })
+    }
+
+    @Test
+    fun `form prefills from the car and checks its limits and the future`() {
+        val car = S08.vehicle(seats = 4, kg = 80_000, ml = 400_000)
+        val form = TripRules.formFromVehicle(TripForm(), car)
+        assertEquals("4", form.seats)
+        assertEquals("80", form.cargoKg)
+        assertEquals("400", form.cargoLitres)
+        val route = S08.route()
+        val ok = form.copy(routeId = route.id, departure = LocalDateTime.of(2026, 10, 2, 7, 30))
+        assertEquals(emptySet<TripFormIssue>(), TripRules.issues(ok, car, route, now))
+        assertEquals(setOf(TripFormIssue.DEPARTURE_PAST), TripRules.issues(ok.copy(departure = LocalDateTime.of(2026, 10, 1, 10, 0)), car, route, now))
+        assertEquals(setOf(TripFormIssue.SEATS, TripFormIssue.CARGO_KG), TripRules.issues(ok.copy(seats = "5", cargoKg = "81"), car, route, now))
+        // Cargo 0 is a trip without parcel offers, not an error; seats 0 is.
+        assertEquals(setOf(TripFormIssue.SEATS), TripRules.issues(ok.copy(seats = "0", cargoKg = "0", cargoLitres = "0"), car, route, now))
+        assertEquals(setOf(TripFormIssue.VEHICLE, TripFormIssue.ROUTE, TripFormIssue.DEPARTURE), TripRules.issues(TripForm(seats = "1", cargoKg = "0", cargoLitres = "0"), null, null, now))
+    }
+
+    @Test
+    fun `trip body numbers stops from 1, times from the route, units in g and ml`() {
+        val car = S08.vehicle()
+        val route = S08.route()
+        val form = TripRules.formFromVehicle(TripForm(), car).copy(seats = "3", cargoKg = "20", cargoLitres = "100", departure = LocalDateTime.of(2026, 10, 2, 7, 30, 41))
+        val body = TripRules.buildTripCreate(form, car, route)
+        assertEquals("2026-10-02T07:30:00+05:00", body.plannedStartAt)
+        assertEquals("2026-10-02T16:02:28+05:00", body.plannedEndAt) // + 30 748 s
+        assertEquals(listOf(1L, 2L, 3L), body.stops.map { it.seq })
+        assertEquals(listOf("stp_tash", "stp_sam", "stp_qarshi"), body.stops.map { it.stopId })
+        assertEquals("2026-10-02T12:58:13+05:00", body.stops[1].plannedArrivalAt) // + 19 693 s
+        assertEquals(5L, body.stops.first().dwellMinutes)
+        assertEquals(3L, body.seatCapacity)
+        assertEquals(20_000L, body.cargoCapacityWeightG)
+        assertEquals(100_000L, body.cargoCapacityVolumeMl)
+        assertEquals(15L, body.maxDetourMinutes)
+        assertEquals(5_000L, body.maxDetourM)
+        assertEquals(10L, body.pickupWaitMinutes)
+        assertNull(body.bookingCutoffAt) // = start, the server's default
+        assertEquals("veh_1", body.vehicleId)
+        assertEquals("rtv_1", body.routeVersionId)
+    }
+
+    @Test
+    fun `offerable means planned and before the cutoff`() {
+        assertTrue(TripRules.offerable(S08.trip(cutoff = "2026-10-02T04:00:00Z"), now))
+        assertFalse(TripRules.offerable(S08.trip(cutoff = "2026-10-01T05:00:00Z"), now))
+        assertFalse(TripRules.offerable(S08.trip(status = TripStatus.BOARDING), now))
+    }
+
+    @Test
+    fun `boarding opening time names the day only when it is not today`() {
+        val opens = Instant.parse("2026-10-02T04:00:00Z") // 09:00 on 2 October in Tashkent
+        assertEquals("02.10, 09:00", DriverTime.clockOrDay(opens, now))
+        assertEquals("09:00", DriverTime.clockOrDay(opens, Instant.parse("2026-10-02T01:00:00Z")))
+        assertEquals("02.10, 09:00 - 18:00", DriverTime.range(opens, Instant.parse("2026-10-02T13:00:00Z")))
+    }
+}

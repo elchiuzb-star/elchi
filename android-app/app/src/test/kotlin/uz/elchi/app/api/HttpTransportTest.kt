@@ -56,6 +56,31 @@ class HttpTransportTest {
     }
 
     @Test
+    fun `a response declared as the whole envelope (the feed) keeps its own meta`() = runTest {
+        server.enqueue(json(200, """{"success":true,"data":[],"meta":{"limit":20,"next_cursor":"c2","ranking_version":"r1",
+            "match_scope":"confirmed_stops","degraded":["ROUTING_UNAVAILABLE"]}}"""))
+
+        val page = ElchiApi(transport).getFeed(
+            serviceType = uz.elchi.app.api.generated.ServiceType.PARCEL,
+            side = uz.elchi.app.api.generated.FeedSide.REQUESTS,
+            dateFrom = "2026-10-01T00:00:00+05:00",
+            dateTo = "2026-10-15T00:00:00+05:00",
+            originRegionId = "reg_tash",
+            destinationDistrictId = "dst_sam",
+            includeAlternatives = true,
+        ).data
+
+        assertEquals(emptyList<Any>(), page.data)
+        assertEquals("c2", page.meta.nextCursor)
+        assertEquals(listOf("ROUTING_UNAVAILABLE"), page.meta.degraded)
+        val request = server.takeRequest()
+        assertEquals("/api/v2/feed", request.url.encodedPath)
+        assertEquals("true", request.url.queryParameter("include_alternatives"))
+        assertEquals("reg_tash", request.url.queryParameter("origin_region_id"))
+        assertNull(request.url.queryParameter("origin_district_id"))
+    }
+
+    @Test
     fun `a discriminated union picks its member by the tag`() {
         val promo = ElchiJson.decodeFromString(BookingPromo.Serializer,
             """{"view":"driver","base_commission_minor":1,"cash_to_collect_minor":2,"commission_charged_minor":3,

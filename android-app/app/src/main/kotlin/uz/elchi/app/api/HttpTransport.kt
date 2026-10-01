@@ -144,8 +144,11 @@ class HttpTransport(
             ?: throw ApiException(status, ApiException.SERVER, "HTTP $status without a JSON body")
         val success = envelope["success"]?.jsonPrimitive?.booleanOrNull
         if (success == true) {
+            // A few endpoints declare the whole envelope as their response model (`/feed` → `FeedEnvelope`, with
+            // its own `meta.degraded`): the generator then asks for that type, which is the body, not `data`.
+            val whole = result.descriptor.serialName.endsWith(ENVELOPE_SUFFIX)
             return ApiResult(
-                data = ElchiJson.decodeFromJsonElement(result, envelope["data"] ?: JsonNull),
+                data = ElchiJson.decodeFromJsonElement(result, if (whole) envelope else envelope["data"] ?: JsonNull),
                 warnings = envelope.decodeOrNull("warnings", ListSerializer(ApiWarning.serializer())) ?: emptyList(),
                 meta = envelope.decodeOrNull("meta", PageMeta.serializer()),
             )
@@ -186,6 +189,7 @@ class HttpTransport(
 
     companion object {
         private val JSON = "application/json".toMediaType()
+        private const val ENVELOPE_SUFFIX = "Envelope"
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)

@@ -822,5 +822,86 @@
   "link.referralApplied": {
     "uz": "Taklif kodi qabul qilindi",
     "ru": "Код приглашения принят"
+  },
+  "driver.routes.privateHint": {
+    "uz": "Safar rejasi faqat sizga ko'rinadi: mos e'lonlarga taklif berish uchun kerak.",
+    "ru": "План поездки видите только вы: он нужен, чтобы предлагать цену на подходящие объявления."
+  },
+  "driver.feed.dateToday": {
+    "uz": "Bugun",
+    "ru": "Сегодня"
+  },
+  "driver.feed.dateTomorrow": {
+    "uz": "Ertaga",
+    "ru": "Завтра"
+  },
+  "driver.feed.date3": {
+    "uz": "3 kun",
+    "ru": "3 дня"
+  },
+  "driver.feed.date14": {
+    "uz": "14 kun",
+    "ru": "14 дней"
+  },
+  "driver.feed.stopsNote": {
+    "uz": "Mosliklar tasdiqlangan bekatlar bo'yicha hisoblangan. Yo'ldan chetga chiqish hisoblanmagan — aniq uchrashuv joyini bron chatida kelishasiz.",
+    "ru": "Совпадения посчитаны по подтверждённым остановкам. Отклонение от маршрута не учитывается — точное место встречи согласуете в чате брони.",
+    "_why": "Stage 08 design note; meeting point is agreed in the booking chat (Q100), not in the negotiation."
+  },
+  "driver.bid.acceptClientPrice": {
+    "uz": "Mijoz narxiga roziman ({price})",
+    "ru": "Согласен с ценой клиента ({price})"
+  },
+  "driver.trip.pause": {
+    "uz": "Safarni to'xtatish",
+    "ru": "Приостановить поездку"
+  },
+  "driver.trip.resume": {
+    "uz": "Safarni davom ettirish",
+    "ru": "Продолжить поездку"
+  },
+  "driver.trip.cancel": {
+    "uz": "Safarni bekor qilish",
+    "ru": "Отменить поездку"
+  },
+  "driver.trip.reasonHint": {
+    "uz": "Sababini qisqa yozing — operator ko'radi.",
+    "ru": "Кратко напишите причину — её увидит оператор."
+  },
+  "driver.trip.windowOpensAt": {
+    "uz": "Chiqish oynasi {time} da ochiladi.",
+    "ru": "Окно посадки откроется в {time}."
+  },
+  "driver.proposals.expiresIn": {
+    "uz": "Taklif {time} amal qiladi",
+    "ru": "Предложение действует ещё {time}"
+  },
+  "driver.saved.limitHint": {
+    "uz": "Limit: {limit} ta yo'nalish",
+    "ru": "Лимит: {limit} направлений"
+  },
+  "driver.saved.notifyNote": {
+    "uz": "Bildirishnomalar har doim yoqilgan.",
+    "ru": "Уведомления всегда включены."
+  },
+  "error.TRIP_HAS_UNRESOLVED_BOOKINGS": {
+    "uz": "Safarda hal qilinmagan bronlar bor — avval ularni yakunlang yoki operatorga yozing.",
+    "ru": "В поездке есть незавершённые брони — сначала завершите их или напишите оператору."
+  },
+  "error.SCHEDULE_CONFLICT": {
+    "uz": "Bu vaqtda sizda yoki avtomobilda boshqa safar bor — boshqa vaqtni tanlang.",
+    "ru": "На это время у вас или у автомобиля уже есть поездка — выберите другое время."
+  },
+  "driver.trip.vehicleLimit": {
+    "uz": "Avtomobilingiz sig'imidan ko'p: eng ko'pi {limit}.",
+    "ru": "Больше вместимости автомобиля: не более {limit}."
+  },
+  "driver.proposals.bookingCreated": {
+    "uz": "Bron yaratildi: {id}. Bronni bajarish keyingi bosqichda qo'shiladi.",
+    "ru": "Бронь создана: {id}. Выполнение брони появится на следующем этапе."
+  },
+  "driver.bid.priceBand": {
+    "uz": "Odatdagi oraliq: {floor} – {ceiling}",
+    "ru": "Обычный диапазон: {floor} – {ceiling}"
   }
 }

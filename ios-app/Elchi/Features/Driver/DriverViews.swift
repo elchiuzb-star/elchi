@@ -7,13 +7,16 @@ import SwiftUI
 struct DriverTabScreen<Content: View>: View {
     let title: String
     let bell: BellButton?
+    /// The top-right "+" (Yo'nalishlar: add a trip).
+    let plus: (label: String, action: () -> Void)?
     let content: Content
     @Environment(\.elchi) private var c
     @Environment(BannerCenter.self) private var banners: BannerCenter?
 
-    init(title: String, bell: BellButton? = nil, @ViewBuilder content: () -> Content) {
+    init(title: String, bell: BellButton? = nil, plus: (label: String, action: () -> Void)? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.bell = bell
+        self.plus = plus
         self.content = content()
     }
 
@@ -25,6 +28,9 @@ struct DriverTabScreen<Content: View>: View {
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 if let bell { bell }
+                if let plus {
+                    RoundIconButton(.plus, label: plus.label, action: plus.action).accessibilityIdentifier("elchi.driver.plus")
+                }
             }
             .frame(height: 64)
             .padding(.horizontal, 16)
@@ -88,6 +94,8 @@ struct DriverHomeView: View {
     let onDocuments: () -> Void
     let onSupport: () -> Void
     let onMatches: () -> Void
+    /// Stage 08: "Takliflarim" (the offers the driver sent).
+    var onProposals: () -> Void = {}
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
@@ -127,6 +135,8 @@ struct DriverHomeView: View {
         availability(status)
         if status.isApproved {
             ElchiButton(strings.t("driverHome.viewMatchingOrders"), variant: .soft, icon: .radar, action: onMatches)
+            ElchiButton(strings.t("proposals.title"), variant: .outline, icon: .tag, action: onProposals)
+                .accessibilityIdentifier("elchi.driver.home.proposals")
         } else {
             ElchiButton(strings.t("driverHome.completeProfile"), action: onProfile)
             ElchiButton(strings.t("driverHome.uploadDocuments"), variant: .soft, action: onDocuments)

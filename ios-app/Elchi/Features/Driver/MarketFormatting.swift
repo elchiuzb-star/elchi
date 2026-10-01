@@ -1,0 +1,101 @@
+import Foundation
+
+/// How the driver's trip, feed and offer screens say places, times, capacity and refusals in the active language.
+extension LocaleStore {
+    func stopName(_ stop: StopRefDTO) -> String { locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz }
+
+    /// `Toshkent → Samarqand`: a trip's first and last stops.
+    func route(_ trip: TripDTO) -> String {
+        let stops = trip.stops.sorted { $0.seq < $1.seq }
+        guard let first = stops.first, let last = stops.last else { return "?" }
+        return "\(stopName(first.stop)) → \(stopName(last.stop))"
+    }
+
+    /// One end of a request as the feed says it: the stop, else the district of the marked place - never a street
+    /// address (the exact place is agreed in the booking chat, Q100).
+    func feedEnd(stop: StopRefDTO?, point: PointEndDTO?) -> String {
+        if let stop { return stopName(stop) }
+        if let district = point?.district { return district.nameUz }
+        return t("app.endLabel.mapPlace")
+    }
+
+    func route(_ listing: ListingPublicDTO) -> String {
+        "\(feedEnd(stop: listing.originStop, point: listing.originPoint)) → \(feedEnd(stop: listing.destinationStop, point: listing.destinationPoint))"
+    }
+
+    /// A version's pickup → dropoff (the driver's offers list).
+    func route(_ version: ProposalVersionDTO) -> String {
+        "\(feedEnd(stop: version.pickupStop, point: version.pickupPoint)) → \(feedEnd(stop: version.dropoffStop, point: version.dropoffPoint))"
+    }
+
+    /// `27 sen, 09:00–18:00` on one day, `27.09, 22:00 - 28.09, 06:00` across days.
+    func span(_ start: Date, _ end: Date) -> String {
+        let calendar = DepartureWindow.calendar
+        if calendar.isDate(start, inSameDayAs: end) { return "\(dayMonth(start)), \(clock(start))–\(clock(end))" }
+        return "\(DepartureWindow.shortText(start)) - \(DepartureWindow.shortText(end))"
+    }
+
+    func span(_ start: String, _ end: String) -> String {
+        guard let from = ServerTime.parse(start), let to = ServerTime.parse(end) else { return window(start, end) }
+        return span(from, to)
+    }
+
+    /// `27 sen · 5 bekat · 3 o'rin`.
+    func tripMeta(_ trip: TripDTO) -> String {
+        let date = ServerTime.parse(trip.plannedStartAt).map { "\(dayMonth($0)), \(clock($0))" } ?? "?"
+        return t("driverRoutes.tripMeta", ("date", date), ("stops", trip.stops.count), ("seats", trip.seatCapacity))
+    }
+
+    /// `Status: Rejalashtirilgan`.
+    func tripStatus(_ status: TripStatus) -> String { tOrNil(TripStatusStyle.key(status)) ?? status.rawValue }
+
+    /// `Kichik quti · 30×20×20 sm gacha · 5 kg gacha`.
+    func parcelLine(_ listing: ListingPublicDTO) -> String? {
+        if let category = listing.parcelCategory { return "\(name(category)) · \(limits(category))" }
+        return listing.parcelType.map(parcelTypeName)
+    }
+
+    /// `2 o'rin · yuk 15 kg / 80 l · bagaj 40 l` - a segment's remaining capacity.
+    func segmentLine(_ segment: SegmentAvailabilityDTO) -> String {
+        t("tripDetail.segmentLine", ("seats", segment.seatsRemaining),
+          ("weight", t("tripDetail.kg", ("value", VehicleLock.thousandths(segment.cargoRemainingWeightG)))),
+          ("volume", t("tripDetail.litres", ("value", VehicleLock.thousandths(segment.cargoRemainingVolumeMl)))),
+          ("baggage", t("tripDetail.litres", ("value", VehicleLock.thousandths(segment.baggageRemainingMl)))))
+    }
+
+    /// `Taklif 1 soat 12 daqiqa amal qiladi`, nil once over.
+    func driverExpiresIn(_ version: ProposalVersionDTO, now: Date) -> String? {
+        guard let expires = ServerTime.parse(version.expiresAt), let left = Countdown.left(until: expires, now: now) else { return nil }
+        return t("driver.proposals.expiresIn", ("time", duration(hours: left.hours, minutes: left.minutes)))
+    }
+
+    /// A refused trip command: when the boarding window opens, or the code's sentence.
+    func tripRefusalText(_ error: Error) -> String {
+        switch TripRefusal.of(error) {
+        case .windowOpensAt(let date):
+            let day = DepartureWindow.calendar.isDateInToday(date) ? clock(date) : DepartureWindow.shortText(date)
+            return t("driver.trip.windowOpensAt", ("time", day))
+        case .unresolvedBookings:
+            return t("error.TRIP_HAS_UNRESOLVED_BOOKINGS")
+        case .versionConflict, .other:
+            return marketErrorText(error)
+        }
+    }
+
+    /// Offer, saved-route and negotiation refusals; the rest is the shared `error.<CODE>` sentence.
+    func marketErrorText(_ error: Error) -> String {
+        switch MarketErrorText.sentence(error) {
+        case .key(let key, let values): return t(key, values: values.map { ($0.key, $0.value as Any) })
+        case .generic:
+            return bannerErrorText(error)
+        }
+    }
+
+    /// `Bu narx … oraliqdan tashqarida … (100 000 so'm – 150 000 so'm)` with the reference band when it came along.
+    func priceWarningText(_ warning: ApiWarning) -> String {
+        let base = warningText(warning)
+        guard warning.code == "PRICE_OUTSIDE_REFERENCE", case .number(let floor)? = warning.details?["floor_minor"],
+              case .number(let ceiling)? = warning.details?["ceiling_minor"] else { return base }
+        return "\(base) \(t("driver.bid.priceBand", ("floor", money(Int(floor))), ("ceiling", money(Int(ceiling)))))"
+    }
+}

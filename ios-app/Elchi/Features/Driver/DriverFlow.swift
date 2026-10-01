@@ -29,6 +29,14 @@ enum DriverRoute: Hashable {
     case safetyCenter
     case settings
     case accountDelete
+    // Stage 08: trips, feed, offers.
+    case trip(String)
+    case addTrip
+    case feedEnd(origin: Bool)
+    case savedRoutes
+    case offer(String)
+    case proposals
+    case thread(String)
 }
 
 /// Signed in as a driver (Stage 07): home (status, balance, availability), the verification gate on Routes / Matches /
@@ -47,6 +55,11 @@ struct DriverFlow: View {
     @State private var threads: SupportThreadsModel
     @State private var supportChats: SupportChatModels
     @State private var accountDelete: AccountDeleteModel
+    @State private var trips: TripsModel
+    @State private var addTrip: AddTripModel
+    @State private var feed: FeedModel
+    @State private var saved: SavedRoutesModel
+    @State private var proposals: DriverProposalsModel
     @State private var confirmLogout = false
     /// "Taklif kodi saqlandi" was tapped and the attribution is on its way.
     @State private var applyingReferral = false
@@ -66,6 +79,12 @@ struct DriverFlow: View {
         _threads = State(initialValue: SupportThreadsModel(api: api))
         _supportChats = State(initialValue: SupportChatModels(api: api, keys: keys))
         _accountDelete = State(initialValue: AccountDeleteModel(api: api, keys: keys))
+        let banners = container.banners
+        _trips = State(initialValue: TripsModel(api: api, banners: banners, keys: keys))
+        _addTrip = State(initialValue: AddTripModel(api: api, keys: keys))
+        _feed = State(initialValue: FeedModel(api: api, market: MarketAPI(transport: container.transport), userId: session.user.id))
+        _saved = State(initialValue: SavedRoutesModel(api: api, banners: banners, keys: keys))
+        _proposals = State(initialValue: DriverProposalsModel(api: api, banners: banners, keys: keys))
     }
 
     var body: some View {
@@ -83,6 +102,8 @@ struct DriverFlow: View {
             case "form": path = [.profileForm]
             case "documents": path = [.documents]
             case "support": path = [.support]
+            case "proposals": path = [.proposals]
+            case "saved": path = [.savedRoutes]
             default: break
             }
         }
@@ -104,14 +125,59 @@ struct DriverFlow: View {
             DriverHomeView(driver: driver, inbox: inbox, referralCode: container.links.referralCode, applyingReferral: applyingReferral,
                            onReferral: { Task { await applyReferral() } }, onBell: { path.append(.notifications) },
                            onProfile: openForm, onDocuments: openDocuments, onSupport: { path.append(.support) },
-                           onMatches: { tab = .matches })
+                           onMatches: { tab = .matches }, onProposals: { path.append(.proposals) })
         case .routes, .matches, .orders:
-            DriverGatedTab(tab: tab, driver: driver, onDocuments: openDocuments, onProfile: openForm,
-                           onSupport: { path.append(.support) })
-                .id(tab)
+            if driver.status?.isApproved == true {
+                work
+            } else {
+                // Q96: until approved these tabs say why and what is next (the server refuses the work anyway).
+                DriverGatedTab(tab: tab, driver: driver, onDocuments: openDocuments, onProfile: openForm,
+                               onSupport: { path.append(.support) })
+                    .id(tab)
+            }
         case .profile:
             DriverProfileMenu(driver: driver, session: session, onAction: menuAction)
         }
+    }
+
+    /// Stage 08: the approved driver's trips, feed and orders.
+    @ViewBuilder
+    private var work: some View {
+        switch tab {
+        case .routes:
+            TripsTabView(trips: trips, onAdd: openAddTrip) { path.append(.trip($0)) }
+        case .matches:
+            FeedTabView(feed: feed, onPickEnd: { path.append(.feedEnd(origin: $0)) }, onSaved: { path.append(.savedRoutes) }) { item in
+                feed.forgetOffer(item.listing.id)
+                path.append(.offer(item.listing.id))
+            }
+        default:
+            DriverOrdersTab(proposals: proposals) { path.append(.proposals) }
+        }
+    }
+
+    private func openAddTrip() {
+        addTrip.reset(vehicles: (driver.vehicles ?? []).filter { $0.verificationStatus == "approved" })
+        path.append(.addTrip)
+    }
+
+    /// A saved trip: back to the offer it was planned for, or on to its detail.
+    private func tripSaved(_ trip: TripDTO) {
+        trips.added(trip)
+        container.banners.ok("addRoute.added")
+        if !path.isEmpty { path.removeLast() }
+        if case .offer? = path.last { return }
+        path.append(.trip(trip.id))
+    }
+
+    /// After an offer: its thread replaces the offer screen, with "Taklif yuborildi" and any price advice.
+    private func offerSent(_ thread: ProposalThreadDTO?, id: String, warnings: [ApiWarning]) {
+        let model = proposals.thread(id, initial: thread)
+        model.adopt(warnings)
+        if thread != nil { container.banners.ok("driverBid.sent") }
+        if !path.isEmpty { path.removeLast() }
+        path.append(.thread(id))
+        Task { await proposals.load(.open) }
     }
 
     @ViewBuilder
@@ -145,6 +211,24 @@ struct DriverFlow: View {
                 let notice = strings.t("client.accountDelete.done")
                 Task { await container.endDeletedSession(notice: notice) }
             }
+        case .trip(let id):
+            TripDetailView(model: trips.detail(id), trips: trips, onBack: back)
+        case .addTrip:
+            AddTripView(model: addTrip, driver: driver, onBack: back, onSaved: tripSaved)
+        case .feedEnd(let origin):
+            FeedEndPickerView(feed: feed, origin: origin, onDone: back)
+        case .savedRoutes:
+            SavedRoutesView(model: saved, feed: feed, onBack: back)
+        case .offer(let id):
+            if let model = feed.offer(id, keys: driver.keys) {
+                OfferView(model: model, trips: trips, onBack: back, onAddTrip: openAddTrip) { thread, threadId, warnings in
+                    offerSent(thread, id: threadId, warnings: warnings)
+                }
+            }
+        case .proposals:
+            DriverProposalsView(model: proposals, onBack: back) { thread in path.append(.thread(thread.id)) ; _ = proposals.thread(thread.id, initial: thread) }
+        case .thread(let id):
+            DriverThreadView(model: proposals.thread(id), onBack: back)
         }
     }
 

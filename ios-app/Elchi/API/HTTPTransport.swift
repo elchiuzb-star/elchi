@@ -33,6 +33,14 @@ public final class HTTPTransport: APITransport {
         try await request(base: v2, method: method, path: path, query: query, body: body, idempotencyKey: idempotencyKey, auth: true)
     }
 
+    /// A v2 endpoint whose contract types the whole envelope (`GET /feed` -> `FeedEnvelope`, which carries
+    /// `meta.degraded`): on success the body is decoded as `T` itself; errors are the usual `APIError`.
+    public func sendWhole<T: Decodable & Sendable>(path: String, query: [(String, (any Sendable)?)], as type: T.Type) async throws -> T {
+        let result: APIResult<T> = try await request(base: v2, method: "GET", path: path, query: query, body: Optional<JSONValue>.none,
+                                                     idempotencyKey: nil, auth: true, whole: true)
+        return result.data
+    }
+
     /// A media link the API returned: signed file links come back as a path on the API host
     /// (`/api/v1/files/...?exp=&sig=`), so they are resolved against it; absolute links stay as they are.
     public func mediaURL(_ reference: String) -> URL? {
@@ -66,6 +74,7 @@ public final class HTTPTransport: APITransport {
         auth: Bool,
         form: MultipartForm? = nil,
         bare: Bool = false,
+        whole: Bool = false,
         retried: Bool = false
     ) async throws -> APIResult<T> {
         let token = auth ? sessions.current()?.accessToken : nil
@@ -99,9 +108,9 @@ public final class HTTPTransport: APITransport {
 
         if status == 401, let token, !retried, await refresh(staleAccessToken: token) {
             return try await self.request(base: base, method: method, path: path, query: query, body: body,
-                                          idempotencyKey: idempotencyKey, auth: auth, form: form, bare: bare, retried: true)
+                                          idempotencyKey: idempotencyKey, auth: auth, form: form, bare: bare, whole: whole, retried: true)
         }
-        return try unwrap(status: status, data: data, bare: bare)
+        return try unwrap(status: status, data: data, bare: bare, whole: whole)
     }
 
     private struct Success<T: Decodable>: Decodable {
@@ -118,13 +127,16 @@ public final class HTTPTransport: APITransport {
         let success: Bool
     }
 
-    private func unwrap<T: Decodable & Sendable>(status: Int, data: Data, bare: Bool = false) throws -> APIResult<T> {
+    private func unwrap<T: Decodable & Sendable>(status: Int, data: Data, bare: Bool = false, whole: Bool = false) throws -> APIResult<T> {
         let decoder = JSONDecoder()
         if bare, (200..<300).contains(status), (try? decoder.decode(Flag.self, from: data)) == nil {
             return APIResult(data: try decoder.decode(T.self, from: data), warnings: [], meta: nil)
         }
         guard let flag = try? decoder.decode(Flag.self, from: data) else {
             throw APIError(status: status, code: APIError.server, message: "HTTP \(status) without a JSON envelope", details: nil)
+        }
+        if flag.success && whole {
+            return APIResult(data: try decoder.decode(T.self, from: data), warnings: [], meta: nil)
         }
         if flag.success {
             let success = try decoder.decode(Success<T>.self, from: data)
@@ -173,6 +185,9 @@ public final class HTTPTransport: APITransport {
             return text.isEmpty ? nil : URLQueryItem(name: key, value: text)
         }
         components.queryItems = items.isEmpty ? nil : items
+        // URLComponents leaves "+" as is, and servers read it as a space: an offset date (`…T00:00:00+05:00`) must
+        // arrive with its plus.
+        components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         return components.url!
     }
 }

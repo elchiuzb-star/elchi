@@ -58,6 +58,12 @@ import uz.elchi.app.session.Session
 @Serializable private data object SafetyCenter
 @Serializable private data object Settings
 @Serializable private data object AccountDelete
+@Serializable private data object AddTrip
+@Serializable private data class TripDetail(val id: String)
+@Serializable private data object SavedSearches
+@Serializable private data class Bid(val listingId: String)
+@Serializable private data object Proposals
+@Serializable private data class ProposalThread(val id: String)
 
 /**
  * Signed in as a driver (Stage 07): a bottom-navigation shell (home, routes, matches, orders, profile). Until the
@@ -81,6 +87,20 @@ fun DriverFlow(container: AppContainer, session: Session) {
         key = "driver-inbox-${session.user.id}",
         factory = viewModelFactory { initializer { InboxViewModel(container.api) } },
     )
+    // Stage 08: the trips, the feed and the offers live as long as the driver flow (tabs and screens share them).
+    val trips: TripsViewModel = viewModel(
+        key = "driver-trips-${session.user.id}",
+        factory = viewModelFactory { initializer { TripsViewModel(container.api, container.banners) } },
+    )
+    val feed: FeedViewModel = viewModel(
+        key = "driver-feed-${session.user.id}",
+        factory = viewModelFactory { initializer { FeedViewModel(container.api, PrefsFeedFilterStore(appContext, session.user.id)) } },
+    )
+    val proposals: ProposalsViewModel = viewModel(
+        key = "driver-proposals-${session.user.id}",
+        factory = viewModelFactory { initializer { ProposalsViewModel(container.api) } },
+    )
+    val work = DriverWork(trips, feed, proposals)
     var tab by rememberSaveable { mutableStateOf(DriverTab.HOME) }
 
     val signOut: () -> Unit = {
@@ -99,9 +119,15 @@ fun DriverFlow(container: AppContainer, session: Session) {
         container.sessions.clear()
         Toast.makeText(appContext, deletedText, Toast.LENGTH_LONG).show()
     }
-    // A driver has no booking or listing screens yet (Stage 08): those links only mark the item read.
+    // A driver has no booking screens yet (Stage 09): those links only mark the item read. Its own offers and
+    // trips open (Stage 08).
     val openTarget: (InboxTarget) -> Unit = { target ->
-        if (target is InboxTarget.SupportThread) nav.navigate(SupportThread(target.id))
+        when (target) {
+            is InboxTarget.SupportThread -> nav.navigate(SupportThread(target.id))
+            is InboxTarget.Proposal -> nav.navigate(ProposalThread(target.id))
+            is InboxTarget.Trip -> nav.navigate(TripDetail(target.id))
+            else -> Unit
+        }
     }
     val routes = DriverNav(
         onProfileForm = { nav.navigate(ProfileForm) { launchSingleTop = true } },
@@ -112,6 +138,12 @@ fun DriverFlow(container: AppContainer, session: Session) {
         onSafety = { nav.navigate(SafetyCenter) { launchSingleTop = true } },
         onSettings = { nav.navigate(Settings) { launchSingleTop = true } },
         onSignOut = signOut,
+        onAddTrip = { nav.navigate(AddTrip) { launchSingleTop = true } },
+        onTrip = { id -> nav.navigate(TripDetail(id)) },
+        onSavedSearches = { nav.navigate(SavedSearches) { launchSingleTop = true } },
+        onOffer = { item -> nav.navigate(Bid(item.listing.id)) },
+        onProposals = { nav.navigate(Proposals) { launchSingleTop = true } },
+        onThread = { id -> nav.navigate(ProposalThread(id)) },
     )
 
     // A link from outside (cold or warm start, or kept through sign-in). A driver can open the operator conversation;
@@ -155,6 +187,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
             DriverShell(
                 driver = driver,
                 inbox = inbox,
+                work = work,
                 session = session,
                 tab = tab,
                 onTab = { tab = it },
@@ -205,6 +238,40 @@ fun DriverFlow(container: AppContainer, session: Session) {
                 onSignOut = signOut,
             )
         }
+        composable<AddTrip> {
+            val vm: AddTripViewModel = viewModel(factory = viewModelFactory { initializer { AddTripViewModel(container.api, container.banners) } })
+            AddTripScreen(vm = vm, onBack = { nav.popBackStack() }, onCreated = { id ->
+                trips.refresh()
+                nav.navigate(TripDetail(id)) { popUpTo<AddTrip> { inclusive = true } }
+            })
+        }
+        composable<TripDetail> { entry ->
+            val id = entry.toRoute<TripDetail>().id
+            val vm: TripDetailViewModel = viewModel(key = "trip-$id", factory = viewModelFactory { initializer { TripDetailViewModel(container.api, container.banners, id, trips::refresh) } })
+            TripDetailScreen(vm = vm, onBack = { nav.popBackStack() })
+        }
+        composable<SavedSearches> {
+            val vm: SavedSearchesViewModel = viewModel(factory = viewModelFactory { initializer { SavedSearchesViewModel(container.api, container.banners, feed) } })
+            SavedSearchesScreen(vm = vm, feed = feed, onBack = { nav.popBackStack() })
+        }
+        composable<Bid> { entry ->
+            val id = entry.toRoute<Bid>().listingId
+            val vm: BidViewModel = viewModel(key = "bid-$id", factory = viewModelFactory { initializer { BidViewModel(container.api, container.banners, id, feed.item(id), trips, proposals) } })
+            BidScreen(
+                vm = vm, trips = trips, driver = driver, nav = routes,
+                onBack = { nav.popBackStack() },
+                onAddTrip = { nav.navigate(AddTrip) { launchSingleTop = true } },
+                onThread = { threadId -> nav.navigate(ProposalThread(threadId)) { popUpTo<Bid> { inclusive = true } } },
+            )
+        }
+        composable<Proposals> {
+            ProposalsScreen(vm = proposals, onBack = { nav.popBackStack() }, onThread = { id -> nav.navigate(ProposalThread(id)) })
+        }
+        composable<ProposalThread> { entry ->
+            val id = entry.toRoute<ProposalThread>().id
+            val vm: ProposalThreadViewModel = viewModel(key = "thread-$id", factory = viewModelFactory { initializer { ProposalThreadViewModel(container.api, container.banners, id, proposals) } })
+            ProposalThreadScreen(vm = vm, onBack = { nav.popBackStack() })
+        }
         composable<AccountDelete> {
             val vm: AccountDeleteViewModel = viewModel(factory = viewModelFactory { initializer { AccountDeleteViewModel(container.api, container.push::unregister) { container.appScope.launch { container.push.sync() } } } })
             AccountDeleteScreen(vm = vm, onBack = { nav.popBackStack() }, onDeleted = accountDeleted)
@@ -223,6 +290,12 @@ data class DriverNav(
     val onSettings: () -> Unit,
     /** Signs out right away; the confirmation is asked by the caller. */
     val onSignOut: () -> Unit,
+    val onAddTrip: () -> Unit = {},
+    val onTrip: (String) -> Unit = {},
+    val onSavedSearches: () -> Unit = {},
+    val onOffer: (uz.elchi.app.api.generated.FeedItemDTO) -> Unit = {},
+    val onProposals: () -> Unit = {},
+    val onThread: (String) -> Unit = {},
 )
 
 /** Picked files through the content resolver: images via the Stage 02 photo pipeline, PDFs byte for byte. */

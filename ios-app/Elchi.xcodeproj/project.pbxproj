@@ -9,17 +9,22 @@
 /* Begin PBXBuildFile section */
 		001E4D22570BBE3016CA1E2B /* SupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C838A004FCEF7772A8382C /* SupportViews.swift */; };
 		01DDAE5BCEAFF579759E70B4 /* BookingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E641F473F072F020E30AFCBC /* BookingModel.swift */; };
+		02CF8DAC07EA1B56C3B4F6A0 /* MarketLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = D047FCEFA08241E03ACF52E2 /* MarketLogic.swift */; };
 		08BD698F703AA7CB9213A2B1 /* BookingTrackingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AADBA05767DAFA193B2463D /* BookingTrackingModel.swift */; };
 		0968CCBD469E0B2A550AB0DA /* StringsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7384394017524FA15DF071D /* StringsTests.swift */; };
 		0F0BE7A1DAFDB2C143221FB7 /* OrdersViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DF7FCD39ADC1768511A03B /* OrdersViews.swift */; };
 		11905C39329C4734ACB37693 /* LegacyViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 774BCD9CFE33E4643559CF3B /* LegacyViews.swift */; };
 		1297D18503791FFB432D328A /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0851D80624E40B0809EEA2C3 /* API.swift */; };
 		13C7C6513818905DAD73B95E /* DriverUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EC1A51C8AC6A8C2978AEF47 /* DriverUITests.swift */; };
+		163240B84A7938B341B4B502 /* FeedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A61A05C9B058156AB0D42B0 /* FeedViews.swift */; };
 		16DC1C1D61AFA615D370DBDC /* OrdersFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5EAC1FDC11AD6AF973FC47B /* OrdersFormatting.swift */; };
+		1892199932721362DD3ED2A3 /* DriverMarketUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2160348ED04BD003F9E3DB5 /* DriverMarketUITests.swift */; };
 		18C00F43B446B6C6713B3405 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9078590EA61C4DFBD7FCE59 /* Components.swift */; };
+		1A645132B135D4935012BFED /* ProposalViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124ABE2A96AC0297228EF63A /* ProposalViews.swift */; };
 		1C0544993AC69F232702A4C2 /* ProfileLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */; };
 		20B6F23F258060280924A139 /* ParcelRequestModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1D5A6E626D2A9700765B4F /* ParcelRequestModel.swift */; };
 		23B687F6EDD2A2AB328D1EA1 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA31EFFA4B516438A1829CD7 /* SettingsViews.swift */; };
+		257023030B11077DA418BADB /* MarketFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CC02CCBB6D8B641324DC52 /* MarketFormatting.swift */; };
 		280414156FB9F22E8BE45C7E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27E951E104397C9F951A02 /* Models.swift */; };
 		2A6135E1CABC44E8EC1DF0DC /* ElchiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE637582601108DA0981BBD /* ElchiApp.swift */; };
 		2E9B2BFAD2DBDC3AEEAF7DDC /* BookingLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36CDA490A4A8FA703305BBC /* BookingLogic.swift */; };
@@ -33,11 +38,13 @@
 		3F69F6036336F84A2A79AB37 /* GeoAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28BF64B36C44C615562BE806 /* GeoAPI.swift */; };
 		42403EF5D537BA688F8CD4C6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 64BF397B4CEEDD77C2732C46 /* Assets.xcassets */; };
 		45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */; };
+		485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD96CB85D338794F3AD1FF7 /* MarketModels.swift */; };
 		48962C87ADECC021F90F4C4B /* OrdersAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC50CE982A2746D3110960D /* OrdersAPI.swift */; };
 		4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */; };
 		50B2F99841F6F5B65F94E8D2 /* ElchiIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AA28EAF962F62889B19611 /* ElchiIcon.swift */; };
 		5144AC33E12070F58FCD9810 /* ElchiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF39A6A56E7964BDFFD5A2FB /* ElchiTheme.swift */; };
 		576267B94BCD44FF6630D0FE /* DeepLinkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */; };
+		596C13432CE68FC5BFE372A3 /* MarketAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F129D51A637BCF9404EF251D /* MarketAPI.swift */; };
 		5D6CAE8A56A9DA4BF1023B9C /* OrderLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 411F2B904B1638EB593ADE46 /* OrderLogic.swift */; };
 		620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */; };
 		65C1408142CCDF8F59B39234 /* BookingTrackingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E897E90FFF89087512394CC1 /* BookingTrackingView.swift */; };
@@ -85,6 +92,7 @@
 		C634812579808489491BC847 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA17164718156721D6DFFECE /* JSONValue.swift */; };
 		C778706AB0715C2A921B1F2A /* DriverModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0466319AC1B19AAED64787DD /* DriverModels.swift */; };
 		CC3D4E19F04823C0812C6207 /* ErrorText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CCE177C989B996DB4ACC0E5 /* ErrorText.swift */; };
+		CDD6F1E8AAD07062CA19987B /* TripViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E3829D24D17A5C141EDF00D /* TripViews.swift */; };
 		D33151EC3B28CCF376021F4A /* OrderLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD460B56DD8B050579E5B85D /* OrderLogicTests.swift */; };
 		D9255F19114537EF0B0B4193 /* LegacyOrderModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */; };
 		DB601A899546A6D5A8CD5015 /* ProfileViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403C98C99D03BBB70E64FD2 /* ProfileViews.swift */; };
@@ -92,6 +100,7 @@
 		DF16308002BCC618A4738B76 /* DriverDocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3F1ACD6E158E318E0EC72B /* DriverDocumentsView.swift */; };
 		E81C117B111A29D67E3D1371 /* ClientOrderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 064E4F383CFE9E482273D83E /* ClientOrderUITests.swift */; };
 		E94205254D498B9F9FEFB373 /* ProfileFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF411664F7EACBB15965006 /* ProfileFormatting.swift */; };
+		E9D1358CC55A3F74366E4CF3 /* MarketLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D3AD394E58D0D62AE2987D8 /* MarketLogicTests.swift */; };
 		EC90A314B89A88B502A2250C /* HTTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5862D85D90BCC2C17E6F61A /* HTTPTransport.swift */; };
 		F575F8543C4E8BBC1F678762 /* BookingLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A72B722AC59F1AB914DA87B /* BookingLogicTests.swift */; };
 		F7C9B4C700F4147BA713C7B8 /* OrderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFBC4032949B66CF63BE6E6 /* OrderViews.swift */; };
@@ -130,6 +139,7 @@
 		0C10A99C8800447B2019AB7C /* ClientHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientHome.swift; sourceTree = "<group>"; };
 		0C3F1ACD6E158E318E0EC72B /* DriverDocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverDocumentsView.swift; sourceTree = "<group>"; };
 		0E573D36C73DF08EB376290B /* ProfileAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAPI.swift; sourceTree = "<group>"; };
+		124ABE2A96AC0297228EF63A /* ProposalViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProposalViews.swift; sourceTree = "<group>"; };
 		16C8702059432269606836EE /* DriverLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverLogic.swift; sourceTree = "<group>"; };
 		1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientOffersUITests.swift; sourceTree = "<group>"; };
 		19304FC7161F98CC88F6F51F /* LegacyOrderAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyOrderAPI.swift; sourceTree = "<group>"; };
@@ -144,6 +154,7 @@
 		31AC3EF77268DC310A40A626 /* Poppins-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Medium.ttf"; sourceTree = "<group>"; };
 		31DADCFCD83585D785D08BFC /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		33C838A004FCEF7772A8382C /* SupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportViews.swift; sourceTree = "<group>"; };
+		36CC02CCBB6D8B641324DC52 /* MarketFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketFormatting.swift; sourceTree = "<group>"; };
 		374F3BCC7187A54274BE4158 /* Elchi.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Elchi.xcconfig; sourceTree = "<group>"; };
 		39B2ABA7C58DF674FEA29553 /* BookingMoreViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingMoreViews.swift; sourceTree = "<group>"; };
 		39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverLogicTests.swift; sourceTree = "<group>"; };
@@ -161,13 +172,16 @@
 		5320FEF5E9CF0CCAC730936A /* ElchiMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiMap.swift; sourceTree = "<group>"; };
 		552D982C968E1E1E115906DF /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		5C800273FB70DBBE3B76B022 /* Elchi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Elchi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5D3AD394E58D0D62AE2987D8 /* MarketLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketLogicTests.swift; sourceTree = "<group>"; };
 		63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientLegacyUITests.swift; sourceTree = "<group>"; };
 		64BF397B4CEEDD77C2732C46 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiMapEngine.swift; sourceTree = "<group>"; };
 		688A71A2ABC3BBA5625256ED /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		6A72B722AC59F1AB914DA87B /* BookingLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingLogicTests.swift; sourceTree = "<group>"; };
+		6E3829D24D17A5C141EDF00D /* TripViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripViews.swift; sourceTree = "<group>"; };
 		7403C98C99D03BBB70E64FD2 /* ProfileViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViews.swift; sourceTree = "<group>"; };
 		774BCD9CFE33E4643559CF3B /* LegacyViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyViews.swift; sourceTree = "<group>"; };
+		7A61A05C9B058156AB0D42B0 /* FeedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViews.swift; sourceTree = "<group>"; };
 		7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyOrderModel.swift; sourceTree = "<group>"; };
 		82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientProfileUITests.swift; sourceTree = "<group>"; };
 		84C0FF664AD5ECD97C0FA11E /* BookingFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingFormatting.swift; sourceTree = "<group>"; };
@@ -182,6 +196,7 @@
 		AA31EFFA4B516438A1829CD7 /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
 		AEFC26087742FF883E6A6FA6 /* OrdersLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersLogic.swift; sourceTree = "<group>"; };
 		B20558F406539BB7C97D53D6 /* Banners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Banners.swift; sourceTree = "<group>"; };
+		B2160348ED04BD003F9E3DB5 /* DriverMarketUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverMarketUITests.swift; sourceTree = "<group>"; };
 		B330F4CF98061BE16535668F /* DriverFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverFlow.swift; sourceTree = "<group>"; };
 		B7384394017524FA15DF071D /* StringsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringsTests.swift; sourceTree = "<group>"; };
 		B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransportTests.swift; sourceTree = "<group>"; };
@@ -194,6 +209,7 @@
 		C4C1CF2BFF8142FAA730B62B /* DriverProfileFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverProfileFormView.swift; sourceTree = "<group>"; };
 		C5862D85D90BCC2C17E6F61A /* HTTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransport.swift; sourceTree = "<group>"; };
 		CD460B56DD8B050579E5B85D /* OrderLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderLogicTests.swift; sourceTree = "<group>"; };
+		D047FCEFA08241E03ACF52E2 /* MarketLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketLogic.swift; sourceTree = "<group>"; };
 		D2F21911C1D356BA08C5B415 /* BookingChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingChatModel.swift; sourceTree = "<group>"; };
 		D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkUITests.swift; sourceTree = "<group>"; };
 		D5EAC1FDC11AD6AF973FC47B /* OrdersFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersFormatting.swift; sourceTree = "<group>"; };
@@ -211,10 +227,12 @@
 		E897E90FFF89087512394CC1 /* BookingTrackingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingTrackingView.swift; sourceTree = "<group>"; };
 		E9078590EA61C4DFBD7FCE59 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingOffersLogicTests.swift; sourceTree = "<group>"; };
+		F129D51A637BCF9404EF251D /* MarketAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketAPI.swift; sourceTree = "<group>"; };
 		F1512BCC8B0C467AC0347376 /* SignInModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInModel.swift; sourceTree = "<group>"; };
 		FB09FB483669F7C8AC86DEA3 /* Poppins-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Regular.ttf"; sourceTree = "<group>"; };
 		FBE637582601108DA0981BBD /* ElchiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiApp.swift; sourceTree = "<group>"; };
 		FCEDCEFD444CC97A5325ED0F /* LocationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationViews.swift; sourceTree = "<group>"; };
+		FDD96CB85D338794F3AD1FF7 /* MarketModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketModels.swift; sourceTree = "<group>"; };
 		FE91ED3A3B98D042C095381D /* ListingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -240,6 +258,7 @@
 				82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */,
 				014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */,
 				D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */,
+				B2160348ED04BD003F9E3DB5 /* DriverMarketUITests.swift */,
 				9EC1A51C8AC6A8C2978AEF47 /* DriverUITests.swift */,
 				E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */,
 			);
@@ -312,6 +331,12 @@
 				0466319AC1B19AAED64787DD /* DriverModels.swift */,
 				C4C1CF2BFF8142FAA730B62B /* DriverProfileFormView.swift */,
 				C1F2E160F1AD7CFF4946D9AB /* DriverViews.swift */,
+				7A61A05C9B058156AB0D42B0 /* FeedViews.swift */,
+				36CC02CCBB6D8B641324DC52 /* MarketFormatting.swift */,
+				D047FCEFA08241E03ACF52E2 /* MarketLogic.swift */,
+				FDD96CB85D338794F3AD1FF7 /* MarketModels.swift */,
+				124ABE2A96AC0297228EF63A /* ProposalViews.swift */,
+				6E3829D24D17A5C141EDF00D /* TripViews.swift */,
 			);
 			path = Driver;
 			sourceTree = "<group>";
@@ -440,6 +465,7 @@
 				C5862D85D90BCC2C17E6F61A /* HTTPTransport.swift */,
 				DA17164718156721D6DFFECE /* JSONValue.swift */,
 				19304FC7161F98CC88F6F51F /* LegacyOrderAPI.swift */,
+				F129D51A637BCF9404EF251D /* MarketAPI.swift */,
 				BBC50CE982A2746D3110960D /* OrdersAPI.swift */,
 				0E573D36C73DF08EB376290B /* ProfileAPI.swift */,
 				4BD382C3A4F0590BB98EE1B1 /* Generated */,
@@ -492,6 +518,7 @@
 				B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */,
 				4B5C2D22B046E6A221A1F05D /* LegacyLogicTests.swift */,
 				EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */,
+				5D3AD394E58D0D62AE2987D8 /* MarketLogicTests.swift */,
 				CD460B56DD8B050579E5B85D /* OrderLogicTests.swift */,
 				9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */,
 				C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */,
@@ -700,6 +727,7 @@
 				5144AC33E12070F58FCD9810 /* ElchiTheme.swift in Sources */,
 				82BC2AF7760127F8021CE78E /* EntryViews.swift in Sources */,
 				CC3D4E19F04823C0812C6207 /* ErrorText.swift in Sources */,
+				163240B84A7938B341B4B502 /* FeedViews.swift in Sources */,
 				792F83771A1610C2CA21ABFE /* FlowLayout.swift in Sources */,
 				3F69F6036336F84A2A79AB37 /* GeoAPI.swift in Sources */,
 				EC90A314B89A88B502A2250C /* HTTPTransport.swift in Sources */,
@@ -710,6 +738,10 @@
 				11905C39329C4734ACB37693 /* LegacyViews.swift in Sources */,
 				C5079BC9D0D2916CFD112524 /* ListingViews.swift in Sources */,
 				A1C1F6F8B8F3DEECE48FCEC4 /* LocationViews.swift in Sources */,
+				596C13432CE68FC5BFE372A3 /* MarketAPI.swift in Sources */,
+				257023030B11077DA418BADB /* MarketFormatting.swift in Sources */,
+				02CF8DAC07EA1B56C3B4F6A0 /* MarketLogic.swift in Sources */,
+				485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */,
 				280414156FB9F22E8BE45C7E /* Models.swift in Sources */,
 				C2EFDE0345EA57A52A6000A9 /* OrderFormatting.swift in Sources */,
 				5D6CAE8A56A9DA4BF1023B9C /* OrderLogic.swift in Sources */,
@@ -726,6 +758,7 @@
 				6BE0984C96A17E029AA7A4DC /* ProfileLogic.swift in Sources */,
 				934C7D227EC8EB85B2E7ACB7 /* ProfileModels.swift in Sources */,
 				DB601A899546A6D5A8CD5015 /* ProfileViews.swift in Sources */,
+				1A645132B135D4935012BFED /* ProposalViews.swift in Sources */,
 				A771E3F0BF8136F5CCCBE929 /* SessionEvents.swift in Sources */,
 				A7C4E21730A9BF16EB0195E9 /* SessionState.swift in Sources */,
 				C36DA73C1757FB7E5CD14FA4 /* SessionStore.swift in Sources */,
@@ -734,6 +767,7 @@
 				FF56E624D0DDE33E0C5F2FA0 /* States.swift in Sources */,
 				AE13A0237DB5E74AA3E83A2B /* Strings.swift in Sources */,
 				001E4D22570BBE3016CA1E2B /* SupportViews.swift in Sources */,
+				CDD6F1E8AAD07062CA19987B /* TripViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -747,6 +781,7 @@
 				6BBB2AFE7BCDB457D18104BD /* HTTPTransportTests.swift in Sources */,
 				8D6C2858EBBDD2B5E779DD1F /* LegacyLogicTests.swift in Sources */,
 				620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */,
+				E9D1358CC55A3F74366E4CF3 /* MarketLogicTests.swift in Sources */,
 				D33151EC3B28CCF376021F4A /* OrderLogicTests.swift in Sources */,
 				6679748F2B6674DBEF88D56F /* ParcelRequestModelTests.swift in Sources */,
 				1C0544993AC69F232702A4C2 /* ProfileLogicTests.swift in Sources */,
@@ -765,6 +800,7 @@
 				83F9D384A561FA388327AF8B /* ClientProfileUITests.swift in Sources */,
 				3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */,
 				576267B94BCD44FF6630D0FE /* DeepLinkUITests.swift in Sources */,
+				1892199932721362DD3ED2A3 /* DriverMarketUITests.swift in Sources */,
 				13C7C6513818905DAD73B95E /* DriverUITests.swift in Sources */,
 				4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */,
 			);
