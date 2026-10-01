@@ -431,6 +431,11 @@ class PublicListingPageDTO(ContractModel):
     currency: Currency
     status_open: StrictBool
     cta: str = Field(description="What the viewer can do next; the app asks for OTP before any offer.")
+    listing_id: str | None = Field(
+        default=None,
+        description="Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). "
+        "A public id is not a secret (ADR-0002); no owner data is added.",
+    )
 
 
 class OpsQueueItemDTO(ContractModel):

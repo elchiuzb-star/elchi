@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- The tracking token is in the address. "strict-origin" sends other sites only https://www.elchigo.uz (never the
+     path), which is what the Yandex key's HTTP Referer restriction needs to see. -->
+<meta name="referrer" content="strict-origin">
+<title>Elchi — jo'natma kuzatuvi</title>
+<meta name="description" content="Bronni olib ketayotgan avtomobilning oxirgi joylashuvi.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231B4FD8'/><path d='M9 20l14-8-6 12-1.6-4.4z' fill='white'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="shell masthead">
+	<a class="wordmark wordmark--logo" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1B4FD8"/><path d="M9 20l14-8-6 12-1.6-4.4z" fill="#fff"/></svg>elchi</a>
+	<nav>
+		<a href="/">Elchi haqida</a>
+		<a href="/privacy">Maxfiylik</a>
+	</nav>
+</header>
+
+<main class="pub">
+	<p class="loading" id="loading">Yuklanmoqda…</p>
+
+	<!-- Only what the server returned: one point, its age and accuracy. No name, phone or address. -->
+	<div class="stack" id="live" hidden>
+		<div>
+			<h1 id="title">Kuzatuv</h1>
+			<p class="pub__sub">Bronungizni olib ketayotgan avtomobil</p>
+		</div>
+
+		<div class="status-line" aria-live="polite">
+			<span class="badge" id="chip"></span>
+			<span id="checked"></span>
+		</div>
+
+		<!-- Present only when a Yandex key is configured AND the server has a point. -->
+		<div class="map" id="map" role="img" aria-label="Avtomobilning oxirgi joylashuvi xaritada" hidden></div>
+
+		<div class="note note--warn" id="low-acc" hidden><p>Bu nuqtaning aniqligi past.</p></div>
+		<div class="note note--warn" id="delayed-hint" hidden>
+			<p>Joylashuv kechikib kelmoqda — avtomobil hozir boshqa joyda bo'lishi mumkin.</p>
+		</div>
+		<div class="note note--gray" id="lost-hint" hidden>
+			<p>Haydovchi telefonidan yangi joylashuv kelmayapti. Ko'rsatilgan nuqta eskirgan.</p>
+		</div>
+		<div class="note note--gray" id="no-point" hidden>
+			<p>Hozircha joylashuv ma'lumoti yo'q. Haydovchi telefoni joylashuv yubora boshlaganda shu yerda ko'rinadi.</p>
+		</div>
+
+		<article class="card" id="point-card" hidden>
+			<dl class="rows">
+				<div id="place-row" hidden><dt>Oxirgi joylashuv</dt><dd id="place"></dd></div>
+				<div><dt>Qancha oldin</dt><dd id="ago"></dd></div>
+				<div><dt>Koordinatalar</dt><dd class="mono" id="coords"></dd></div>
+				<div><dt>Aniqlik</dt><dd id="acc"></dd></div>
+			</dl>
+		</article>
+
+		<div class="note note--gray" id="offline" hidden>
+			<p>Yangilab bo'lmadi. Sahifa 15 soniyadan keyin yana urinadi; ko'rsatilgan ma'lumot oxirgi muvaffaqiyatli so'rovdan.</p>
+		</div>
+	</div>
+
+	<!-- Unknown, revoked or expired link, or the tracking window is closed: one answer, nothing revealed. -->
+	<section class="card empty" id="unavailable" hidden>
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+		<h2>Kuzatuv mavjud emas</h2>
+		<p>Havola muddati tugagan, bekor qilingan yoki safar hali boshlanmagan bo'lishi mumkin. Jo'natuvchidan yangi havola so'rang.</p>
+		<button type="button" class="btn btn--ghost" id="recheck">↻ Qayta tekshirish</button>
+	</section>
+
+	<div class="stack" id="error" hidden>
+		<div class="note note--err"><p>Ma'lumotni yuklab bo'lmadi. Internet aloqasini tekshirib, qayta urining.</p></div>
+		<button type="button" class="btn btn--ghost btn--block" id="retry">↻ Qayta urinish</button>
+	</div>
+
+	<p class="fineprint">Manba: haydovchining telefoni. Sahifa har 15 soniyada yangilanadi. Bu yerda ism, telefon va manzil ko'rsatilmaydi.</p>
+</main>
+
+<footer class="band foot">
+	<div class="shell">
+		<div class="foot__row">
+			<a class="wordmark" href="/">elchi</a>
+			<nav>
+				<a href="/">Bosh sahifa</a>
+				<a href="/privacy">Maxfiylik siyosati</a>
+				<a href="/delete-account">Hisobni o'chirish</a>
+			</nav>
+		</div>
+		<p class="foot__legal">
+			© <span id="yr">2026</span> Elchi · Shaharlararo yuk va pochta yetkazish xizmati
+		</p>
+	</div>
+</footer>
+
+<script src="/config.js"></script>
+<script src="/pub.js"></script>
+<script>
+	(function () {
+		"use strict";
+		var P = window.ElchiPub;
+		var token = P.tokenFrom("/t/");
+		var POLL_MS = 15000;
+		// §10.4 buckets on this device's clock; the shown state is never better than the server's.
+		var FRESH_S = 30, DELAYED_S = 120;
+		var RANK = { fresh: 0, delayed: 1, lost: 2, no_data: 3 };
+		var CHIP = {
+			fresh: ["Jonli", "badge--ok"],
+			delayed: ["Kechikmoqda", "badge--warn"],
+			lost: ["Aloqa uzilgan", "badge--err"],
+			no_data: ["Joylashuv yo'q", "badge--gray"]
+		};
+		var STATUS = {
+			"passenger.confirmed": "Bron tasdiqlangan",
+			"passenger.awaiting_pickup": "Yo'lovchi olib ketilishini kutmoqda",
+			"passenger.onboard": "Yo'lovchi yo'lda",
+			"passenger.arrived": "Yo'lovchi yetib keldi",
+			"passenger.completed": "Safar yakunlandi",
+			"parcel.confirmed": "Jo'natma bron qilingan",
+			"parcel.awaiting_pickup": "Jo'natma olinishini kutmoqda",
+			"parcel.picked_up": "Jo'natma haydovchida",
+			// Q142: the trip departed - not proof the parcel was loaded.
+			"parcel.in_transit": "Haydovchi yo'lga chiqdi",
+			"parcel.delivery_failed": "Yetkazib bo'lmadi",
+			"parcel.delivered": "Jo'natma topshirildi",
+			"parcel.return_required": "Jo'natma qaytarilishi kerak",
+			"parcel.returned": "Jo'natma qaytarildi",
+			"parcel.completed": "Yakunlandi"
+		};
+
+		var last = null;        // last successful DTO
+		var lastOkAt = 0;
+		var timer = null;
+		var gone = false;
+
+		function effective(d, now) {
+			if (!d.last_point) return "no_data";
+			var age = Math.max(0, (now - Date.parse(d.last_point.captured_at)) / 1000);
+			var local = age <= FRESH_S ? "fresh" : age <= DELAYED_S ? "delayed" : "lost";
+			var server = RANK[d.freshness] === undefined ? "lost" : d.freshness;
+			return RANK[local] > RANK[server] ? local : server;
+		}
+
+		// ── Map (Yandex Maps JS API 2.1), only with a configured key and a server point ──────────────
+		var ymapsState = "idle"; // idle | loading | ready | failed
+		var map = null, mark = null, circle = null, shownAt = null;
+
+		function loadYmaps(cb) {
+			if (ymapsState === "ready") return cb();
+			if (ymapsState === "loading" || ymapsState === "failed") return;
+			ymapsState = "loading";
+			var s = document.createElement("script");
+			s.src = "https://api-maps.yandex.ru/2.1/?apikey=" + encodeURIComponent(P.config.YANDEX_JS_KEY) +
+				"&lang=" + encodeURIComponent(P.config.YANDEX_LANG || "uz_UZ");
+			s.async = true;
+			s.onload = function () {
+				if (!window.ymaps) { ymapsState = "failed"; P.show("map", false); return; }
+				window.ymaps.ready(function () { ymapsState = "ready"; cb(); }, function () {
+					ymapsState = "failed"; P.show("map", false);
+				});
+			};
+			s.onerror = function () { ymapsState = "failed"; P.show("map", false); };
+			document.head.appendChild(s);
+		}
+
+		function drawMap(point, state) {
+			if (!P.config.YANDEX_JS_KEY || !point || ymapsState === "failed") { P.show("map", false); return; }
+			P.show("map", true);
+			loadYmaps(function () {
+				var ym = window.ymaps;
+				var at = [point.lat, point.lng];
+				var live = state === "fresh";
+				var caption = live ? "Jonli" : state === "delayed" ? "Kechikmoqda" : "Aloqa uzilgan";
+				var preset = live ? "islands#blueAutoIcon" : "islands#grayAutoIcon";
+				var colour = live ? "#1b4fd8" : "#8a919e";
+				if (!map) {
+					map = new ym.Map("map", { center: at, zoom: 13, controls: ["zoomControl"] },
+						{ suppressMapOpenBlock: true });
+					map.behaviors.disable("scrollZoom");
+					circle = new ym.Circle([at, point.accuracy_m || 0], {}, {
+						fillColor: colour + "22", strokeColor: colour, strokeOpacity: 0.5, strokeWidth: 1
+					});
+					mark = new ym.Placemark(at, { iconCaption: caption }, { preset: preset });
+					map.geoObjects.add(circle).add(mark);
+				} else {
+					mark.geometry.setCoordinates(at);
+					mark.properties.set("iconCaption", caption);
+					mark.options.set("preset", preset);
+					circle.geometry.setCoordinates(at);
+					circle.geometry.setRadius(point.accuracy_m || 0);
+					circle.options.set({ fillColor: colour + "22", strokeColor: colour });
+					// Follow the car only when the server point moved, so a viewer's own panning is not undone.
+					if (shownAt && (shownAt[0] !== at[0] || shownAt[1] !== at[1])) {
+						map.panTo(at, { flying: false, duration: 300 });
+					}
+				}
+				shownAt = at;
+			});
+		}
+
+		// ── Rendering ────────────────────────────────────────────────────────────────────────────────
+		function render() {
+			if (!last) return;
+			var now = Date.now();
+			var d = last;
+			var p = d.last_point || null;
+			var state = effective(d, now);
+			P.text("title", STATUS[d.status_label] || "Bron faol");
+			var chip = P.el("chip");
+			chip.textContent = CHIP[state][0];
+			chip.className = "badge " + CHIP[state][1];
+			P.text("checked", lastOkAt ? "Tekshirildi: " + new Intl.DateTimeFormat("uz-UZ", {
+				timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
+			}).format(new Date(lastOkAt)) : "");
+
+			P.show("no-point", !p);
+			P.show("point-card", !!p);
+			P.show("low-acc", !!p && (p.low_accuracy === true || p.accuracy_m > 100));
+			P.show("delayed-hint", state === "delayed");
+			P.show("lost-hint", state === "lost");
+			if (p) {
+				P.text("ago", P.ago(p.captured_at, now));
+				P.text("coords", Number(p.lat).toFixed(5) + ", " + Number(p.lng).toFixed(5));
+				P.text("acc", "±" + Math.round(p.accuracy_m) + " m");
+				// A place name only if the server ever sends one; the page never reverse-geocodes (no addresses).
+				var place = typeof d.place_label === "string" ? d.place_label.trim() : "";
+				P.show("place-row", !!place);
+				P.text("place", place);
+			}
+			drawMap(p, state);
+			P.show("loading", false);
+			P.show("error", false);
+			P.show("unavailable", false);
+			P.show("live", true);
+		}
+
+		function showGone() {
+			gone = true;
+			last = null;
+			stop();
+			if (map) { map.destroy(); map = null; mark = null; circle = null; shownAt = null; }
+			P.show("loading", false);
+			P.show("live", false);
+			P.show("error", false);
+			P.show("unavailable", true);
+		}
+
+		function poll() {
+			timer = null;
+			if (!token) { showGone(); return; }
+			P.getV2("/public/tracking/" + encodeURIComponent(token)).then(function (res) {
+				if (res.data) {
+					last = res.data;
+					lastOkAt = Date.now();
+					gone = false;
+					P.show("offline", false);
+					render();
+				} else if (res.status === 404 || res.status === 410) {
+					showGone();
+					return;
+				} else if (last) {
+					P.show("offline", true);
+					render();
+				} else {
+					P.show("loading", false);
+					P.show("error", true);
+				}
+				schedule();
+			});
+		}
+
+		function schedule() {
+			if (gone || document.hidden || timer) return;
+			timer = setTimeout(poll, POLL_MS);
+		}
+
+		function stop() {
+			if (timer) { clearTimeout(timer); timer = null; }
+		}
+
+		function resume() {
+			if (gone || document.hidden) return;
+			stop();
+			poll();
+		}
+
+		// Polling stops while the page is hidden and resumes (with an immediate read) when it is back.
+		document.addEventListener("visibilitychange", function () {
+			if (document.hidden) stop(); else resume();
+		});
+		window.addEventListener("focus", function () { if (!timer) resume(); });
+
+		// Ageing between reads: "Jonli" turns into "Kechikmoqda" on its own if the phone goes quiet.
+		setInterval(function () { if (last && !document.hidden) render(); }, 5000);
+
+		P.el("retry").addEventListener("click", function () {
+			P.show("error", false); P.show("loading", true); resume();
+		});
+		P.el("recheck").addEventListener("click", function () {
+			gone = false; P.show("unavailable", false); P.show("loading", true); resume();
+		});
+
+		poll();
+	})();
+</script>
+</body>
+</html>

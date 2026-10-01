@@ -65,12 +65,13 @@ struct DeepLinkRulesTests {
             #expect(DeepLinkRules.action(target, audience: .client) == .open(target))
             #expect(DeepLinkRules.action(target, audience: .signedOut) == .holdForSignIn)
         }
-        // Stage 09: the driver has booking, chat, offer-thread and operator-chat screens; never a client's listing.
-        for target in all where target != .listing("l") {
+        // Stage 09: the driver has booking, chat, offer-thread and operator-chat screens; Stage 10: a client's listing
+        // too (which screen it becomes is `ListingLinkRules`).
+        for target in all {
             #expect(DeepLinkRules.action(target, audience: .driver) == .open(target))
         }
-        #expect(DeepLinkRules.action(.listing("l"), audience: .driver) == .unsupported)
         #expect(DeepLinkRules.action(.unsupported, audience: .client) == .unsupported)
+        #expect(DeepLinkRules.action(.unsupported, audience: .driver) == .unsupported)
     }
 
     @Test func clientTargetsAreTheInboxScreens() {
@@ -165,17 +166,25 @@ struct DeepLinkCenterTests {
         #expect(banners.current == nil)
     }
 
-    @Test func driverOpensABookingButNotAListing() {
+    @Test func driverOpensABookingAndAListing() {
         let (links, banners, _, suite) = center()
         defer { UserDefaults().removePersistentDomain(forName: suite) }
         links.handle(URL(string: "elchi://bookings/bkg_1")!)
         #expect(links.takePending(for: .driver) == .open(.booking("bkg_1")))
         #expect(links.takePending(for: .driver) == nil)
         links.handle(URL(string: "elchi://listings/lst_1")!)
-        #expect(links.takePending(for: .driver) == .unsupported)
-        guard case .key(let key)? = banners.current?.message else { Issue.record("no banner"); return }
-        #expect(key == "link.unsupported")
+        #expect(links.takePending(for: .driver) == .open(.listing("lst_1")))
         #expect(links.takePending(for: .driver) == nil)
+        #expect(banners.current == nil)
+    }
+
+    @Test func signedOutListingLinkWaitsThenGoesToTheSignedInRole() {
+        let (links, _, _, suite) = center()
+        defer { UserDefaults().removePersistentDomain(forName: suite) }
+        links.handle(URL(string: "elchi://listings/lst_9")!)
+        #expect(links.takePending(for: .signedOut) == .holdForSignIn)
+        #expect(links.takePending(for: .driver) == .open(.listing("lst_9")))
+        #expect(links.takePending(for: .client) == nil)
     }
 
     @Test func garbageSaysUnsupportedAndKeepsNothing() {
@@ -195,5 +204,64 @@ struct DeepLinkCenterTests {
         activity.webpageURL = URL(string: "https://elchigo.uz/r/AB2CD3EF")
         links.handle(activity: activity)
         #expect(links.referralCode == "AB2CD3EF")
+    }
+}
+
+/// Stage 10: `elchi://listings/{id}` (the share page's "Ilovani ochish") by role.
+struct ListingLinkRulesTests {
+    func listing(_ status: ListingStatus) -> ListingPublicDTO {
+        var dto = MarketFixture.listing(id: "lst_7")
+        dto.status = status
+        return dto
+    }
+
+    @Test func approvedDriverGetsTheOfferScreenForAnOpenRequest() {
+        let open = listing(.published)
+        #expect(ListingLinkRules.driver(approved: true, listing: open) == .offer(open))
+        #expect(ListingLinkRules.messageKey(.offer(open)) == nil)
+    }
+
+    @Test func unapprovedDriverGetsTheGateWhateverTheListing() {
+        #expect(ListingLinkRules.driver(approved: false, listing: listing(.published)) == .gate)
+        #expect(ListingLinkRules.driver(approved: false, listing: listing(.cancelled)) == .gate)
+        #expect(ListingLinkRules.driver(approved: false, listing: nil) == .gate)
+        #expect(ListingLinkRules.messageKey(.gate) == nil)
+    }
+
+    @Test func aListingThatTakesNoOffersIsASentence() {
+        for status: ListingStatus in [.paused, .fulfilled, .expired, .cancelled, .draft, .unknown("archived")] {
+            #expect(ListingLinkRules.driver(approved: true, listing: listing(status)) == .notOpen)
+        }
+        #expect(ListingLinkRules.messageKey(.notOpen) == "link.listingNotOpen")
+        #expect(ListingLinkRules.driver(approved: true, listing: nil) == .missing)
+        #expect(ListingLinkRules.messageKey(.missing) == "link.listingMissing")
+    }
+
+    @Test func theOwnerGetsTheDetailAnotherClientASentence() throws {
+        // The owner's answer is the full ListingDTO (owner, version, terms_version) ...
+        let owner = Fixture.decode(JSONValue.self, """
+            {"id":"lst_1","kind":"request","service_type":"parcel","status":"paused","version":4,"corridor_id":"cor_1",
+             "created_at":"2026-09-28T08:00:00Z","currency":"UZS","departure_window_start":"2026-09-30T04:00:00Z",
+             "departure_window_end":"2026-09-30T13:00:00Z","expires_at":"2026-10-02T13:00:00Z","owner":{"id":"usr_1","display_name":"A"},
+             "payment_method":"cash","price_basis":"total","quantity":1,"terms_version":2,"timezone":"Asia/Tashkent",
+             "total_minor":15000000,"unit_price_minor":15000000}
+            """)
+        #expect(ListingLinkRules.client(owner) == .ownListing)
+        // ... anybody else's the public DTO, without them.
+        let data = try JSONEncoder().encode(MarketFixture.listing(id: "lst_7"))
+        let other = try JSONDecoder().decode(JSONValue.self, from: data)
+        #expect(ListingLinkRules.client(other) == .notOwn)
+        #expect(ListingLinkRules.messageKey(.notOwn) == "link.listingNotOwn")
+        #expect(ListingLinkRules.client(nil) == .missing)
+        // A driver reads the public DTO out of either shape.
+        #expect(ListingLinkRules.publicListing(other)?.id == "lst_7")
+        #expect(ListingLinkRules.publicListing(owner)?.id == "lst_1")
+    }
+
+    @Test func onlyA404IsAMissingListing() {
+        #expect(ListingLinkRules.isMissing(APIError(status: 404, code: "NOT_FOUND", message: "", details: nil)))
+        #expect(!ListingLinkRules.isMissing(APIError(status: 0, code: APIError.network, message: "", details: nil)))
+        #expect(!ListingLinkRules.isMissing(APIError(status: 500, code: "SERVER_ERROR", message: "", details: nil)))
+        #expect(!ListingLinkRules.isMissing(CancellationError()))
     }
 }

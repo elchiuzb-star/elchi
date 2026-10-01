@@ -11,6 +11,7 @@ import uz.elchi.app.api.generated.ActorSide
 import uz.elchi.app.api.generated.ApiWarning
 import uz.elchi.app.api.generated.ListingOfferDTO
 import uz.elchi.app.api.generated.ListingPublicDTO
+import uz.elchi.app.api.generated.ListingStatus
 import uz.elchi.app.api.generated.PromoDriverAckInput
 import uz.elchi.app.api.generated.ProposalCounter
 import uz.elchi.app.api.generated.ProposalCreate
@@ -50,8 +51,31 @@ sealed interface ThreadLine {
 }
 
 /** The offer screen and "Takliflarim", pure. */
+/** What the offer screen shows (it is also where `elchi://listings/{id}` leads a driver, Stage 10). */
+enum class BidView {
+    /** Not approved (Q96): the verification gate, never the price field. */
+    GATE,
+
+    /** The listing no longer takes offers (paused, fulfilled, expired, cancelled): one sentence, no form. */
+    CLOSED,
+
+    /** The request, the rival board and the price form. */
+    FORM,
+}
+
 object OfferRules {
     // -- the offer screen ----------------------------------------------------------------------------------------
+
+    /**
+     * [status] = the driver's status, null while it is still being read (the form shows; the server refuses an
+     * unapproved driver anyway, `DRIVER_NOT_ELIGIBLE`); [listing] = the listing's status. The gate comes first: an
+     * unapproved driver learns why it cannot offer before whether this listing would take one.
+     */
+    fun bidView(status: DriverStatus?, listing: ListingStatus): BidView = when {
+        status != null && DriverRules.gate(status) != GateVariant.NONE -> BidView.GATE
+        listing != ListingStatus.PUBLISHED -> BidView.CLOSED
+        else -> BidView.FORM
+    }
 
     /** Planned trips still taking bookings, soonest first: the only ones an offer can be made from. */
     fun candidateTrips(trips: List<TripDTO>, now: Instant): List<TripDTO> =

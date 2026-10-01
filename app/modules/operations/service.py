@@ -124,6 +124,7 @@ class PublicListingPage:
     currency: str
     status_open: bool
     cta: str
+    listing_id: str | None = None
 
     @property
     def departure_date(self) -> str:
@@ -297,6 +298,7 @@ def open_public_listing(session: Session, *, token: str, now: datetime | None = 
         currency=listing.currency,
         status_open=listing.status == ListingStatus.PUBLISHED.value and not expired,
         cta=rules.page_cta(status=listing.status, expired=expired),
+        listing_id=marketplace_service.listing_public_id(listing),
     )
 
 

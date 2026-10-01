@@ -196,7 +196,8 @@ fun DriverFlow(container: AppContainer, session: Session) {
     )
 
     // A link from outside (cold or warm start, or kept through sign-in, a push or the GPS notification's tap): the
-    // driver's screens; a referral code shows as the home row (tap = confirm); a client listing is "cannot be opened".
+    // driver's screens; a referral code shows as the home row (tap = confirm); a client listing (the public page's
+    // "Ilovani ochish", Stage 10) is the offer screen, which shows the Q96 gate or the "no longer open" sentence itself.
     val link by container.links.target.collectAsStateWithLifecycle()
     LaunchedEffect(link) {
         val target = link ?: return@LaunchedEffect
@@ -208,6 +209,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
             }
             is DeepLinkTarget.SupportThread -> nav.navigate(SupportThread(allowed.id))
             DeepLinkTarget.SupportThreads -> nav.navigate(SupportThreads) { launchSingleTop = true }
+            is DeepLinkTarget.Listing -> nav.navigate(Bid(allowed.id)) { launchSingleTop = true }
             is DeepLinkTarget.Inbox -> {
                 val event = allowed.event
                 // A push tap: the inbox row of the same event carries the real link (see ClientFlow for why this is

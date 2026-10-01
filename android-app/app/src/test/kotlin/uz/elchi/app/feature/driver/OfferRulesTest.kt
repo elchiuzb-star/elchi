@@ -10,6 +10,7 @@ import org.junit.Test
 import uz.elchi.app.api.ApiException
 import uz.elchi.app.api.generated.ActorSide
 import uz.elchi.app.api.generated.ApiWarning
+import uz.elchi.app.api.generated.ListingStatus
 import uz.elchi.app.api.generated.PriceBasis
 import uz.elchi.app.api.generated.ProposalStatus
 import uz.elchi.app.api.generated.TripStatus
@@ -17,6 +18,23 @@ import java.time.Instant
 
 class OfferRulesTest {
     private val now: Instant = Instant.parse("2026-10-01T06:00:00Z")
+
+    // -- what the offer screen shows (also the target of elchi://listings/{id}, Stage 10) ----------------------
+
+    @Test
+    fun `an unapproved driver sees the gate first, then a closed listing is one sentence, else the form`() {
+        listOf(DriverStatus.NEW, DriverStatus.PENDING, DriverStatus.REJECTED, DriverStatus.BLOCKED).forEach { st ->
+            assertEquals(st.name, BidView.GATE, OfferRules.bidView(st, ListingStatus.PUBLISHED))
+            assertEquals(st.name, BidView.GATE, OfferRules.bidView(st, ListingStatus.EXPIRED))
+        }
+        assertEquals(BidView.FORM, OfferRules.bidView(DriverStatus.APPROVED, ListingStatus.PUBLISHED))
+        // Status still loading: not the gate (the server refuses an unapproved driver anyway).
+        assertEquals(BidView.FORM, OfferRules.bidView(null, ListingStatus.PUBLISHED))
+        listOf(ListingStatus.PAUSED, ListingStatus.FULFILLED, ListingStatus.EXPIRED, ListingStatus.CANCELLED, ListingStatus.DRAFT, ListingStatus.UNKNOWN).forEach {
+            assertEquals(it.name, BidView.CLOSED, OfferRules.bidView(DriverStatus.APPROVED, it))
+            assertEquals(it.name, BidView.CLOSED, OfferRules.bidView(null, it))
+        }
+    }
 
     // -- pickup window ----------------------------------------------------------------------------------------
 

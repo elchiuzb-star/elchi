@@ -77,7 +77,8 @@ public enum DeepLinkRules {
     }
 
     /// A client has every in-app screen the links name; a driver (Stage 09) its bookings and their chat, its offer
-    /// threads and the operator chat - never a client's listing; signed out, the target waits for sign-in.
+    /// threads and the operator chat, and (Stage 10, the share page's "Ilovani ochish") a client's listing - which
+    /// screen it becomes is `ListingLinkRules`, once the listing is read; signed out, the target waits for sign-in.
     public static func action(_ target: DeepLinkTarget, audience: LinkAudience) -> LinkAction {
         switch target {
         case .unsupported, .referral: return .unsupported
@@ -85,10 +86,7 @@ public enum DeepLinkRules {
         }
         switch audience {
         case .signedOut: return .holdForSignIn
-        case .client: return .open(target)
-        case .driver:
-            if case .listing = target { return .unsupported }
-            return .open(target)
+        case .client, .driver: return .open(target)
         }
     }
 
@@ -102,6 +100,61 @@ public enum DeepLinkRules {
         case .supportThread(let id): .supportThread(id)
         case .referral, .unsupported: nil
         }
+    }
+}
+
+// MARK: - `elchi://listings/{id}` (Stage 10)
+
+/// What a listing link becomes once the signed-in role (and the listing) is known.
+public enum ListingLinkOutcome: Equatable, Sendable {
+    /// Approved driver, open request: the Stage 08 offer screen ("Narx taklif qiling") for it.
+    case offer(ListingPublicDTO)
+    /// Driver not approved yet: the Stage 07 gate (the tab says why and what is next, Q96).
+    case gate
+    /// The listing takes no new offers (paused, booked, expired, cancelled): a sentence, no screen.
+    case notOpen
+    /// No such listing for this person (404 - a wrong id or a draft): a sentence.
+    case missing
+    /// The client's own listing: its detail (the existing owner screen).
+    case ownListing
+    /// Another client's listing: clients cannot view others' listings - a sentence.
+    case notOwn
+}
+
+public enum ListingLinkRules {
+    /// The sentence a non-screen outcome shows.
+    public static func messageKey(_ outcome: ListingLinkOutcome) -> String? {
+        switch outcome {
+        case .notOpen: "link.listingNotOpen"
+        case .missing: "link.listingMissing"
+        case .notOwn: "link.listingNotOwn"
+        case .offer, .gate, .ownListing: nil
+        }
+    }
+
+    /// A driver: unapproved -> the gate whatever the listing (the server refuses the offer anyway, so the listing
+    /// is not even read); approved -> the offer screen only for a published request, else a sentence.
+    public static func driver(approved: Bool, listing: ListingPublicDTO?) -> ListingLinkOutcome {
+        guard approved else { return .gate }
+        guard let listing else { return .missing }
+        return listing.status == .published ? .offer(listing) : .notOpen
+    }
+
+    /// A client: `GET /listings/{id}` answers the owner with the full `ListingDTO` (it has `owner`, `version`,
+    /// `terms_version`) and anybody else with the public DTO, so the shape says who is looking. nil = 404.
+    public static func client(_ json: JSONValue?) -> ListingLinkOutcome {
+        guard let json else { return .missing }
+        return (try? json.decode(ListingDTO.self)) != nil ? .ownListing : .notOwn
+    }
+
+    /// A driver's read of the listing (nil when the JSON is not a listing at all).
+    public static func publicListing(_ json: JSONValue) -> ListingPublicDTO? {
+        try? json.decode(ListingPublicDTO.self)
+    }
+
+    /// `GET /listings/{id}` failed: 404 is an answer (no such listing for this person), anything else is an error.
+    public static func isMissing(_ error: Error) -> Bool {
+        (error as? APIError)?.status == 404
     }
 }
 

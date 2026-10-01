@@ -32,12 +32,51 @@
           "value": "public, max-age=3600"
         }
       ]
+    },
+    {
+      "source": "/(e|t)/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/e/(.*)",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        }
+      ]
+    },
+    {
+      "source": "/t/(.*)",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin"
+        }
+      ]
     }
   ],
   "rewrites": [
     {
       "source": "/r/:code",
       "destination": "/r.html"
+    },
+    {
+      "source": "/e/:token",
+      "destination": "/e.html"
+    },
+    {
+      "source": "/t/:token",
+      "destination": "/t.html"
     }
   ]
 }

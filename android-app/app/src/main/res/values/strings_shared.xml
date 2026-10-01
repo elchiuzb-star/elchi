@@ -965,6 +965,9 @@
     <string name="legacyOrder_ratingSent">Baho yuborildi</string>
     <string name="legacyOrder_ratingSubmit">Bahoni yuborish</string>
     <string name="legacyOrder_stars">{value} yulduz</string>
+    <string name="link_listingMissing">E\'lon topilmadi: havola eskirgan yoki e\'lon olib tashlangan.</string>
+    <string name="link_listingNotOpen">Bu e\'lon hozir yangi taklif qabul qilmayapti.</string>
+    <string name="link_listingNotOwn">Bu boshqa mijozning e\'loni — uni ilovada faqat egasi va haydovchilar ochadi.</string>
     <string name="link_referralApplied">Taklif kodi qabul qilindi</string>
     <string name="link_referralSaved">Taklif kodi saqlandi: {code}</string>
     <string name="link_unsupported">Bu havolani ilovada ochib bo\'lmaydi.</string>

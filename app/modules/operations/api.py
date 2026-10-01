@@ -110,6 +110,7 @@ def public_listing_page(
             currency=page.currency,
             status_open=page.status_open,
             cta=page.cta,
+            listing_id=page.listing_id,
         )
     )
 

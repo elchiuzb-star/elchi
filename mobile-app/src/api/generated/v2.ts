@@ -10506,6 +10506,11 @@ export interface components {
             /** Destination Stop Name */
             destination_stop_name: string;
             kind: components["schemas"]["ListingKind"];
+            /**
+             * Listing Id
+             * @description Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). A public id is not a secret (ADR-0002); no owner data is added.
+             */
+            listing_id?: string | null;
             /** Origin Stop Name */
             origin_stop_name: string;
             price_basis: components["schemas"]["PriceBasis"];

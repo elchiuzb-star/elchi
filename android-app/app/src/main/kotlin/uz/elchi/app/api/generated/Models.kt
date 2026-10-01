@@ -1870,6 +1870,10 @@ data class PublicListingPageDTO(
     @SerialName("departure_window_start") val departureWindowStart: String,
     @SerialName("destination_stop_name") val destinationStopName: String,
     @SerialName("kind") val kind: ListingKind,
+    /**
+     * Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). A public id is not a secret (ADR-0002); no owner data is added.
+     */
+    @SerialName("listing_id") val listingId: String? = null,
     @SerialName("origin_stop_name") val originStopName: String,
     @SerialName("price_basis") val priceBasis: PriceBasis,
     @SerialName("quantity") val quantity: Long,

@@ -321,6 +321,29 @@ struct ClientFlow: View {
         }
     }
 
+    /// Stage 10 (`elchi://listings/{id}`): the owner gets the listing's detail; somebody else's listing (clients do
+    /// not view each other's) or a missing one is a sentence. A listing already in the orders list is the owner's.
+    private func openListingLink(_ id: String) async {
+        let outcome: ListingLinkOutcome
+        if orders.listings.value?.contains(where: { $0.id == id }) == true {
+            outcome = .ownListing
+        } else {
+            do {
+                outcome = ListingLinkRules.client(try await container.api.getListing(listingId: id).data)
+            } catch {
+                guard ListingLinkRules.isMissing(error) else { container.banners.error(error); return }
+                outcome = ListingLinkRules.client(nil)
+            }
+        }
+        if outcome == .ownListing {
+            section = .orders
+            path = []
+            openListing(id)
+        } else if let key = ListingLinkRules.messageKey(outcome) {
+            container.banners.show(.key(key), tone: .warn)
+        }
+    }
+
     private func takeLinks() {
         let links = container.links
         if links.takeReferralArrival() {
@@ -329,6 +352,10 @@ struct ClientFlow: View {
         }
         guard case .open(let target)? = links.takePending(for: .client), let inbox = DeepLinkRules.inboxTarget(target) else { return }
         closeForLink()
+        if case .listing(let id) = inbox {
+            Task { await openListingLink(id) }
+            return
+        }
         switch inbox {
         case .booking, .listing:
             section = .orders

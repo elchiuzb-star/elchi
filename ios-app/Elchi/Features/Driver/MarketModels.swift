@@ -359,9 +359,14 @@ final class FeedModel {
     func offer(_ listingId: String, keys: ActionKeys) -> OfferModel? {
         if let model = offers[listingId] { return model }
         guard let item = item(listingId) else { return nil }
-        let model = OfferModel(item: item, api: api, keys: keys)
+        let model = OfferModel(listing: item.listing, api: api, keys: keys)
         offers[listingId] = model
         return model
+    }
+
+    /// A request opened from a link (Stage 10): a fresh offer screen for the listing the server just returned.
+    func offer(opening listing: ListingPublicDTO, keys: ActionKeys) {
+        offers[listing.id] = OfferModel(listing: listing, api: api, keys: keys)
     }
 
     /// A fresh offer screen next time (after sending, or when the feed item changed).
@@ -461,7 +466,6 @@ final class SavedRoutesModel {
 /// window, the price and the commission estimate. Sending never holds a seat or money.
 @MainActor @Observable
 final class OfferModel {
-    let item: FeedItemDTO
     private let api: ElchiAPI
     private let keys: ActionKeys
 
@@ -476,14 +480,16 @@ final class OfferModel {
     private(set) var sending = false
     private(set) var error: Error?
 
-    init(item: FeedItemDTO, api: ElchiAPI, keys: ActionKeys) {
-        self.item = item
+    init(listing: ListingPublicDTO, api: ElchiAPI, keys: ActionKeys) {
+        self.listing = listing
         self.api = api
         self.keys = keys
-        priceDigits = String(item.listing.unitPriceMinor / 100)
+        priceDigits = String(listing.unitPriceMinor / 100)
     }
 
-    var listing: ListingPublicDTO { item.listing }
+    /// The request being priced: a feed item's listing, or (Stage 10, `elchi://listings/{id}`) the public DTO from
+    /// `GET /listings/{id}` - the offer screen reads nothing else.
+    let listing: ListingPublicDTO
     var trip: TripDTO? { trips.value?.first { $0.id == tripId } }
     var priceMinor: Int { Money.minor(fromSoum: priceDigits) }
     var totalMinor: Int { OfferBody.totalMinor(listing: listing, unitPriceMinor: priceMinor) }

@@ -21814,6 +21814,18 @@
           "kind": {
             "$ref": "#/components/schemas/ListingKind"
           },
+          "listing_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). A public id is not a secret (ADR-0002); no owner data is added.",
+            "title": "Listing Id"
+          },
           "origin_stop_name": {
             "title": "Origin Stop Name",
             "type": "string"

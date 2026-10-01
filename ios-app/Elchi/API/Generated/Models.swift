@@ -3983,6 +3983,8 @@ public struct PublicListingPageDTO: Codable, Hashable, Sendable {
     public var departureWindowStart: String
     public var destinationStopName: String
     public var kind: ListingKind
+    /// Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). A public id is not a secret (ADR-0002); no owner data is added.
+    public var listingId: String?
     public var originStopName: String
     public var priceBasis: PriceBasis
     public var quantity: Int
@@ -3992,7 +3994,7 @@ public struct PublicListingPageDTO: Codable, Hashable, Sendable {
     public var totalMinor: Int
     public var unitPriceMinor: Int
 
-    public init(cta: String, currency: Currency, departureDate: String, departureWindowEnd: String, departureWindowStart: String, destinationStopName: String, kind: ListingKind, originStopName: String, priceBasis: PriceBasis, quantity: Int, serviceType: ServiceType, statusOpen: Bool, timezone: String, totalMinor: Int, unitPriceMinor: Int) {
+    public init(cta: String, currency: Currency, departureDate: String, departureWindowEnd: String, departureWindowStart: String, destinationStopName: String, kind: ListingKind, listingId: String? = nil, originStopName: String, priceBasis: PriceBasis, quantity: Int, serviceType: ServiceType, statusOpen: Bool, timezone: String, totalMinor: Int, unitPriceMinor: Int) {
         self.cta = cta
         self.currency = currency
         self.departureDate = departureDate
@@ -4000,6 +4002,7 @@ public struct PublicListingPageDTO: Codable, Hashable, Sendable {
         self.departureWindowStart = departureWindowStart
         self.destinationStopName = destinationStopName
         self.kind = kind
+        self.listingId = listingId
         self.originStopName = originStopName
         self.priceBasis = priceBasis
         self.quantity = quantity
@@ -4018,6 +4021,7 @@ public struct PublicListingPageDTO: Codable, Hashable, Sendable {
         case departureWindowStart = "departure_window_start"
         case destinationStopName = "destination_stop_name"
         case kind = "kind"
+        case listingId = "listing_id"
         case originStopName = "origin_stop_name"
         case priceBasis = "price_basis"
         case quantity = "quantity"

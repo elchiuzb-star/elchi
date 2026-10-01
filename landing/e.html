@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- The share token is in the address: never send it to another site. -->
+<meta name="referrer" content="no-referrer">
+<title>Elchi — e'lon havolasi</title>
+<meta name="description" content="Elchi'dagi shaharlararo e'lon: yo'nalish, sana va narx. Taklif berish ilovada.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231B4FD8'/><path d='M9 20l14-8-6 12-1.6-4.4z' fill='white'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="shell masthead">
+	<a class="wordmark wordmark--logo" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1B4FD8"/><path d="M9 20l14-8-6 12-1.6-4.4z" fill="#fff"/></svg>elchi</a>
+	<nav>
+		<a href="/">Elchi haqida</a>
+		<a href="/privacy">Maxfiylik</a>
+	</nav>
+</header>
+
+<main class="pub" aria-live="polite">
+	<section class="what" aria-labelledby="what-title">
+		<h2 id="what-title">Elchi nima?</h2>
+		<p>Shaharlararo posilka xizmati: siz narx yozasiz, shu tomonga ketayotgan haydovchilar taklif beradi.</p>
+	</section>
+
+	<p class="loading" id="loading">Yuklanmoqda…</p>
+
+	<!-- The listing, as the server describes it (no owner name, phone or street address — Q43). -->
+	<div class="stack" id="listing" hidden>
+		<article class="card" aria-labelledby="route">
+			<div class="card__head">
+				<h1 class="card__title" id="route"></h1>
+				<span class="badge" id="badge"></span>
+			</div>
+			<dl class="rows">
+				<div><dt>Xizmat</dt><dd id="service"></dd></div>
+				<div><dt>Sana</dt><dd id="date"></dd></div>
+				<div><dt>Vaqt oynasi</dt><dd id="window"></dd></div>
+				<div><dt>Narx birligi</dt><dd id="basis"></dd></div>
+				<div><dt>Jami</dt><dd class="strong" id="total"></dd></div>
+			</dl>
+		</article>
+
+		<div class="note note--info" id="open-note" hidden>
+			<p>Taklif berish uchun ilovaga kiring: telefon raqamingiz SMS kod bilan tasdiqlanadi. Bron ilova ichida saqlanadi.</p>
+		</div>
+		<div class="note note--gray" id="closed-note" hidden>
+			<p>Bu e'lon hozir yangi taklif qabul qilmayapti.</p>
+		</div>
+
+		<a class="btn btn--primary btn--block" id="open-app" href="#">Ilovani ochish</a>
+
+		<!-- Shown only when the app did not open within ~1.5 s. -->
+		<div class="note note--gray" id="stores" hidden>
+			<p><strong>Ilova ochilmadimi?</strong>Elchi ilovasi telefoningizda o'rnatilmagan bo'lishi mumkin.</p>
+			<div class="stores" id="store-links" style="margin-top:10px"></div>
+		</div>
+	</div>
+
+	<!-- Unknown, revoked, expired or closed link: the server answers 404 and reveals nothing more. -->
+	<div class="stack" id="error" hidden>
+		<div class="note note--err">
+			<p id="error-text">Havola eskirgan bo'lishi mumkin. E'lon egasidan yangi havola so'rang.</p>
+		</div>
+		<button type="button" class="btn btn--ghost btn--block" id="retry">↻ Qayta urinish</button>
+	</div>
+
+	<p class="fineprint">Bu sahifada e'lon egasining ismi va telefoni ko'rsatilmaydi.</p>
+	<p class="fineprint">Elchi — shaharlararo posilka xizmati. Narxni siz yozasiz, haydovchilar taklif beradi.</p>
+</main>
+
+<footer class="band foot">
+	<div class="shell">
+		<div class="foot__row">
+			<a class="wordmark" href="/">elchi</a>
+			<nav>
+				<a href="/">Bosh sahifa</a>
+				<a href="/privacy">Maxfiylik siyosati</a>
+				<a href="/delete-account">Hisobni o'chirish</a>
+			</nav>
+		</div>
+		<p class="foot__legal">
+			© <span id="yr">2026</span> Elchi · Shaharlararo yuk va pochta yetkazish xizmati
+		</p>
+	</div>
+</footer>
+
+<script src="/config.js"></script>
+<script src="/pub.js"></script>
+<script>
+	(function () {
+		"use strict";
+		var P = window.ElchiPub;
+		var token = P.tokenFrom("/e/");
+		var SERVICE = { parcel: "Pochta", passenger: "Yo'lovchi" };
+		var BASIS = { total: "Jami", per_seat: "O'rin uchun", per_kg: "Kg uchun" };
+		// The public page DTO carries no listing id today; with one, the app opens that listing (driver: the offer
+		// screen). Without it the button can only bring the app to the front.
+		var APP_HOME = "elchi://notifications";
+
+		function fail(status) {
+			P.show("loading", false);
+			P.show("listing", false);
+			P.text("error-text", status === 0
+				? "Ma'lumotni yuklab bo'lmadi. Internet aloqasini tekshirib, qayta urining."
+				: "Havola eskirgan bo'lishi mumkin. E'lon egasidan yangi havola so'rang.");
+			P.show("error", true);
+		}
+
+		function render(d) {
+			var open = d.status_open === true;
+			P.text("route", (d.origin_stop_name || "?") + " → " + (d.destination_stop_name || "?"));
+			var badge = P.el("badge");
+			badge.textContent = open ? "Ochiq" : "Yopiq";
+			badge.className = "badge " + (open ? "badge--ok" : "badge--gray");
+			P.text("service", SERVICE[d.service_type] || "—");
+			P.text("date", P.dateText(d.departure_date));
+			P.text("window", P.windowText(d.departure_window_start, d.departure_window_end));
+			var basis = BASIS[d.price_basis] || "—";
+			if (d.price_basis !== "total" && d.quantity > 1) {
+				basis += " · " + d.quantity + " × " + P.money(d.unit_price_minor, d.currency);
+			}
+			P.text("basis", basis);
+			P.text("total", P.money(d.total_minor, d.currency));
+			P.show("open-note", open);
+			P.show("closed-note", !open);
+
+			var btn = P.el("open-app");
+			var id = d.listing_id || d.id;
+			if (open) {
+				btn.href = id ? "elchi://listings/" + encodeURIComponent(id) : APP_HOME;
+				btn.removeAttribute("aria-disabled");
+				btn.removeAttribute("tabindex");
+			} else {
+				btn.removeAttribute("href");
+				btn.setAttribute("aria-disabled", "true");
+				btn.setAttribute("tabindex", "-1");
+			}
+			P.show("loading", false);
+			P.show("error", false);
+			P.show("listing", true);
+		}
+
+		function storeLinks() {
+			var box = P.el("store-links");
+			box.textContent = "";
+			[["Google Play", P.config.STORE_ANDROID], ["App Store", P.config.STORE_IOS]].forEach(function (s) {
+				var node;
+				if (s[1]) {
+					node = document.createElement("a");
+					node.href = s[1];
+					node.rel = "noopener";
+					node.textContent = s[0] + " →";
+				} else {
+					node = document.createElement("span");
+					node.textContent = s[0] + ": ilova hali do'konda e'lon qilinmagan";
+				}
+				box.appendChild(node);
+			});
+		}
+
+		P.el("open-app").addEventListener("click", function (event) {
+			if (this.getAttribute("aria-disabled") === "true") { event.preventDefault(); return; }
+			// If the app opens, this page goes to the background; if it is still in front after ~1.5 s, say so.
+			var startedAt = Date.now();
+			setTimeout(function () {
+				if (!document.hidden && Date.now() - startedAt < 4000) {
+					storeLinks();
+					P.show("stores", true);
+				}
+			}, 1500);
+		});
+
+		function load() {
+			P.show("error", false);
+			P.show("loading", true);
+			if (!token) { fail(404); return; }
+			P.getV2("/public/listings/" + encodeURIComponent(token)).then(function (res) {
+				if (res.data) render(res.data); else fail(res.status);
+			});
+		}
+
+		P.el("retry").addEventListener("click", load);
+		load();
+	})();
+</script>
+</body>
+</html>

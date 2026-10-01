@@ -28,6 +28,10 @@ html {
 	-webkit-text-size-adjust: 100%;
 }
 
+[hidden] {
+	display: none !important;
+}
+
 body {
 	margin: 0;
 	background: var(--paper);
@@ -85,6 +89,18 @@ a {
 	letter-spacing: -0.03em;
 	color: var(--ink);
 	text-decoration: none;
+}
+
+.wordmark--logo {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.wordmark--logo svg {
+	width: 24px;
+	height: 24px;
+	flex: none;
 }
 
 .masthead nav {
@@ -184,6 +200,15 @@ a {
 .btn--ghost {
 	border-color: var(--rule);
 	color: var(--ink);
+}
+
+button.btn {
+	font: 600 15px var(--body);
+	cursor: pointer;
+}
+
+button.btn--ghost {
+	background: #fff;
 }
 
 .btn--ghost:hover {
@@ -457,6 +482,364 @@ a {
 .doc .fill {
 	background: #fff5d6;
 	border-bottom: 1px solid #e6c74d;
+	padding: 0 3px;
+	font-family: var(--mono);
+	font-size: 13px;
+}
+
+/* ── Public link pages (/e/<token>, /t/<token>) ─────────────────────────
+   Phone-first single column. Same paper, ink and one accent as the rest of
+   the site; status colours appear only on badges, notes and the map marker. */
+.pub {
+	max-width: 560px;
+	margin-inline: auto;
+	padding: 28px var(--gutter) 40px;
+}
+
+.pub h1 {
+	font-family: var(--display);
+	font-weight: 700;
+	font-size: clamp(24px, 6vw, 30px);
+	letter-spacing: -0.025em;
+	line-height: 1.1;
+	margin: 0;
+}
+
+.pub__sub {
+	margin: 6px 0 0;
+	color: var(--muted);
+	font-size: 15px;
+}
+
+.pub > * + *,
+.stack > * + * {
+	margin-top: 16px;
+}
+
+.what {
+	background: #0e2350;
+	color: #fff;
+	border-radius: 8px;
+	padding: 16px 18px;
+}
+
+.what h2 {
+	font-family: var(--display);
+	font-size: 16px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	margin: 0 0 4px;
+}
+
+.what p {
+	margin: 0;
+	font-size: 14.5px;
+	line-height: 1.5;
+	color: #d5ddef;
+}
+
+.what a {
+	color: #fff;
+}
+
+.card {
+	border: 1px solid var(--rule);
+	border-radius: 8px;
+	background: #fff;
+	padding: 16px 18px;
+}
+
+.card__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 6px;
+}
+
+.card__title {
+	font-family: var(--display);
+	font-size: 20px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.2;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.rows {
+	margin: 0;
+}
+
+.rows > div {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 16px;
+	padding-block: 10px;
+	border-top: 1px solid var(--rule);
+}
+
+.rows > div:first-child,
+.rows > [hidden]:first-child + div {
+	border-top: 0;
+}
+
+.rows dt {
+	color: var(--muted);
+	font-size: 14.5px;
+	flex: none;
+}
+
+.rows dd {
+	margin: 0;
+	font-weight: 500;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.rows dd.strong {
+	font-weight: 700;
+	font-size: 17px;
+}
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	padding: 3px 10px;
+	border-radius: 999px;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: nowrap;
+}
+
+.badge::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.badge--ok { background: #e3f6ea; color: #136c34; }
+.badge--warn { background: #fff1d6; color: #8a5300; }
+.badge--err { background: #fde7e5; color: #b42318; }
+.badge--gray { background: var(--wash); color: var(--muted); }
+
+.note {
+	border-radius: 8px;
+	padding: 12px 14px;
+	font-size: 14.5px;
+	line-height: 1.5;
+	border: 1px solid transparent;
+}
+
+.note p { margin: 0; }
+.note strong { display: block; margin-bottom: 2px; }
+.note--info { background: #eaf0fe; border-color: #cfdcfb; color: #183c99; }
+.note--gray { background: var(--wash); border-color: var(--rule); color: #3b4352; }
+.note--warn { background: #fff6e0; border-color: #f1d9a0; color: #6d4300; }
+.note--err { background: #fdeceb; border-color: #f6c9c5; color: #8f1d14; }
+
+.btn--block {
+	display: flex;
+	width: 100%;
+	justify-content: center;
+	min-height: 52px;
+	font: 600 16px var(--body);
+	cursor: pointer;
+}
+
+.btn--block.btn--ghost {
+	min-height: 44px;
+	background: #fff;
+}
+
+.btn[aria-disabled="true"],
+.btn:disabled {
+	background: #c9ced8;
+	color: #fff;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
+.stores {
+	display: grid;
+	gap: 8px;
+}
+
+.stores a,
+.stores span {
+	display: block;
+	padding: 11px 14px;
+	border: 1px solid var(--rule);
+	border-radius: 6px;
+	text-decoration: none;
+	color: var(--ink);
+	font-size: 15px;
+}
+
+.stores span {
+	color: var(--muted);
+}
+
+.fineprint {
+	text-align: center;
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.5;
+	margin: 0;
+}
+
+.pub > .fineprint {
+	margin-top: 28px;
+}
+
+.pub > .fineprint + .fineprint {
+	margin-top: 6px;
+}
+
+.loading {
+	color: var(--muted);
+	font-size: 15px;
+	padding: 24px 0;
+	text-align: center;
+}
+
+.map {
+	position: relative;
+	height: 260px;
+	border: 1px solid var(--rule);
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--wash);
+}
+
+.map__label {
+	position: absolute;
+	left: 10px;
+	top: 10px;
+	z-index: 2;
+}
+
+.status-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+}
+
+.status-line span:last-child {
+	color: var(--muted);
+	font-size: 13.5px;
+}
+
+.empty {
+	text-align: center;
+	padding: 36px 18px;
+}
+
+.empty svg {
+	width: 44px;
+	height: 44px;
+	color: var(--muted);
+}
+
+.empty h2 {
+	font-family: var(--display);
+	font-size: 20px;
+	margin: 12px 0 6px;
+}
+
+.empty p {
+	color: var(--muted);
+	margin: 0 auto;
+	max-width: 36ch;
+	font-size: 15px;
+}
+
+.empty .btn {
+	margin-top: 18px;
+}
+
+.mono {
+	font-family: var(--mono);
+	font-size: 14px;
+}
+
+/* ── Policy additions: draft banner and contents list ──────────────────── */
+.draft {
+	background: #fff5d6;
+	border: 1px solid #e6c74d;
+	border-radius: 6px;
+	padding: 12px 14px;
+	font-size: 14.5px;
+	margin: 0 0 24px;
+}
+
+.draft strong {
+	display: block;
+}
+
+.backlink {
+	display: inline-block;
+	margin-bottom: 18px;
+	font-size: 14.5px;
+	text-decoration: none;
+}
+
+.backlink::before {
+	content: "← ";
+}
+
+.toc {
+	border: 1px solid var(--rule);
+	border-radius: 6px;
+	padding: 14px 18px 8px;
+	margin-top: 28px;
+}
+
+.toc p {
+	margin: 0 0 6px;
+	font-weight: 600;
+}
+
+.doc .toc ol {
+	margin: 0;
+	padding-left: 22px;
+}
+
+.doc .toc li {
+	margin-bottom: 4px;
+	font-size: 15px;
+}
+
+.doc table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 14.5px;
+	margin: 12px 0;
+}
+
+.doc th,
+.doc td {
+	text-align: left;
+	vertical-align: top;
+	padding: 8px 10px 8px 0;
+	border-bottom: 1px solid var(--rule);
+}
+
+.doc th {
+	font-weight: 600;
+}
+
+.check {
+	background: #fde7e5;
+	border-bottom: 1px solid #e59a93;
 	padding: 0 3px;
 	font-family: var(--mono);
 	font-size: 13px;

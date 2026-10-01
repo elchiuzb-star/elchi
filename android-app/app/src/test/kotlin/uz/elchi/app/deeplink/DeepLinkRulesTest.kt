@@ -5,6 +5,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import uz.elchi.app.api.ApiException
 import uz.elchi.app.feature.client.InboxTarget
 import uz.elchi.app.session.MobileRole
@@ -83,7 +86,7 @@ class DeepLinkRulesTest {
     }
 
     @Test
-    fun `a driver opens its bookings, offers, trips and wallet - not a client listing`() {
+    fun `a driver opens its bookings, offers, trips, wallet and a listing link`() {
         val referral = DeepLinkTarget.Referral("AB2CD3EF")
         val thread = DeepLinkTarget.SupportThread("t1")
         assertEquals(referral, DeepLinkRules.forRole(referral, MobileRole.DRIVER))
@@ -91,7 +94,9 @@ class DeepLinkRulesTest {
         listOf(DeepLinkTarget.Booking("1"), DeepLinkTarget.BookingChat("1"), DeepLinkTarget.Proposal("1"), DeepLinkTarget.Trip("1"), DeepLinkTarget.Wallet).forEach {
             assertEquals(it, DeepLinkRules.forRole(it, MobileRole.DRIVER))
         }
-        assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(DeepLinkTarget.Listing("1"), MobileRole.DRIVER))
+        // Stage 10: the public page's "Ilovani ochish" - the offer screen (OfferRules.bidView decides what it shows).
+        assertEquals(DeepLinkTarget.Listing("1"), DeepLinkRules.forRole(DeepLinkTarget.Listing("1"), MobileRole.DRIVER))
+        assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(DeepLinkTarget.Listing("1"), null))
         listOf(DeepLinkTarget.Booking("1"), DeepLinkTarget.BookingChat("1"), DeepLinkTarget.Listing("1"), DeepLinkTarget.Proposal("1")).forEach {
             assertEquals(it, DeepLinkRules.forRole(it, MobileRole.CLIENT))
         }
@@ -99,6 +104,26 @@ class DeepLinkRulesTest {
         assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(DeepLinkTarget.Trip("1"), MobileRole.CLIENT))
         assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(DeepLinkTarget.Wallet, MobileRole.CLIENT))
         assertEquals(DeepLinkTarget.Unsupported, DeepLinkRules.forRole(thread, null))
+    }
+
+    @Test
+    fun `a client opens a listing link only when the server answers with the owner's DTO`() {
+        val owner = buildJsonObject {
+            put("id", "lst_1")
+            put("status", "published")
+            put("owner", buildJsonObject { put("display_name", "A") })
+        }
+        val public = buildJsonObject {
+            put("id", "lst_1")
+            put("status", "published")
+        }
+        assertTrue(DeepLinkRules.ownsListing(owner))
+        assertFalse(DeepLinkRules.ownsListing(public))
+        assertFalse(DeepLinkRules.ownsListing(buildJsonObject { put("owner", JsonNull) }))
+        assertFalse(DeepLinkRules.ownsListing(JsonNull))
+        // The link parses the same for both roles; signed out, DeepLinkCenter keeps it until a flow takes it.
+        assertEquals(DeepLinkTarget.Listing("lst_1"), parse("elchi://listings/lst_1"))
+        assertEquals(DeepLinkTarget.Listing("lst_1"), DeepLinkRules.forRole(DeepLinkTarget.Listing("lst_1"), MobileRole.CLIENT))
     }
 
     @Test

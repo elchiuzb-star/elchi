@@ -16389,6 +16389,57 @@
         }
       }
     },
+    "link.listingMissing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Объявление не найдено: ссылка устарела или объявление удалено."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E'lon topilmadi: havola eskirgan yoki e'lon olib tashlangan."
+          }
+        }
+      }
+    },
+    "link.listingNotOpen": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это объявление сейчас не принимает новые предложения."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu e'lon hozir yangi taklif qabul qilmayapti."
+          }
+        }
+      }
+    },
+    "link.listingNotOwn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это объявление другого клиента — в приложении его открывают только владелец и водители."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu boshqa mijozning e'loni — uni ilovada faqat egasi va haydovchilar ochadi."
+          }
+        }
+      }
+    },
     "link.referralApplied": {
       "extractionState": "manual",
       "localizations": {

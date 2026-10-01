@@ -14,142 +14,200 @@
 <body>
 
 <header class="shell masthead">
-	<a class="wordmark" href="/">elchi</a>
+	<a class="wordmark wordmark--logo" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1B4FD8"/><path d="M9 20l14-8-6 12-1.6-4.4z" fill="#fff"/></svg>elchi</a>
 	<nav>
 		<a href="/">Bosh sahifa</a>
+		<a href="/delete-account">Hisobni o'chirish</a>
 	</nav>
 </header>
 
 <main class="shell doc">
-	<p class="eyebrow">Hujjat</p>
-	<h1>Maxfiylik siyosati</h1>
-	<p class="doc__meta">Oxirgi yangilanish: 2026-yil 7-avgust</p>
+	<!-- DRAFT: remove this banner only after a lawyer has reviewed the text and every [..] placeholder is filled. -->
+	<div class="draft" role="note">
+		<strong>Matn yuridik tekshiruvdan o'tmagan</strong>
+		Bu — qoralama. Kvadrat qavsdagi bandlar hali to'ldirilmagan yoki tasdiqlanmagan.
+	</div>
 
-	<h2>1. Umumiy qoidalar</h2>
+	<a class="backlink" href="/" id="back">Orqaga</a>
+	<p class="eyebrow" style="color: var(--road)">Elchi</p>
+	<h1>Maxfiylik siyosati</h1>
+	<p class="doc__meta">Oxirgi yangilanish: 2026-yil 1-oktabr</p>
+
+	<nav class="toc" aria-label="Mundarija">
+		<p>Mundarija</p>
+		<ol>
+			<li><a href="#umumiy">Umumiy qoidalar</a></li>
+			<li><a href="#yigamiz">Biz qanday ma'lumotlarni yig'amiz</a></li>
+			<li><a href="#maqsadlar">Maqsadlar</a></li>
+			<li><a href="#uchinchi">Uchinchi shaxslar</a></li>
+			<li><a href="#saqlash">Saqlash</a></li>
+			<li><a href="#xavfsizlik">Xavfsizlik</a></li>
+			<li><a href="#huquqlar">Huquqlaringiz</a></li>
+			<li><a href="#yosh">Voyaga yetmaganlar (18+)</a></li>
+			<li><a href="#ozgarish">O'zgarishlar</a></li>
+			<li><a href="#aloqa">Bog'lanish</a></li>
+		</ol>
+	</nav>
+
+	<h2 id="umumiy">1. Umumiy qoidalar</h2>
 	<p>
 		Ushbu Maxfiylik siyosati <span class="fill">[YURIDIK SHAXS NOMI]</span> (keyingi
-		o'rinlarda — «Biz», «Elchi») tomonidan Elchi mobil ilovasi va veb-saytidan
+		o'rinlarda — «Biz», «Elchi») tomonidan Elchi mobil ilovasi va elchigo.uz veb-saytidan
 		(keyingi o'rinlarda — «Platforma») foydalanuvchilarning shaxsiy ma'lumotlarini
 		yig'ish, saqlash, qayta ishlash va himoya qilish tartibini belgilaydi.
 	</p>
 	<p>
-		Platforma shaharlararo yuk va pochta jo'natmalarini yetkazib berish xizmati
-		bo'lib, mijozlar va haydovchilarni bog'laydi. Platformadan foydalanish orqali
-		siz ushbu siyosat shartlariga rozilik bildirasiz.
+		Platforma shaharlararo pochta (posilka) va yo'lovchi tashish e'lonlari bo'yicha mijozlar
+		va haydovchilarni bog'laydi: mijoz e'lon beradi, haydovchilar narx taklif qiladi, mijoz
+		taklifni tanlaydi. Platformadan foydalanish orqali siz ushbu siyosat shartlariga rozilik
+		bildirasiz.
 	</p>
 	<p>
 		Ma'lumotlar O'zbekiston Respublikasining «Shaxsiy ma'lumotlar to'g'risida»gi
 		ZRU-547-sonli Qonuni talablariga muvofiq qayta ishlanadi.
 	</p>
 
-	<h2>2. Biz qanday ma'lumotlarni yig'amiz</h2>
+	<h2 id="yigamiz">2. Biz qanday ma'lumotlarni yig'amiz</h2>
 
-	<h3>Barcha foydalanuvchilar uchun</h3>
+	<h3>Barcha foydalanuvchilar</h3>
 	<ul>
-		<li>Telefon raqami — ro'yxatdan o'tish va tizimga kirish uchun;</li>
-		<li>Ism-familiya — profilda ko'rsatilgan holda;</li>
-		<li>Tasdiqlash kodi (OTP) va so'rov yuborilgan IP-manzil — xavfsizlik va suiiste'molning oldini olish uchun;</li>
-		<li>Seans ma'lumotlari — tizimga kirish vaqti va faol qurilmalar;</li>
-		<li>Bildirishnomalar va ilova sozlamalari.</li>
+		<li>Telefon raqami — ro'yxatdan o'tish va SMS kod orqali kirish uchun;</li>
+		<li>Ism — profilda ko'rsatilgan holda;</li>
+		<li>Tasdiqlash kodi (OTP), so'rov yuborilgan IP-manzil va qurilma ma'lumotlari — xavfsizlik va suiiste'molning oldini olish uchun;</li>
+		<li>Seans ma'lumotlari — kirish vaqti va faol qurilmalar;</li>
+		<li>Ilova ichidagi yozishmalar: bron chati, operator (yordam) chati, xavfsizlik haqidagi xabarlar va bloklash ro'yxati;</li>
+		<li>Qoldirilgan baholar va izohlar;</li>
+		<li>Bildirishnomalar, ilova sozlamalari va — push-bildirishnomalar yoqilganda — qurilmaning push tokeni;</li>
+		<li>Taklif kodi ishlatilganda — kod va suiiste'molga qarshi telefon raqamining himoyalangan (xeshlangan) identifikatori.</li>
 	</ul>
 
-	<h3>Mijozlardan qo'shimcha ravishda</h3>
+	<h3>Mijozlar</h3>
 	<ul>
-		<li>Jo'natish va yetkazib berish manzillari hamda ularning koordinatalari;</li>
-		<li>Jo'natuvchi va qabul qiluvchining telefon raqamlari;</li>
-		<li>Yuk turi, izohlar va yuk fotosurati;</li>
-		<li>Buyurtma narxi, to'lov usuli va buyurtma tarixi;</li>
-		<li>Haydovchilarga qoldirilgan reyting va sharhlar.</li>
+		<li>E'lon ma'lumotlari: yo'nalish, xaritada belgilangan jo'nash va yetkazish joylari, sana va vaqt oynasi, narx;</li>
+		<li>Pochta uchun: jo'natma toifasi va turi, izoh, jo'natma fotosurati, jo'natuvchi va qabul qiluvchining ismi va telefon raqami;</li>
+		<li>Yo'lovchi xizmati uchun: o'rinlar soni va safarga oid izohlar;</li>
+		<li>Takliflar, bronlar va ularning holat tarixi;</li>
+		<li>Siz yaratgan ulashish havolalari (e'lon havolasi, qabul qiluvchi uchun kuzatuv havolasi).</li>
 	</ul>
 
-	<h3>Haydovchilardan qo'shimcha ravishda</h3>
+	<h3>Haydovchilar</h3>
 	<ul>
-		<li>Avtomobil modeli, rangi va davlat raqami;</li>
-		<li>Shaxsni tasdiqlovchi hujjatlar nusxalari (pasport, haydovchilik guvohnomasi, texnik pasport) — faqat tekshiruvdan o'tkazish maqsadida;</li>
-		<li>Tekshiruv holati, faollik statusi, reyting va bajarilgan buyurtmalar statistikasi;</li>
-		<li>Tanlangan yo'nalishlar.</li>
+		<li>Shaxsni tasdiqlovchi hujjatlar nusxalari (pasport, haydovchilik guvohnomasi, texnik pasport) — faqat tekshiruv uchun;</li>
+		<li>Avtomobil: model, rang, davlat raqami, o'rin va yuk sig'imi;</li>
+		<li>Safarlar, takliflar, bronlar va reyting;</li>
+		<li>Safar davomida telefonning GPS joylashuvi: koordinatalar, aniqlik, tezlik, yo'nalish, vaqt va batareya darajasi — faqat safar boshlangandan yakunlanguncha;</li>
+		<li>Komissiya hamyoni: balans, to'ldirish so'rovlari va ularga ilova qilingan to'lov tasdiqlari, komissiya yozuvlari.</li>
 	</ul>
 
 	<p>
-		Biz bank kartalari ma'lumotlarini yig'maymiz va saqlamaymiz. Hozirgi vaqtda
-		to'lov faqat naqd pul orqali amalga oshiriladi.
+		Biz bank kartasi ma'lumotlarini yig'maymiz va saqlamaymiz. Xizmat uchun to'lov
+		tomonlar o'rtasida naqd amalga oshiriladi.
 	</p>
 
-	<h2>3. Ma'lumotlardan foydalanish maqsadlari</h2>
+	<h2 id="maqsadlar">3. Maqsadlar</h2>
 	<ul>
-		<li>Foydalanuvchini identifikatsiya qilish va hisobga kirishini ta'minlash;</li>
-		<li>Buyurtmalarni yaratish, haydovchilar bilan bog'lash va yetkazib berishni kuzatish;</li>
-		<li>Mijoz va haydovchi o'rtasida aloqani ta'minlash;</li>
-		<li>Haydovchilarni tekshirish va platforma xavfsizligini saqlash;</li>
-		<li>Nizolarni ko'rib chiqish va qo'llab-quvvatlash xizmatini ko'rsatish;</li>
-		<li>Xizmat sifatini yaxshilash va statistik tahlil;</li>
+		<li>Foydalanuvchini identifikatsiya qilish va hisobga kirishni ta'minlash;</li>
+		<li>E'lon, taklif va bronlarni yuritish, mos e'lonlarni haydovchilarga ko'rsatish;</li>
+		<li>Bron tasdiqlangandan keyin tomonlar o'rtasida ilova ichida aloqani ta'minlash;</li>
+		<li>Safar davomida avtomobil joylashuvini bron ishtirokchilariga va siz havola bergan qabul qiluvchiga ko'rsatish;</li>
+		<li>Haydovchilarni tekshirish, firibgarlik va soxta joylashuvni aniqlash, platforma xavfsizligini saqlash;</li>
+		<li>Shikoyatlar va nizolarni ko'rib chiqish, qo'llab-quvvatlash xizmatini ko'rsatish;</li>
+		<li>Komissiya hisob-kitobi va moliyaviy hisobot;</li>
 		<li>Qonun hujjatlarida nazarda tutilgan majburiyatlarni bajarish.</li>
 	</ul>
-
-	<h2>4. Ma'lumotlarni uchinchi shaxslarga berish</h2>
 	<p>
-		Biz shaxsiy ma'lumotlaringizni sotmaymiz. Ma'lumotlar faqat quyidagi hollarda
-		va faqat zarur hajmda uzatiladi:
+		Bron qabul qilinmaguncha telefon raqami, to'liq ism, davlat raqami va aniq manzil boshqa
+		tomonga ko'rsatilmaydi; e'lon va chat matnlaridagi telefon raqamlari va boshqa aloqa
+		ma'lumotlari avtomatik yashiriladi.
+	</p>
+
+	<h2 id="uchinchi">4. Uchinchi shaxslar</h2>
+	<p>
+		Biz shaxsiy ma'lumotlaringizni sotmaymiz. Ma'lumotlar faqat quyidagi hollarda va
+		faqat zarur hajmda uzatiladi:
 	</p>
 	<ul>
-		<li>Buyurtma ishtirokchilariga — manzil va telefon raqami tayinlangan haydovchiga, haydovchining ismi va avtomobil ma'lumotlari esa mijozga ko'rsatiladi;</li>
-		<li>Eskiz.uz — tasdiqlash kodlarini SMS orqali yuborish uchun telefon raqami uzatiladi;</li>
-		<li>Yandex Maps — manzilni koordinataga aylantirish va xaritani ko'rsatish uchun;</li>
+		<li>Bron ishtirokchilariga — xizmat bajarilishi uchun zarur hajmda (masalan, safar boshlangach tomonlarning telefon raqamlari);</li>
+		<li>Siz havola bergan shaxslarga — e'lon havolasi sahifasida faqat yo'nalish (bekat yoki tuman nomi), sana, vaqt oynasi va narx; kuzatuv havolasida faqat avtomobilning oxirgi joylashuvi. Ism, telefon va manzil bu sahifalarda ko'rsatilmaydi;</li>
+		<li><strong>Eskiz.uz</strong> — tasdiqlash kodini SMS orqali yuborish uchun telefon raqami;</li>
+		<li><strong>Yandex Maps / Yandex Geocoder</strong> — xaritani ko'rsatish va xaritada belgilangan joyni manzil yoki tuman nomiga aylantirish uchun koordinatalar;</li>
+		<li><strong>Google Firebase Cloud Messaging</strong> — push-bildirishnomalar yoqilganda: qurilma tokeni va bildirishnoma matni (telefon, ism, manzil va koordinatasiz);</li>
 		<li>Vakolatli davlat organlariga — qonun hujjatlarida belgilangan tartibda rasmiy so'rov asosida.</li>
 	</ul>
 
-	<h2>5. Ma'lumotlarni saqlash</h2>
+	<h2 id="saqlash">5. Saqlash</h2>
 	<p>
-		Shaxsiy ma'lumotlar O'zbekiston Respublikasi hududida joylashgan serverlarda
-		saqlanadi.
+		Shaxsiy ma'lumotlar O'zbekiston Respublikasi hududidagi serverlarda saqlanadi.
+		<span class="check">[TEKSHIRING: server joylashuvi]</span>
+	</p>
+	<!-- The production API still runs outside Uzbekistan (docs/SERVER_MIGRATION.md, ADR-0011). Do not publish the
+	     sentence above as true until the move is done, or replace it with the real location. -->
+	<table>
+		<thead>
+			<tr><th scope="col">Ma'lumot</th><th scope="col">Muddat</th></tr>
+		</thead>
+		<tbody>
+			<tr><td>Safar GPS nuqtalari (xom)</td><td>7 kun</td></tr>
+			<tr><td>Safar marshrutining soddalashtirilgan izi</td><td>30 kun</td></tr>
+			<tr><td>Shikoyat yoki nizo uchun ajratilgan GPS nusxasi</td><td>ish yopilib, ushlab turish bekor qilingandan keyin 30 kun</td></tr>
+			<tr><td>Qabul qiluvchi uchun kuzatuv havolasi</td><td>15 daqiqadan 24 soatgacha amal qiladi; istalgan payt bekor qilinadi</td></tr>
+			<tr><td>E'lon havolasi</td><td>1 soatdan 14 kungacha amal qiladi (odatiy — 48 soat)</td></tr>
+			<tr><td>Tasdiqlash kodi (OTP)</td><td>bir necha daqiqa amal qiladi</td></tr>
+			<tr><td>Hisob, bron, chat va moliyaviy yozuvlar</td><td>hisob faol bo'lgan davrda va hisobot majburiyatlari talab qilgan muddatda <span class="fill">[MUDDATNI TASDIQLANG]</span></td></tr>
+		</tbody>
+	</table>
+	<p>
+		<strong>Hisob o'chirilganda</strong> ism, telefon raqami, haydovchi hujjatlari va
+		avtomobil ma'lumotlari darhol o'chiriladi yoki anonimlashtiriladi. Yakunlangan bronlar
+		va moliyaviy yozuvlar hisobot majburiyatlari sababli ism va telefonsiz saqlanadi va
+		shaxsingiz bilan bog'lanmaydi. Batafsil: <a href="/delete-account">Hisobni o'chirish</a>.
+	</p>
+
+	<h2 id="xavfsizlik">6. Xavfsizlik</h2>
+	<p>
+		Ma'lumotlar shifrlangan HTTPS ulanishi orqali uzatiladi; tasdiqlash kodlari va havola
+		tokenlari faqat qaytarilmas (xesh) shaklda saqlanadi; ma'lumotlar bazasiga tashqi
+		tarmoqdan to'g'ridan-to'g'ri kirish yopilgan; xodimlarning harakatlari audit jurnalida
+		qayd etiladi.
 	</p>
 	<ul>
-		<li>Hisob ma'lumotlari — hisob faol bo'lgan davrda va o'chirilgandan keyin qonunda belgilangan muddat davomida;</li>
-		<li>Buyurtmalar tarixi va moliyaviy yozuvlar — hisobot majburiyatlari talab qilgan muddatda;</li>
-		<li>Tasdiqlash kodlari — bir necha daqiqa ichida amal qilish muddati tugaydi;</li>
-		<li>Haydovchi hujjatlari — hamkorlik davomida va u tugagach qonunda belgilangan muddatda.</li>
+		<li><strong>GPS:</strong> manba — haydovchining telefoni. Joylashuv faqat safar davomida yig'iladi va faqat shu bron ishtirokchilariga hamda jo'natuvchi havola bergan qabul qiluvchiga, kuzatuv oynasi ochiq bo'lgan vaqtda ko'rsatiladi. Xodim joylashuvni ko'rganda bu audit jurnaliga yoziladi.</li>
+		<li><strong>Yo'lovchi va jo'natma ma'lumotlari:</strong> jo'natma fotosurati faqat e'lon egasi va tayinlangan haydovchiga ko'rinadi; telefon raqamlari xizmat boshlanguncha ko'rsatilmaydi va yakunlangandan 24 soat keyin yana yashiriladi.</li>
+		<li><strong>Havolalar:</strong> e'lon va kuzatuv havolalarida tasodifiy maxfiy token bor; muddati tugagan yoki bekor qilingan havola hech narsa ko'rsatmaydi.</li>
 	</ul>
-
-	<h2>6. Xavfsizlik</h2>
 	<p>
-		Barcha ma'lumotlar shifrlangan HTTPS ulanishi orqali uzatiladi; parollar va
-		tasdiqlash kodlari faqat qaytarilmas kriptografik shaklda (xesh) saqlanadi;
-		ma'lumotlar bazasiga tashqi tarmoqdan to'g'ridan-to'g'ri kirish yopilgan;
-		ma'muriy amallar audit jurnalida qayd etiladi.
-	</p>
-	<p>
-		Shunga qaramay, internet orqali ma'lumot uzatishning 100% xavfsizligini
-		kafolatlash mumkin emas. Hisobingiz xavfsizligi buzilganiga shubha qilsangiz,
-		darhol biz bilan bog'laning.
+		Internet orqali ma'lumot uzatishning mutlaq xavfsizligini kafolatlash mumkin emas.
+		Hisobingiz xavfsizligi buzilganiga shubha qilsangiz, ilova ichidagi yordam chati orqali
+		darhol xabar bering.
 	</p>
 
-	<h2>7. Sizning huquqlaringiz</h2>
+	<h2 id="huquqlar">7. Huquqlaringiz</h2>
 	<ul>
-		<li>O'zingiz haqingizdagi ma'lumotlarni olish va ular bilan tanishish;</li>
+		<li>O'zingiz haqingizdagi ma'lumotlar bilan tanishish;</li>
 		<li>Noto'g'ri yoki to'liq bo'lmagan ma'lumotlarni tuzatishni talab qilish;</li>
-		<li>Ma'lumotlaringizni o'chirishni yoki qayta ishlashni to'xtatishni talab qilish;</li>
-		<li>Berilgan rozilikni qaytarib olish;</li>
+		<li>Ma'lumotlaringizni o'chirishni talab qilish — ilovada <strong>Sozlamalar → Akkauntni o'chirish</strong>, ilovaga kira olmasangiz <a href="/delete-account">elchigo.uz/delete-account</a> sahifasidagi tartibda;</li>
+		<li>Berilgan rozilikni qaytarib olish (masalan, joylashuv yoki bildirishnoma ruxsatini qurilma sozlamalarida o'chirish);</li>
 		<li>Huquqlaringiz buzilgan deb hisoblasangiz, vakolatli organga murojaat qilish.</li>
 	</ul>
 	<p>
-		Ba'zi ma'lumotlar (masalan, yakunlangan buyurtmalar bo'yicha yozuvlar) qonuniy
-		majburiyatlar sababli saqlanib qolishi mumkin.
+		Yakunlanmagan bron bo'lsa, u yakunlanguncha yoki bekor qilinguncha hisobni o'chirib
+		bo'lmaydi — boshqa tomon kutilmaganda aloqasiz qolmasligi uchun. Ba'zi yozuvlar qonuniy majburiyatlar sababli 5-bo'limda aytilgan tartibda saqlanadi.
 	</p>
 
-	<h2>8. Voyaga yetmaganlar</h2>
+	<h2 id="yosh">8. Voyaga yetmaganlar (18+)</h2>
 	<p>
-		Platforma 18 yoshga to'lmagan shaxslar uchun mo'ljallanmagan. Agar voyaga
-		yetmagan shaxsning ma'lumotlari yig'ilgani aniqlansa, ular o'chiriladi.
+		Platforma 18 yoshga to'lmagan shaxslar uchun mo'ljallanmagan. Voyaga yetmagan shaxsning
+		ma'lumotlari yig'ilgani aniqlansa, ular o'chiriladi.
 	</p>
 
-	<h2>9. Siyosatga o'zgartirishlar</h2>
+	<h2 id="ozgarish">9. O'zgarishlar</h2>
 	<p>
-		Ushbu siyosatga o'zgartirishlar kiritilishi mumkin. Yangi tahrir ushbu sahifada
-		e'lon qilingan paytdan boshlab kuchga kiradi. Muhim o'zgarishlar haqida ilova
-		orqali xabar beriladi.
+		Ushbu siyosatga o'zgartirishlar kiritilishi mumkin. Yangi tahrir ushbu sahifada e'lon
+		qilingan paytdan kuchga kiradi; yuqoridagi «Oxirgi yangilanish» sanasi o'zgaradi. Muhim
+		o'zgarishlar haqida ilova orqali xabar beriladi.
 	</p>
 
-	<h2>10. Biz bilan bog'lanish</h2>
+	<h2 id="aloqa">10. Bog'lanish</h2>
 	<ul>
 		<li>Tashkilot: <span class="fill">[YURIDIK SHAXS NOMI]</span></li>
 		<li>STIR (INN): <span class="fill">[STIR RAQAMI]</span></li>
@@ -157,6 +215,7 @@
 		<li>Elektron pochta: <span class="fill">[EMAIL]</span></li>
 		<li>Telefon: <span class="fill">[TELEFON RAQAMI]</span></li>
 	</ul>
+	<p>Ilova ichida: Profil → Yordam (operator bilan yozishma).</p>
 </main>
 
 <footer class="band foot">
@@ -175,6 +234,15 @@
 	</div>
 </footer>
 
-<script>document.getElementById("yr").textContent = new Date().getFullYear();</script>
+<script>
+	document.getElementById("yr").textContent = new Date().getFullYear();
+	// "Orqaga" returns to the previous page of this site; opened directly (store listing, app settings) it goes home.
+	document.getElementById("back").addEventListener("click", function (event) {
+		if (document.referrer && document.referrer.indexOf(location.origin + "/") === 0 && history.length > 1) {
+			event.preventDefault();
+			history.back();
+		}
+	});
+</script>
 </body>
 </html>

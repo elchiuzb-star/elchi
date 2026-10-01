@@ -107,7 +107,9 @@ final class ClientOrdersModel {
             legacyNextPage = nil
         } catch {
             if legacy.value == nil { legacy = .failed(error) }
-            banners.error(error)
+            // The screen went away mid-load (e.g. a link pushed a listing over the list at once): the cancelled
+            // request is not "Internet aloqasi yo'q".
+            if !Task.isCancelled { banners.error(error) }
             return false
         }
         return true

@@ -1098,5 +1098,17 @@
     "uz": "Telefon joylashuvga ruxsat so'raydi — «Ilovadan foydalanganda»ni tanlang va aniq joylashuvni yoqing.",
     "ru": "Телефон запросит доступ к геолокации — выберите «Только при использовании приложения» и включите точное местоположение.",
     "_why": "Native replacement for driverTracking.permissionPrompt, which talks about a browser."
+  },
+  "link.listingNotOpen": {
+    "uz": "Bu e'lon hozir yangi taklif qabul qilmayapti.",
+    "ru": "Это объявление сейчас не принимает новые предложения."
+  },
+  "link.listingMissing": {
+    "uz": "E'lon topilmadi: havola eskirgan yoki e'lon olib tashlangan.",
+    "ru": "Объявление не найдено: ссылка устарела или объявление удалено."
+  },
+  "link.listingNotOwn": {
+    "uz": "Bu boshqa mijozning e'loni — uni ilovada faqat egasi va haydovchilar ochadi.",
+    "ru": "Это объявление другого клиента — в приложении его открывают только владелец и водители."
   }
 }

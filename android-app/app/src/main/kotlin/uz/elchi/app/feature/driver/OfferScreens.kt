@@ -26,6 +26,7 @@ import uz.elchi.app.api.generated.ActorSide
 import uz.elchi.app.api.generated.ApiWarning
 import uz.elchi.app.api.generated.ListingOfferDTO
 import uz.elchi.app.api.generated.ListingPublicDTO
+import uz.elchi.app.api.generated.ListingStatus
 import uz.elchi.app.api.generated.ProposalThreadDTO
 import uz.elchi.app.api.generated.ServiceType
 import uz.elchi.app.api.generated.TripDTO
@@ -143,11 +144,12 @@ fun BidScreen(
     val trip = listing?.let { vm.trip(ts.list, it) }
     val window = listing?.let { OfferRules.pickupWindow(trip, it) }
     val status = ds.status
-    val approved = status == null || DriverRules.gate(status) == GateVariant.NONE
+    // Before the listing is read only the gate is known; FORM stands for "not the gate" until then.
+    val view = OfferRules.bidView(status, listing?.status ?: ListingStatus.PUBLISHED)
     StepScaffold(
         title = t(R.string.driverBid_title),
         onBack = onBack,
-        footer = if (approved && listing != null) {
+        footer = if (view == BidView.FORM && listing != null) {
             {
                 ElchiButton(
                     t(R.string.driverBid_send), { vm.send(trip) }, Modifier.fillMaxWidth(),
@@ -156,8 +158,9 @@ fun BidScreen(
             }
         } else null,
     ) {
-        if (!approved && status != null) {
-            // Q96 one screen deeper: a stale feed or a revoked approval can land here; the price field must not say it.
+        if (view == BidView.GATE && status != null) {
+            // Q96 one screen deeper: a stale feed, a revoked approval or a link from the public page (Stage 10) can
+            // land here; the price field must not say it.
             VerificationGate(status, onDocuments = nav.onDocuments, onProfile = nav.onProfileForm, onSupport = nav.onHelp)
             return@StepScaffold
         }
@@ -166,6 +169,11 @@ fun BidScreen(
             is Load.Failed -> LoadFailed(t(R.string.driverBid_title), l.error) { onBack() }
             is Load.Ready -> {
                 RequestSummary(l.value)
+                if (view == BidView.CLOSED) {
+                    // A link to a listing that is no longer open (the public page's own sentence): no board, no form.
+                    Note(t(R.string.publicShare_closedHint), tone = Tone.GRAY)
+                    return@StepScaffold
+                }
                 RivalBoard(s.board, vm::loadBoard)
                 TripChoice(vm, ts, trip, window, onAddTrip)
                 ElchiField(

@@ -5,6 +5,8 @@ import uz.elchi.app.feature.client.InboxTarget
 import uz.elchi.app.feature.client.PromoRules
 import uz.elchi.app.session.MobileRole
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import java.net.URI
 import java.net.URISyntaxException
 
@@ -113,7 +115,10 @@ object DeepLinkRules {
     /**
      * What the signed-in role can open. A client has every in-app screen the inbox has except the driver's trip and
      * wallet; a driver (Stage 09) its bookings and their chat, its offers, trips, wallet, the operator conversations
-     * and the inbox - not a client's listing. A referral is for both roles.
+     * and the inbox. A referral is for both roles. A listing (Stage 10, the public page's "Ilovani ochish") is for
+     * both too, but leads to different screens: the driver's offer screen (which itself shows the Q96 gate to an
+     * unapproved driver and a sentence when the listing no longer takes offers, [uz.elchi.app.feature.driver.OfferRules.bidView]),
+     * the owner's listing detail for a client - and only for the owner ([ownsListing]).
      */
     fun forRole(target: DeepLinkTarget, role: MobileRole?): DeepLinkTarget = when (role) {
         MobileRole.CLIENT -> when (target) {
@@ -122,11 +127,20 @@ object DeepLinkRules {
         }
         MobileRole.DRIVER -> when (target) {
             is DeepLinkTarget.Referral, is DeepLinkTarget.SupportThread, DeepLinkTarget.SupportThreads, is DeepLinkTarget.Inbox,
-            is DeepLinkTarget.Booking, is DeepLinkTarget.BookingChat, is DeepLinkTarget.Proposal, is DeepLinkTarget.Trip, DeepLinkTarget.Wallet -> target
+            is DeepLinkTarget.Booking, is DeepLinkTarget.BookingChat, is DeepLinkTarget.Proposal, is DeepLinkTarget.Trip, DeepLinkTarget.Wallet,
+            is DeepLinkTarget.Listing -> target
             else -> DeepLinkTarget.Unsupported
         }
         null -> DeepLinkTarget.Unsupported
     }
+
+    /**
+     * `GET /listings/{id}` as a client: did the server answer with the owner's `ListingDTO` (it has `owner`) rather
+     * than the `ListingPublicDTO` everyone else gets? Only the owner's listing opens; another client's is the
+     * `link.unsupported` sentence (a client has no screen for somebody else's listing). Staff also get `ListingDTO`,
+     * but a marketplace account is never staff (Q3).
+     */
+    fun ownsListing(listing: JsonElement): Boolean = ((listing as? JsonObject)?.get("owner") as? JsonObject) != null
 
     /** The client's screens are the inbox's: the same target, the same navigation. The two lists are not items. */
     fun inboxTarget(target: DeepLinkTarget): InboxTarget? = when (target) {

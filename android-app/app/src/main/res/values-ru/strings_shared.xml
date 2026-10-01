@@ -965,6 +965,9 @@
     <string name="legacyOrder_ratingSent">Оценка отправлена</string>
     <string name="legacyOrder_ratingSubmit">Отправить оценку</string>
     <string name="legacyOrder_stars">Звёзд: {value}</string>
+    <string name="link_listingMissing">Объявление не найдено: ссылка устарела или объявление удалено.</string>
+    <string name="link_listingNotOpen">Это объявление сейчас не принимает новые предложения.</string>
+    <string name="link_listingNotOwn">Это объявление другого клиента — в приложении его открывают только владелец и водители.</string>
     <string name="link_referralApplied">Код приглашения принят</string>
     <string name="link_referralSaved">Код приглашения сохранён: {code}</string>
     <string name="link_unsupported">Эту ссылку нельзя открыть в приложении.</string>

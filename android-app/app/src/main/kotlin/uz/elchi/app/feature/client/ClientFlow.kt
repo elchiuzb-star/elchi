@@ -230,6 +230,13 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 }
             }
             DeepLinkTarget.SupportThreads -> nav.navigate(SupportThreads) { launchSingleTop = true }
+            // Stage 10 (the public page's "Ilovani ochish"): only the owner has a screen for a listing; for anybody
+            // else the server answers with the public DTO and the link "cannot be opened". A failed read opens the
+            // detail anyway - it says why and retries. Not in this effect's scope (taking the link restarts it).
+            is DeepLinkTarget.Listing -> scope.launch {
+                val own = runCatching { DeepLinkRules.ownsListing(container.api.getListing(allowed.id).data) }.getOrNull()
+                if (own == false) container.links.unsupported() else openTarget(InboxTarget.Listing(allowed.id))
+            }
             else -> DeepLinkRules.inboxTarget(allowed)?.let(openTarget) ?: container.links.unsupported()
         }
     }

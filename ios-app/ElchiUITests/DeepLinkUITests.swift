@@ -116,6 +116,25 @@ final class DeepLinkUITests: ClientUITestCase {
         }
     }
 
+    /// Stage 10 (`elchi://listings/{id}`): signs in as `ELCHI_LINK_PHONE` (`ELCHI_LINK_ROLE` = driver | client), then
+    /// only confirms the system's "Open in "Elchi"?" prompt while the shell runs `xcrun simctl openurl` and takes
+    /// screenshots, until it creates `<ELCHI_CMD_DIR>/stop`.
+    func test6_SignInThenHoldForLinks() {
+        let env = ProcessInfo.processInfo.environment
+        let driver = env["ELCHI_LINK_ROLE"] == "driver"
+        launch()
+        _ = button("Boshlash")
+        signIn(env["ELCHI_LINK_PHONE"] ?? driverPhone, role: driver ? "Men haydovchiman" : "Men mijozman")
+        if driver {
+            XCTAssertTrue(app.buttons["elchi.tab.home"].waitForExistence(timeout: 25), "no driver tabs")
+        } else {
+            XCTAssertTrue(app.buttons["Yo'nalishni ko'rish"].firstMatch.waitForExistence(timeout: 25), "no client home")
+        }
+        let dir = env["ELCHI_CMD_DIR"] ?? "/tmp"
+        FileManager.default.createFile(atPath: dir + "/ready", contents: Data())
+        test5_ConfirmSystemPrompts()
+    }
+
     func test4_Driver() {
         launch()
         _ = button("Boshlash")

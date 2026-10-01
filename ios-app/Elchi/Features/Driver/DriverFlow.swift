@@ -390,7 +390,38 @@ struct DriverFlow: View {
         case .booking(let id): path = [.booking(id)]
         case .bookingChat(let id): path = [.booking(id), .bookingChat(id)]
         case .proposal(let id): path = [.thread(id)]
+        case .listing(let id): Task { await openListingLink(id) }
         default: break
+        }
+    }
+
+    /// Stage 10 (`elchi://listings/{id}`, the share page's "Ilovani ochish"): approved -> the offer screen for that
+    /// request; not approved -> the Moslar tab's gate; a request that takes no offers or does not exist -> a sentence.
+    private func openListingLink(_ id: String) async {
+        if driver.status == nil { await driver.loadProfile() }
+        guard let status = driver.status else {
+            if case .failed(let error) = driver.profile { container.banners.error(error) }
+            return
+        }
+        var listing: ListingPublicDTO?
+        if status.isApproved {
+            do {
+                listing = ListingLinkRules.publicListing(try await container.api.getListing(listingId: id).data)
+            } catch {
+                guard ListingLinkRules.isMissing(error) else { container.banners.error(error); return }
+            }
+        }
+        let outcome = ListingLinkRules.driver(approved: status.isApproved, listing: listing)
+        switch outcome {
+        case .offer(let listing):
+            feed.offer(opening: listing, keys: driver.keys)
+            tab = .matches
+            path = [.offer(listing.id)]
+        case .gate:
+            tab = .matches
+            path = []
+        default:
+            if let key = ListingLinkRules.messageKey(outcome) { container.banners.show(.key(key), tone: .warn) }
         }
     }
 
