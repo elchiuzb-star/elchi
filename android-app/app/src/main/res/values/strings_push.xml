@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android-only push text (not in the shared dictionary): the body line of a push whose event has no
+     notification.<type>.body. A push carries no text (ADR-0022), so it can only say where to look. -->
+<resources>
+    <string name="push_body_generic">Batafsil — ilovada.</string>
+</resources>

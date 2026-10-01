@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="elchi_background">#FFFFFF</color>
+    <!-- Launch screen: the same navy as the in-app splash, so the two read as one. -->
+    <color name="elchi_navy">#0E2350</color>
+</resources>

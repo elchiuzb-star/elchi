@@ -1,0 +1,354 @@
+import Foundation
+
+// MARK: - Server time
+
+/// The API writes instants as ISO 8601 in UTC (`Z`, sometimes with fractions); v1 legacy rows carry naive
+/// timestamps, read here as UTC.
+public enum ServerTime {
+    public static func parse(_ text: String?) -> Date? {
+        guard var text, !text.isEmpty else { return nil }
+        if let date = withFractions.date(from: text) ?? plain.date(from: text) { return date }
+        // Legacy naive `2026-08-04T10:15:00(.123456)`: no zone at all.
+        if !text.hasSuffix("Z") && !text.contains("+") && text.count >= 19 { text += "Z" }
+        return withFractions.date(from: text) ?? plain.date(from: text)
+    }
+
+    nonisolated(unsafe) private static let withFractions: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    nonisolated(unsafe) private static let plain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+}
+
+// MARK: - Negotiation (port of mobile-app/src/app/auction.ts, with the Stage 03 fixes)
+
+/// What the client may do with one negotiation thread right now. Pure: the thread the server sent plus the clock.
+///
+/// Fixes over the web module: an offer whose `expires_at` has passed is closed here at once (the server would refuse
+/// it anyway), and "Boshqa narx" is offered only while the client still has a price revision left (the web showed it
+/// and let the server refuse).
+public struct NegotiationActions: Equatable, Sendable {
+    /// The thread is live and its current version can still be answered.
+    public let open: Bool
+    /// The driver spoke last, so the answer is the client's.
+    public let theirTurn: Bool
+    /// AC05: only a version the other side wrote.
+    public let canAccept: Bool
+    public let canReject: Bool
+    public let canCounter: Bool
+    /// The client can take back what it wrote, never what the driver wrote.
+    public let canWithdraw: Bool
+    /// Price revisions this side still has (`price_revisions_left.client`).
+    public let revisionsLeft: Int
+    /// The server still says open, but the offer's time is over (`now >= expires_at`).
+    public let expiredByClock: Bool
+
+    static let closed = NegotiationActions(open: false, theirTurn: false, canAccept: false, canReject: false, canCounter: false,
+                                           canWithdraw: false, revisionsLeft: 0, expiredByClock: false)
+
+    public static func of(_ thread: ProposalThreadDTO, now: Date = Date()) -> NegotiationActions {
+        guard let version = thread.currentVersion, thread.state == "open", version.status == .active else { return .closed }
+        if let expires = ServerTime.parse(version.expiresAt), now >= expires {
+            return NegotiationActions(open: false, theirTurn: false, canAccept: false, canReject: false, canCounter: false,
+                                      canWithdraw: false, revisionsLeft: 0, expiredByClock: true)
+        }
+        let theirTurn = version.authorSide != .client
+        let left = version.priceRevisionsLeft.client
+        return NegotiationActions(open: true, theirTurn: theirTurn, canAccept: theirTurn, canReject: theirTurn,
+                                  canCounter: theirTurn && left > 0, canWithdraw: !theirTurn, revisionsLeft: left,
+                                  expiredByClock: false)
+    }
+}
+
+extension ProposalThreadDTO {
+    /// The dictionary key for why a closed offer is closed (`proposalStatus.*`): the version's own status, or
+    /// "expired" when only the clock closed it.
+    func closedStatusKey(now: Date = Date()) -> String {
+        let actions = NegotiationActions.of(self, now: now)
+        if actions.expiredByClock { return "proposalStatus.expired" }
+        if state == "accepted" { return "proposalStatus.accepted" }
+        return "proposalStatus.\(currentVersion?.status.rawValue ?? "expired")"
+    }
+
+    /// `3` from the server's stable anonymous label "Haydovchi #3" (Q40), so the app can say it in the active
+    /// language; nil when the label has another shape.
+    var driverNumber: Int? {
+        guard let hash = driver.label.lastIndex(of: "#") else { return nil }
+        return Int(driver.label[driver.label.index(after: hash)...].trimmingCharacters(in: .whitespaces))
+    }
+}
+
+/// Time left on an offer, rounded up to the minute (a live countdown never says "0 minutes" while it is still open).
+public enum Countdown {
+    public static func left(until expires: Date, now: Date = Date()) -> (hours: Int, minutes: Int)? {
+        let seconds = expires.timeIntervalSince(now)
+        guard seconds > 0 else { return nil }
+        let minutes = Int((seconds / 60).rounded(.up))
+        return (minutes / 60, minutes % 60)
+    }
+
+    /// Whole minutes since an instant (at least 1), for "Eng yangi taklif 12 daqiqa oldin".
+    public static func minutesAgo(_ date: Date, now: Date = Date()) -> Int {
+        max(1, Int(now.timeIntervalSince(date) / 60))
+    }
+}
+
+// MARK: - Sorting the offers
+
+public enum OfferSort: String, CaseIterable, Hashable, Sendable {
+    case cheapest, fastest, bestRated
+
+    /// Live offers first (they can still be answered), closed ones after; inside each group by the chosen order. Ties
+    /// fall back to price, then to the thread id so the order never jumps between refreshes.
+    public func sorted(_ threads: [ProposalThreadDTO], now: Date = Date()) -> [ProposalThreadDTO] {
+        threads.sorted { a, b in
+            let openA = NegotiationActions.of(a, now: now).open, openB = NegotiationActions.of(b, now: now).open
+            if openA != openB { return openA }
+            switch self {
+            case .cheapest:
+                break
+            case .fastest:
+                let startA = ServerTime.parse(a.currentVersion?.pickupWindowStart) ?? .distantFuture
+                let startB = ServerTime.parse(b.currentVersion?.pickupWindowStart) ?? .distantFuture
+                if startA != startB { return startA < startB }
+            case .bestRated:
+                let rankA = Self.ratingRank(a.driverSummary), rankB = Self.ratingRank(b.driverSummary)
+                if rankA != rankB { return rankA < rankB }
+                let countA = a.driverSummary?.ratingCount ?? 0, countB = b.driverSummary?.ratingCount ?? 0
+                if countA != countB { return countA > countB }
+            }
+            let priceA = a.currentVersion?.totalMinor ?? .max, priceB = b.currentVersion?.totalMinor ?? .max
+            if priceA != priceB { return priceA < priceB }
+            return a.id < b.id
+        }
+    }
+
+    /// good < new_verified < mixed < low < unknown (the server gives buckets, never a score - never invented).
+    static func ratingRank(_ summary: ProposalDriverSummaryDTO?) -> Int {
+        switch summary?.ratingBucket {
+        case .good: 0
+        case .newVerified: 1
+        case .mixed: 2
+        case .low: 3
+        default: 4
+        }
+    }
+
+    /// The live offer with the lowest total, badged "Eng arzon" - only when there is something to compare it with.
+    public static func cheapestOpenId(_ threads: [ProposalThreadDTO], now: Date = Date()) -> String? {
+        let open = threads.filter { NegotiationActions.of($0, now: now).open }
+        guard open.count >= 2 else { return nil }
+        return open.min { ($0.currentVersion?.totalMinor ?? .max, $0.id) < ($1.currentVersion?.totalMinor ?? .max, $1.id) }?.id
+    }
+}
+
+// MARK: - Owner's listing controls (port of mobile-app/src/app/listingEdit.ts)
+
+public struct OwnerListingActions: Equatable, Sendable {
+    public let canPause: Bool
+    public let canResume: Bool
+    public let canEdit: Bool
+    public let canCancel: Bool
+    /// Share links exist only for a listing people can still answer (`LISTING_NOT_OPEN` otherwise).
+    public let canShare: Bool
+
+    public static func of(_ status: ListingStatus) -> OwnerListingActions {
+        let editable = [ListingStatus.draft, .published, .paused].contains(status)
+        return OwnerListingActions(canPause: status == .published, canResume: status == .paused, canEdit: editable,
+                                   canCancel: editable, canShare: status == .published || status == .paused)
+    }
+}
+
+/// What the edit form holds: whole so'm as typed, the comment, the window (Tashkent wall clock, as `Date`).
+public struct ListingEditForm: Equatable, Sendable {
+    public var priceDigits: String
+    public var comment: String
+    public var windowStart: Date?
+    public var windowEnd: Date?
+
+    public init(priceDigits: String, comment: String, windowStart: Date?, windowEnd: Date?) {
+        self.priceDigits = priceDigits
+        self.comment = comment
+        self.windowStart = windowStart
+        self.windowEnd = windowEnd
+    }
+
+    /// The form as the listing is now: nothing changed yet.
+    public init(listing: ListingDTO) {
+        priceDigits = String(listing.unitPriceMinor / 100)
+        comment = listing.comment ?? ""
+        windowStart = ServerTime.parse(listing.departureWindowStart)
+        windowEnd = ServerTime.parse(listing.departureWindowEnd)
+    }
+}
+
+/// The PATCH an edit would send, and what it means. Q20: on a live listing a moved window closes every open offer;
+/// price and comment do not. The owner is told before sending, so the diff is computed here the way the server
+/// classifies it.
+public struct ListingPatchPlan: Equatable, Sendable {
+    public var unitPriceMinor: Int?
+    /// `""` clears the comment (a nil field is simply not sent).
+    public var comment: String?
+    public var windowStart: Date?
+    public var windowEnd: Date?
+    /// This edit closes the open offers of a published or paused listing.
+    public var material = false
+    /// Why it cannot be sent as it is: `listingOwner.invalid.<reason>` (price, window_incomplete, window_order, window_past).
+    public var invalid: String?
+
+    public var empty: Bool { unitPriceMinor == nil && comment == nil && windowStart == nil }
+
+    /// Live listings: where open offers exist that an edit could close (`marketplace.service.LIVE_STATUSES`).
+    static let live: [ListingStatus] = [.published, .paused]
+
+    public static func plan(_ listing: ListingDTO, _ form: ListingEditForm, now: Date = Date()) -> ListingPatchPlan {
+        var plan = ListingPatchPlan()
+        let price = Money.minor(fromSoum: form.priceDigits)
+        if price <= 0 {
+            plan.invalid = "price"
+        } else if price != listing.unitPriceMinor {
+            plan.unitPriceMinor = price
+        }
+
+        let comment = form.comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        if comment != (listing.comment ?? "").trimmingCharacters(in: .whitespacesAndNewlines) { plan.comment = comment }
+
+        // A client request owns its window (a trip offer's comes from the trip - not a client screen).
+        if listing.kind == .request {
+            if let start = form.windowStart, let end = form.windowEnd {
+                if end <= start {
+                    plan.invalid = plan.invalid ?? "window_order"
+                } else if end <= now {
+                    plan.invalid = plan.invalid ?? "window_past"
+                } else if start != ServerTime.parse(listing.departureWindowStart) || end != ServerTime.parse(listing.departureWindowEnd) {
+                    // The server validates the pair, so both ends travel together.
+                    plan.windowStart = start
+                    plan.windowEnd = end
+                    plan.material = live.contains(listing.status)
+                }
+            } else {
+                plan.invalid = plan.invalid ?? "window_incomplete"
+            }
+        }
+        return plan
+    }
+
+    /// `PATCH /listings/{id}` body (not idempotent: `expected_version` guards it).
+    public func body(expectedVersion: Int) -> ListingPatch {
+        ListingPatch(comment: comment, departureWindowEnd: windowEnd.map(DepartureWindow.iso),
+                     departureWindowStart: windowStart.map(DepartureWindow.iso), expectedVersion: expectedVersion,
+                     unitPriceMinor: unitPriceMinor)
+    }
+}
+
+// MARK: - Share links
+
+/// The design's TTL chips are days; the API takes hours (1...336).
+public enum ShareTTL {
+    public static let days = [1, 2, 3, 7, 14]
+    public static let defaultDays = 2
+
+    public static func hours(days: Int) -> Int { min(max(days * 24, 1), 336) }
+}
+
+// MARK: - Status labels and tones
+
+/// A status as the person reads it: a dictionary key, the raw value to show when the key is missing, and the tone
+/// of its badge (the badge also carries a dot, so the meaning is not colour-only).
+public struct StatusLabel: Equatable, Sendable {
+    public let key: String
+    public let raw: String
+    public let tone: Tone
+
+    /// A listing of the client's (`ListingStatus`).
+    public static func listing(_ status: ListingStatus) -> StatusLabel {
+        let tone: Tone = switch status {
+        case .published: .blue
+        case .fulfilled: .ok
+        case .cancelled: .err
+        default: .gray
+        }
+        return StatusLabel(key: "status.\(status.rawValue)", raw: status.rawValue, tone: tone)
+    }
+
+    /// A booking's `service_status`. Parcel `in_transit` is set by the system when the trip departs: "Haydovchi yo'lga
+    /// chiqdi"; `delivered` and `completed` are the operator's (Q139/Q144).
+    public static func booking(_ service: ServiceType, _ status: String) -> StatusLabel {
+        switch (service, status) {
+        case (.parcel, "in_transit"), (.parcel, "picked_up"):
+            return StatusLabel(key: "parcel.status.driverDeparted", raw: status, tone: .blue)
+        case (.parcel, "delivered"):
+            return StatusLabel(key: "parcel.progress.deliveredByOperator", raw: status, tone: .ok)
+        case (_, "confirmed"), (_, "completed"):
+            return StatusLabel(key: "status.\(status)", raw: status, tone: .ok)
+        case (_, "awaiting_pickup"):
+            return StatusLabel(key: "status.awaiting_pickup", raw: status, tone: .warn)
+        case (_, "cancelled"), (_, "no_show"):
+            return StatusLabel(key: "status.\(status)", raw: status, tone: .err)
+        case (_, "onboard"), (_, "arrived"), (_, "return_required"), (_, "returned"), (_, "delivery_failed"):
+            let tone: Tone = status == "arrived" ? .ok : status == "onboard" ? .blue : status == "returned" ? .gray
+                : status == "delivery_failed" ? .err : .warn
+            return StatusLabel(key: "tripDetail.service.\(status)", raw: status, tone: tone)
+        default:
+            return StatusLabel(key: "status.\(status)", raw: status, tone: .gray)
+        }
+    }
+
+    /// A v1 order status (read-only history).
+    public static func legacy(_ status: String) -> StatusLabel {
+        let tone: Tone = switch status {
+        case "published", "bidding", "in_transit": .blue
+        case "accepted", "picked_up": .warn
+        case "delivered", "confirmed", "completed": .ok
+        case "cancelled", "disputed": .err
+        default: .gray
+        }
+        return StatusLabel(key: "status.\(status)", raw: status, tone: tone)
+    }
+}
+
+// MARK: - Legacy money
+
+/// v1 prices are DECIMAL so'm (not minor units) and come as a JSON number or a string: `70000`, `"70000.00"`.
+public enum LegacyMoney {
+    public static func minor(_ value: JSONValue?) -> Int? {
+        switch value {
+        case .number(let soum)?:
+            return soum.isFinite && soum >= 0 ? Int((soum * 100).rounded()) : nil
+        case .string(let text)?:
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            guard let soum = Decimal(string: trimmed, locale: Locale(identifier: "en_US_POSIX")), soum >= 0 else { return nil }
+            return NSDecimalNumber(decimal: soum * 100).rounding(accordingToBehavior: nil).intValue
+        default:
+            return nil
+        }
+    }
+}
+
+// MARK: - One Idempotency-Key per action
+
+/// One key per user action (ADR-0005), reused while that same action is retried without a definite answer (no
+/// connection, a 5xx) and dropped once the server has decided - success or a business refusal.
+@MainActor
+final class ActionKeys {
+    private var keys: [String: String] = [:]
+
+    func key(_ action: String) -> String {
+        if let key = keys[action] { return key }
+        let key = UUID().uuidString
+        keys[action] = key
+        return key
+    }
+
+    /// The server answered for sure: the next attempt of this action is a new action.
+    func settle(_ action: String, after error: Error? = nil) {
+        if let error = error as? APIError, error.code == APIError.network || error.status >= 500 { return }
+        keys[action] = nil
+    }
+}

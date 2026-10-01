@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+: asked once on the signed-in home screen (push/NotificationPermission.kt), never at launch. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Yandex MapKit declares precise location; Stage 02 never asks for it (places are picked on the map), so the
+         app does not claim it. The driver's GPS stage adds location deliberately, with its own explanation. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />
+
+    <application
+        android:name=".ElchiApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="false"
+        android:theme="@style/Theme.Elchi">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Elchi.Starting"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- In-app paths (the inbox's links and push taps): elchi://bookings/{id}[/messages],
+                 elchi://listings/{id}, elchi://proposals/{id}, elchi://support-threads[/{id}], elchi://notifications,
+                 elchi://r/{code}. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="elchi" />
+                <data android:host="bookings" />
+                <data android:host="listings" />
+                <data android:host="proposals" />
+                <data android:host="support-threads" />
+                <data android:host="notifications" />
+                <data android:host="r" />
+            </intent-filter>
+            <!-- Referral App Link (Q107): https://<link host>/r/<code> only. /t/ and /e/ stay in the browser until the
+                 public pages are built in the app. Hosts come from build.gradle.kts (linkHosts). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="${linkHost}" />
+                <data android:host="${linkHostAlt}" />
+                <data android:pathPrefix="/r/" />
+            </intent-filter>
+        </activity>
+        <!-- FCM (ADR-0022): data-only messages; the app builds the notification itself. -->
+        <service
+            android:name=".push.ElchiMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="elchi.events" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_elchi" />
+        <!-- The camera app writes the parcel photo here (cache/photos); nothing goes to the shared gallery. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>

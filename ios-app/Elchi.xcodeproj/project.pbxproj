@@ -1,0 +1,1107 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		001E4D22570BBE3016CA1E2B /* SupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C838A004FCEF7772A8382C /* SupportViews.swift */; };
+		01DDAE5BCEAFF579759E70B4 /* BookingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E641F473F072F020E30AFCBC /* BookingModel.swift */; };
+		08BD698F703AA7CB9213A2B1 /* BookingTrackingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AADBA05767DAFA193B2463D /* BookingTrackingModel.swift */; };
+		0968CCBD469E0B2A550AB0DA /* StringsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7384394017524FA15DF071D /* StringsTests.swift */; };
+		0F0BE7A1DAFDB2C143221FB7 /* OrdersViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DF7FCD39ADC1768511A03B /* OrdersViews.swift */; };
+		11905C39329C4734ACB37693 /* LegacyViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 774BCD9CFE33E4643559CF3B /* LegacyViews.swift */; };
+		1297D18503791FFB432D328A /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0851D80624E40B0809EEA2C3 /* API.swift */; };
+		13C7C6513818905DAD73B95E /* DriverUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EC1A51C8AC6A8C2978AEF47 /* DriverUITests.swift */; };
+		16DC1C1D61AFA615D370DBDC /* OrdersFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5EAC1FDC11AD6AF973FC47B /* OrdersFormatting.swift */; };
+		18C00F43B446B6C6713B3405 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9078590EA61C4DFBD7FCE59 /* Components.swift */; };
+		1C0544993AC69F232702A4C2 /* ProfileLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */; };
+		20B6F23F258060280924A139 /* ParcelRequestModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1D5A6E626D2A9700765B4F /* ParcelRequestModel.swift */; };
+		23B687F6EDD2A2AB328D1EA1 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA31EFFA4B516438A1829CD7 /* SettingsViews.swift */; };
+		280414156FB9F22E8BE45C7E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27E951E104397C9F951A02 /* Models.swift */; };
+		2A6135E1CABC44E8EC1DF0DC /* ElchiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE637582601108DA0981BBD /* ElchiApp.swift */; };
+		2E9B2BFAD2DBDC3AEEAF7DDC /* BookingLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36CDA490A4A8FA703305BBC /* BookingLogic.swift */; };
+		2EE9361493EBF0EE092CD319 /* BookingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87EA31F8CE0EA13DE5C57F5 /* BookingViews.swift */; };
+		2F334E68CE593793D8169447 /* PointPickerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */; };
+		3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */; };
+		38E28AADEA9D73BC78B9C945 /* ElchiMapEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */; };
+		3B003CCFF041EA026C746E73 /* Icons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A3694A601D0778DB17F9198C /* Icons.xcassets */; };
+		3B5ACADCADEA3B0376AD4C3C /* DriverAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D96E5FDD2494A0AC2D3230D /* DriverAPI.swift */; };
+		3DEA99CC213A9FF855FD827B /* BookingChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E956232ED814D3E4F19F3F /* BookingChatViews.swift */; };
+		3F69F6036336F84A2A79AB37 /* GeoAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28BF64B36C44C615562BE806 /* GeoAPI.swift */; };
+		42403EF5D537BA688F8CD4C6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 64BF397B4CEEDD77C2732C46 /* Assets.xcassets */; };
+		45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */; };
+		48962C87ADECC021F90F4C4B /* OrdersAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC50CE982A2746D3110960D /* OrdersAPI.swift */; };
+		4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */; };
+		50B2F99841F6F5B65F94E8D2 /* ElchiIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AA28EAF962F62889B19611 /* ElchiIcon.swift */; };
+		5144AC33E12070F58FCD9810 /* ElchiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF39A6A56E7964BDFFD5A2FB /* ElchiTheme.swift */; };
+		576267B94BCD44FF6630D0FE /* DeepLinkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */; };
+		5D6CAE8A56A9DA4BF1023B9C /* OrderLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 411F2B904B1638EB593ADE46 /* OrderLogic.swift */; };
+		620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */; };
+		65C1408142CCDF8F59B39234 /* BookingTrackingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E897E90FFF89087512394CC1 /* BookingTrackingView.swift */; };
+		6679748F2B6674DBEF88D56F /* ParcelRequestModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */; };
+		6B921A6811DE88D46A706954 /* AuthAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F2114B14B07FC499E89951 /* AuthAPI.swift */; };
+		6BBB2AFE7BCDB457D18104BD /* HTTPTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */; };
+		6BE0984C96A17E029AA7A4DC /* ProfileLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 283497BEDB21D5D8D01F7231 /* ProfileLogic.swift */; };
+		792F83771A1610C2CA21ABFE /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 435B25D2F7FEA8A1307C81B0 /* FlowLayout.swift */; };
+		7D6E33DDB9198119029153E4 /* DriverProfileFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C1CF2BFF8142FAA730B62B /* DriverProfileFormView.swift */; };
+		7E306CC355B11B288606940C /* LegacyOrderAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19304FC7161F98CC88F6F51F /* LegacyOrderAPI.swift */; };
+		7FC274B688353984E37E1761 /* Poppins-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 091A2CC726EB7B80E35F6690 /* Poppins-SemiBold.ttf */; };
+		82BC2AF7760127F8021CE78E /* EntryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077C2D6194C60CE1DB103563 /* EntryViews.swift */; };
+		83F9D384A561FA388327AF8B /* ClientProfileUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */; };
+		86E0469A8C4B537C30B261F6 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A80FE97EF8890CC6CC4A553 /* DeepLinkTests.swift */; };
+		87258CB1D69D3566CC4E76B3 /* ElchiAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FE9A7EB2E109760A5E2B8B7 /* ElchiAPI.swift */; };
+		8ABBB5990D94801EFE8DE3FE /* Poppins-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 25ADC998933154BA1C02905E /* Poppins-OFL.txt */; };
+		8B153DC9951BE2E3408FB121 /* DriverLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */; };
+		8C754C7698344577FA059522 /* ClientOffersUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */; };
+		8D6C2858EBBDD2B5E779DD1F /* LegacyLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B5C2D22B046E6A221A1F05D /* LegacyLogicTests.swift */; };
+		91665C4670147D367AAF7838 /* Banners.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20558F406539BB7C97D53D6 /* Banners.swift */; };
+		934C7D227EC8EB85B2E7ACB7 /* ProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3C7743DF12041A749F814C /* ProfileModels.swift */; };
+		9901C3611318BA4FBE452A53 /* DeepLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1572CEFF41B9C7099E5FA2D /* DeepLinks.swift */; };
+		9AA42AE7BD3617FAA3BBB493 /* BookingMoreViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39B2ABA7C58DF674FEA29553 /* BookingMoreViews.swift */; };
+		A06862743976E57BB2A54C4B /* OrdersModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5187A5C380B98BE157A1B9B7 /* OrdersModel.swift */; };
+		A1C1F6F8B8F3DEECE48FCEC4 /* LocationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCEDCEFD444CC97A5325ED0F /* LocationViews.swift */; };
+		A37637F2D903F19C2D385DED /* ProfileAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E573D36C73DF08EB376290B /* ProfileAPI.swift */; };
+		A4CBDBCE32C986316189D94A /* Poppins-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = FB09FB483669F7C8AC86DEA3 /* Poppins-Regular.ttf */; };
+		A72D42C24DE898896AB96E17 /* OrdersLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFC26087742FF883E6A6FA6 /* OrdersLogic.swift */; };
+		A771E3F0BF8136F5CCCBE929 /* SessionEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E294ED9B0B7B264B55416A48 /* SessionEvents.swift */; };
+		A7C4E21730A9BF16EB0195E9 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE319893889166112F6E6BC /* SessionState.swift */; };
+		AB48E9D4591CE833644D5435 /* SignInModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1512BCC8B0C467AC0347376 /* SignInModel.swift */; };
+		AE13A0237DB5E74AA3E83A2B /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688A71A2ABC3BBA5625256ED /* Strings.swift */; };
+		B0F78E51A83CEFECC4F1C004 /* YandexMapsMobileLite in Frameworks */ = {isa = PBXBuildFile; productRef = CF0977FA92FA72F9DDF3847D /* YandexMapsMobileLite */; };
+		B23CD59E593AE1E368114217 /* BookingFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C0FF664AD5ECD97C0FA11E /* BookingFormatting.swift */; };
+		B3EC95ADF38F7034699746B0 /* DriverViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F2E160F1AD7CFF4946D9AB /* DriverViews.swift */; };
+		B960A9D5AD351B96A2ECD1F7 /* ClientBookingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A189282F9DE6787F410CC3 /* ClientBookingUITests.swift */; };
+		B96AFD77FAF4F12960E96CD8 /* LegacyLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = E566FCB6E874711B2522C06E /* LegacyLogic.swift */; };
+		BDD4CCB47FF04EDE3E54356A /* DriverFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B330F4CF98061BE16535668F /* DriverFlow.swift */; };
+		C15C8A4635209F5021CFF7F3 /* Poppins-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E80BAE3CABBA9AC149F68DC7 /* Poppins-Bold.ttf */; };
+		C1B5853E6A1B75CE95444A08 /* DriverLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C8702059432269606836EE /* DriverLogic.swift */; };
+		C2EFDE0345EA57A52A6000A9 /* OrderFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5119DDBF60496FF3D30DAE /* OrderFormatting.swift */; };
+		C36DA73C1757FB7E5CD14FA4 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 552D982C968E1E1E115906DF /* SessionStore.swift */; };
+		C5079BC9D0D2916CFD112524 /* ListingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE91ED3A3B98D042C095381D /* ListingViews.swift */; };
+		C52BBC92759016BAA554FEC3 /* Poppins-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 31AC3EF77268DC310A40A626 /* Poppins-Medium.ttf */; };
+		C634812579808489491BC847 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA17164718156721D6DFFECE /* JSONValue.swift */; };
+		C778706AB0715C2A921B1F2A /* DriverModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0466319AC1B19AAED64787DD /* DriverModels.swift */; };
+		CC3D4E19F04823C0812C6207 /* ErrorText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CCE177C989B996DB4ACC0E5 /* ErrorText.swift */; };
+		D33151EC3B28CCF376021F4A /* OrderLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD460B56DD8B050579E5B85D /* OrderLogicTests.swift */; };
+		D9255F19114537EF0B0B4193 /* LegacyOrderModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */; };
+		DB601A899546A6D5A8CD5015 /* ProfileViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7403C98C99D03BBB70E64FD2 /* ProfileViews.swift */; };
+		DBFDF80C5AEE2AC92BF68E29 /* BookingChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F21911C1D356BA08C5B415 /* BookingChatModel.swift */; };
+		DF16308002BCC618A4738B76 /* DriverDocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3F1ACD6E158E318E0EC72B /* DriverDocumentsView.swift */; };
+		E81C117B111A29D67E3D1371 /* ClientOrderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 064E4F383CFE9E482273D83E /* ClientOrderUITests.swift */; };
+		E94205254D498B9F9FEFB373 /* ProfileFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF411664F7EACBB15965006 /* ProfileFormatting.swift */; };
+		EC90A314B89A88B502A2250C /* HTTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5862D85D90BCC2C17E6F61A /* HTTPTransport.swift */; };
+		F575F8543C4E8BBC1F678762 /* BookingLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A72B722AC59F1AB914DA87B /* BookingLogicTests.swift */; };
+		F7C9B4C700F4147BA713C7B8 /* OrderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFBC4032949B66CF63BE6E6 /* OrderViews.swift */; };
+		FAB19FC6C22199DC5825CBC6 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 31DADCFCD83585D785D08BFC /* Localizable.xcstrings */; };
+		FCC0A2304CA1B829C9D531E2 /* ClientHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C10A99C8800447B2019AB7C /* ClientHome.swift */; };
+		FF56E624D0DDE33E0C5F2FA0 /* States.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E893EAF0C557DAE0B0D0C0F /* States.swift */; };
+		FFFC69F342C8C5DC1D6DC4A9 /* ElchiMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5320FEF5E9CF0CCAC730936A /* ElchiMap.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4FA79BC26640F083956A6C89 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C25B04D843D83C936C3016DE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B995506D75E11436EFF9C8BC;
+			remoteInfo = Elchi;
+		};
+		C97EA442394602BD9F26017D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C25B04D843D83C936C3016DE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B995506D75E11436EFF9C8BC;
+			remoteInfo = Elchi;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientUITestCase.swift; sourceTree = "<group>"; };
+		0466319AC1B19AAED64787DD /* DriverModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverModels.swift; sourceTree = "<group>"; };
+		064E4F383CFE9E482273D83E /* ClientOrderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientOrderUITests.swift; sourceTree = "<group>"; };
+		077C2D6194C60CE1DB103563 /* EntryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryViews.swift; sourceTree = "<group>"; };
+		0851D80624E40B0809EEA2C3 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
+		091A2CC726EB7B80E35F6690 /* Poppins-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-SemiBold.ttf"; sourceTree = "<group>"; };
+		09F2114B14B07FC499E89951 /* AuthAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthAPI.swift; sourceTree = "<group>"; };
+		0AADBA05767DAFA193B2463D /* BookingTrackingModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingTrackingModel.swift; sourceTree = "<group>"; };
+		0C10A99C8800447B2019AB7C /* ClientHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientHome.swift; sourceTree = "<group>"; };
+		0C3F1ACD6E158E318E0EC72B /* DriverDocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverDocumentsView.swift; sourceTree = "<group>"; };
+		0E573D36C73DF08EB376290B /* ProfileAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAPI.swift; sourceTree = "<group>"; };
+		16C8702059432269606836EE /* DriverLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverLogic.swift; sourceTree = "<group>"; };
+		1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientOffersUITests.swift; sourceTree = "<group>"; };
+		19304FC7161F98CC88F6F51F /* LegacyOrderAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyOrderAPI.swift; sourceTree = "<group>"; };
+		1CE0D49CABA9B2818C7BBF7A /* ElchiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ElchiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E893EAF0C557DAE0B0D0C0F /* States.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = States.swift; sourceTree = "<group>"; };
+		1FE9A7EB2E109760A5E2B8B7 /* ElchiAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiAPI.swift; sourceTree = "<group>"; };
+		221E681A85248434CC7E468D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		25ADC998933154BA1C02905E /* Poppins-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Poppins-OFL.txt"; sourceTree = "<group>"; };
+		283497BEDB21D5D8D01F7231 /* ProfileLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLogic.swift; sourceTree = "<group>"; };
+		28BF64B36C44C615562BE806 /* GeoAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoAPI.swift; sourceTree = "<group>"; };
+		2C3C7743DF12041A749F814C /* ProfileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileModels.swift; sourceTree = "<group>"; };
+		31AC3EF77268DC310A40A626 /* Poppins-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Medium.ttf"; sourceTree = "<group>"; };
+		31DADCFCD83585D785D08BFC /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		33C838A004FCEF7772A8382C /* SupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportViews.swift; sourceTree = "<group>"; };
+		374F3BCC7187A54274BE4158 /* Elchi.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Elchi.xcconfig; sourceTree = "<group>"; };
+		39B2ABA7C58DF674FEA29553 /* BookingMoreViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingMoreViews.swift; sourceTree = "<group>"; };
+		39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverLogicTests.swift; sourceTree = "<group>"; };
+		3A80FE97EF8890CC6CC4A553 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
+		3C1D5A6E626D2A9700765B4F /* ParcelRequestModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParcelRequestModel.swift; sourceTree = "<group>"; };
+		3D96E5FDD2494A0AC2D3230D /* DriverAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverAPI.swift; sourceTree = "<group>"; };
+		411F2B904B1638EB593ADE46 /* OrderLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderLogic.swift; sourceTree = "<group>"; };
+		41A189282F9DE6787F410CC3 /* ClientBookingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientBookingUITests.swift; sourceTree = "<group>"; };
+		435B25D2F7FEA8A1307C81B0 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
+		4A5119DDBF60496FF3D30DAE /* OrderFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderFormatting.swift; sourceTree = "<group>"; };
+		4B5C2D22B046E6A221A1F05D /* LegacyLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyLogicTests.swift; sourceTree = "<group>"; };
+		4CCE177C989B996DB4ACC0E5 /* ErrorText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorText.swift; sourceTree = "<group>"; };
+		4EFBC4032949B66CF63BE6E6 /* OrderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderViews.swift; sourceTree = "<group>"; };
+		5187A5C380B98BE157A1B9B7 /* OrdersModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersModel.swift; sourceTree = "<group>"; };
+		5320FEF5E9CF0CCAC730936A /* ElchiMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiMap.swift; sourceTree = "<group>"; };
+		552D982C968E1E1E115906DF /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		5C800273FB70DBBE3B76B022 /* Elchi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Elchi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientLegacyUITests.swift; sourceTree = "<group>"; };
+		64BF397B4CEEDD77C2732C46 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiMapEngine.swift; sourceTree = "<group>"; };
+		688A71A2ABC3BBA5625256ED /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
+		6A72B722AC59F1AB914DA87B /* BookingLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingLogicTests.swift; sourceTree = "<group>"; };
+		7403C98C99D03BBB70E64FD2 /* ProfileViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViews.swift; sourceTree = "<group>"; };
+		774BCD9CFE33E4643559CF3B /* LegacyViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyViews.swift; sourceTree = "<group>"; };
+		7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyOrderModel.swift; sourceTree = "<group>"; };
+		82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientProfileUITests.swift; sourceTree = "<group>"; };
+		84C0FF664AD5ECD97C0FA11E /* BookingFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingFormatting.swift; sourceTree = "<group>"; };
+		88AA28EAF962F62889B19611 /* ElchiIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiIcon.swift; sourceTree = "<group>"; };
+		9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParcelRequestModelTests.swift; sourceTree = "<group>"; };
+		9DA85381C566791BF786AFD0 /* Elchi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Elchi.entitlements; sourceTree = "<group>"; };
+		9EC1A51C8AC6A8C2978AEF47 /* DriverUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverUITests.swift; sourceTree = "<group>"; };
+		A1572CEFF41B9C7099E5FA2D /* DeepLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinks.swift; sourceTree = "<group>"; };
+		A3694A601D0778DB17F9198C /* Icons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Icons.xcassets; sourceTree = "<group>"; };
+		A4E956232ED814D3E4F19F3F /* BookingChatViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingChatViews.swift; sourceTree = "<group>"; };
+		A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointPickerModel.swift; sourceTree = "<group>"; };
+		AA31EFFA4B516438A1829CD7 /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
+		AEFC26087742FF883E6A6FA6 /* OrdersLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersLogic.swift; sourceTree = "<group>"; };
+		B20558F406539BB7C97D53D6 /* Banners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Banners.swift; sourceTree = "<group>"; };
+		B330F4CF98061BE16535668F /* DriverFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverFlow.swift; sourceTree = "<group>"; };
+		B7384394017524FA15DF071D /* StringsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringsTests.swift; sourceTree = "<group>"; };
+		B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransportTests.swift; sourceTree = "<group>"; };
+		BBC50CE982A2746D3110960D /* OrdersAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersAPI.swift; sourceTree = "<group>"; };
+		BDF411664F7EACBB15965006 /* ProfileFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormatting.swift; sourceTree = "<group>"; };
+		C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLogicTests.swift; sourceTree = "<group>"; };
+		C1F2E160F1AD7CFF4946D9AB /* DriverViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverViews.swift; sourceTree = "<group>"; };
+		C36CDA490A4A8FA703305BBC /* BookingLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingLogic.swift; sourceTree = "<group>"; };
+		C3DF7FCD39ADC1768511A03B /* OrdersViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersViews.swift; sourceTree = "<group>"; };
+		C4C1CF2BFF8142FAA730B62B /* DriverProfileFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverProfileFormView.swift; sourceTree = "<group>"; };
+		C5862D85D90BCC2C17E6F61A /* HTTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransport.swift; sourceTree = "<group>"; };
+		CD460B56DD8B050579E5B85D /* OrderLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderLogicTests.swift; sourceTree = "<group>"; };
+		D2F21911C1D356BA08C5B415 /* BookingChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingChatModel.swift; sourceTree = "<group>"; };
+		D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkUITests.swift; sourceTree = "<group>"; };
+		D5EAC1FDC11AD6AF973FC47B /* OrdersFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersFormatting.swift; sourceTree = "<group>"; };
+		DA17164718156721D6DFFECE /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
+		DB27E951E104397C9F951A02 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		DEE319893889166112F6E6BC /* SessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionState.swift; sourceTree = "<group>"; };
+		DF39A6A56E7964BDFFD5A2FB /* ElchiTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiTheme.swift; sourceTree = "<group>"; };
+		E294ED9B0B7B264B55416A48 /* SessionEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEvents.swift; sourceTree = "<group>"; };
+		E2E875F1F437C5D3AC64126D /* ElchiUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ElchiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E566FCB6E874711B2522C06E /* LegacyLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyLogic.swift; sourceTree = "<group>"; };
+		E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryFlowUITests.swift; sourceTree = "<group>"; };
+		E641F473F072F020E30AFCBC /* BookingModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingModel.swift; sourceTree = "<group>"; };
+		E80BAE3CABBA9AC149F68DC7 /* Poppins-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Bold.ttf"; sourceTree = "<group>"; };
+		E87EA31F8CE0EA13DE5C57F5 /* BookingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingViews.swift; sourceTree = "<group>"; };
+		E897E90FFF89087512394CC1 /* BookingTrackingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingTrackingView.swift; sourceTree = "<group>"; };
+		E9078590EA61C4DFBD7FCE59 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingOffersLogicTests.swift; sourceTree = "<group>"; };
+		F1512BCC8B0C467AC0347376 /* SignInModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInModel.swift; sourceTree = "<group>"; };
+		FB09FB483669F7C8AC86DEA3 /* Poppins-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Regular.ttf"; sourceTree = "<group>"; };
+		FBE637582601108DA0981BBD /* ElchiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiApp.swift; sourceTree = "<group>"; };
+		FCEDCEFD444CC97A5325ED0F /* LocationViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationViews.swift; sourceTree = "<group>"; };
+		FE91ED3A3B98D042C095381D /* ListingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingViews.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5072B63A247B47953FFF699F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0F78E51A83CEFECC4F1C004 /* YandexMapsMobileLite in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		05CC1F34B114D44AE999D1B2 /* ElchiUITests */ = {
+			isa = PBXGroup;
+			children = (
+				41A189282F9DE6787F410CC3 /* ClientBookingUITests.swift */,
+				63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */,
+				1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */,
+				064E4F383CFE9E482273D83E /* ClientOrderUITests.swift */,
+				82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */,
+				014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */,
+				D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */,
+				9EC1A51C8AC6A8C2978AEF47 /* DriverUITests.swift */,
+				E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */,
+			);
+			path = ElchiUITests;
+			sourceTree = "<group>";
+		};
+		0EDEA01197A7DBD29587B477 /* Session */ = {
+			isa = PBXGroup;
+			children = (
+				E294ED9B0B7B264B55416A48 /* SessionEvents.swift */,
+				DEE319893889166112F6E6BC /* SessionState.swift */,
+				552D982C968E1E1E115906DF /* SessionStore.swift */,
+			);
+			path = Session;
+			sourceTree = "<group>";
+		};
+		15128A6205406AD1680B4BBA /* Orders */ = {
+			isa = PBXGroup;
+			children = (
+				FE91ED3A3B98D042C095381D /* ListingViews.swift */,
+				D5EAC1FDC11AD6AF973FC47B /* OrdersFormatting.swift */,
+				AEFC26087742FF883E6A6FA6 /* OrdersLogic.swift */,
+				5187A5C380B98BE157A1B9B7 /* OrdersModel.swift */,
+				C3DF7FCD39ADC1768511A03B /* OrdersViews.swift */,
+			);
+			path = Orders;
+			sourceTree = "<group>";
+		};
+		15BDD8ED2B5D3BC08BBF3187 /* Order */ = {
+			isa = PBXGroup;
+			children = (
+				4A5119DDBF60496FF3D30DAE /* OrderFormatting.swift */,
+				411F2B904B1638EB593ADE46 /* OrderLogic.swift */,
+				4EFBC4032949B66CF63BE6E6 /* OrderViews.swift */,
+				3C1D5A6E626D2A9700765B4F /* ParcelRequestModel.swift */,
+			);
+			path = Order;
+			sourceTree = "<group>";
+		};
+		249FA13EE5E8340BA932C00C /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				B20558F406539BB7C97D53D6 /* Banners.swift */,
+				E9078590EA61C4DFBD7FCE59 /* Components.swift */,
+				435B25D2F7FEA8A1307C81B0 /* FlowLayout.swift */,
+				1E893EAF0C557DAE0B0D0C0F /* States.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		2A12F9E374676548D133EF40 /* Profile */ = {
+			isa = PBXGroup;
+			children = (
+				BDF411664F7EACBB15965006 /* ProfileFormatting.swift */,
+				283497BEDB21D5D8D01F7231 /* ProfileLogic.swift */,
+				2C3C7743DF12041A749F814C /* ProfileModels.swift */,
+				7403C98C99D03BBB70E64FD2 /* ProfileViews.swift */,
+				AA31EFFA4B516438A1829CD7 /* SettingsViews.swift */,
+				33C838A004FCEF7772A8382C /* SupportViews.swift */,
+			);
+			path = Profile;
+			sourceTree = "<group>";
+		};
+		34A6CB2172D1F8E5E684F55B /* Driver */ = {
+			isa = PBXGroup;
+			children = (
+				0C3F1ACD6E158E318E0EC72B /* DriverDocumentsView.swift */,
+				B330F4CF98061BE16535668F /* DriverFlow.swift */,
+				16C8702059432269606836EE /* DriverLogic.swift */,
+				0466319AC1B19AAED64787DD /* DriverModels.swift */,
+				C4C1CF2BFF8142FAA730B62B /* DriverProfileFormView.swift */,
+				C1F2E160F1AD7CFF4946D9AB /* DriverViews.swift */,
+			);
+			path = Driver;
+			sourceTree = "<group>";
+		};
+		4BD382C3A4F0590BB98EE1B1 /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				1FE9A7EB2E109760A5E2B8B7 /* ElchiAPI.swift */,
+				DB27E951E104397C9F951A02 /* Models.swift */,
+			);
+			path = Generated;
+			sourceTree = "<group>";
+		};
+		54CBCB7A22879B767FC39325 /* Elchi */ = {
+			isa = PBXGroup;
+			children = (
+				9DA85381C566791BF786AFD0 /* Elchi.entitlements */,
+				221E681A85248434CC7E468D /* Info.plist */,
+				AFDD2DD89E73BE6F7B402DB6 /* API */,
+				B2696CC2AFE8D99A01E97C53 /* App */,
+				CCB722CAB450485A16758459 /* Features */,
+				DF50B6C0369035C4AC96132A /* I18n */,
+				D4B80D83EDF3BA97476B0EE5 /* Resources */,
+				0EDEA01197A7DBD29587B477 /* Session */,
+				9B524305E617A954EDFA132F /* UI */,
+			);
+			path = Elchi;
+			sourceTree = "<group>";
+		};
+		691297550A9A4CB2B21DC568 /* Booking */ = {
+			isa = PBXGroup;
+			children = (
+				D2F21911C1D356BA08C5B415 /* BookingChatModel.swift */,
+				A4E956232ED814D3E4F19F3F /* BookingChatViews.swift */,
+				84C0FF664AD5ECD97C0FA11E /* BookingFormatting.swift */,
+				C36CDA490A4A8FA703305BBC /* BookingLogic.swift */,
+				E641F473F072F020E30AFCBC /* BookingModel.swift */,
+				39B2ABA7C58DF674FEA29553 /* BookingMoreViews.swift */,
+				0AADBA05767DAFA193B2463D /* BookingTrackingModel.swift */,
+				E897E90FFF89087512394CC1 /* BookingTrackingView.swift */,
+				E87EA31F8CE0EA13DE5C57F5 /* BookingViews.swift */,
+			);
+			path = Booking;
+			sourceTree = "<group>";
+		};
+		6D888D493F244344AE6387F6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5C800273FB70DBBE3B76B022 /* Elchi.app */,
+				1CE0D49CABA9B2818C7BBF7A /* ElchiTests.xctest */,
+				E2E875F1F437C5D3AC64126D /* ElchiUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		710AB420199AC838DEB372E0 /* Location */ = {
+			isa = PBXGroup;
+			children = (
+				FCEDCEFD444CC97A5325ED0F /* LocationViews.swift */,
+				A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */,
+			);
+			path = Location;
+			sourceTree = "<group>";
+		};
+		717A557A4EFD9ABBD38ED7A6 /* Map */ = {
+			isa = PBXGroup;
+			children = (
+				5320FEF5E9CF0CCAC730936A /* ElchiMap.swift */,
+				669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */,
+			);
+			path = Map;
+			sourceTree = "<group>";
+		};
+		77DD7DFEBFCA02F301772940 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				0C10A99C8800447B2019AB7C /* ClientHome.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+		85EFD881AF3C7D9C6A106C38 /* Legacy */ = {
+			isa = PBXGroup;
+			children = (
+				E566FCB6E874711B2522C06E /* LegacyLogic.swift */,
+				7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */,
+				774BCD9CFE33E4643559CF3B /* LegacyViews.swift */,
+			);
+			path = Legacy;
+			sourceTree = "<group>";
+		};
+		91E264767CF5766289C6D12F /* Links */ = {
+			isa = PBXGroup;
+			children = (
+				A1572CEFF41B9C7099E5FA2D /* DeepLinks.swift */,
+			);
+			path = Links;
+			sourceTree = "<group>";
+		};
+		99DCC2736FD38035F8A7B74F /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				DF39A6A56E7964BDFFD5A2FB /* ElchiTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		9B524305E617A954EDFA132F /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				88AA28EAF962F62889B19611 /* ElchiIcon.swift */,
+				249FA13EE5E8340BA932C00C /* Components */,
+				717A557A4EFD9ABBD38ED7A6 /* Map */,
+				99DCC2736FD38035F8A7B74F /* Theme */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		AFDD2DD89E73BE6F7B402DB6 /* API */ = {
+			isa = PBXGroup;
+			children = (
+				0851D80624E40B0809EEA2C3 /* API.swift */,
+				09F2114B14B07FC499E89951 /* AuthAPI.swift */,
+				3D96E5FDD2494A0AC2D3230D /* DriverAPI.swift */,
+				28BF64B36C44C615562BE806 /* GeoAPI.swift */,
+				C5862D85D90BCC2C17E6F61A /* HTTPTransport.swift */,
+				DA17164718156721D6DFFECE /* JSONValue.swift */,
+				19304FC7161F98CC88F6F51F /* LegacyOrderAPI.swift */,
+				BBC50CE982A2746D3110960D /* OrdersAPI.swift */,
+				0E573D36C73DF08EB376290B /* ProfileAPI.swift */,
+				4BD382C3A4F0590BB98EE1B1 /* Generated */,
+			);
+			path = API;
+			sourceTree = "<group>";
+		};
+		B2696CC2AFE8D99A01E97C53 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				FBE637582601108DA0981BBD /* ElchiApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		BADF51BD5ED0FEF417DADF85 = {
+			isa = PBXGroup;
+			children = (
+				DA1EFEA480B40C226B1059AF /* Config */,
+				54CBCB7A22879B767FC39325 /* Elchi */,
+				D347B232CB6E044801623D03 /* ElchiTests */,
+				05CC1F34B114D44AE999D1B2 /* ElchiUITests */,
+				6D888D493F244344AE6387F6 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CCB722CAB450485A16758459 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				691297550A9A4CB2B21DC568 /* Booking */,
+				34A6CB2172D1F8E5E684F55B /* Driver */,
+				DE3D5406691560AC3E4FC49C /* Entry */,
+				77DD7DFEBFCA02F301772940 /* Home */,
+				85EFD881AF3C7D9C6A106C38 /* Legacy */,
+				91E264767CF5766289C6D12F /* Links */,
+				710AB420199AC838DEB372E0 /* Location */,
+				15BDD8ED2B5D3BC08BBF3187 /* Order */,
+				15128A6205406AD1680B4BBA /* Orders */,
+				2A12F9E374676548D133EF40 /* Profile */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		D347B232CB6E044801623D03 /* ElchiTests */ = {
+			isa = PBXGroup;
+			children = (
+				6A72B722AC59F1AB914DA87B /* BookingLogicTests.swift */,
+				3A80FE97EF8890CC6CC4A553 /* DeepLinkTests.swift */,
+				39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */,
+				B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */,
+				4B5C2D22B046E6A221A1F05D /* LegacyLogicTests.swift */,
+				EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */,
+				CD460B56DD8B050579E5B85D /* OrderLogicTests.swift */,
+				9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */,
+				C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */,
+				B7384394017524FA15DF071D /* StringsTests.swift */,
+			);
+			path = ElchiTests;
+			sourceTree = "<group>";
+		};
+		D47AF56BEE3AA8CF3E99962D /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				E80BAE3CABBA9AC149F68DC7 /* Poppins-Bold.ttf */,
+				31AC3EF77268DC310A40A626 /* Poppins-Medium.ttf */,
+				25ADC998933154BA1C02905E /* Poppins-OFL.txt */,
+				FB09FB483669F7C8AC86DEA3 /* Poppins-Regular.ttf */,
+				091A2CC726EB7B80E35F6690 /* Poppins-SemiBold.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		D4B80D83EDF3BA97476B0EE5 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				64BF397B4CEEDD77C2732C46 /* Assets.xcassets */,
+				A3694A601D0778DB17F9198C /* Icons.xcassets */,
+				31DADCFCD83585D785D08BFC /* Localizable.xcstrings */,
+				D47AF56BEE3AA8CF3E99962D /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		DA1EFEA480B40C226B1059AF /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				374F3BCC7187A54274BE4158 /* Elchi.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		DE3D5406691560AC3E4FC49C /* Entry */ = {
+			isa = PBXGroup;
+			children = (
+				077C2D6194C60CE1DB103563 /* EntryViews.swift */,
+				F1512BCC8B0C467AC0347376 /* SignInModel.swift */,
+			);
+			path = Entry;
+			sourceTree = "<group>";
+		};
+		DF50B6C0369035C4AC96132A /* I18n */ = {
+			isa = PBXGroup;
+			children = (
+				4CCE177C989B996DB4ACC0E5 /* ErrorText.swift */,
+				688A71A2ABC3BBA5625256ED /* Strings.swift */,
+			);
+			path = I18n;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8E769ADF5CFD9B6A4D732F7A /* ElchiTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 158519CCE98EFD12024B6502 /* Build configuration list for PBXNativeTarget "ElchiTests" */;
+			buildPhases = (
+				6D5BBFDAA60E414D5C834CA1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0A9DEA594B17A644FCA79DD6 /* PBXTargetDependency */,
+			);
+			name = ElchiTests;
+			packageProductDependencies = (
+			);
+			productName = ElchiTests;
+			productReference = 1CE0D49CABA9B2818C7BBF7A /* ElchiTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B995506D75E11436EFF9C8BC /* Elchi */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 338EBD2A7EB51448948BF70E /* Build configuration list for PBXNativeTarget "Elchi" */;
+			buildPhases = (
+				3266C2BC3A7B1367EA704359 /* Sources */,
+				1AF2E4439547BC5A2E080B8F /* Resources */,
+				5072B63A247B47953FFF699F /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Elchi;
+			packageProductDependencies = (
+				CF0977FA92FA72F9DDF3847D /* YandexMapsMobileLite */,
+			);
+			productName = Elchi;
+			productReference = 5C800273FB70DBBE3B76B022 /* Elchi.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C2D540CAD1A1DB7397266FFA /* ElchiUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 525AFC0ABD719C86A37BA69E /* Build configuration list for PBXNativeTarget "ElchiUITests" */;
+			buildPhases = (
+				F347D081E8109BFCCD64247B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3D64A7626BBED610BB970402 /* PBXTargetDependency */,
+			);
+			name = ElchiUITests;
+			packageProductDependencies = (
+			);
+			productName = ElchiUITests;
+			productReference = E2E875F1F437C5D3AC64126D /* ElchiUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C25B04D843D83C936C3016DE /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					C2D540CAD1A1DB7397266FFA = {
+						TestTargetID = B995506D75E11436EFF9C8BC;
+					};
+				};
+			};
+			buildConfigurationList = 2407B9BB4BA3FECF3AEFBEA3 /* Build configuration list for PBXProject "Elchi" */;
+			developmentRegion = uz;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				ru,
+				uz,
+			);
+			mainGroup = BADF51BD5ED0FEF417DADF85;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A47E0A0D9FFE6E9874909F49 /* XCRemoteSwiftPackageReference "mapkit-ios-lite" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 6D888D493F244344AE6387F6 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B995506D75E11436EFF9C8BC /* Elchi */,
+				8E769ADF5CFD9B6A4D732F7A /* ElchiTests */,
+				C2D540CAD1A1DB7397266FFA /* ElchiUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1AF2E4439547BC5A2E080B8F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				42403EF5D537BA688F8CD4C6 /* Assets.xcassets in Resources */,
+				3B003CCFF041EA026C746E73 /* Icons.xcassets in Resources */,
+				FAB19FC6C22199DC5825CBC6 /* Localizable.xcstrings in Resources */,
+				C15C8A4635209F5021CFF7F3 /* Poppins-Bold.ttf in Resources */,
+				C52BBC92759016BAA554FEC3 /* Poppins-Medium.ttf in Resources */,
+				8ABBB5990D94801EFE8DE3FE /* Poppins-OFL.txt in Resources */,
+				A4CBDBCE32C986316189D94A /* Poppins-Regular.ttf in Resources */,
+				7FC274B688353984E37E1761 /* Poppins-SemiBold.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3266C2BC3A7B1367EA704359 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1297D18503791FFB432D328A /* API.swift in Sources */,
+				6B921A6811DE88D46A706954 /* AuthAPI.swift in Sources */,
+				91665C4670147D367AAF7838 /* Banners.swift in Sources */,
+				DBFDF80C5AEE2AC92BF68E29 /* BookingChatModel.swift in Sources */,
+				3DEA99CC213A9FF855FD827B /* BookingChatViews.swift in Sources */,
+				B23CD59E593AE1E368114217 /* BookingFormatting.swift in Sources */,
+				2E9B2BFAD2DBDC3AEEAF7DDC /* BookingLogic.swift in Sources */,
+				01DDAE5BCEAFF579759E70B4 /* BookingModel.swift in Sources */,
+				9AA42AE7BD3617FAA3BBB493 /* BookingMoreViews.swift in Sources */,
+				08BD698F703AA7CB9213A2B1 /* BookingTrackingModel.swift in Sources */,
+				65C1408142CCDF8F59B39234 /* BookingTrackingView.swift in Sources */,
+				2EE9361493EBF0EE092CD319 /* BookingViews.swift in Sources */,
+				FCC0A2304CA1B829C9D531E2 /* ClientHome.swift in Sources */,
+				18C00F43B446B6C6713B3405 /* Components.swift in Sources */,
+				9901C3611318BA4FBE452A53 /* DeepLinks.swift in Sources */,
+				3B5ACADCADEA3B0376AD4C3C /* DriverAPI.swift in Sources */,
+				DF16308002BCC618A4738B76 /* DriverDocumentsView.swift in Sources */,
+				BDD4CCB47FF04EDE3E54356A /* DriverFlow.swift in Sources */,
+				C1B5853E6A1B75CE95444A08 /* DriverLogic.swift in Sources */,
+				C778706AB0715C2A921B1F2A /* DriverModels.swift in Sources */,
+				7D6E33DDB9198119029153E4 /* DriverProfileFormView.swift in Sources */,
+				B3EC95ADF38F7034699746B0 /* DriverViews.swift in Sources */,
+				87258CB1D69D3566CC4E76B3 /* ElchiAPI.swift in Sources */,
+				2A6135E1CABC44E8EC1DF0DC /* ElchiApp.swift in Sources */,
+				50B2F99841F6F5B65F94E8D2 /* ElchiIcon.swift in Sources */,
+				FFFC69F342C8C5DC1D6DC4A9 /* ElchiMap.swift in Sources */,
+				38E28AADEA9D73BC78B9C945 /* ElchiMapEngine.swift in Sources */,
+				5144AC33E12070F58FCD9810 /* ElchiTheme.swift in Sources */,
+				82BC2AF7760127F8021CE78E /* EntryViews.swift in Sources */,
+				CC3D4E19F04823C0812C6207 /* ErrorText.swift in Sources */,
+				792F83771A1610C2CA21ABFE /* FlowLayout.swift in Sources */,
+				3F69F6036336F84A2A79AB37 /* GeoAPI.swift in Sources */,
+				EC90A314B89A88B502A2250C /* HTTPTransport.swift in Sources */,
+				C634812579808489491BC847 /* JSONValue.swift in Sources */,
+				B96AFD77FAF4F12960E96CD8 /* LegacyLogic.swift in Sources */,
+				7E306CC355B11B288606940C /* LegacyOrderAPI.swift in Sources */,
+				D9255F19114537EF0B0B4193 /* LegacyOrderModel.swift in Sources */,
+				11905C39329C4734ACB37693 /* LegacyViews.swift in Sources */,
+				C5079BC9D0D2916CFD112524 /* ListingViews.swift in Sources */,
+				A1C1F6F8B8F3DEECE48FCEC4 /* LocationViews.swift in Sources */,
+				280414156FB9F22E8BE45C7E /* Models.swift in Sources */,
+				C2EFDE0345EA57A52A6000A9 /* OrderFormatting.swift in Sources */,
+				5D6CAE8A56A9DA4BF1023B9C /* OrderLogic.swift in Sources */,
+				F7C9B4C700F4147BA713C7B8 /* OrderViews.swift in Sources */,
+				48962C87ADECC021F90F4C4B /* OrdersAPI.swift in Sources */,
+				16DC1C1D61AFA615D370DBDC /* OrdersFormatting.swift in Sources */,
+				A72D42C24DE898896AB96E17 /* OrdersLogic.swift in Sources */,
+				A06862743976E57BB2A54C4B /* OrdersModel.swift in Sources */,
+				0F0BE7A1DAFDB2C143221FB7 /* OrdersViews.swift in Sources */,
+				20B6F23F258060280924A139 /* ParcelRequestModel.swift in Sources */,
+				2F334E68CE593793D8169447 /* PointPickerModel.swift in Sources */,
+				A37637F2D903F19C2D385DED /* ProfileAPI.swift in Sources */,
+				E94205254D498B9F9FEFB373 /* ProfileFormatting.swift in Sources */,
+				6BE0984C96A17E029AA7A4DC /* ProfileLogic.swift in Sources */,
+				934C7D227EC8EB85B2E7ACB7 /* ProfileModels.swift in Sources */,
+				DB601A899546A6D5A8CD5015 /* ProfileViews.swift in Sources */,
+				A771E3F0BF8136F5CCCBE929 /* SessionEvents.swift in Sources */,
+				A7C4E21730A9BF16EB0195E9 /* SessionState.swift in Sources */,
+				C36DA73C1757FB7E5CD14FA4 /* SessionStore.swift in Sources */,
+				23B687F6EDD2A2AB328D1EA1 /* SettingsViews.swift in Sources */,
+				AB48E9D4591CE833644D5435 /* SignInModel.swift in Sources */,
+				FF56E624D0DDE33E0C5F2FA0 /* States.swift in Sources */,
+				AE13A0237DB5E74AA3E83A2B /* Strings.swift in Sources */,
+				001E4D22570BBE3016CA1E2B /* SupportViews.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6D5BBFDAA60E414D5C834CA1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F575F8543C4E8BBC1F678762 /* BookingLogicTests.swift in Sources */,
+				86E0469A8C4B537C30B261F6 /* DeepLinkTests.swift in Sources */,
+				8B153DC9951BE2E3408FB121 /* DriverLogicTests.swift in Sources */,
+				6BBB2AFE7BCDB457D18104BD /* HTTPTransportTests.swift in Sources */,
+				8D6C2858EBBDD2B5E779DD1F /* LegacyLogicTests.swift in Sources */,
+				620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */,
+				D33151EC3B28CCF376021F4A /* OrderLogicTests.swift in Sources */,
+				6679748F2B6674DBEF88D56F /* ParcelRequestModelTests.swift in Sources */,
+				1C0544993AC69F232702A4C2 /* ProfileLogicTests.swift in Sources */,
+				0968CCBD469E0B2A550AB0DA /* StringsTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F347D081E8109BFCCD64247B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B960A9D5AD351B96A2ECD1F7 /* ClientBookingUITests.swift in Sources */,
+				45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */,
+				8C754C7698344577FA059522 /* ClientOffersUITests.swift in Sources */,
+				E81C117B111A29D67E3D1371 /* ClientOrderUITests.swift in Sources */,
+				83F9D384A561FA388327AF8B /* ClientProfileUITests.swift in Sources */,
+				3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */,
+				576267B94BCD44FF6630D0FE /* DeepLinkUITests.swift in Sources */,
+				13C7C6513818905DAD73B95E /* DriverUITests.swift in Sources */,
+				4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0A9DEA594B17A644FCA79DD6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B995506D75E11436EFF9C8BC /* Elchi */;
+			targetProxy = 4FA79BC26640F083956A6C89 /* PBXContainerItemProxy */;
+		};
+		3D64A7626BBED610BB970402 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B995506D75E11436EFF9C8BC /* Elchi */;
+			targetProxy = C97EA442394602BD9F26017D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		15E64F703B3D63C318F8B52E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 374F3BCC7187A54274BE4158 /* Elchi.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Elchi/Elchi.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Elchi/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Elchi;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = uz.elchi.app;
+				PRODUCT_NAME = Elchi;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2542468D25D4E8FC6A29583F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = uz.elchi.app.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Elchi;
+			};
+			name = Release;
+		};
+		331E54C8171030A34F1E318D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = uz.elchi.app.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Elchi.app/Elchi";
+			};
+			name = Debug;
+		};
+		5F38762E09651A17CB6D4C37 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = uz.elchi.app.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Elchi.app/Elchi";
+			};
+			name = Release;
+		};
+		62D0125E137B271A5F4AA38F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ELCHI_API_BASE_URL = "https:/$()/api.elchigo.uz/api/v1";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 2.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		63DA9505F5A92191E55064D2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ELCHI_API_BASE_URL = "http:/$()/127.0.0.1:8000/api/v1";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 2.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		82F5019B419C464C52432C5F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = uz.elchi.app.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Elchi;
+			};
+			name = Debug;
+		};
+		8998641BC84320454E886473 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 374F3BCC7187A54274BE4158 /* Elchi.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Elchi/Elchi.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Elchi/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Elchi;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = uz.elchi.app;
+				PRODUCT_NAME = Elchi;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		158519CCE98EFD12024B6502 /* Build configuration list for PBXNativeTarget "ElchiTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				331E54C8171030A34F1E318D /* Debug */,
+				5F38762E09651A17CB6D4C37 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2407B9BB4BA3FECF3AEFBEA3 /* Build configuration list for PBXProject "Elchi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				63DA9505F5A92191E55064D2 /* Debug */,
+				62D0125E137B271A5F4AA38F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		338EBD2A7EB51448948BF70E /* Build configuration list for PBXNativeTarget "Elchi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				15E64F703B3D63C318F8B52E /* Debug */,
+				8998641BC84320454E886473 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		525AFC0ABD719C86A37BA69E /* Build configuration list for PBXNativeTarget "ElchiUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				82F5019B419C464C52432C5F /* Debug */,
+				2542468D25D4E8FC6A29583F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A47E0A0D9FFE6E9874909F49 /* XCRemoteSwiftPackageReference "mapkit-ios-lite" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/yandex/mapkit-ios-lite";
+			requirement = {
+				kind = exactVersion;
+				version = 4.45.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CF0977FA92FA72F9DDF3847D /* YandexMapsMobileLite */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A47E0A0D9FFE6E9874909F49 /* XCRemoteSwiftPackageReference "mapkit-ios-lite" */;
+			productName = YandexMapsMobileLite;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C25B04D843D83C936C3016DE /* Project object */;
+}

@@ -1,0 +1,98 @@
+# XcodeGen spec: `xcodegen generate` writes Elchi.xcodeproj (do not edit the .xcodeproj by hand).
+name: Elchi
+options:
+  bundleIdPrefix: uz.elchi
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  developmentLanguage: uz
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "2.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+  configs:
+    Debug:
+      # The simulator shares the Mac's network, so localhost is the local backend. A real phone needs the Mac's LAN IP.
+      ELCHI_API_BASE_URL: "http:/$()/127.0.0.1:8000/api/v1"
+    Release:
+      ELCHI_API_BASE_URL: "https:/$()/api.elchigo.uz/api/v1"
+# Map: the official Yandex MapKit Mobile SDK, lite edition, from Yandex's own SPM repo. ElchiMap compiles against it
+# through `#if canImport(YandexMapsMobile)`; without a key (Config/Secrets.xcconfig) it shows the placeholder.
+packages:
+  YandexMapsMobileLite:
+    url: https://github.com/yandex/mapkit-ios-lite
+    exactVersion: 4.45.0
+targets:
+  Elchi:
+    type: application
+    platform: iOS
+    sources:
+      - path: Elchi
+    dependencies:
+      - package: YandexMapsMobileLite
+    configFiles:
+      # MAPKIT_API_KEY comes from the gitignored Config/Secrets.xcconfig (see Secrets.example.xcconfig).
+      Debug: Config/Elchi.xcconfig
+      Release: Config/Elchi.xcconfig
+    settings:
+      base:
+        # Kept from the first app: referral App Links (Q107) and the store listing are bound to it.
+        PRODUCT_BUNDLE_IDENTIFIER: uz.elchi.app
+        PRODUCT_NAME: Elchi
+        # Universal Links (Q107): `applinks:` for www.elchigo.uz and elchigo.uz, `/r/*` only (the server's
+        # apple-app-site-association file names the paths and needs the team id + bundle id).
+        CODE_SIGN_ENTITLEMENTS: Elchi/Elchi.entitlements
+        # YandexMapsMobile is a static framework whose setApiKey/setLocale live in an Objective-C category
+        # (YMKMapKit+Factory); without -ObjC the linker drops them and the app crashes at MapKit start.
+        OTHER_LDFLAGS: ["$(inherited)", "-ObjC"]
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_CFBundleDisplayName: Elchi
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    info:
+      path: Elchi/Info.plist
+      properties:
+        ElchiAPIBaseURL: $(ELCHI_API_BASE_URL)
+        # Empty without Config/Secrets.xcconfig: the app then shows the map placeholder and search instead.
+        ElchiMapKitKey: $(MAPKIT_API_KEY)
+        NSCameraUsageDescription: "Posilka rasmini olish uchun kamera kerak."
+        UIAppFonts: [Poppins-Regular.ttf, Poppins-Medium.ttf, Poppins-SemiBold.ttf, Poppins-Bold.ttf]
+        CFBundleDevelopmentRegion: uz
+        CFBundleLocalizations: [uz, ru]
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [elchi]
+        NSAppTransportSecurity:
+          # Plain HTTP only to local addresses (the dev backend); everything else stays HTTPS.
+          NSAllowsLocalNetworking: true
+    scheme:
+      testTargets: [ElchiTests, ElchiUITests]
+  ElchiTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: ElchiTests
+    dependencies:
+      - target: Elchi
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: uz.elchi.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+  ElchiUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ElchiUITests
+    dependencies:
+      - target: Elchi
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: uz.elchi.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Elchi

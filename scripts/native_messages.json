@@ -1,0 +1,826 @@
+{
+  "_about": "Strings only the native apps use (design-driven copy the web client does not have yet). Merged after mobile-app/src/i18n by scripts/gen_native_strings.mjs; a key that also exists there is an error, so the two never disagree. Same wording rules as messages.ts: say what is true, never promise what the platform has not checked.",
+  "entry.tagline": {
+    "uz": "Shaharlararo posilka xizmati",
+    "ru": "Междугородняя доставка посылок",
+    "_why": "Stage 01 design: passenger service is off (K7/Q5), so the splash promises parcels only."
+  },
+  "entry.footer": {
+    "uz": "Elchi · UZ · 2026",
+    "ru": "Elchi · UZ · 2026"
+  },
+  "onboarding.step3OperatorTitle": {
+    "uz": "Yetkazilganini operator qayd etadi",
+    "ru": "Доставку фиксирует оператор",
+    "_why": "Q139/Q144: the sender no longer confirms delivery and there is no rating step."
+  },
+  "onboarding.step3OperatorText": {
+    "uz": "Kelishuvdan keyin chat va kuzatuv ochiladi. To'lov haydovchiga naqd beriladi.",
+    "ru": "После договорённости открываются чат и отслеживание. Оплата — наличными водителю."
+  },
+  "onboarding.roleSubtitlePermanent": {
+    "uz": "Rol telefon raqamingizga bog'lanadi. Boshqa rol uchun chiqib, qayta kirasiz.",
+    "ru": "Роль привязывается к номеру телефона. Для другой роли нужно выйти и войти заново.",
+    "_why": "Replaces 'keyin ham almashtira olasiz': the server refuses the other role for a registered phone (ROLE_MISMATCH)."
+  },
+  "auth.asClient": {
+    "uz": "Mijoz sifatida",
+    "ru": "Как клиент"
+  },
+  "auth.asDriver": {
+    "uz": "Haydovchi sifatida",
+    "ru": "Как водитель"
+  },
+  "theme.light": {
+    "uz": "Yorug' rejim",
+    "ru": "Светлая тема"
+  },
+  "theme.dark": {
+    "uz": "Qorong'i rejim",
+    "ru": "Тёмная тема"
+  },
+  "client.home.taxiSoon": {
+    "uz": "Yo'lovchi e'loni ilovada keyingi bosqichda qo'shiladi.",
+    "ru": "Объявление для пассажиров появится в приложении на следующем этапе.",
+    "_why": "Stage 02 builds only the parcel request; the Taksi segment is shown (passenger_enabled) but says honestly that it is not here yet."
+  },
+  "client.drawer.soon": {
+    "uz": "Keyingi bosqichda",
+    "ru": "На следующем этапе"
+  },
+  "client.map.unavailable": {
+    "uz": "Xarita hozircha ko'rsatilmayapti",
+    "ru": "Карта пока не отображается"
+  },
+  "client.map.unavailableHint": {
+    "uz": "Joyni qidiruv orqali toping yoki tuman markazini tanlang.",
+    "ru": "Найдите место через поиск или выберите центр района."
+  },
+  "client.pointPicker.useDistrictCentre": {
+    "uz": "Tuman markazini tanlash",
+    "ru": "Выбрать центр района"
+  },
+  "client.pointPicker.searchMissNoMap": {
+    "uz": "Bu nom bo'yicha joy topilmadi — boshqacha yozib ko'ring yoki tuman markazini tanlang.",
+    "ru": "По этому названию место не найдено — попробуйте написать иначе или выберите центр района."
+  },
+  "client.location.pickRegionSubtitle": {
+    "uz": "Avval hududni tanlang, keyin tuman va xaritadagi joyni belgilaysiz.",
+    "ru": "Сначала выберите регион, затем район и место на карте.",
+    "_why": "Q88: the stop is optional; replaces location.pickRegionThenDistrict ('... bekatni belgilaysiz') on the native picker."
+  },
+  "client.routeSummary.windowPlaceholder": {
+    "uz": "kk.oo.yyyy, --:--",
+    "ru": "дд.мм.гггг, --:--"
+  },
+  "client.photo.camera": {
+    "uz": "Suratga olish",
+    "ru": "Сделать фото"
+  },
+  "client.photo.gallery": {
+    "uz": "Galereyadan tanlash",
+    "ru": "Выбрать из галереи"
+  },
+  "client.photo.replace": {
+    "uz": "Boshqa rasm tanlash",
+    "ru": "Выбрать другое фото"
+  },
+  "client.photo.unreadable": {
+    "uz": "Rasmni o'qib bo'lmadi. Boshqa rasm tanlang.",
+    "ru": "Не удалось прочитать фото. Выберите другое."
+  },
+  "error.PARCEL_CATALOG_UNCONFIRMED": {
+    "uz": "Jo'natma o'lchamlari katalogi hali tasdiqlanmagan — pochta e'lonini hozir berib bo'lmaydi.",
+    "ru": "Каталог размеров посылок ещё не утверждён — разместить объявление о посылке пока нельзя.",
+    "_why": "Stage 02 design note: the server code needs its own sentence (Q140)."
+  },
+  "error.OTP_GLOBAL_LIMIT": {
+    "uz": "Hozir kod yuborib bo'lmadi. Birozdan keyin qayta urinib ko'ring.",
+    "ru": "Сейчас не удалось отправить код. Попробуйте чуть позже."
+  },
+  "error.OTP_IP_LIMIT": {
+    "uz": "Bu tarmoqdan juda ko'p so'rov yuborildi. Birozdan keyin qayta urinib ko'ring.",
+    "ru": "Из этой сети отправлено слишком много запросов. Попробуйте чуть позже."
+  },
+  "error.ROLE_NOT_ALLOWED": {
+    "uz": "Bu rol bilan ilovaga kirib bo'lmaydi.",
+    "ru": "С этой ролью войти в приложение нельзя."
+  },
+  "client.orders.bookings": {
+    "uz": "Bronlar",
+    "ru": "Брони",
+    "_why": "Stage 03 client-orders section."
+  },
+  "client.orders.listings": {
+    "uz": "E'lonlarim",
+    "ru": "Мои объявления"
+  },
+  "client.orders.emptyText": {
+    "uz": "Bosh sahifadan birinchi posilkangizni yuboring.",
+    "ru": "Отправьте первую посылку с главного экрана."
+  },
+  "client.orders.newestOffer": {
+    "uz": "Eng yangi taklif {ago}",
+    "ru": "Последнее предложение {ago}",
+    "_why": "{ago} is publicTracking.minutesAgo / client.time.hoursAgo / client.time.daysAgo."
+  },
+  "client.time.hoursAgo": {
+    "uz": "{hours} soat oldin",
+    "ru": "{hours} ч назад"
+  },
+  "client.time.daysAgo": {
+    "uz": "{days} kun oldin",
+    "ru": "{days} дн. назад"
+  },
+  "client.listingDetail.manage": {
+    "uz": "Boshqaruv",
+    "ru": "Управление"
+  },
+  "client.listingDetail.viewOffers": {
+    "uz": "Takliflarni ko'rish ({count})",
+    "ru": "Посмотреть предложения ({count})"
+  },
+  "client.listingDetail.expires": {
+    "uz": "E'lon amal qiladi",
+    "ru": "Объявление действует"
+  },
+  "client.listingDetail.until": {
+    "uz": "{date} gacha",
+    "ru": "до {date}"
+  },
+  "client.listingDetail.resumeHint": {
+    "uz": "E'lon yana lentada ko'rinadi va haydovchilar taklif yubora oladi.",
+    "ru": "Объявление снова появится в ленте, и водители смогут присылать предложения.",
+    "_why": "Pair of listingOwner.pauseHint for a paused listing."
+  },
+  "client.listingCancel.text": {
+    "uz": "E'lon yopiladi va {count} ta ochiq taklif rad etiladi. Bu amalni qaytarib bo'lmaydi.",
+    "ru": "Объявление закроется, открытые предложения ({count}) будут отклонены. Это действие нельзя отменить."
+  },
+  "client.listingCancel.textNoOffers": {
+    "uz": "E'lon yopiladi. Bu amalni qaytarib bo'lmaydi.",
+    "ru": "Объявление закроется. Это действие нельзя отменить.",
+    "_why": "listing-cancel sheet when the listing has no open offer ('0 ta ochiq taklif' reads wrong)."
+  },
+  "client.orders.partialFailed": {
+    "uz": "Ro'yxatning bir qismini yuklab bo'lmadi. Pastga tortib yangilang.",
+    "ru": "Часть списка не загрузилась. Потяните вниз, чтобы обновить.",
+    "_why": "client-orders: bookings, listings and v1 orders load separately; one failing must not blank the rest."
+  },
+  "client.share.telegram": {
+    "uz": "Telegram",
+    "ru": "Telegram"
+  },
+  "client.share.link": {
+    "uz": "Havola",
+    "ru": "Ссылка"
+  },
+  "client.share.text": {
+    "uz": "Ulashish matni",
+    "ru": "Текст для отправки"
+  },
+  "client.share.send": {
+    "uz": "Ulashish",
+    "ru": "Поделиться"
+  },
+  "client.share.revoke": {
+    "uz": "Havolani bekor qilish",
+    "ru": "Отозвать ссылку"
+  },
+  "client.share.tooMany": {
+    "uz": "Faol havolalar soni chegarasiga yetildi ({limit} ta). Eskilarining muddati tugagach, yangisini yarata olasiz.",
+    "ru": "Достигнут предел активных ссылок ({limit}). Новую можно будет создать, когда истечёт срок старых.",
+    "_why": "share-links VALIDATION_ERROR reason too_many_active."
+  },
+  "client.listingBids.sortCheapest": {
+    "uz": "Eng arzon",
+    "ru": "Сначала дешёвые"
+  },
+  "client.listingBids.sortFastest": {
+    "uz": "Eng tez",
+    "ru": "Сначала ранние"
+  },
+  "client.listingBids.sortRating": {
+    "uz": "Yaxshi baholangan",
+    "ru": "С лучшими оценками"
+  },
+  "client.listingBids.cheapest": {
+    "uz": "Eng arzon",
+    "ru": "Самое дешёвое"
+  },
+  "client.listingBids.driver": {
+    "uz": "Haydovchi #{number}",
+    "ru": "Водитель #{number}",
+    "_why": "The server's anonymous label (Q40) is Uzbek; the number is stable per listing."
+  },
+  "client.listingBids.expiresIn": {
+    "uz": "Taklif {time} amal qiladi",
+    "ru": "Предложение действует ещё {time}"
+  },
+  "client.listingBids.counterShort": {
+    "uz": "Boshqa narx ({count} marta qoldi)",
+    "ru": "Другая цена (осталось: {count})"
+  },
+  "client.listingBids.bonusOptIn": {
+    "uz": "Belgilamasangiz bonus ishlatilmaydi.",
+    "ru": "Без отметки бонус не используется."
+  },
+  "client.listingBids.pausedNote": {
+    "uz": "E'lon to'xtatilgan — qayta ochmaguningizcha haydovchini tanlab ham, boshqa narx taklif qilib ham bo'lmaydi.",
+    "ru": "Объявление приостановлено — пока вы его не возобновите, нельзя выбрать водителя или предложить другую цену.",
+    "_why": "Pause refuses counters and accepts (LISTING_NOT_OPEN); rejecting or withdrawing still works."
+  },
+  "client.listingBids.driverCannotTake": {
+    "uz": "Bu haydovchi hozir buyurtmani ola olmaydi. Boshqa taklifni tanlang yoki keyinroq urinib ko'ring.",
+    "ru": "Этот водитель сейчас не может взять заказ. Выберите другое предложение или попробуйте позже.",
+    "_why": "INSUFFICIENT_COMMISSION_BALANCE / DRIVER_NOT_ELIGIBLE on accept: the driver's matter, said neutrally to the client."
+  },
+  "client.listingBids.termsChanged": {
+    "uz": "E'lon shartlari o'zgargan — takliflar yangilandi, ularni qaytadan ko'rib chiqing.",
+    "ru": "Условия объявления изменились — предложения обновлены, посмотрите их ещё раз."
+  },
+  "client.listingBids.alreadyBooked": {
+    "uz": "Bu e'lon bo'yicha bron allaqachon yaratilgan.",
+    "ru": "По этому объявлению бронь уже создана."
+  },
+  "client.accept.title": {
+    "uz": "Haydovchi #{number} ni tanlaysizmi?",
+    "ru": "Выбрать водителя #{number}?"
+  },
+  "client.accept.text": {
+    "uz": "Bron darhol yaratiladi, boshqa takliflar yopiladi va chat ochiladi.",
+    "ru": "Бронь создаётся сразу, остальные предложения закрываются, открывается чат."
+  },
+  "client.accept.confirm": {
+    "uz": "Ha, tanlayman",
+    "ru": "Да, выбираю"
+  },
+  "client.proposals.emptyTitle": {
+    "uz": "Taklif yo'q",
+    "ru": "Предложений нет"
+  },
+  "client.proposals.emptyText": {
+    "uz": "E'loningizga haydovchi javob bersa yoki siz qarshi taklif yuborsangiz, shu yerda ko'rinadi.",
+    "ru": "Здесь появятся ответы водителей на ваши объявления и ваши встречные предложения.",
+    "_why": "Replaces proposals.emptyClient (driver listings were retired, Q138)."
+  },
+  "client.bookingDetail.driverCard": {
+    "uz": "Haydovchi va avtomobil",
+    "ru": "Водитель и автомобиль"
+  },
+  "client.bookingDetail.reputation": {
+    "uz": "★ {rating} · {count} ta baho · {bookings} ta bajarilgan bron",
+    "ru": "★ {rating} · оценок: {count} · выполненных броней: {bookings}"
+  },
+  "client.bookingDetail.plateLater": {
+    "uz": "To'liq raqam olib ketishga 30 daqiqa qolganda ochiladi",
+    "ru": "Полный номер откроется за 30 минут до забора",
+    "_why": "Q64/Q75: the full plate from trip boarding or 30 min before pickup_window_start."
+  },
+  "client.bookingDetail.plateOpen": {
+    "uz": "To'liq raqam ochildi",
+    "ru": "Полный номер открыт"
+  },
+  "client.bookingDetail.phoneLater": {
+    "uz": "Safar jo'naganda ochiladi",
+    "ru": "Откроется, когда рейс отправится",
+    "_why": "Q142: parcel phones open at the trip's departure."
+  },
+  "client.bookingDetail.phoneChatOnly": {
+    "uz": "Hozircha aloqa ilova ichidagi chat orqali",
+    "ru": "Пока связь — только через чат в приложении"
+  },
+  "client.bookingDetail.contactOpen": {
+    "uz": "Aloqa ochiq",
+    "ru": "Связь открыта"
+  },
+  "client.bookingDetail.call": {
+    "uz": "Qo'ng'iroq",
+    "ru": "Позвонить"
+  },
+  "client.bookingDetail.bySideClient": {
+    "uz": "Siz",
+    "ru": "Вы"
+  },
+  "client.bookingDetail.bySideSystem": {
+    "uz": "Tizim",
+    "ru": "Система"
+  },
+  "client.bookingDetail.safetyHint": {
+    "uz": "Xavfli xatti-harakat, firibgarlik yoki bloklash",
+    "ru": "Опасное поведение, мошенничество или блокировка"
+  },
+  "client.bookingDetail.rated": {
+    "uz": "Baho berildi",
+    "ru": "Оценка отправлена"
+  },
+  "client.trackingShare.validFrom": {
+    "uz": "Havola {time} dan ishlay boshlaydi.",
+    "ru": "Ссылка начнёт работать с {time}.",
+    "_why": "A grant made before the window opens starts at the agreed pickup (tracking rules.grant_validity)."
+  },
+  "client.trackingShare.tooEarly": {
+    "uz": "Havolani hozir yaratib bo'lmaydi — {time} dan keyin urinib ko'ring.",
+    "ru": "Ссылку пока нельзя создать — попробуйте после {time}.",
+    "_why": "VALIDATION_ERROR reason=grant_too_early {issuable_from}."
+  },
+  "client.chat.rateLimited": {
+    "uz": "Juda tez yozyapsiz — {seconds} soniyadan keyin qayta urinib ko'ring.",
+    "ru": "Слишком часто — попробуйте снова через {seconds} с.",
+    "_why": "Q83: 20 messages per minute; RATE_LIMITED carries retry_after_s."
+  },
+  "client.support.newThread": {
+    "uz": "Yangi murojaat",
+    "ru": "Новое обращение"
+  },
+  "client.support.closedText": {
+    "uz": "Bu murojaat yopilgan. Yozishma o'qish uchun qoladi; yangi savol bo'lsa, yangi murojaat oching.",
+    "ru": "Это обращение закрыто. Переписка остаётся для чтения; если есть новый вопрос, откройте новое обращение."
+  },
+  "client.amendment.statusAccepted": {
+    "uz": "Qabul qilingan",
+    "ru": "Принято",
+    "_why": "status.accepted reads \"Haydovchi tanlangan\" (a listing's word)."
+  },
+  "client.amendment.openExists": {
+    "uz": "Ochiq taklif bor — unga javob kelmaguncha yangisini yuborib bo'lmaydi.",
+    "ru": "Есть открытое предложение — пока на него не ответили, новое отправить нельзя."
+  },
+  "client.amendment.conflict.tripNotPlanned": {
+    "uz": "Safarga tayyorgarlik boshlangan — endi shartlarni o'zgartirib bo'lmaydi.",
+    "ru": "Подготовка к рейсу началась — условия больше нельзя изменить."
+  },
+  "client.amendment.conflict.bookingChanged": {
+    "uz": "Bron shu orada o'zgargan — yangi holatini ko'rib, qaytadan yuboring.",
+    "ru": "Бронь тем временем изменилась — посмотрите новое состояние и отправьте снова."
+  },
+  "client.amendment.conflict.expired": {
+    "uz": "Bu taklifning muddati tugagan.",
+    "ru": "Срок этого предложения истёк."
+  },
+  "client.amendment.noChange": {
+    "uz": "Yangi narx hozirgisidan farq qilishi kerak.",
+    "ru": "Новая цена должна отличаться от текущей."
+  },
+  "client.safety.note": {
+    "uz": "Xavfli xatti-harakat, firibgarlik shubhasi yoki ilovadan tashqari aloqaga undash haqida xabar bering yoki bu odamni bloklang. Oddiy muammo uchun «Yordam / shikoyat» chatidan foydalaning. Bron majburiyatlari davom etadi.",
+    "ru": "Сообщите об опасном поведении, подозрении на мошенничество или склонении к связи вне приложения — или заблокируйте этого человека. С обычной проблемой пишите в чат «Помощь / жалоба». Обязательства по брони сохраняются.",
+    "_why": "safety.sectionHint says \"yuqoridagi\" (above) - on its own screen the button is not above."
+  },
+  "client.safety.blockConfirmTitle": {
+    "uz": "Haydovchini bloklaysizmi?",
+    "ru": "Заблокировать водителя?"
+  },
+  "client.safety.blockConfirm": {
+    "uz": "Ha, bloklash",
+    "ru": "Да, заблокировать"
+  },
+  "client.safety.blocked": {
+    "uz": "Haydovchi bloklandi. Mavjud bron va qo'llab-quvvatlash davom etadi.",
+    "ru": "Водитель заблокирован. Текущая бронь и поддержка сохраняются."
+  },
+  "client.tracking.lastPointLine": {
+    "uz": "Oxirgi nuqta: {time} · ±{accuracy} m · Manba: haydovchining telefoni",
+    "ru": "Последняя точка: {time} · ±{accuracy} м · Источник: телефон водителя"
+  },
+  "client.tracking.offLadder": {
+    "uz": "Hozirgi holat: {status}",
+    "ru": "Текущий статус: {status}"
+  },
+  "client.tracking.freshLine": {
+    "uz": "So'nggi 30 soniya ichida yangilangan.",
+    "ru": "Обновлено за последние 30 секунд."
+  },
+  "client.tracking.liveChannel": {
+    "uz": "Yangi nuqtalar ochiq aloqa orqali keladi.",
+    "ru": "Новые точки приходят по открытому соединению.",
+    "_why": "iOS: the K8 socket is live; otherwise liveTracking.polling (every 15 s) is shown."
+  },
+  "client.tracking.coordinates": {
+    "uz": "Oxirgi nuqta koordinatalari",
+    "ru": "Координаты последней точки",
+    "_why": "Shown only while the map cannot be drawn (no MapKit key)."
+  },
+  "client.tracking.stepDone": {
+    "uz": "bajarildi",
+    "ru": "выполнено",
+    "_why": "VoiceOver: the ladder's state is not colour-only."
+  },
+  "client.tracking.stepCurrent": {
+    "uz": "hozirgi bosqich",
+    "ru": "текущий этап"
+  },
+  "client.trackingShare.tooEarlyNoTime": {
+    "uz": "Havolani hozir yaratib bo'lmaydi — keyinroq urinib ko'ring.",
+    "ru": "Ссылку пока нельзя создать — попробуйте позже."
+  },
+  "client.trackingShare.finished": {
+    "uz": "Buyurtma yakunlangan — kuzatuv havolasi endi yaratilmaydi.",
+    "ru": "Заказ завершён — ссылку для отслеживания больше создать нельзя.",
+    "_why": "INVALID_STATE_TRANSITION {reason: booking_finished|trip_finished} on POST tracking-grants."
+  },
+  "client.trackingShare.ownerOnly": {
+    "uz": "Kuzatuv havolasini faqat buyurtma egasi yarata oladi.",
+    "ru": "Ссылку для отслеживания может создать только владелец заказа."
+  },
+  "client.bookingCancel.tooLate": {
+    "uz": "Bu holatda bronni bekor qilib bo'lmaydi. Muammo bo'lsa, «Yordam / shikoyat» orqali yozing.",
+    "ru": "В этом статусе бронь отменить нельзя. Если есть проблема, напишите через «Помощь / жалоба».",
+    "_why": "bookingCancel.refused.tooLate says \"nizo oching\" - there is no dispute form for users any more (Q141)."
+  },
+  "client.chat.discard": {
+    "uz": "Olib tashlash",
+    "ru": "Убрать",
+    "_why": "Drops a message the server refused (it was never stored)."
+  },
+  "client.amendment.statusClosed": {
+    "uz": "Yopilgan",
+    "ru": "Закрыто",
+    "_why": "A proposed amendment stays `proposed` after the booking moves on; the booking then takes no change."
+  },
+  "client.amendment.expiresIn": {
+    "uz": "Javob uchun {time} qoldi",
+    "ru": "На ответ осталось {time}"
+  },
+  "client.amendment.history": {
+    "uz": "Tarix",
+    "ru": "История"
+  },
+  "client.amendment.onlyConfirmed": {
+    "uz": "Shartlarni faqat safarga tayyorgarlik boshlanmasidan oldin o'zgartirish mumkin.",
+    "ru": "Условия можно изменить только до начала подготовки к рейсу.",
+    "_why": "The server refuses an amendment once the trip is not `planned` (trip_not_planned): offered only in `confirmed`."
+  },
+  "client.settings.themeLight": {
+    "uz": "Yorug'",
+    "ru": "Светлая",
+    "_why": "Stage 05 design (Profil, sozlamalar)."
+  },
+  "client.settings.themeLightHint": {
+    "uz": "Doim yorug'",
+    "ru": "Всегда светлая"
+  },
+  "client.settings.themeDark": {
+    "uz": "Qorong'i",
+    "ru": "Тёмная"
+  },
+  "client.settings.themeDarkHint": {
+    "uz": "Doim qorong'i",
+    "ru": "Всегда тёмная"
+  },
+  "client.settings.themeSystem": {
+    "uz": "Tizim",
+    "ru": "Системная"
+  },
+  "client.settings.themeSystemHint": {
+    "uz": "Qurilmaga mos",
+    "ru": "Как на устройстве"
+  },
+  "client.settings.deleteAccount": {
+    "uz": "Akkauntni o'chirish",
+    "ru": "Удалить аккаунт"
+  },
+  "client.settings.version": {
+    "uz": "Elchi · pilot · {version}",
+    "ru": "Elchi · пилот · {version}"
+  },
+  "client.settings.mapLanguageNote": {
+    "uz": "Xaritadagi yozuvlar tili ilova qayta ochilganda almashadi.",
+    "ru": "Язык подписей на карте сменится после перезапуска приложения."
+  },
+  "client.accountDelete.title": {
+    "uz": "Akkauntni o'chirish",
+    "ru": "Удаление аккаунта"
+  },
+  "client.accountDelete.warn": {
+    "uz": "Faol bron, ochiq murojaat yoki yopilmagan hisob bo'lsa, akkauntni o'chirib bo'lmaydi — avval ularni yakunlang.",
+    "ru": "Аккаунт нельзя удалить, пока есть активные брони, открытые обращения или незакрытые расчёты — сначала завершите их."
+  },
+  "client.accountDelete.deletedLabel": {
+    "uz": "Nima o'chiriladi",
+    "ru": "Что удаляется"
+  },
+  "client.accountDelete.deletedValue": {
+    "uz": "Ismingiz, telefon raqamingiz va barcha kirish sessiyalari",
+    "ru": "Ваше имя, номер телефона и все сеансы входа"
+  },
+  "client.accountDelete.keptLabel": {
+    "uz": "Nima saqlanadi",
+    "ru": "Что сохраняется"
+  },
+  "client.accountDelete.keptValue": {
+    "uz": "Bron va buyurtma qaydlari — ismingiz va raqamingizsiz",
+    "ru": "Записи о бронях и заказах — без вашего имени и номера"
+  },
+  "client.accountDelete.whenLabel": {
+    "uz": "Qachon",
+    "ru": "Когда"
+  },
+  "client.accountDelete.whenValue": {
+    "uz": "Darhol. O'chirilgan akkauntni tiklab bo'lmaydi.",
+    "ru": "Сразу. Удалённый аккаунт восстановить нельзя."
+  },
+  "client.accountDelete.confirm": {
+    "uz": "Tushundim, akkauntim va ma'lumotlarim o'chirilsin",
+    "ru": "Понимаю, удалите мой аккаунт и данные"
+  },
+  "client.accountDelete.submit": {
+    "uz": "Akkauntni o'chirish",
+    "ru": "Удалить аккаунт"
+  },
+  "client.accountDelete.blockedTitle": {
+    "uz": "Hozircha o'chirib bo'lmaydi",
+    "ru": "Пока удалить нельзя"
+  },
+  "client.accountDelete.blocked.active_bookings": {
+    "uz": "Faol bronlar: {count}",
+    "ru": "Активные брони: {count}"
+  },
+  "client.accountDelete.blocked.active_orders": {
+    "uz": "Eski ilovadagi faol buyurtmalar: {count}",
+    "ru": "Активные заказы из старого приложения: {count}"
+  },
+  "client.accountDelete.blocked.open_disputes": {
+    "uz": "Ochiq nizolar: {count}",
+    "ru": "Открытые споры: {count}"
+  },
+  "client.accountDelete.blocked.open_sos_tickets": {
+    "uz": "Ochiq SOS murojaatlar: {count}",
+    "ru": "Открытые SOS-обращения: {count}"
+  },
+  "client.accountDelete.blocked.pending_no_show_reviews": {
+    "uz": "Ko'rib chiqilayotgan «kelmadi» holatlari: {count}",
+    "ru": "Случаи «не пришёл» на рассмотрении: {count}"
+  },
+  "client.accountDelete.blocked.other": {
+    "uz": "Boshqa yopilmagan holat bor. Yordam bo'limiga yozing.",
+    "ru": "Есть другой незакрытый вопрос. Напишите в поддержку."
+  },
+  "client.accountDelete.done": {
+    "uz": "Akkaunt o'chirildi",
+    "ru": "Аккаунт удалён"
+  },
+  "client.session.expiredTitle": {
+    "uz": "Sessiya tugadi",
+    "ru": "Сеанс завершён"
+  },
+  "client.session.expiredText": {
+    "uz": "Xavfsizlik uchun qayta kiring.",
+    "ru": "В целях безопасности войдите снова."
+  },
+  "client.session.relogin": {
+    "uz": "Qayta kirish",
+    "ru": "Войти снова"
+  },
+  "client.logout.confirmTitle": {
+    "uz": "Chiqasizmi?",
+    "ru": "Выйти из аккаунта?"
+  },
+  "client.logout.confirmText": {
+    "uz": "Qayta kirish uchun telefoningizga yangi kod yuboriladi.",
+    "ru": "Чтобы войти снова, на ваш телефон придёт новый код."
+  },
+  "client.logout.stay": {
+    "uz": "Qolish",
+    "ru": "Остаться"
+  },
+  "client.support.ticket.open": {
+    "uz": "Yuborildi",
+    "ru": "Отправлено"
+  },
+  "client.support.ticket.acknowledged": {
+    "uz": "Operator ko'rdi",
+    "ru": "Оператор увидел"
+  },
+  "client.support.ticket.resolved": {
+    "uz": "Hal qilindi",
+    "ru": "Решено"
+  },
+  "client.notifications.emptyHint": {
+    "uz": "Push bildirishnoma yo'q — barcha yangiliklar shu yerda.",
+    "ru": "Push-уведомлений нет — все новости здесь."
+  },
+  "client.notifications.new": {
+    "uz": "Yangi",
+    "ru": "Новое"
+  },
+  "client.profile.statCompleted": {
+    "uz": "Yakunlangan",
+    "ru": "Завершено"
+  },
+  "client.profile.statTotal": {
+    "uz": "Jami",
+    "ru": "Всего"
+  },
+  "client.profile.nameSaveFailed": {
+    "uz": "Ismni saqlab bo'lmadi: {error}",
+    "ru": "Не удалось сохранить имя: {error}"
+  },
+  "client.safety.unblockFailed": {
+    "uz": "Blokdan chiqarib bo'lmadi: {error}",
+    "ru": "Не удалось разблокировать: {error}"
+  },
+  "notification.support.thread.replied.title": {
+    "uz": "Operator javob berdi",
+    "ru": "Оператор ответил"
+  },
+  "client.notifications.yesterday": {
+    "uz": "Kecha, {time}",
+    "ru": "Вчера, {time}"
+  },
+  "client.safety.blocksTitle": {
+    "uz": "Bloklanganlar",
+    "ru": "Заблокированные"
+  },
+  "client.safety.blockedAt": {
+    "uz": "Bloklangan: {date}",
+    "ru": "Заблокирован: {date}"
+  },
+  "client.profile.myProposalsHint": {
+    "uz": "Haydovchilar bilan narx kelishuvlari",
+    "ru": "Согласование цены с водителями"
+  },
+  "client.legacy.archiveNote": {
+    "uz": "Arxiv: bu buyurtma eski tizimda yaratilgan.",
+    "ru": "Архив: этот заказ создан в старой системе.",
+    "_why": "Stage 06 design: v1 orders are an archive of the old system (Q4); actions on existing v1 orders stay as in the web client, creation is gone."
+  },
+  "client.legacy.cancelReason": {
+    "uz": "Mijoz bekor qildi",
+    "ru": "Клиент отменил"
+  },
+  "client.legacy.phoneAfterAccept": {
+    "uz": "Telefon haydovchi tanlangandan keyin ko'rinadi",
+    "ru": "Телефон виден после выбора водителя"
+  },
+  "client.legacy.call": {
+    "uz": "Qo'ng'iroq qilish",
+    "ru": "Позвонить"
+  },
+  "client.legacy.bidsClosed": {
+    "uz": "Takliflar yopilgan: haydovchi tanlangan yoki buyurtma yakunlangan.",
+    "ru": "Предложения закрыты: водитель выбран или заказ завершён."
+  },
+  "client.legacy.dispute.reason.delayed": {
+    "uz": "Posilka kechikdi",
+    "ru": "Посылка задерживается"
+  },
+  "client.legacy.dispute.reason.lost": {
+    "uz": "Posilka yo'qoldi",
+    "ru": "Посылка потеряна"
+  },
+  "client.legacy.dispute.reason.damaged": {
+    "uz": "Posilka shikastlangan",
+    "ru": "Посылка повреждена"
+  },
+  "client.legacy.dispute.reason.receiver_denied": {
+    "uz": "Qabul qiluvchi olmadi",
+    "ru": "Получатель не принял"
+  },
+  "client.legacy.dispute.reason.wrong_address": {
+    "uz": "Noto'g'ri manzil",
+    "ru": "Неверный адрес"
+  },
+  "client.legacy.dispute.reason.payment_issue": {
+    "uz": "To'lov bo'yicha kelishmovchilik",
+    "ru": "Разногласие по оплате"
+  },
+  "client.legacy.dispute.reason.prohibited_item": {
+    "uz": "Taqiqlangan buyum",
+    "ru": "Запрещённый предмет"
+  },
+  "client.legacy.dispute.reason.other": {
+    "uz": "Boshqa muammo",
+    "ru": "Другая проблема"
+  },
+  "client.legacy.dispute.details": {
+    "uz": "Tafsilot",
+    "ru": "Подробности"
+  },
+  "client.legacy.dispute.exists": {
+    "uz": "Bu buyurtma bo'yicha nizo allaqachon ochilgan.",
+    "ru": "По этому заказу спор уже открыт."
+  },
+  "client.banner.newOffer": {
+    "uz": "Yangi taklif bor — yangilash uchun bosing",
+    "ru": "Есть новое предложение — нажмите, чтобы обновить"
+  },
+  "client.legacy.error.orderChanged": {
+    "uz": "Buyurtma holati shu orada o'zgargan. Sahifani yangilab, qayta urinib ko'ring.",
+    "ru": "Статус заказа успел измениться. Обновите страницу и попробуйте снова."
+  },
+  "client.legacy.error.bidGone": {
+    "uz": "Bu taklif endi faol emas. Ro'yxat yangilandi.",
+    "ru": "Это предложение уже неактивно. Список обновлён."
+  },
+  "client.legacy.error.driverUnavailable": {
+    "uz": "Bu haydovchini hozir tanlab bo'lmaydi. Boshqa taklifni tanlang.",
+    "ru": "Этого водителя сейчас нельзя выбрать. Выберите другое предложение."
+  },
+  "client.legacy.confirmDeliveryYes": {
+    "uz": "Ha, yetib keldi",
+    "ru": "Да, доставлено"
+  },
+  "driver.profile.lockWarning": {
+    "uz": "Diqqat: avtomobil ma'lumotlari saqlangach qulflanadi.",
+    "ru": "Внимание: после сохранения данные автомобиля будут заблокированы.",
+    "_why": "Stage 07 design (driver onboarding, Q94 vehicle lock)."
+  },
+  "driver.home.availableOn": {
+    "uz": "Faolman — buyurtma qabul qilishga tayyor",
+    "ru": "На линии — готов принимать заказы"
+  },
+  "driver.home.verificationLabel": {
+    "uz": "Tasdiqlash holati",
+    "ru": "Статус проверки"
+  },
+  "driver.error.plateTaken": {
+    "uz": "Bu davlat raqami boshqa haydovchiga biriktirilgan. Raqamni tekshiring yoki operatorga yozing.",
+    "ru": "Этот госномер уже закреплён за другим водителем. Проверьте номер или напишите оператору."
+  },
+  "driver.error.fileTooLarge": {
+    "uz": "Fayl juda katta: {max} MB gacha yuklash mumkin.",
+    "ru": "Файл слишком большой: можно загрузить до {max} МБ."
+  },
+  "driver.error.blocked": {
+    "uz": "Hisobingiz bloklangan. Qo'llab-quvvatlashga yozing.",
+    "ru": "Ваш аккаунт заблокирован. Напишите в поддержку."
+  },
+  "driver.docs.fileHintImage": {
+    "uz": "Rasm (JPG, PNG, WEBP), {max} MB gacha",
+    "ru": "Фото (JPG, PNG, WEBP), до {max} МБ"
+  },
+  "driver.docs.fileHintImageOrPdf": {
+    "uz": "Rasm yoki PDF, {max} MB gacha",
+    "ru": "Фото или PDF, до {max} МБ"
+  },
+  "driver.docs.pdf": {
+    "uz": "PDF fayl",
+    "ru": "PDF-файл"
+  },
+  "driver.docs.uploading": {
+    "uz": "Yuklanmoqda…",
+    "ru": "Загрузка…"
+  },
+  "driver.tab.nextStage": {
+    "uz": "Bu bo'lim keyingi bosqichda qo'shiladi.",
+    "ru": "Этот раздел появится на следующем этапе."
+  },
+  "driver.profile.menuTitle": {
+    "uz": "Haydovchi",
+    "ru": "Водитель"
+  },
+  "driver.form.required": {
+    "uz": "Bu maydonni to'ldiring",
+    "ru": "Заполните это поле"
+  },
+  "driver.form.positiveNumber": {
+    "uz": "0 dan katta butun son kiriting",
+    "ru": "Введите целое число больше 0"
+  },
+  "driver.faq1Question": {
+    "uz": "Buyurtmalarni qanday olaman?",
+    "ru": "Как получать заказы?",
+    "_why": "Help screen reused in the driver flow answered client questions; driver FAQ per AGENTS.md Q44/Q94/Q142 and the commission model."
+  },
+  "driver.faq1Answer": {
+    "uz": "Profil va hujjatlaringiz tasdiqlangach, faol holatni yoqing. Yo'nalishingizga mos so'rovlar «Moslar» bo'limida ko'rinadi: mijoz narxiga rozi bo'lasiz yoki o'z narxingizni taklif qilasiz.",
+    "ru": "После проверки профиля и документов включите статус «на линии». Подходящие вашему направлению запросы появятся в разделе «Подходящие»: соглашайтесь с ценой клиента или предлагайте свою."
+  },
+  "driver.faq2Question": {
+    "uz": "Komissiya qanday olinadi?",
+    "ru": "Как списывается комиссия?"
+  },
+  "driver.faq2Answer": {
+    "uz": "Mijoz sizga naqd to'laydi. ELCHI komissiyasi bron qabul qilinganda hamyoningizdagi oldindan to'ldirilgan balansdan ushlab turiladi va xizmat yakunlanganda undiriladi.",
+    "ru": "Клиент платит вам наличными. Комиссия ELCHI удерживается с предоплаченного баланса кошелька при принятии брони и списывается после завершения услуги."
+  },
+  "driver.faq3Question": {
+    "uz": "Avtomobil ma'lumotlarini qanday o'zgartiraman?",
+    "ru": "Как изменить данные автомобиля?"
+  },
+  "driver.faq3Answer": {
+    "uz": "Avtomobil ma'lumotlari bir marta kiritiladi. O'zgartirish kerak bo'lsa, operator yoki adminga murojaat qiling.",
+    "ru": "Данные автомобиля вводятся один раз. Если нужно их изменить, обратитесь к оператору или администратору."
+  },
+  "driver.faq4Question": {
+    "uz": "Mijozning telefoni qachon ochiladi?",
+    "ru": "Когда открывается телефон клиента?"
+  },
+  "driver.faq4Answer": {
+    "uz": "Xizmat boshlanganda: pochta uchun safar yo'lga chiqqanda. Undan oldin aloqa ilova ichidagi chat orqali bo'ladi.",
+    "ru": "Когда начинается услуга: для посылок — когда рейс отправляется. До этого связь только через чат в приложении."
+  },
+  "link.referralSaved": {
+    "uz": "Taklif kodi saqlandi: {code}",
+    "ru": "Код приглашения сохранён: {code}"
+  },
+  "link.unsupported": {
+    "uz": "Bu havolani ilovada ochib bo'lmaydi.",
+    "ru": "Эту ссылку нельзя открыть в приложении."
+  },
+  "link.referralApplied": {
+    "uz": "Taklif kodi qabul qilindi",
+    "ru": "Код приглашения принят"
+  }
+}

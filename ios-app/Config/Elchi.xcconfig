@@ -1,0 +1,4 @@
+// Build settings shared by every configuration. Secrets live in the gitignored Secrets.xcconfig (copy
+// Secrets.example.xcconfig); without it the map key is empty and the app shows the map placeholder.
+MAPKIT_API_KEY =
+#include? "Secrets.xcconfig"
