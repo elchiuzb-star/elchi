@@ -1,0 +1,18 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "uz.elchi.app",
+      "sha256_cert_fingerprints": ["REPLACE_WITH_PLAY_APP_SIGNING_SHA256"]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "uz.elchi.app.dev",
+      "sha256_cert_fingerprints": ["14:51:99:66:0D:B6:60:BC:BC:D6:E4:CE:E3:D2:E7:6C:03:F9:F1:4A:2F:83:B8:53:F6:88:C8:29:1C:09:6E:4E"]
+    }
+  }
+]

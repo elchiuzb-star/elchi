@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_WITH_TEAM_ID.uz.elchi.app"],
+        "components": [
+          { "/": "/r/*", "comment": "Referral links (Q107). /t/ and /e/ stay in the browser until the in-app public pages exist." }
+        ]
+      }
+    ]
+  }
+}
