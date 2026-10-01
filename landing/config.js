@@ -18,7 +18,7 @@
  */
 window.ELCHI_CONFIG = {
 	API_BASE: "https://api.elchigo.uz",
-	YANDEX_JS_KEY: "",
+	YANDEX_JS_KEY: "3edd1375-5c77-48e9-bda9-c61b69e3d305",
 	YANDEX_LANG: "uz_UZ",
 	STORE_ANDROID: "",
 	STORE_IOS: ""
