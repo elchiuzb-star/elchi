@@ -17,6 +17,7 @@ from app.contracts.operations import (
     KPI_SMALL_SAMPLE_BELOW,
     KPI_TARGETS,
     SHARE_LINK_PUBLIC_PATH,
+    SHARE_LINK_WEB_PATH,
     TRACKING_FRESHNESS_TARGET,
 )
 
@@ -72,11 +73,16 @@ def share_text(
     return "\n".join(lines)
 
 
-def public_url(token: str, template: str | None = None) -> str:
-    """``template`` comes from the deployment (``ELCHI_SHARE_PUBLIC_URL_TEMPLATE``); it must carry ``{token}``."""
+def public_url(token: str, template: str | None = None, web_base: str | None = None) -> str:
+    """``template`` comes from the deployment (``ELCHI_SHARE_PUBLIC_URL_TEMPLATE``); it must carry ``{token}``.
+
+    Without a usable template, ``web_base`` (``ELCHI_PUBLIC_WEB_BASE_URL``, no trailing slash) gives
+    ``{web_base}/e/{token}``; without either, the relative API path - the behaviour before the base existed.
+    """
     chosen = (template or "").strip()
     if "{token}" not in chosen:
-        chosen = SHARE_LINK_PUBLIC_PATH
+        base = (web_base or "").strip().rstrip("/")
+        chosen = f"{base}{SHARE_LINK_WEB_PATH}" if base else SHARE_LINK_PUBLIC_PATH
     return chosen.replace("{token}", token)
 
 

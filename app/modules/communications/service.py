@@ -52,6 +52,7 @@ from app.contracts.errors import DomainError, ErrorCode, WarningCode
 from app.contracts.events import EVENT_AUDIENCES, EventAudience, EventEnvelope, payload_for_audience
 from app.contracts.ids import PublicIdPrefix, format_public_id, parse_public_id
 from app.contracts.timeutil import ensure_aware_utc, utc_now
+from app.core.secret_box import CURRENT_KEY_VERSION, SecretBoxError, open_sealed, seal
 from app.models.audit_log import AuditLog
 from app.modules.communications import dispatch as dispatch_registry
 from app.modules.communications.models import (
@@ -73,6 +74,8 @@ logger = logging.getLogger(__name__)
 RATE_WINDOW = timedelta(minutes=1)
 CHAT_FILTER_FIELD = "text"
 STAFF_ONLY = frozenset({EventAudience.STAFF})
+#: ADR-0022: derived-key purpose of the sealed push registration token (``crypto.derive_subkey``).
+PUSH_TOKEN_PURPOSE = "push-token"
 STAFF_EVENT_TYPES: tuple[str, ...] = tuple(
     sorted(event_type.value for event_type, audiences in EVENT_AUDIENCES.items() if EventAudience.STAFF in audiences)
 )
@@ -659,7 +662,10 @@ def record_push_result(session: Session, claim: PushClaim, result: PushResult, *
         .with_for_update()
         .execution_options(populate_existing=True)
     ).scalar_one_or_none()
+    # A device FCM reported as gone is gone whether or not this lease is still ours: revoke it first.
+    _revoke_gone_devices(session, claim.message.user_id, result.gone_device_ids, now)
     if row is None:
+        session.flush()
         return None
     row.lease_until = None
     row.updated_at = now
@@ -667,13 +673,40 @@ def record_push_result(session: Session, claim: PushClaim, result: PushResult, *
         row.status, row.sent_at, row.last_error = NotificationDeliveryStatus.SENT.value, now, None
     else:
         row.last_error = (result.error or "push_failed")[:500]
-        delay = outbox_retry_delay(max(1, int(row.attempts or 1)))
+        delay = outbox_retry_delay(max(1, int(row.attempts or 1))) if result.retryable else None
         if delay is None:
             row.status = NotificationDeliveryStatus.DEAD.value
         else:
             row.status, row.next_attempt_at = NotificationDeliveryStatus.FAILED.value, now + delay
     session.flush()
     return row.status
+
+
+def _revoke_gone_devices(session: Session, user_id: int, device_ids: Sequence[str], now: datetime) -> int:
+    """Revoke devices the provider reported as permanently gone - the effect of ``DELETE /devices/{id}``.
+
+    Scoped to the message's user and to active rows, so a token that was meanwhile re-bound to another
+    account (which gets a new public id) is never touched.
+    """
+    values = []
+    for value in device_ids:
+        try:
+            values.append(parse_public_id(value, PublicIdPrefix.DEVICE))
+        except DomainError:
+            continue
+    if not values:
+        return 0
+    devices = list(session.execute(
+        select(DeviceToken)
+        .where(DeviceToken.public_id.in_(values), DeviceToken.user_id == user_id, DeviceToken.revoked_at.is_(None))
+        .order_by(DeviceToken.id)
+        .with_for_update()
+    ).scalars())
+    for device in devices:
+        device.revoked_at = now
+    if devices:
+        logger.info("push_device_revoked_gone count=%s", len(devices))
+    return len(devices)
 
 
 # --- inbox and events (N1, N4, N5) -----------------------------------------------------------------------------------------
@@ -774,6 +807,11 @@ def register_device(session: Session, *, user_id: int, platform: str, token: str
         device.created_at = now
     device.app_version = app_version
     device.last_seen_at = now
+    # ADR-0022: FCM needs the token itself, so it is sealed (AES-256-GCM, derived "push-token" key) and bound
+    # to this row's public id. Re-sealed on every registration: that fills rows from before 0073, follows a
+    # re-bind (new public id) and moves the row to the current key version.
+    device.token_cipher = seal_push_token(token, device.public_id)
+    device.token_key_version = CURRENT_KEY_VERSION
     # §17.3: keep the account <-> device history the re-bind above would otherwise erase. This is a *signal
     # source* for human review (A12), not an authorisation fact: nothing here blocks anyone.
     session.execute(
@@ -804,6 +842,38 @@ def device_account_groups(
     for _platform, _token_hash, user_ids in session.execute(stmt).all():
         groups.append(sorted({int(value) for value in user_ids}))
     return groups
+
+
+def seal_push_token(token: str, device_uuid: uuid.UUID) -> bytes:
+    from app.core.config import settings
+
+    return seal(settings.secret_key, PUSH_TOKEN_PURPOSE, token, aad=str(device_uuid), key_version=CURRENT_KEY_VERSION)
+
+
+def device_push_token(session: Session, device_public_id_value: str) -> str | None:
+    """ADR-0022: the registration token of an active device, for the push provider; ``None`` = cannot push.
+
+    ``None`` for an unknown or revoked device, a row registered before 0073 (no cipher - it fills when the
+    device registers again) and a ciphertext that does not authenticate (wrong key/row). Never logs the token.
+    """
+    from app.core.config import settings
+
+    try:
+        value = parse_public_id(device_public_id_value, PublicIdPrefix.DEVICE)
+    except DomainError:
+        return None
+    row = session.execute(
+        select(DeviceToken.public_id, DeviceToken.token_cipher, DeviceToken.token_key_version)
+        .where(DeviceToken.public_id == value, DeviceToken.revoked_at.is_(None))
+    ).one_or_none()
+    if row is None or row.token_cipher is None:
+        return None
+    try:
+        return open_sealed(settings.secret_key, PUSH_TOKEN_PURPOSE, bytes(row.token_cipher), aad=str(row.public_id),
+                           key_version=int(row.token_key_version or CURRENT_KEY_VERSION))
+    except SecretBoxError:
+        logger.warning("push_token_unsealable device=%s", device_public_id_value)
+        return None
 
 
 def revoke_device(session: Session, *, device_public_id_value: str, user_id: int, now: datetime | None = None) -> None:

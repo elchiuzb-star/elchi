@@ -303,3 +303,60 @@ def test_public_page_and_share_link_through_http(bw: BW, ops_client) -> None:  #
     revoked = ops_client.delete(f"/api/v2/share-links/{data['id']}", headers=auth(bw.w.client_id, "client"))
     assert revoked.status_code == 200
     assert ops_client.get(f"/api/v2/public/listings/{token}").status_code == 404
+
+
+# --- Q88 map-point listings on the public share text and page (audit fix) ------------------------------------------
+
+
+def _published_point_listing(bw: BW) -> tuple[str, str]:
+    from app.modules.marketplace.schemas import ListingCreate
+    from tests.pg.marketplace.test_point_endpoints_pg import point_body
+
+    district = scalar(bw.db, "SELECT name_uz FROM geo_districts ORDER BY id LIMIT 1")
+    return publish_listing(bw, bw.w.client_id, ListingCreate.model_validate(point_body(bw))), district
+
+
+def test_map_point_listing_is_named_by_its_district_never_by_the_street_address(bw: BW) -> None:
+    """A Q88 listing has no stop ids. Its share text and public page used to say "? - ?"; they now name the
+    district the place was marked in - never the reverse-geocoded street address (Q43: public, before accept)."""
+    listing, district = _published_point_listing(bw)
+    assert district
+    _public_id, token, share_text, _url = _create_link(bw, listing, bw.w.client_id)
+    assert share_text.split("\n")[0].endswith(f": {district} - {district}")
+    assert "? - ?" not in share_text
+    assert "ko'chasi" not in share_text, "the street address must not reach a public share text (Q43)"
+
+    with bw.db.session() as s:
+        page = service.open_public_listing(s, token=token)
+        s.commit()
+    assert (page.origin_stop_name, page.destination_stop_name) == (district, district)
+
+
+def test_stop_listing_keeps_its_stop_names(bw: BW) -> None:
+    listing = _published_listing(bw, origin="A", destination="D")
+    _public_id, token, share_text, _url = _create_link(bw, listing, bw.w.client_id)
+    with bw.db.session() as s:
+        page = service.open_public_listing(s, token=token)
+        s.commit()
+    names = {r.name_uz for r in rows(bw.db, "SELECT name_uz FROM corridor_stops WHERE id IN (:a, :d)",
+                                     a=bw.w.stop_ids["A"], d=bw.w.stop_ids["D"])}
+    assert {page.origin_stop_name, page.destination_stop_name} == names
+    assert share_text.split("\n")[0].endswith(f": {page.origin_stop_name} - {page.destination_stop_name}")
+
+
+def test_share_url_uses_the_public_web_base_only_when_no_template_is_set(bw: BW, monkeypatch) -> None:  # noqa: ANN001
+    from app.core.config import settings
+
+    listing = _published_listing(bw)
+    monkeypatch.delenv("ELCHI_SHARE_PUBLIC_URL_TEMPLATE", raising=False)
+    monkeypatch.setattr(settings, "public_web_base_url", None)
+    _p, token, _t, url = _create_link(bw, listing, bw.w.client_id)
+    assert url == f"/api/v2/public/listings/{token}", "unset base: unchanged relative behaviour"
+
+    monkeypatch.setattr(settings, "public_web_base_url", "https://www.elchigo.uz")
+    _p, token, text_for_chat, url = _create_link(bw, listing, bw.w.client_id)
+    assert url == f"https://www.elchigo.uz/e/{token}" and url in text_for_chat
+
+    monkeypatch.setenv("ELCHI_SHARE_PUBLIC_URL_TEMPLATE", "https://share.example.uz/x/{token}")
+    _p, token, _t, url = _create_link(bw, listing, bw.w.client_id)
+    assert url == f"https://share.example.uz/x/{token}", "the explicit template keeps priority"

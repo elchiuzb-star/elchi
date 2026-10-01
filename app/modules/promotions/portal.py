@@ -214,9 +214,15 @@ def campaign_version(session: Session, campaign: PromoCampaign, version_no: int)
 
 
 def share_url(code: str) -> str | None:
-    from app.core.config import settings
+    """``https://<host>/r/<code>``. ELCHI_REFERRAL_LINK_HOST wins; otherwise the host of
+    ELCHI_PUBLIC_WEB_BASE_URL; neither -> ``None`` (the app shows the code for manual entry).
 
-    host = (settings.referral_link_host or "").strip().strip("/")
+    A URL here only means "configured": DNS, certificate, deploy and App Links are verified separately,
+    which is why the API reports ``link_status = configured_unverified`` and never "ready" (Q107/Q116).
+    """
+    from app.core.config import public_web_host, settings
+
+    host = (settings.referral_link_host or "").strip().strip("/") or (public_web_host() or "")
     return f"https://{host}/r/{code}" if host else None
 
 

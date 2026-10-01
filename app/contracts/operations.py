@@ -19,6 +19,8 @@ SHARE_LINK_DEFAULT_TTL_HOURS = 48
 SHARE_LINK_MAX_ACTIVE_PER_LISTING = 5
 # Path of the public page; the deployment may put a web page in front of it (ELCHI_SHARE_PUBLIC_URL_TEMPLATE).
 SHARE_LINK_PUBLIC_PATH = "/api/v2/public/listings/{token}"
+# Path of the share page on the public web site; used with ELCHI_PUBLIC_WEB_BASE_URL when no template is set.
+SHARE_LINK_WEB_PATH = "/e/{token}"
 
 # --- ops queues (O4) -------------------------------------------------------------------------------------------
 OPS_QUEUE_DEFAULT_LIMIT = 20

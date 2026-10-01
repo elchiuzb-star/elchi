@@ -42,3 +42,13 @@ def _isolate_booking_dispute_hooks() -> Iterator[None]:
     yield
     _reset_booking_dispute_hooks()
     _reset_request_metrics()
+
+
+@pytest.fixture(autouse=True)
+def _no_public_web_base_from_local_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``ELCHI_PUBLIC_WEB_BASE_URL`` in a developer's ``.env`` would turn every tracking/share/referral link
+    absolute and break tests that follow the relative API link. Tests start from the unset default; a test
+    that wants the base sets ``settings.public_web_base_url`` itself."""
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "public_web_base_url", None)

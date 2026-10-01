@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -59,6 +60,20 @@ class Settings(BaseSettings):
     # Host of the share link https://<host>/r/<code>. Unset -> the app shows the code for manual entry only.
     # Setting it does NOT mean the link works: DNS, certificate, deploy and App Links are verified separately.
     referral_link_host: str | None = None
+    # ── Public web base (share / tracking / referral links) ─────────────────
+    # Origin of the public web site, e.g. https://www.elchigo.uz (no trailing slash). Only a fallback: when
+    # set and the specific ELCHI_TRACKING_PUBLIC_URL_TEMPLATE / ELCHI_SHARE_PUBLIC_URL_TEMPLATE /
+    # ELCHI_REFERRAL_LINK_HOST is not, links become {base}/t/{token}, {base}/e/{token} and https://<host>/r/<code>.
+    # Unset -> every link behaves exactly as before (relative API paths, no referral share_url).
+    public_web_base_url: str | None = None
+    # ── Push (ADR-0022) ──────────────────────────────────────────────────────
+    # "disabled" (default) or "fcm". "fcm" is installed by the worker only when the Firebase config below is
+    # complete; in production it is additionally refused unless push_allow_production is set, which must
+    # wait for the K3 legal review (ADR-0022 "Yoqishdan oldin bajarilishi shart").
+    push_provider: str = "disabled"
+    push_fcm_project_id: str | None = None
+    push_fcm_service_account_file: str | None = None
+    push_allow_production: bool = False
     # Pilot abuse limits (ADR-0023 §16 proposal; not production-approved values). Counted in promo_rate_events.
     referral_code_checks_per_ip_per_minute: int = 30
     referral_attributions_per_user_per_hour: int = 5
@@ -131,6 +146,35 @@ class Settings(BaseSettings):
             return None
         return value
 
+    @field_validator("public_web_base_url", mode="before")
+    @classmethod
+    def normalize_public_web_base_url(cls, value: object) -> object:
+        if value is None:
+            return None
+        text = str(value).strip().rstrip("/")
+        if not text:
+            return None
+        parsed = urlsplit(text)
+        if parsed.scheme not in {"https", "http"} or not parsed.netloc or parsed.query or parsed.fragment:
+            raise ValueError(f"ELCHI_PUBLIC_WEB_BASE_URL must be an absolute http(s) origin, got {value!r}")
+        return text
+
+    @field_validator("push_provider", mode="before")
+    @classmethod
+    def push_provider_in_allowlist(cls, value: object) -> str:
+        text = value.strip().lower() if isinstance(value, str) else ""
+        text = text or "disabled"
+        if text not in {"disabled", "fcm"}:
+            raise ValueError(f"ELCHI_PUSH_PROVIDER must be 'disabled' or 'fcm', got {value!r}")
+        return text
+
+    @field_validator("push_fcm_project_id", "push_fcm_service_account_file", mode="before")
+    @classmethod
+    def blank_push_setting_is_unset(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value.strip() if isinstance(value, str) else value
+
     yandex_geocoder_api_key: str | None = None
     # Geosuggest is a separate Yandex product with its own key: the geocoder answers addresses,
     # suggest answers place names ("10-sonli maktab"), which is what a person actually types.
@@ -166,6 +210,18 @@ def cursor_signing_secret(config: "Settings | None" = None) -> bytes:
     Previous keys are not accepted (an old cursor fails and the client restarts pagination)."""
     config = config or settings
     return derive_subkey(config.cursor_signing_key or config.secret_key, PURPOSE_CURSOR_SIGNING)
+
+
+def public_web_base_url(config: "Settings | None" = None) -> str | None:
+    """``ELCHI_PUBLIC_WEB_BASE_URL`` without a trailing slash, or ``None`` when unset (links stay as before)."""
+    config = config or settings
+    return config.public_web_base_url or None
+
+
+def public_web_host(config: "Settings | None" = None) -> str | None:
+    """Host (with port, if any) of :func:`public_web_base_url` - the fallback for ELCHI_REFERRAL_LINK_HOST."""
+    base = public_web_base_url(config)
+    return urlsplit(base).netloc or None if base else None
 
 
 @lru_cache

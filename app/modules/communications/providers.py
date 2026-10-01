@@ -1,9 +1,9 @@
-"""Push provider port (ADR-0012 §9; U3 pending).
+"""Push provider port (ADR-0012 §9; provider chosen in ADR-0022: FCM).
 
-No real provider (Web Push VAPID / FCM / Expo) is wired and no dependency is added until the U3 decision, which
-also decides how the raw token/subscription is stored (``device_tokens`` keeps only a SHA-256 hash today).
 The default provider is :class:`DisabledPushProvider`: the dispatcher then creates no push deliveries and the in-app
-inbox is the only channel. :class:`FakePushProvider` exists for tests and local demos.
+inbox is the only channel. The FCM adapter (``communications.fcm``) is installed only by the worker, only when
+``ELCHI_PUSH_PROVIDER=fcm`` and its config is complete, and never in production without the explicit K3 flag
+(``communications.push_setup``). :class:`FakePushProvider` exists for tests and local demos.
 
 A provider is called by ``communications.jobs`` OUTSIDE any DB transaction (claim -> commit -> send -> result tx).
 A push is never proof of a transaction (spec §16) and its failure never touches bookings or money (AC34).
@@ -32,6 +32,12 @@ class PushMessage:
 class PushResult:
     ok: bool
     error: str | None = None
+    #: dev_ public ids the provider reported as permanently gone (FCM ``UNREGISTERED`` ...). The result
+    #: transaction revokes them - the same effect as ``DELETE /api/v2/devices/{id}`` - so they are not retried.
+    gone_device_ids: tuple[str, ...] = ()
+    #: ``False`` when another attempt cannot succeed (every device gone, no stored token, our own credentials
+    #: refused): the delivery goes straight to ``dead`` instead of walking the whole backoff schedule.
+    retryable: bool = True
 
 
 class PushProvider(Protocol):

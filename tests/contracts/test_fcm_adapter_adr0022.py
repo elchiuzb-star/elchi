@@ -121,3 +121,69 @@ def test_missing_access_token_fails_closed_without_calling_out() -> None:
     result = sender.send(message())
     assert result.ok is False and result.error == "fcm_no_access_token"
     assert transport.calls == []
+
+
+# --- audit fixes: what the outbox is told (gone devices, retryability, auth failures) -----------------------------
+
+
+class RefreshingCredentials(FakeCredentials):
+    """Hands out a new token after ``invalidate`` - like the service-account credentials after a 401."""
+
+    def __init__(self) -> None:
+        super().__init__("ya29.stale")
+        self.invalidated = 0
+
+    def invalidate(self) -> None:
+        self.invalidated += 1
+        self._token = "ya29.fresh"
+
+
+def test_gone_devices_are_reported_so_the_result_transaction_can_revoke_them() -> None:
+    sender, _transport = provider((404, {"error": {"status": "UNREGISTERED"}}))
+    result = sender.send(message(devices=("dev_1", "dev_2")))
+    assert result.ok is False and result.error == "UNREGISTERED"
+    assert result.gone_device_ids == ("dev_1", "dev_2")
+    assert result.retryable is False, "every device is gone: another attempt cannot succeed"
+
+
+def test_a_success_still_reports_the_dead_sibling() -> None:
+    sender, _transport = provider((200, {}), (404, {"error": {"status": "UNREGISTERED"}}))
+    result = sender.send(message(devices=("dev_1", "dev_2")))
+    assert result.ok is True and result.gone_device_ids == ("dev_2",)
+
+
+def test_transient_errors_stay_retryable() -> None:
+    sender, _transport = provider((503, {"error": {"status": "UNAVAILABLE"}}))
+    result = sender.send(message())
+    assert result.ok is False and result.retryable is True and result.gone_device_ids == ()
+
+
+def test_a_missing_token_is_not_retried() -> None:
+    sender, _transport = provider(token=None)
+    result = sender.send(message())
+    assert result.error == "device_token_unavailable" and result.retryable is False
+
+
+def test_auth_failure_refreshes_once_then_stops_and_is_not_retried() -> None:
+    """401/403 is our credentials, not the device: one refresh, then no hammering and no endless backoff."""
+    credentials = RefreshingCredentials()
+    transport = FakeTransport((401, {"error": {"status": "UNAUTHENTICATED"}}))
+    sender = fcm.FcmPushProvider(credentials=credentials, transport=transport, token_lookup=lambda _d: "fcm-token")
+    result = sender.send(message(devices=("dev_1", "dev_2", "dev_3")))
+    assert result.ok is False and result.retryable is False and result.gone_device_ids == ()
+    assert credentials.invalidated == 1
+    assert len(transport.calls) == 2, "one call plus one retry with the fresh token; the other devices are skipped"
+    assert transport.calls[1]["headers"]["Authorization"] == "Bearer ya29.fresh"
+
+
+def test_an_expired_access_token_recovers_after_the_refresh() -> None:
+    credentials = RefreshingCredentials()
+    transport = FakeTransport((401, {"error": {"status": "UNAUTHENTICATED"}}), (200, {}))
+    sender = fcm.FcmPushProvider(credentials=credentials, transport=transport, token_lookup=lambda _d: "fcm-token")
+    assert sender.send(message()).ok is True
+
+
+def test_sender_id_mismatch_is_a_gone_device_not_an_auth_failure() -> None:
+    sender, transport = provider((403, {"error": {"status": "SENDER_ID_MISMATCH"}}))
+    result = sender.send(message(devices=("dev_1", "dev_2")))
+    assert result.gone_device_ids == ("dev_1", "dev_2") and len(transport.calls) == 2

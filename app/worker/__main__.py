@@ -53,6 +53,11 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, _stop)
     if not args.once:
         # Long-running worker only: `--once` stays a dependency-free loop/heartbeat smoke check.
+        # ADR-0022: FCM only when ELCHI_PUSH_PROVIDER=fcm, the config is complete and (in production) the K3
+        # flag is set; otherwise the disabled default stays and this logs why, once.
+        from app.modules.communications.push_setup import install_push_provider
+
+        install_push_provider()
         register_default_tasks()  # geo routing_cache cleanup + SERVICE_JOBS whose functions exist
     return run_forever(stop, once=args.once)
 

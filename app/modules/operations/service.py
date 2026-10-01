@@ -53,6 +53,7 @@ from app.contracts.operations import (
 )
 from app.contracts.timeutil import ensure_aware_utc, utc_now
 from app.contracts.tracking import DELAYED_MAX_AGE_SECONDS
+from app.core.config import public_web_base_url
 from app.models import AuditLog
 from app.modules.identity import service as identity_service
 from app.modules.marketplace import service as marketplace_service
@@ -137,9 +138,39 @@ def _owned_listing(session: Session, listing_public_id_value: str, actor_user_id
 
 
 def _stop_names(session: Session, listing: Listing) -> tuple[str, str]:
-    stops = get_ports().geo.stops_by_ids(session, [listing.origin_stop_id, listing.destination_stop_id])
-    origin, destination = stops.get(listing.origin_stop_id), stops.get(listing.destination_stop_id)
-    return (origin.name_uz if origin else "?"), (destination.name_uz if destination else "?")
+    """Public names of both ends: the verified stop, or - for a Q88 map point - the district it was marked in.
+
+    The share text and the public page are read by anyone with the link, so a map point is named by its
+    district only. ``origin_address`` / ``destination_address`` are street-level (reverse-geocoded) and would
+    put an exact address on a public page before any accept (Q43), so they are deliberately not used here.
+    """
+    stop_ids = [value for value in (listing.origin_stop_id, listing.destination_stop_id) if value]
+    stops = get_ports().geo.stops_by_ids(session, stop_ids) if stop_ids else {}
+    district_ids = [
+        district_id
+        for stop_id, district_id in (
+            (listing.origin_stop_id, listing.origin_district_id),
+            (listing.destination_stop_id, listing.destination_district_id),
+        )
+        if district_id and stops.get(stop_id) is None
+    ]
+    districts: dict = {}
+    if district_ids:
+        from app.modules.geo import service as geo_service
+
+        districts = geo_service.districts_by_ids(session, district_ids)
+
+    def name(stop_id: int | None, district_id: int | None) -> str:
+        stop = stops.get(stop_id) if stop_id else None
+        if stop is not None:
+            return stop.name_uz
+        district = districts.get(district_id) if district_id else None
+        return district.name_uz if district is not None else "?"
+
+    return (
+        name(listing.origin_stop_id, listing.origin_district_id),
+        name(listing.destination_stop_id, listing.destination_district_id),
+    )
 
 
 def create_share_link(
@@ -184,7 +215,7 @@ def create_share_link(
     session.add(row)
     session.flush()
     origin, destination = _stop_names(session, listing)
-    url = rules.public_url(token, os.environ.get(PUBLIC_URL_TEMPLATE_ENV))
+    url = rules.public_url(token, os.environ.get(PUBLIC_URL_TEMPLATE_ENV), public_web_base_url())
     text_for_chat = rules.share_text(
         channel=channel_value,
         kind=listing.kind,
