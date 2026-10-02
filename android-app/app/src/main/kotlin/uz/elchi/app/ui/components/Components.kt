@@ -151,10 +151,11 @@ fun ElchiButton(
 
 /**
  * 44dp round button floating over a map or sheet (profile, back, locate). [dot] is the small red mark on the menu
- * button when something unread waits; the caller puts it into [contentDescription] too.
+ * button when something unread waits; the caller puts it into [contentDescription] too. [tint] colours the icon
+ * (default: the text colour); [loading] swaps it for a small spinner (the button stays tappable).
  */
 @Composable
-fun RoundIconButton(icon: ElchiIcon, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier, dot: Boolean = false) {
+fun RoundIconButton(icon: ElchiIcon, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier, dot: Boolean = false, tint: Color? = null, loading: Boolean = false) {
     val c = Elchi.colors
     Box(modifier.size(44.dp)) {
         Box(
@@ -166,7 +167,9 @@ fun RoundIconButton(icon: ElchiIcon, contentDescription: String, onClick: () -> 
                 .clickable(role = Role.Button, onClick = onClick)
                 .semantics { this.contentDescription = contentDescription },
             contentAlignment = Alignment.Center,
-        ) { ElchiIconView(icon, c.text) }
+        ) {
+            if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = c.brand, strokeWidth = 2.dp) else ElchiIconView(icon, tint ?: c.text)
+        }
         if (dot) {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 7.dp, end = 7.dp).size(10.dp).clip(CircleShape).background(c.card).padding(1.5.dp).clip(CircleShape).background(c.tone(Tone.ERR).fg))
         }

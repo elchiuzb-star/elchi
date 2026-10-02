@@ -338,6 +338,10 @@
     <string name="client_logout_confirmText">Чтобы войти снова, на ваш телефон придёт новый код.</string>
     <string name="client_logout_confirmTitle">Выйти из аккаунта?</string>
     <string name="client_logout_stay">Остаться</string>
+    <string name="client_map_locating">Определяем местоположение…</string>
+    <string name="client_map_locationDenied">Нет доступа к геолокации. Включите геолокацию для Elchi в настройках телефона.</string>
+    <string name="client_map_locationUnavailable">Не удалось определить местоположение. Проверьте, включён ли GPS.</string>
+    <string name="client_map_myLocation">Моё местоположение</string>
     <string name="client_map_unavailable">Карта пока не отображается</string>
     <string name="client_map_unavailableHint">Найдите место через поиск или выберите центр района.</string>
     <string name="client_notifications_emptyHint">Push-уведомлений нет — все новости здесь.</string>

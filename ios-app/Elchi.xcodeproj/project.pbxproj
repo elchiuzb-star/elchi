@@ -45,6 +45,7 @@
 		45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */; };
 		485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD96CB85D338794F3AD1FF7 /* MarketModels.swift */; };
 		48962C87ADECC021F90F4C4B /* OrdersAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC50CE982A2746D3110960D /* OrdersAPI.swift */; };
+		4B5647F4AABE57D928028C3D /* MyLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DA8DCF66F9980504D3D867 /* MyLocation.swift */; };
 		4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */; };
 		50B2F99841F6F5B65F94E8D2 /* ElchiIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AA28EAF962F62889B19611 /* ElchiIcon.swift */; };
 		5144AC33E12070F58FCD9810 /* ElchiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF39A6A56E7964BDFFD5A2FB /* ElchiTheme.swift */; };
@@ -55,6 +56,7 @@
 		620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */; };
 		65C1408142CCDF8F59B39234 /* BookingTrackingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E897E90FFF89087512394CC1 /* BookingTrackingView.swift */; };
 		6679748F2B6674DBEF88D56F /* ParcelRequestModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */; };
+		6A476D8B2D0697F39A6721CE /* MyLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C261C4C90D818622BF524E8A /* MyLocationTests.swift */; };
 		6B921A6811DE88D46A706954 /* AuthAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F2114B14B07FC499E89951 /* AuthAPI.swift */; };
 		6BBB2AFE7BCDB457D18104BD /* HTTPTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */; };
 		6BE0984C96A17E029AA7A4DC /* ProfileLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 283497BEDB21D5D8D01F7231 /* ProfileLogic.swift */; };
@@ -87,6 +89,7 @@
 		A7C4E21730A9BF16EB0195E9 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE319893889166112F6E6BC /* SessionState.swift */; };
 		AB48E9D4591CE833644D5435 /* SignInModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1512BCC8B0C467AC0347376 /* SignInModel.swift */; };
 		ABC581163DC45FD17E329931 /* DriverBookingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E2BDBFD509B21B996A062B /* DriverBookingModels.swift */; };
+		AC7EBB138BDC371D56B0B027 /* ClientMyLocationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0D6DE1F2618F2B03471134 /* ClientMyLocationUITests.swift */; };
 		AE13A0237DB5E74AA3E83A2B /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688A71A2ABC3BBA5625256ED /* Strings.swift */; };
 		AF45273097DBAA3D41ADA4F2 /* DriverBookingLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A221EB8F4FF967F4D54A6CB /* DriverBookingLogic.swift */; };
 		B0F78E51A83CEFECC4F1C004 /* YandexMapsMobileLite in Frameworks */ = {isa = PBXBuildFile; productRef = CF0977FA92FA72F9DDF3847D /* YandexMapsMobileLite */; };
@@ -163,6 +166,7 @@
 		19304FC7161F98CC88F6F51F /* LegacyOrderAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyOrderAPI.swift; sourceTree = "<group>"; };
 		1CE0D49CABA9B2818C7BBF7A /* ElchiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ElchiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1E893EAF0C557DAE0B0D0C0F /* States.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = States.swift; sourceTree = "<group>"; };
+		1F0D6DE1F2618F2B03471134 /* ClientMyLocationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMyLocationUITests.swift; sourceTree = "<group>"; };
 		1F5E7B4176A9CB4B37D47A2F /* DriverProfileViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverProfileViews.swift; sourceTree = "<group>"; };
 		1FE9A7EB2E109760A5E2B8B7 /* ElchiAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiAPI.swift; sourceTree = "<group>"; };
 		221E681A85248434CC7E468D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -234,6 +238,7 @@
 		BDF411664F7EACBB15965006 /* ProfileFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormatting.swift; sourceTree = "<group>"; };
 		C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLogicTests.swift; sourceTree = "<group>"; };
 		C1F2E160F1AD7CFF4946D9AB /* DriverViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverViews.swift; sourceTree = "<group>"; };
+		C261C4C90D818622BF524E8A /* MyLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyLocationTests.swift; sourceTree = "<group>"; };
 		C36CDA490A4A8FA703305BBC /* BookingLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingLogic.swift; sourceTree = "<group>"; };
 		C3DF7FCD39ADC1768511A03B /* OrdersViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersViews.swift; sourceTree = "<group>"; };
 		C4C1CF2BFF8142FAA730B62B /* DriverProfileFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverProfileFormView.swift; sourceTree = "<group>"; };
@@ -258,6 +263,7 @@
 		E80BAE3CABBA9AC149F68DC7 /* Poppins-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Bold.ttf"; sourceTree = "<group>"; };
 		E87EA31F8CE0EA13DE5C57F5 /* BookingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingViews.swift; sourceTree = "<group>"; };
 		E897E90FFF89087512394CC1 /* BookingTrackingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingTrackingView.swift; sourceTree = "<group>"; };
+		E8DA8DCF66F9980504D3D867 /* MyLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyLocation.swift; sourceTree = "<group>"; };
 		E9078590EA61C4DFBD7FCE59 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingOffersLogicTests.swift; sourceTree = "<group>"; };
 		F129D51A637BCF9404EF251D /* MarketAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketAPI.swift; sourceTree = "<group>"; };
@@ -287,6 +293,7 @@
 			children = (
 				41A189282F9DE6787F410CC3 /* ClientBookingUITests.swift */,
 				63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */,
+				1F0D6DE1F2618F2B03471134 /* ClientMyLocationUITests.swift */,
 				1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */,
 				064E4F383CFE9E482273D83E /* ClientOrderUITests.swift */,
 				82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */,
@@ -451,6 +458,7 @@
 			children = (
 				5320FEF5E9CF0CCAC730936A /* ElchiMap.swift */,
 				669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */,
+				E8DA8DCF66F9980504D3D867 /* MyLocation.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -578,6 +586,7 @@
 				4B5C2D22B046E6A221A1F05D /* LegacyLogicTests.swift */,
 				EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */,
 				5D3AD394E58D0D62AE2987D8 /* MarketLogicTests.swift */,
+				C261C4C90D818622BF524E8A /* MyLocationTests.swift */,
 				CD460B56DD8B050579E5B85D /* OrderLogicTests.swift */,
 				9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */,
 				C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */,
@@ -812,6 +821,7 @@
 				02CF8DAC07EA1B56C3B4F6A0 /* MarketLogic.swift in Sources */,
 				485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */,
 				280414156FB9F22E8BE45C7E /* Models.swift in Sources */,
+				4B5647F4AABE57D928028C3D /* MyLocation.swift in Sources */,
 				C2EFDE0345EA57A52A6000A9 /* OrderFormatting.swift in Sources */,
 				5D6CAE8A56A9DA4BF1023B9C /* OrderLogic.swift in Sources */,
 				F7C9B4C700F4147BA713C7B8 /* OrderViews.swift in Sources */,
@@ -856,6 +866,7 @@
 				8D6C2858EBBDD2B5E779DD1F /* LegacyLogicTests.swift in Sources */,
 				620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */,
 				E9D1358CC55A3F74366E4CF3 /* MarketLogicTests.swift in Sources */,
+				6A476D8B2D0697F39A6721CE /* MyLocationTests.swift in Sources */,
 				D33151EC3B28CCF376021F4A /* OrderLogicTests.swift in Sources */,
 				6679748F2B6674DBEF88D56F /* ParcelRequestModelTests.swift in Sources */,
 				1C0544993AC69F232702A4C2 /* ProfileLogicTests.swift in Sources */,
@@ -869,6 +880,7 @@
 			files = (
 				B960A9D5AD351B96A2ECD1F7 /* ClientBookingUITests.swift in Sources */,
 				45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */,
+				AC7EBB138BDC371D56B0B027 /* ClientMyLocationUITests.swift in Sources */,
 				8C754C7698344577FA059522 /* ClientOffersUITests.swift in Sources */,
 				E81C117B111A29D67E3D1371 /* ClientOrderUITests.swift in Sources */,
 				83F9D384A561FA388327AF8B /* ClientProfileUITests.swift in Sources */,

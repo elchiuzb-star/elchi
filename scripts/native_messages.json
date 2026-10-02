@@ -1110,5 +1110,21 @@
   "link.listingNotOwn": {
     "uz": "Bu boshqa mijozning e'loni — uni ilovada faqat egasi va haydovchilar ochadi.",
     "ru": "Это объявление другого клиента — в приложении его открывают только владелец и водители."
+  },
+  "client.map.myLocation": {
+    "uz": "Mening joylashuvim",
+    "ru": "Моё местоположение"
+  },
+  "client.map.locationDenied": {
+    "uz": "Joylashuvga ruxsat berilmagan. Telefon sozlamalarida Elchi uchun joylashuvni yoqing.",
+    "ru": "Нет доступа к геолокации. Включите геолокацию для Elchi в настройках телефона."
+  },
+  "client.map.locationUnavailable": {
+    "uz": "Joylashuvni aniqlab bo'lmadi. GPS yoqilganini tekshiring.",
+    "ru": "Не удалось определить местоположение. Проверьте, включён ли GPS."
+  },
+  "client.map.locating": {
+    "uz": "Joylashuv aniqlanmoqda…",
+    "ru": "Определяем местоположение…"
   }
 }

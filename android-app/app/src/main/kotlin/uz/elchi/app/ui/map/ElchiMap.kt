@@ -53,6 +53,7 @@ import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.ScreenPoint
 import com.yandex.mapkit.ScreenRect
 import com.yandex.mapkit.geometry.BoundingBox
+import com.yandex.mapkit.geometry.Circle
 import com.yandex.mapkit.geometry.Geometry
 import com.yandex.mapkit.geometry.Point
 import com.yandex.mapkit.geometry.Polyline
@@ -164,6 +165,7 @@ sealed interface MapFocus {
  * The app's only map. [padding] is the part of the map covered by floating UI (top bar, bottom sheet): the camera
  * frames and centres inside what is left, so a fixed centre pin drawn over that area marks the camera target.
  * [logoBottom] lifts the Yandex logo that far above the map's bottom edge (default: the bottom [padding]).
+ * [userLocation] draws the "you are here" dot (with its accuracy halo) under the markers.
  * [onCameraIdle] fires when a person's pan or zoom comes to rest. [onAvailability] reports false when the map is
  * not usable (the caller offers search and the district centre instead).
  */
@@ -173,6 +175,7 @@ fun ElchiMap(
     markers: List<MapMarker> = emptyList(),
     route: List<GeoPoint> = emptyList(),
     focus: MapFocus? = null,
+    userLocation: UserFix? = null,
     padding: PaddingValues = PaddingValues(0.dp),
     logoBottom: Dp? = null,
     interactive: Boolean = true,
@@ -204,6 +207,8 @@ fun ElchiMap(
     var failed by remember { mutableStateOf(MapKitSupport.lastLoadFailed) }
     // MapView wants the Activity context (theme, window), not the localized configuration context.
     val mapView = remember { MapView(hostView.context) }
+    // Added first, so the dot stays under the route and its markers.
+    val userObjects = remember { mapView.mapWindow.map.mapObjects.addCollection() }
     val objects = remember { mapView.mapWindow.map.mapObjects.addCollection() }
 
     val paddingPx = with(density) {
@@ -307,6 +312,24 @@ fun ElchiMap(
             }
         }
         markers.forEach { marker -> addMarker(objects, marker, hostView.context, brand, pin, surface) }
+    }
+
+    LaunchedEffect(userLocation, brand, surface) {
+        userObjects.clear()
+        val fix = userLocation ?: return@LaunchedEffect
+        val point = Point(fix.point.lat, fix.point.lng)
+        // The halo only when it is wider than the dot itself would read (a few metres is noise).
+        if (fix.accuracyM >= MIN_HALO_M) {
+            userObjects.addCircle(Circle(point, fix.accuracyM.coerceAtMost(MAX_HALO_M))).apply {
+                fillColor = (brand and 0x00FFFFFF) or (0x26 shl 24)
+                strokeColor = (brand and 0x00FFFFFF) or (0x59 shl 24)
+                strokeWidth = 1f
+            }
+        }
+        userObjects.addPlacemark().apply {
+            geometry = point
+            setIcon(ImageProvider.fromBitmap(userDotBitmap(hostView.context.resources.displayMetrics.density, brand, surface)), IconStyle().setAnchor(PointF(0.5f, 0.5f)))
+        }
     }
 
     // A fit is framed again when the floating UI changes size (the home sheet grows once the route card is in);
@@ -437,6 +460,22 @@ private fun dotBitmap(scale: Float, color: Int): Bitmap {
     }
 }
 
+/** You are here: a brand dot in a surface-coloured rim with a faint shadow ring (the halo is the accuracy circle). */
+private fun userDotBitmap(scale: Float, brand: Int, rim: Int): Bitmap {
+    val size = (24 * scale).toInt()
+    return createBitmap(size, size).also { bitmap ->
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val r = size / 2f
+        paint.color = android.graphics.Color.argb(40, 0, 0, 0)
+        canvas.drawCircle(r, r, r, paint)
+        paint.color = rim
+        canvas.drawCircle(r, r, r - scale, paint)
+        paint.color = brand
+        canvas.drawCircle(r, r, r - 4 * scale, paint)
+    }
+}
+
 /** Destination: a teardrop pin whose tip is the point, with a surface-coloured hole. */
 private fun pinBitmap(scale: Float, colour: Int, hole: Int): Bitmap {
     val w = (26 * scale).toInt()
@@ -477,6 +516,8 @@ fun MapPlaceholder(title: String, text: String?, modifier: Modifier = Modifier, 
     }
 }
 
+private const val MIN_HALO_M = 15f
+private const val MAX_HALO_M = 5_000f
 private const val LOAD_TIMEOUT_MS = 30_000L
 private const val PROBE_WIDTH = 24
 private const val PROBE_HEIGHT = 48

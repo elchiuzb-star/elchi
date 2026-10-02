@@ -65,7 +65,7 @@ targets:
         NSCameraUsageDescription: "Posilka rasmini olish uchun kamera kerak."
         # Stage 09 (Q148): the driver's GPS during a running trip only. While using first, then Always for the
         # background; the `location` background mode lets CoreLocation keep delivering with the blue indicator.
-        NSLocationWhenInUseUsageDescription: "Safar davomida mijozlar mashinangizni xaritada ko'rishi uchun joylashuvingiz kerak. Joylashuv faqat boshlangan safar davomida yuboriladi."
+        NSLocationWhenInUseUsageDescription: "Xaritada qayerda turganingizni ko'rsatish uchun joylashuvingiz kerak. Haydovchi bo'lsangiz, safar davomida mijozlar mashinangizni xaritada ko'radi — joylashuv faqat boshlangan safar davomida yuboriladi."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Ilova fonda yoki ekran o'chiq bo'lsa ham safar joylashuvini yuborish uchun «Har doim» ruxsati kerak. Joylashuv faqat boshlangan safar davomida yuboriladi va safar tugashi bilan to'xtaydi."
         UIBackgroundModes: [location]
         UIAppFonts: [Poppins-Regular.ttf, Poppins-Medium.ttf, Poppins-SemiBold.ttf, Poppins-Bold.ttf]

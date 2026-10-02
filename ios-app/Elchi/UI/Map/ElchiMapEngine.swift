@@ -37,6 +37,12 @@ struct ElchiMapEngine: UIViewRepresentable {
     let interactive: Bool
     /// Bumped by the recentre button: the last camera (the fit) is applied again.
     let recentre: Int
+    /// The "you are here" dot and its accuracy halo (client home), nil when not shown.
+    var userFix: UserLocationFix? = nil
+    /// A one-off camera move to the person (the my-location button), applied once per `id`.
+    var cameraRequest: MapCameraRequest? = nil
+    /// The person panned or zoomed (called on each camera change a gesture makes).
+    var onUserGesture: (() -> Void)? = nil
     let onIdle: ((GeoPoint) -> Void)?
     let onLoaded: () -> Void
     let onFailed: () -> Void
@@ -63,6 +69,8 @@ struct ElchiMapEngine: UIViewRepresentable {
         context.coordinator.onLoaded = onLoaded
         context.coordinator.onFailed = onFailed
         context.coordinator.recentre = recentre
+        // A request from before this view existed (a tap on an earlier home) is not replayed.
+        context.coordinator.cameraRequestId = cameraRequest?.id
         context.coordinator.watchLoad(view)
         return view
     }
@@ -70,6 +78,7 @@ struct ElchiMapEngine: UIViewRepresentable {
     func updateUIView(_ view: YMKMapView, context: Context) {
         let coordinator = context.coordinator
         coordinator.onIdle = onIdle
+        coordinator.onUserGesture = onUserGesture
         coordinator.onLoaded = onLoaded
         coordinator.onFailed = onFailed
         coordinator.viewWidth = view.bounds.width
@@ -86,6 +95,12 @@ struct ElchiMapEngine: UIViewRepresentable {
             coordinator.refit(view.mapWindow, animated: true)
         }
         map.isNightModeEnabled = c.isDark
+        coordinator.drawUser(userFix, on: view.mapWindow, dark: c.isDark,
+                             colour: UIColor(c.brand), surface: UIColor(c.card))
+        if let request = cameraRequest, request.id != coordinator.cameraRequestId {
+            coordinator.cameraRequestId = request.id
+            coordinator.centre(on: request, window: view.mapWindow)
+        }
         let content = Coordinator.Content(markers: markers, polyline: polyline, focus: focus, dark: c.isDark)
         guard content != coordinator.content else { return }
         coordinator.content = content
@@ -114,10 +129,15 @@ struct ElchiMapEngine: UIViewRepresentable {
 
         var content: Content?
         var onIdle: ((GeoPoint) -> Void)?
+        var onUserGesture: (() -> Void)?
         var onLoaded: (() -> Void)?
         var onFailed: (() -> Void)?
         var insets = EdgeInsets()
         var recentre = 0
+        var cameraRequestId: Int?
+        private var userDot: YMKPlacemarkMapObject?
+        private var userHalo: YMKCircleMapObject?
+        private var userDotDark: Bool?
         /// The view's width in points; MapKit measures in physical pixels, so pixels ÷ points gives the scale.
         var viewWidth: CGFloat = 0
         private var lastCamera: ((YMKMap, Bool) -> Void)?
@@ -202,6 +222,7 @@ struct ElchiMapEngine: UIViewRepresentable {
 
         func onCameraPositionChanged(with map: YMKMap, cameraPosition: YMKCameraPosition,
                                      cameraUpdateReason: YMKCameraUpdateReason, finished: Bool) {
+            if cameraUpdateReason == .gestures { onUserGesture?() }
             guard finished else { return }
             onIdle?(GeoPoint(lat: cameraPosition.target.latitude, lng: cameraPosition.target.longitude))
         }
@@ -256,6 +277,65 @@ struct ElchiMapEngine: UIViewRepresentable {
                 camera(map, false)
             } else {
                 pendingCamera = { camera($0, false) }
+            }
+        }
+
+        /// The person's dot (brand disc, white rim, soft shadow) over a faint halo as wide as the fix's accuracy; kept
+        /// apart from the route's objects (which are redrawn as a set) and moved in place on every fix.
+        func drawUser(_ fix: UserLocationFix?, on window: YMKMapWindow, dark: Bool, colour: UIColor, surface: UIColor) {
+            let collection = window.map.mapObjects
+            guard let fix else {
+                if let userDot { collection.remove(with: userDot) }
+                if let userHalo { collection.remove(with: userHalo) }
+                userDot = nil
+                userHalo = nil
+                return
+            }
+            let point = YMKPoint(latitude: fix.point.lat, longitude: fix.point.lng)
+            let circle = YMKCircle(center: point, radius: Float(max(fix.accuracy, 0)))
+            if let userHalo {
+                userHalo.geometry = circle
+            } else {
+                let halo = collection.addCircle(with: circle)
+                halo.strokeWidth = 1
+                halo.zIndex = 5
+                userHalo = halo
+            }
+            userHalo?.fillColor = colour.withAlphaComponent(0.12)
+            userHalo?.strokeColor = colour.withAlphaComponent(0.35)
+            let dot = userDot ?? collection.addPlacemark()
+            dot.geometry = point
+            if userDot == nil || userDotDark != dark {
+                dot.setIconWith(Self.userIcon(colour, rim: dark ? surface : .white), style: YMKIconStyle(
+                    anchor: NSValue(cgPoint: CGPoint(x: 0.5, y: 0.5)), rotationType: nil, zIndex: nil, flat: nil, visible: nil,
+                    scale: nil, opacity: 1, tappableArea: nil))
+                dot.zIndex = 20
+                userDotDark = dark
+            }
+            userDot = dot
+        }
+
+        /// The my-location button: the person at the centre of the visible part (the focus rect), animated.
+        func centre(on request: MapCameraRequest, window: YMKMapWindow) {
+            guard window.width() > 0, window.height() > 0 else {
+                // A cold start's first fix can beat the first layout: the move waits for it.
+                pendingCamera = { [weak self] _ in self?.centre(on: request, window: window) }
+                return
+            }
+            applyFocusRect(window)
+            Self.move(window.map, to: YMKCameraPosition(target: YMKPoint(latitude: request.point.lat, longitude: request.point.lng),
+                                                        zoom: request.zoom, azimuth: 0, tilt: 0), animated: true)
+        }
+
+        private static func userIcon(_ colour: UIColor, rim: UIColor) -> UIImage {
+            UIGraphicsImageRenderer(size: CGSize(width: 28, height: 28)).image { context in
+                let cg = context.cgContext
+                cg.setShadow(offset: CGSize(width: 0, height: 1), blur: 3, color: UIColor.black.withAlphaComponent(0.3).cgColor)
+                rim.setFill()
+                cg.fillEllipse(in: CGRect(x: 4, y: 4, width: 20, height: 20))
+                cg.setShadow(offset: .zero, blur: 0, color: nil)
+                colour.setFill()
+                cg.fillEllipse(in: CGRect(x: 7, y: 7, width: 14, height: 14))
             }
         }
 
@@ -326,6 +406,9 @@ struct ElchiMapEngine: View {
     let insets: EdgeInsets
     let interactive: Bool
     let recentre: Int
+    var userFix: UserLocationFix? = nil
+    var cameraRequest: MapCameraRequest? = nil
+    var onUserGesture: (() -> Void)? = nil
     let onIdle: ((GeoPoint) -> Void)?
     let onLoaded: () -> Void
     let onFailed: () -> Void

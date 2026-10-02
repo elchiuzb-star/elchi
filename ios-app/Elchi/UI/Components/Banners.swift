@@ -86,11 +86,12 @@ public final class BannerCenter {
 
     public var loading: Bool { loadingCount > 0 }
 
-    public func show(_ message: BannerMessage, tone: BannerTone, onTap: (@MainActor () -> Void)? = nil) {
+    /// `hideAfter` replaces the tone's own timing (the map's "location not found" goes after 6 s, as on Android).
+    public func show(_ message: BannerMessage, tone: BannerTone, hideAfter: Duration? = nil, onTap: (@MainActor () -> Void)? = nil) {
         let item = Item(message: message, tone: tone, onTap: onTap)
         current = item
         hide?.cancel()
-        guard let delay = BannerPolicy.autoHide(tone) else { return }
+        guard let delay = hideAfter ?? BannerPolicy.autoHide(tone) else { return }
         hide = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, self?.current?.id == item.id else { return }

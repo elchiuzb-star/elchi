@@ -84,6 +84,8 @@ public struct ElchiMap: View {
     let interactive: Bool
     /// When set, a button with this label frames the markers and the road again after a person has panned away.
     let recentreLabel: String?
+    /// The client home's "you are here": the dot and the my-location button (nil on every other map).
+    let myLocation: MyLocationControl?
     let onIdle: ((GeoPoint) -> Void)?
     let placeholder: String
     /// Space a sheet covers at the bottom, so the placeholder's words sit in the part of the map that is visible.
@@ -94,7 +96,8 @@ public struct ElchiMap: View {
     @State private var recentre = 0
 
     public init(markers: [MapMarker] = [], polyline: [GeoPoint] = [], focus: GeoPoint? = nil, zoom: Float = 12,
-                centrePin: Bool = false, interactive: Bool = true, recentreLabel: String? = nil, placeholder: String,
+                centrePin: Bool = false, interactive: Bool = true, recentreLabel: String? = nil,
+                myLocation: MyLocationControl? = nil, placeholder: String,
                 placeholderInset: CGFloat = 0, onIdle: ((GeoPoint) -> Void)? = nil) {
         self.markers = markers
         self.polyline = polyline
@@ -103,6 +106,7 @@ public struct ElchiMap: View {
         self.centrePin = centrePin
         self.interactive = interactive
         self.recentreLabel = recentreLabel
+        self.myLocation = myLocation
         self.placeholder = placeholder
         self.placeholderInset = placeholderInset
         self.onIdle = onIdle
@@ -114,7 +118,11 @@ public struct ElchiMap: View {
                 // The bottom sheet (placeholderInset) and the floating top buttons cover the map; routes fit the rest.
                 ElchiMapEngine(markers: markers, polyline: polyline, focus: focus, zoom: zoom,
                                insets: EdgeInsets(top: placeholderInset > 0 ? 120 : 0, leading: 0, bottom: placeholderInset, trailing: 0),
-                               interactive: interactive, recentre: recentre, onIdle: onIdle,
+                               interactive: interactive, recentre: recentre,
+                               userFix: myLocation.flatMap { $0.model.state.showsDot ? $0.model.state.fix : nil },
+                               cameraRequest: myLocation?.model.camera,
+                               onUserGesture: myLocation.map { control in { control.model.mapMovedByUser() } },
+                               onIdle: onIdle,
                                onLoaded: {
                                    loaded = true
                                    timedOut = false
@@ -126,13 +134,18 @@ public struct ElchiMap: View {
                                })
                 if loaded {
                     if centrePin { CentrePin().allowsHitTesting(false) }
-                    if let recentreLabel, !markers.isEmpty {
-                        // Right end of the row just above the sheet; the Yandex logo holds the left end.
-                        RoundIconButton(.locate, label: recentreLabel) { recentre += 1 }
-                            .padding(.trailing, 16)
-                            .padding(.bottom, placeholderInset + 12)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    // Right end of the row just above the sheet (the Yandex logo holds the left end): my location at the
+                    // bottom, always there; "show the route again" stacked above it once there is a route to frame.
+                    VStack(alignment: .trailing, spacing: 12) {
+                        if let recentreLabel, !markers.isEmpty {
+                            RoundIconButton(myLocation == nil ? .locate : .route, label: recentreLabel) { recentre += 1 }
+                                .accessibilityIdentifier("elchi.map.recentre")
+                        }
+                        if let myLocation { MyLocationButton(control: myLocation) }
                     }
+                    .padding(.trailing, 16)
+                    .padding(.bottom, placeholderInset + 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 } else if timedOut || availability.failed {
                     MapPlaceholder(text: placeholder, bottomInset: placeholderInset)
                 } else {
@@ -142,6 +155,47 @@ public struct ElchiMap: View {
         } else {
             MapPlaceholder(text: placeholder, bottomInset: placeholderInset)
         }
+    }
+}
+
+/// What the map needs for "you are here": the model and the two sentences it shows.
+public struct MyLocationControl {
+    let model: MyLocationModel
+    let label: String
+    let locatingLabel: String
+
+    public init(model: MyLocationModel, label: String, locatingLabel: String) {
+        self.model = model
+        self.label = label
+        self.locatingLabel = locatingLabel
+    }
+}
+
+/// The round crosshair button; while a tap waits for the first fix a small pill above it says so (above, not beside:
+/// beside it a Russian sentence on a 375 pt phone would reach the Yandex logo, which must stay visible).
+struct MyLocationButton: View {
+    let control: MyLocationControl
+    @Environment(\.elchi) private var c
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            if control.model.state.locating {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(c.muted)
+                    Text(control.locatingLabel).font(ElchiFont.poppins(12.5, .medium)).foregroundStyle(c.text).lineLimit(1)
+                }
+                .padding(.horizontal, 14).frame(height: 36)
+                .background(c.card, in: Capsule())
+                .shadow(color: c.shadow, radius: 12, y: 6)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("elchi.map.locating")
+                .transition(.opacity)
+                .onAppear { AccessibilityNotification.Announcement(control.locatingLabel).post() }
+            }
+            RoundIconButton(.locate, label: control.label) { control.model.tap() }
+                .accessibilityIdentifier("elchi.map.myLocation")
+        }
+        .animation(.easeOut(duration: 0.2), value: control.model.state.locating)
     }
 }
 

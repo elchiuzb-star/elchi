@@ -338,6 +338,10 @@
     <string name="client_logout_confirmText">Qayta kirish uchun telefoningizga yangi kod yuboriladi.</string>
     <string name="client_logout_confirmTitle">Chiqasizmi?</string>
     <string name="client_logout_stay">Qolish</string>
+    <string name="client_map_locating">Joylashuv aniqlanmoqda…</string>
+    <string name="client_map_locationDenied">Joylashuvga ruxsat berilmagan. Telefon sozlamalarida Elchi uchun joylashuvni yoqing.</string>
+    <string name="client_map_locationUnavailable">Joylashuvni aniqlab bo\'lmadi. GPS yoqilganini tekshiring.</string>
+    <string name="client_map_myLocation">Mening joylashuvim</string>
     <string name="client_map_unavailable">Xarita hozircha ko\'rsatilmayapti</string>
     <string name="client_map_unavailableHint">Joyni qidiruv orqali toping yoki tuman markazini tanlang.</string>
     <string name="client_notifications_emptyHint">Push bildirishnoma yo\'q — barcha yangiliklar shu yerda.</string>

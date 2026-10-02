@@ -5730,6 +5730,74 @@
         }
       }
     },
+    "client.map.locating": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Определяем местоположение…"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joylashuv aniqlanmoqda…"
+          }
+        }
+      }
+    },
+    "client.map.locationDenied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет доступа к геолокации. Включите геолокацию для Elchi в настройках телефона."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joylashuvga ruxsat berilmagan. Telefon sozlamalarida Elchi uchun joylashuvni yoqing."
+          }
+        }
+      }
+    },
+    "client.map.locationUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось определить местоположение. Проверьте, включён ли GPS."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joylashuvni aniqlab bo'lmadi. GPS yoqilganini tekshiring."
+          }
+        }
+      }
+    },
+    "client.map.myLocation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Моё местоположение"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mening joylashuvim"
+          }
+        }
+      }
+    },
     "client.map.unavailable": {
       "extractionState": "manual",
       "localizations": {

@@ -119,7 +119,8 @@ struct ClientFlow: View {
             Group {
                 switch section {
                 case .home:
-                    ClientHomeView(model: model, inbox: inbox, referralCode: container.links.referralCode, onMenu: openDrawer,
+                    ClientHomeView(model: model, inbox: inbox, banners: container.banners, referralCode: container.links.referralCode,
+                                   onMenu: openDrawer,
                                    onPick: startPick, onViewRoute: { path.append(.routeSummary) }, onReferral: { path.append(.bonus) })
                         // The map has no top bar to draw the banner under: it floats below the menu row (a link that
                         // cannot be opened says so here).
@@ -418,6 +419,8 @@ struct ClientFlow: View {
 private struct ClientHomeView: View {
     let model: ParcelRequestModel
     let inbox: InboxModel
+    /// The my-location button's denied / not-found sentences go to the app's banner.
+    let banners: BannerCenter
     /// The code kept from an `elchigo.uz/r/<code>` link (web `home.referralCodeSaved`); gone once it is forgotten.
     let referralCode: String?
     let onMenu: () -> Void
@@ -431,11 +434,18 @@ private struct ClientHomeView: View {
     @State private var sheetHeight: CGFloat = 0
     /// The map runs under the home indicator and so does the sheet's background, so both count as covered map.
     @State private var bottomSafeArea: CGFloat = 0
+    /// "You are here": CoreLocation runs only while this home is on screen (and the app in front).
+    @State private var myLocation = MyLocationModel()
+    @State private var onScreen = false
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ElchiMap(markers: markers, polyline: model.routeLeg,
                      focus: markers.first?.point, zoom: 11, recentreLabel: strings.t("location.recentre"),
+                     myLocation: MyLocationControl(model: myLocation, label: strings.t("client.map.myLocation"),
+                                                   locatingLabel: strings.t("client.map.locating")),
                      placeholder: strings.t("client.map.unavailable"),
                      placeholderInset: sheetHeight + bottomSafeArea)
                 .ignoresSafeArea()
@@ -454,6 +464,32 @@ private struct ClientHomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task { await model.loadCountryFlags() }
         .task { await inbox.refreshUnread() }
+        // The camera moves on its own once at most: the first fix on an empty home, inside Uzbekistan, before the
+        // person touched the map (MyLocationLogic). With a place chosen it stays on the route until the button.
+        .onChange(of: markers.isEmpty) { _, empty in myLocation.homeEmpty(empty) }
+        .onAppear {
+            myLocation.onDenied = { [banners, openURL] in
+                banners.show(.key("client.map.locationDenied"), tone: .warn) {
+                    // iOS asks only once: after a denial the switch is in Settings.
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+            }
+            myLocation.onUnavailable = { [banners] in
+                banners.show(.key("client.map.locationUnavailable"), tone: .warn, hideAfter: .seconds(6))
+            }
+            // Before `appear`: a first fix must know whether a place is chosen.
+            myLocation.homeEmpty(markers.isEmpty)
+            onScreen = true
+            if scenePhase != .background { myLocation.appear() }
+        }
+        .onDisappear {
+            onScreen = false
+            myLocation.disappear()
+        }
+        // `.inactive` is also the permission prompt itself: only the background stops the updates.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { myLocation.disappear() } else if onScreen { myLocation.appear() }
+        }
     }
 
     private var markers: [MapMarker] {

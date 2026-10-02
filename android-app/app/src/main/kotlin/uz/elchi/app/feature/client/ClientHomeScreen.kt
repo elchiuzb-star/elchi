@@ -63,15 +63,18 @@ import uz.elchi.app.ui.map.GeoPoint
 import uz.elchi.app.ui.map.MapFocus
 import uz.elchi.app.ui.map.MapKitSupport
 import uz.elchi.app.ui.map.MapMarker
+import uz.elchi.app.ui.map.MyLocation
 import uz.elchi.app.ui.map.decodePolyline
 import uz.elchi.app.ui.map.legPath
 import uz.elchi.app.ui.theme.Elchi
 import uz.elchi.app.ui.theme.ThemeMode
 import uz.elchi.app.ui.theme.Tone
 
-/** Roughly the whole of Uzbekistan, for a home map with nothing marked yet. */
 /** Nothing marked yet: the whole country (south-west and north-east corners of Uzbekistan). */
 private val UZBEKISTAN = listOf(GeoPoint(37.18, 55.99), GeoPoint(45.59, 73.15))
+
+/** The one automatic move on an empty home: the user's city rather than their street. */
+private const val AUTO_ZOOM = 11f
 
 /**
  * `client-home`: full-screen map, floating menu + theme switch, bottom sheet with the service heading, the route
@@ -124,6 +127,7 @@ private fun HomeContent(
     var panelHeight by remember { mutableIntStateOf(0) }
     var recentre by remember { mutableIntStateOf(0) }
     var mapUsable by remember { mutableStateOf(MapKitSupport.likelyAvailable) }
+    val myLocation = rememberMyLocation()
 
     val origin = s.draft.origin
     val destination = s.draft.destination
@@ -134,10 +138,27 @@ private fun HomeContent(
     val route = remember(s.preview?.routePolyline, markers) {
         legPath(s.preview?.routePolyline?.let(::decodePolyline).orEmpty(), markers.firstOrNull { it.kind == MapMarker.Kind.ORIGIN }?.point, markers.firstOrNull { it.kind == MapMarker.Kind.DESTINATION }?.point)
     }
-    val focus = remember(markers, route, recentre) {
+    val fit = remember(markers, route, recentre) {
         val points = markers.map { it.point } + route
         MapFocus.Fit(points.ifEmpty { UZBEKISTAN }, recentre)
     }
+    // The camera goes to the user only on a tap (or once, on an empty home); a new place or the recentre button
+    // frames the direction again.
+    var userFocus by remember { mutableStateOf<MapFocus.At?>(null) }
+    LaunchedEffect(markers, route, recentre) { userFocus = null }
+    LaunchedEffect(myLocation.state.centre) {
+        val fix = myLocation.state.fix
+        if (myLocation.state.centre > 0 && fix != null) userFocus = MapFocus.At(fix.point, MyLocation.ZOOM, myLocation.state.centre)
+    }
+    var userMovedMap by remember { mutableStateOf(false) }
+    var firstFixSeen by remember { mutableStateOf(false) }
+    LaunchedEffect(myLocation.state.fix != null) {
+        val fix = myLocation.state.fix ?: return@LaunchedEffect
+        if (firstFixSeen) return@LaunchedEffect
+        firstFixSeen = true
+        if (MyLocation.autoCentre(fix, markers.isEmpty(), userMovedMap, UZBEKISTAN)) userFocus = MapFocus.At(fix.point, AUTO_ZOOM, -1)
+    }
+    val focus = userFocus ?: fit
     val topInset = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
 
     Box(Modifier.fillMaxSize().background(c.field)) {
@@ -146,10 +167,15 @@ private fun HomeContent(
             markers = markers,
             route = route,
             focus = focus,
+            userLocation = myLocation.state.fix,
             padding = PaddingValues(top = topInset + 72.dp, bottom = with(density) { sheetHeight.toDp() } + 8.dp, start = 24.dp, end = 24.dp),
             // On the recentre button's row, left of it, rather than above it.
             logoBottom = with(density) { panelHeight.toDp() } + 16.dp,
             onAvailability = { mapUsable = it },
+            onCameraIdle = {
+                userMovedMap = true
+                myLocation.panned()
+            },
             placeholderTitle = t(R.string.client_map_unavailable),
         )
 
@@ -162,11 +188,23 @@ private fun HomeContent(
             ThemeSwitch(themeMode, onTheme, t(R.string.theme_light), t(R.string.theme_dark))
         }
 
+        if (mapUsable) {
+            MyLocationBanner(myLocation, Modifier.statusBarsPadding().padding(top = 64.dp, start = 16.dp, end = 16.dp))
+        }
+
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { sheetHeight = it.height }) {
-            if (mapUsable && markers.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
-                    Spacer(Modifier.weight(1f))
-                    RoundIconButton(ElchiIcon.LOCATE, t(R.string.location_recentre), { recentre++ })
+            // Right edge, just above the sheet: "my location" (crosshair) and, with a direction on the map, the
+            // recentre-on-the-route button under it (route icon, so the two never look alike).
+            if (mapUsable) {
+                Column(
+                    Modifier.align(Alignment.End).padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    MyLocationButton(myLocation)
+                    if (markers.isNotEmpty()) RoundIconButton(ElchiIcon.ROUTE, t(R.string.location_recentre), {
+                        recentre++
+                        myLocation.panned() // the camera leaves the user: the crosshair is no longer "on"
+                    })
                 }
             }
             Box(Modifier.onSizeChanged { panelHeight = it.height }) {
