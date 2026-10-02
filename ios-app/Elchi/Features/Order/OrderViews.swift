@@ -20,10 +20,14 @@ struct RouteSummaryView: View {
     @State private var priceText = ""
     @State private var editing: WindowEdge?
     @State private var availability = MapAvailability.shared
+    /// While the price is typed the "Jami" card under it stays above the number pad.
+    @State private var priceFocused = false
+    private static let totalID = "route.total"
 
     var body: some View {
         let blockers = model.routeBlockers
-        ScreenScaffold(title: strings.t("routeSummary.direction"), backLabel: strings.t("common.back"), onBack: onBack) {
+        ScreenScaffold(title: strings.t("routeSummary.direction"), backLabel: strings.t("common.back"), onBack: onBack,
+                       keepVisible: priceFocused ? Self.totalID : nil, keyboardDone: strings.t("client.keyboard.done")) {
             ElchiCard {
                 endRow(.pickup, key: "routeSummary.pickup", first: true)
                 endRow(.dropoff, key: "routeSummary.dropoff", first: false)
@@ -56,7 +60,8 @@ struct RouteSummaryView: View {
                 // Taksi (design 'seat-picker'): how many people, on a cabin picture - only the count is booked.
                 SeatPickerView(selected: $model.seats)
             }
-            ElchiField(text: $priceText, label: strings.t(taxi ? "routeSummary.pricePerPerson" : "listingOwner.priceLabel"), keyboard: .numberPad)
+            ElchiField(text: $priceText, label: strings.t(taxi ? "routeSummary.pricePerPerson" : "listingOwner.priceLabel"), keyboard: .numberPad,
+                       onFocus: { priceFocused = $0 })
                 .onChange(of: priceText) { _, typed in
                     model.priceDigits = Money.soumDigits(typed)
                     let formatted = Money.grouped(model.priceDigits)
@@ -73,6 +78,7 @@ struct RouteSummaryView: View {
                 }
             }
             .accessibilityIdentifier("elchi.route.total")
+            .id(Self.totalID)
         } footer: {
             ElchiButton(strings.t("common.save"), action: onSave).disabled(!blockers.isEmpty)
             if !blockers.isEmpty {

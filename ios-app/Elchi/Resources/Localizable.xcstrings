@@ -5050,6 +5050,23 @@
         }
       }
     },
+    "client.keyboard.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Готово"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tayyor"
+          }
+        }
+      }
+    },
     "client.legacy.archiveNote": {
       "extractionState": "manual",
       "localizations": {

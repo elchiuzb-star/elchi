@@ -262,17 +262,21 @@ struct ListingEditView: View {
     @State private var form: ListingEditForm?
     @State private var priceText = ""
     @State private var editing: WindowEdge?
+    /// The price or the people count is being typed: the number pad is up.
+    @State private var typing = false
 
     var body: some View {
         let listing = model.listing.value
         let plan = listing.flatMap { dto in form.map { ListingPatchPlan.plan(dto, $0) } }
         let warnOffers = plan?.material == true && model.openOffers > 0
         let seatsEditable = listing.map(SeatEdit.editable) ?? false
-        ScreenScaffold(title: strings.t("listingOwner.editTitle"), backLabel: strings.t("common.back"), onBack: onBack) {
+        let offersWarning = "\(strings.t("listingOwner.materialWarning")) \(strings.t("listingOwner.openOffers", ("count", model.openOffers)))"
+        ScreenScaffold(title: strings.t("listingOwner.editTitle"), backLabel: strings.t("common.back"), onBack: onBack,
+                       keyboardDone: strings.t("client.keyboard.done")) {
             if form != nil {
                 ElchiField(text: $priceText,
                            label: seatsEditable ? strings.t("listingOwner.priceLabel") + strings.t("listingEdit.perSeatSuffix")
-                                : strings.t("listingOwner.priceLabel"), keyboard: .numberPad)
+                                : strings.t("listingOwner.priceLabel"), keyboard: .numberPad, onFocus: { typing = $0 })
                     .onChange(of: priceText) { _, typed in
                         // Local text re-synced after every edit: SwiftUI's TextField ignores a binding that rewrites the input.
                         let digits = Money.soumDigits(typed)
@@ -286,7 +290,8 @@ struct ListingEditView: View {
                     // Q145: the number of people, until a booking exists; a new number closes the open offers (Q20).
                     ElchiField(text: Binding(get: { form?.seats ?? "" }, set: { form?.seats = String($0.filter(\.isNumber).prefix(1)) }),
                                label: strings.t("listingEdit.seats"), hint: strings.t("listingEdit.seatsHint"),
-                               error: plan?.invalid == "seats" ? strings.t("listingOwner.invalid.seats") : nil, keyboard: .numberPad)
+                               error: plan?.invalid == "seats" ? strings.t("listingOwner.invalid.seats") : nil, keyboard: .numberPad,
+                               onFocus: { typing = $0 })
                         .accessibilityIdentifier("elchi.listingEdit.seats")
                 }
                 PickerField(label: strings.t("listingOwner.windowStart"), value: form?.windowStart.map(DepartureWindow.text),
@@ -296,8 +301,8 @@ struct ListingEditView: View {
                             placeholder: strings.t("client.routeSummary.windowPlaceholder"), error: plan?.invalid == "window_order") { editing = .end }
                 Text(strings.t("listingOwner.nonMaterialNote")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
                     .fixedSize(horizontal: false, vertical: true)
-                if warnOffers {
-                    Note("\(strings.t("listingOwner.materialWarning")) \(strings.t("listingOwner.openOffers", ("count", model.openOffers)))", tone: .warn)
+                if warnOffers && !typing {
+                    Note(offersWarning, tone: .warn)
                 }
                 if let invalid = plan?.invalid, invalid != "seats" {
                     Note(strings.tOrNil("listingOwner.invalid.\(invalid)") ?? invalid, tone: .err)
@@ -307,6 +312,11 @@ struct ListingEditView: View {
                 SkeletonCards(count: 2)
             }
         } footer: {
+            // Under the number pad the warning would be out of sight: while a number is typed it sits over the button
+            // it explains, above the keyboard.
+            if warnOffers && typing {
+                Note(offersWarning, tone: .warn).accessibilityIdentifier("elchi.listingEdit.offersWarning")
+            }
             ElchiButton(strings.t(warnOffers ? "listingOwner.materialConfirm" : "common.save"), loading: model.running == .save) {
                 guard let plan else { return }
                 Task { if await model.save(plan) { onSaved() } }

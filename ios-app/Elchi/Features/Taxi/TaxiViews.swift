@@ -21,12 +21,12 @@ struct SeatPickerView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
                     driverSeat
-                    Color.clear.frame(maxWidth: .infinity, minHeight: 62)
-                    Color.clear.frame(maxWidth: .infinity, minHeight: 62)
+                    Color.clear.frame(maxWidth: .infinity, minHeight: SeatPickerView.tileHeight)
+                    Color.clear.frame(maxWidth: .infinity, minHeight: SeatPickerView.tileHeight)
                     seat(.front)
                 }
                 HStack(spacing: 8) {
-                    Color.clear.frame(maxWidth: .infinity, minHeight: 62)
+                    Color.clear.frame(maxWidth: .infinity, minHeight: SeatPickerView.tileHeight)
                     seat(.rearLeft)
                     seat(.rearMiddle)
                     seat(.rearRight)
@@ -41,13 +41,23 @@ struct SeatPickerView: View {
         .accessibilityElement(children: .contain)
     }
 
+    /// Tall enough for a seat and a two-line name ("Сзади, / посередине") on a 375-pt phone.
+    static let tileHeight: CGFloat = 76
+
+    /// A seat's name: two lines at most, centred, shrinking a little before it would cut a word.
+    private func seatLabel(_ text: String, color: Color, weight: ElchiFont.Weight) -> some View {
+        Text(text).font(ElchiFont.poppins(10, weight)).foregroundStyle(color)
+            .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var driverSeat: some View {
         VStack(spacing: 4) {
             Circle().strokeBorder(c.placeholder, lineWidth: 2).frame(width: 20, height: 20)
-            Text(strings.t("seatPicker.driver")).font(ElchiFont.poppins(9, .semibold)).foregroundStyle(c.placeholder).lineLimit(1)
-                .minimumScaleFactor(0.7)
+            seatLabel(strings.t("seatPicker.driver"), color: c.placeholder, weight: .semibold)
         }
-        .frame(maxWidth: .infinity, minHeight: 62)
+        .padding(.horizontal, 3).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: SeatPickerView.tileHeight)
         .background(c.card.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
         .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(c.outline, style: StrokeStyle(lineWidth: 2, dash: [5, 4])) }
         .accessibilityHidden(true)
@@ -62,15 +72,19 @@ struct SeatPickerView: View {
         } label: {
             VStack(spacing: 0) {
                 // A seat drawn rather than iconified: a back and a cushion read as a seat at this size.
-                UnevenRoundedRectangle(topLeadingRadius: 7, topTrailingRadius: 7)
-                    .fill(tint.opacity(on ? 0.25 : 0.15)).frame(width: 28, height: 16)
-                    .overlay { UnevenRoundedRectangle(topLeadingRadius: 7, topTrailingRadius: 7).stroke(tint, lineWidth: 2) }
-                UnevenRoundedRectangle(bottomLeadingRadius: 5, bottomTrailingRadius: 5)
-                    .fill(tint.opacity(on ? 0.25 : 0.15)).frame(width: 36, height: 10)
-                    .overlay { UnevenRoundedRectangle(bottomLeadingRadius: 5, bottomTrailingRadius: 5).stroke(tint, lineWidth: 2) }
+                UnevenRoundedRectangle(topLeadingRadius: 6, topTrailingRadius: 6)
+                    .fill(tint.opacity(on ? 0.25 : 0.15)).frame(width: 24, height: 13)
+                    .overlay { UnevenRoundedRectangle(topLeadingRadius: 6, topTrailingRadius: 6).stroke(tint, lineWidth: 2) }
+                UnevenRoundedRectangle(bottomLeadingRadius: 4, bottomTrailingRadius: 4)
+                    .fill(tint.opacity(on ? 0.25 : 0.15)).frame(width: 30, height: 8)
+                    .overlay { UnevenRoundedRectangle(bottomLeadingRadius: 4, bottomTrailingRadius: 4).stroke(tint, lineWidth: 2) }
                     .padding(.top, 2)
+                // Its name under it, as on Android ("Orqada, o'rta" / "Сзади, посередине" wraps after the comma).
+                seatLabel(strings.t(seat.labelKey), color: on ? c.text : c.muted, weight: .medium)
+                    .padding(.top, 5)
             }
-            .frame(maxWidth: .infinity, minHeight: 62)
+            .padding(.horizontal, 3).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: SeatPickerView.tileHeight)
             .background(on ? c.brand.opacity(0.12) : c.card, in: RoundedRectangle(cornerRadius: 14))
             .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(on ? c.brand : c.outline, lineWidth: on ? 2 : 1.5) }
             .overlay(alignment: .topTrailing) {

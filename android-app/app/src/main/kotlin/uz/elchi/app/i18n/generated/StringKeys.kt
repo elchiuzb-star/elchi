@@ -303,6 +303,7 @@ object StringKeys {
         "client.chat.rateLimited" to R.string.client_chat_rateLimited,
         "client.drawer.soon" to R.string.client_drawer_soon,
         "client.home.taxiSoon" to R.string.client_home_taxiSoon,
+        "client.keyboard.done" to R.string.client_keyboard_done,
         "client.legacy.archiveNote" to R.string.client_legacy_archiveNote,
         "client.legacy.bidsClosed" to R.string.client_legacy_bidsClosed,
         "client.legacy.call" to R.string.client_legacy_call,

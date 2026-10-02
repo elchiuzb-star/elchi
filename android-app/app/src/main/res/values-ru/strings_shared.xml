@@ -298,6 +298,7 @@
     <string name="client_chat_rateLimited">Слишком часто — попробуйте снова через {seconds} с.</string>
     <string name="client_drawer_soon">На следующем этапе</string>
     <string name="client_home_taxiSoon">Объявление для пассажиров появится в приложении на следующем этапе.</string>
+    <string name="client_keyboard_done">Готово</string>
     <string name="client_legacy_archiveNote">Архив: этот заказ создан в старой системе.</string>
     <string name="client_legacy_bidsClosed">Предложения закрыты: водитель выбран или заказ завершён.</string>
     <string name="client_legacy_call">Позвонить</string>

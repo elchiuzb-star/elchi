@@ -298,6 +298,7 @@
     <string name="client_chat_rateLimited">Juda tez yozyapsiz — {seconds} soniyadan keyin qayta urinib ko\'ring.</string>
     <string name="client_drawer_soon">Keyingi bosqichda</string>
     <string name="client_home_taxiSoon">Yo\'lovchi e\'loni ilovada keyingi bosqichda qo\'shiladi.</string>
+    <string name="client_keyboard_done">Tayyor</string>
     <string name="client_legacy_archiveNote">Arxiv: bu buyurtma eski tizimda yaratilgan.</string>
     <string name="client_legacy_bidsClosed">Takliflar yopilgan: haydovchi tanlangan yoki buyurtma yakunlangan.</string>
     <string name="client_legacy_call">Qo\'ng\'iroq qilish</string>

@@ -364,6 +364,38 @@ final class TaxiUITests: ClientUITestCase {
         snap("\(prefix)-05-booking-top")
     }
 
+    /// The route step with the price being typed in `LOCALE`: the seat names under the seats, the "Jami" card kept
+    /// above the number pad (refocusing from the top scrolls it back into view), the keyboard's close button.
+    func testPolishRouteKeyboard() {
+        let locale = envOr("LOCALE", "uz"), ru = locale == "ru"
+        let prefix = "polish-\(locale)"
+        launch(locale: locale, theme: "light", reset: true, extra: ["-uiTestWindowFromNow", "5"])
+        if ru {
+            signInAsClient(phone: env("CLIENT"), start: "Начать", next: "Далее", client: "Я клиент", getCode: "Получить код",
+                           home: "Посмотреть направление")
+        } else {
+            signInAsClient(phone: env("CLIENT"))
+        }
+        taxiRouteStep(prefix: prefix, locale: locale)
+        let done = byId("elchi.keyboard.done")
+        done.tap()
+        scrollTop()
+        Thread.sleep(forTimeInterval: 1)
+        snap("\(prefix)-04-seats-top")
+        let price = field(ru ? "Цена за одного человека (сум)" : "Bir kishi uchun narx (so'm)")
+        price.tap()
+        Thread.sleep(forTimeInterval: 1.5)
+        let total = byId("elchi.route.total")
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "no keyboard")
+        XCTAssertLessThanOrEqual(total.frame.maxY, app.keyboards.firstMatch.frame.minY, "total under the keyboard")
+        XCTAssertTrue(byId("elchi.keyboard.done").exists)
+        snap("\(prefix)-05-price-focused")
+        byId("elchi.keyboard.done").tap()
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertFalse(app.keyboards.firstMatch.exists, "keyboard still up")
+        snap("\(prefix)-06-keyboard-closed")
+    }
+
     /// Driver screens in `THEME` / `LOCALE`: the feed in Taksi mode and the passenger booking.
     func testTourDriver() {
         let theme = envOr("THEME", "light"), locale = envOr("LOCALE", "uz")

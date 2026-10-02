@@ -395,11 +395,15 @@ public struct ElchiField: View {
     let contentType: UITextContentType?
     let multiline: Bool
     let monospaced: Bool
+    /// Told when the field gains or loses the keyboard (a screen keeps what the number changes in sight).
+    let onFocus: ((Bool) -> Void)?
     @Environment(\.elchi) private var c
+    @FocusState private var focused: Bool
 
     public init(text: Binding<String>, label: String? = nil, placeholder: String? = nil, prefix: String? = nil, icon: ElchiIcon? = nil,
                 hint: String? = nil, error: String? = nil, keyboard: UIKeyboardType = .default, contentType: UITextContentType? = nil,
-                multiline: Bool = false, monospaced: Bool = false) {
+                multiline: Bool = false, monospaced: Bool = false, onFocus: ((Bool) -> Void)? = nil) {
+        self.onFocus = onFocus
         _text = text
         self.label = label
         self.placeholder = placeholder
@@ -432,6 +436,8 @@ public struct ElchiField: View {
                     .textContentType(contentType)
                     .tint(c.brand)
                     .accessibilityLabel(label ?? placeholder ?? "")
+                    .focused($focused)
+                    .onChange(of: focused) { _, now in onFocus?(now) }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, multiline ? 14 : 0)
@@ -692,6 +698,8 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
     let onBack: (() -> Void)?
     let showsFooter: Bool
     let banner: (text: String, tone: Tone)?
+    let keepVisible: AnyHashable?
+    let keyboardDone: String?
     let content: Content
     let footer: Footer
     @Environment(\.elchi) private var c
@@ -702,7 +710,10 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
 
     public init(title: String, right: String? = nil, rightIcon: ElchiIcon? = nil, onRight: (() -> Void)? = nil, leading: ElchiIcon = .back,
                 backLabel: String, onBack: (() -> Void)?, showsFooter: Bool = true, banner: (text: String, tone: Tone)? = nil,
+                keepVisible: AnyHashable? = nil, keyboardDone: String? = nil,
                 @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.keepVisible = keepVisible
+        self.keyboardDone = keyboardDone
         self.title = title
         self.right = right
         self.rightIcon = rightIcon
@@ -745,11 +756,17 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
             if let accessory { accessory }
             if let banners { BannerHost(center: banners) }
             if let banner { Banner(banner.text, tone: banner.tone).id(banner.text) }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) { content }
-                    .padding(EdgeInsets(top: 6, leading: 16, bottom: 18, trailing: 16))
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) { content }
+                        .padding(EdgeInsets(top: 6, leading: 16, bottom: 18, trailing: 16))
+                }
+                .scrollDismissesKeyboard(.interactively)
+                // `keepVisible`: the view (by id) that must stay above the keyboard while a field is being typed in -
+                // once now, and again when the keyboard has finished rising and the scroll area has shrunk.
+                .onChange(of: keepVisible) { _, id in reveal(id, proxy) }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in reveal(keepVisible, proxy) }
             }
-            .scrollDismissesKeyboard(.interactively)
             let footerView = VStack(spacing: 8) { footer }
             if showsFooter && !(footer is EmptyView) {
                 footerView
@@ -761,6 +778,25 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
         }
         .background(c.page.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar {
+            // The number pad has no return key: "Yopish" over it puts it away.
+            if let keyboardDone {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(keyboardDone) {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                    .font(ElchiFont.poppins(15, .semibold))
+                    .tint(c.brand)
+                    .accessibilityIdentifier("elchi.keyboard.done")
+                }
+            }
+        }
+    }
+
+    private func reveal(_ id: AnyHashable?, _ proxy: ScrollViewProxy) {
+        guard let id else { return }
+        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .bottom) }
     }
 }
 

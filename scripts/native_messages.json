@@ -1227,5 +1227,9 @@
   "app.cash.commentRequired": {
     "uz": "Nimaga rozi emasligingizni yozing — buni operator o'qiydi.",
     "ru": "Напишите, с чем вы не согласны — это прочитает оператор."
+  },
+  "client.keyboard.done": {
+    "uz": "Tayyor",
+    "ru": "Готово"
   }
 }
