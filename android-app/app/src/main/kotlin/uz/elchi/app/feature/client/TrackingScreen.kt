@@ -71,7 +71,7 @@ private fun Ladder(booking: BookingClientDTO) {
     val labels = mapOf(LadderState.DONE to t(R.string.client_tracking_stepDone), LadderState.CURRENT to t(R.string.client_tracking_stepCurrent))
     val rows = BookingRules.ladder(booking).map { item ->
         LadderRow(
-            title = tOrNull(item.step.key) ?: item.step.name,
+            title = tOrNull(item.key) ?: item.step.name,
             time = item.at?.let { OrderRules.tashkent(it)?.let(ParcelRules::displayShort) },
             state = when (item.state) {
                 StepState.DONE -> LadderState.DONE
@@ -82,7 +82,7 @@ private fun Ladder(booking: BookingClientDTO) {
     }
     StatusLadder(rows, stateLabels = labels)
     // Cancelled and the return statuses are not steps on the way: they are said in words.
-    if (BookingRules.ladderIndex(booking.serviceStatus) == null) {
+    if (BookingRules.ladderIndex(booking.serviceStatus, booking.serviceType) == null) {
         val status = tOrNull(OrderRules.bookingStatusKey(booking.serviceType, booking.serviceStatus)) ?: booking.serviceStatus
         val tone = OrderRules.bookingTone(booking.serviceType, booking.serviceStatus)
         Note(t(R.string.client_tracking_offLadder, "status" to status), tone = if (tone == Tone.ERR) Tone.ERR else Tone.WARN)

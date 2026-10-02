@@ -79,8 +79,11 @@ struct AmendmentView<Host: BookingScreenHost>: View {
     private func fields(_ dto: ClientBookingDTO) -> some View {
         let priceMinor = Money.minor(fromSoum: digits)
         let total = dto.quantity > 1 ? priceMinor * dto.quantity : priceMinor
-        Note(strings.t("amendment.parcelQuantityFixed"), tone: .gray)
-        ElchiField(text: $priceText, label: strings.t("amendment.priceLabel"), keyboard: .numberPad)
+        let passenger = dto.serviceType == .passenger
+        // Q145: the quantity stays as agreed after the booking (D9) - only the price changes, by agreement.
+        Note(passenger ? strings.t("amendment.seatsFixed", ("count", dto.quantity)) : strings.t("amendment.parcelQuantityFixed"), tone: .gray)
+        ElchiField(text: $priceText, label: strings.t(PassengerMoney.perSeat(dto.priceBasis) ? "amendment.seatPriceLabel" : "amendment.priceLabel"),
+                   keyboard: .numberPad)
             .onChange(of: priceText) { _, typed in
                 // Local text re-synced after every edit: SwiftUI's TextField ignores a binding that rewrites the input.
                 digits = Money.soumDigits(typed)

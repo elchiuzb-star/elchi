@@ -59,7 +59,7 @@ struct OrdersView: View {
                 let status = strings.status(.booking(booking.serviceType, booking.serviceStatus))
                 let day = ServerTime.parse(booking.pickup.windowStart) ?? ServerTime.parse(booking.createdAt)
                 ItemCard(title: strings.route(booking), icon: .pin, badge: status, meta: day.map(strings.dayMonth),
-                         right: strings.money(booking.cashDueMinor)) { onOpenBooking(booking.id) }
+                         right: strings.bookingPrice(booking)) { onOpenBooking(booking.id) }
             }
         }
     }
@@ -99,7 +99,8 @@ struct ListingSummaryCard: View {
     @Environment(LocaleStore.self) private var strings
 
     var body: some View {
-        ItemCard(title: strings.route(listing), badge: strings.status(.listing(listing.status)), lines: [ItemLine(line)],
+        ItemCard(title: strings.route(listing), badge: strings.status(.listing(listing.status)),
+                 lines: [ItemLine(line)] + (strings.peopleLine(listing).map { [ItemLine($0)] } ?? []),
                  meta: live ? stats?.newest.map { strings.t("client.orders.newestOffer", ("ago", strings.ago($0))) } : nil,
                  right: strings.money(listing.totalMinor), action: action)
     }

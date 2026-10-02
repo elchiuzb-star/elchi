@@ -19,6 +19,7 @@ struct BookingDetailView: View {
     @Environment(\.elchi) private var c
     @Environment(\.openURL) private var openURL
     @State private var confirmCancel = false
+    @State private var confirmComplete = false
 
     var body: some View {
         ScreenScaffold(title: strings.t("listingDetail.title"), backLabel: strings.t("common.back"), onBack: onBack, banner: banner) {
@@ -40,25 +41,50 @@ struct BookingDetailView: View {
         .sheet(isPresented: $confirmCancel) {
             CancelBookingSheet(model: model) { confirmCancel = false }
         }
+        .overlay {
+            if confirmComplete {
+                TaxiCompleteDialog(working: model.running == .complete, onConfirm: {
+                    Task {
+                        _ = await model.complete()
+                        confirmComplete = false
+                    }
+                }, onClose: { confirmComplete = false })
+            }
+        }
     }
 
     /// What the last command did (or why it failed), kept in sight under the top bar.
     private var banner: (text: String, tone: Tone)? {
         if let error = model.commandError, model.running == nil, model.failed == .cancel { return (strings.cancelErrorText(error), .err) }
+        if let error = model.commandError, model.running == nil, model.failed == .complete { return (strings.errorText(error), .err) }
         return model.notice.map { (strings.t($0), .ok) }
     }
 
     @ViewBuilder
     private func content(_ booking: ClientBookingDTO) -> some View {
         let actions = BookingActions.of(booking.serviceStatus)
+        let taxi = ClientTaxiActions.of(booking)
         ForEach(model.warnings, id: \.code) { Note(strings.warningText($0), tone: .warn) }
 
         ItemCard(title: strings.route(booking), icon: .pin, badge: strings.status(.booking(booking.serviceType, booking.serviceStatus)),
                  lines: booking.cancelled.map { [ItemLine(strings.cancelledLine($0), tone: .err)] } ?? [],
-                 meta: strings.bookingWhen(booking), right: strings.money(booking.cashDueMinor))
+                 meta: strings.bookingWhen(booking), right: strings.bookingPrice(booking))
+            .accessibilityIdentifier("elchi.booking.header")
+        // Q7: the driver reported a no-show; an operator reviews it and only an operator cancels meanwhile.
+        if taxi.noShowPending { Note(strings.t("bookingCancel.reviewPending"), tone: .warn) }
         driverCard(booking)
+        if taxi.showCode { BoardingCodeSection(model: model.code) }
         if let promo = booking.promo { promoBlock(promo) }
         fareCard(booking)
+        if taxi.cash { CashRecordSection(model: model.cash, booking: booking, dueMinor: booking.cashDueMinor) }
+        if taxi.canComplete {
+            ElchiButton(strings.t("client.taxi.complete"), icon: .checkC) {
+                model.clearNotice()
+                confirmComplete = true
+            }
+            .disabled(model.running != nil)
+            .accessibilityIdentifier("elchi.taxi.complete")
+        }
         photo
         HStack(spacing: 8) {
             ElchiButton(strings.t("bookingDetail.messages"), variant: .soft, size: .pair, icon: .chat, action: onChat)
@@ -104,7 +130,9 @@ struct BookingDetailView: View {
                         if let url = DriverReveal.dialURL(phone) { openURL(url) }
                     }
                 } else if !BookingActions.of(booking.serviceStatus).terminal {
-                    CardRow(strings.t("driverBooking.phone"), strings.t("client.bookingDetail.phoneLater"),
+                    // A passenger's service starts at boarding (Q44), a parcel's when the trip departs (Q142).
+                    CardRow(strings.t("driverBooking.phone"),
+                            strings.t(booking.serviceType == .passenger ? "driverBooking.phoneHidden" : "client.bookingDetail.phoneLater"),
                             detail: strings.t("client.bookingDetail.phoneChatOnly"), placeholder: true)
                 }
             }
@@ -126,6 +154,11 @@ struct BookingDetailView: View {
         ElchiCard {
             CardRow(strings.t("bookingDetail.fare"), strings.t("bookingDetail.fareCash", ("amount", strings.money(booking.cashDueMinor))), first: true,
                     detail: strings.t("bookingDetail.fareNote"))
+            if booking.serviceType == .passenger {
+                // "2 kishi · 2 × 150 000 so'm": the agreed people and the per-seat price.
+                CardRow(strings.t("orderForm.review.passengers"), strings.peopleLine(booking.quantity, unitMinor: booking.unitPriceMinor),
+                        detail: strings.t("orderForm.review.seatNegotiated"))
+            }
             if let parcel = strings.parcelLine(booking.parcelCategory, type: model.parcelType) {
                 CardRow(strings.t("listingDetail.parcel"), parcel)
             }

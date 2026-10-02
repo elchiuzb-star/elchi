@@ -26,15 +26,18 @@
 		18C00F43B446B6C6713B3405 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9078590EA61C4DFBD7FCE59 /* Components.swift */; };
 		1A645132B135D4935012BFED /* ProposalViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124ABE2A96AC0297228EF63A /* ProposalViews.swift */; };
 		1C0544993AC69F232702A4C2 /* ProfileLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */; };
+		1C14566718995E3EF2B31E0F /* TaxiModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD04770790C53C1713FFD25F /* TaxiModels.swift */; };
 		20B6F23F258060280924A139 /* ParcelRequestModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1D5A6E626D2A9700765B4F /* ParcelRequestModel.swift */; };
 		23B687F6EDD2A2AB328D1EA1 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA31EFFA4B516438A1829CD7 /* SettingsViews.swift */; };
 		257023030B11077DA418BADB /* MarketFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CC02CCBB6D8B641324DC52 /* MarketFormatting.swift */; };
+		27B3399240ECA0754431B80E /* TaxiFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA8ECF9793BFC089612969E /* TaxiFormatting.swift */; };
 		280414156FB9F22E8BE45C7E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27E951E104397C9F951A02 /* Models.swift */; };
 		2A6135E1CABC44E8EC1DF0DC /* ElchiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE637582601108DA0981BBD /* ElchiApp.swift */; };
 		2E9B2BFAD2DBDC3AEEAF7DDC /* BookingLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36CDA490A4A8FA703305BBC /* BookingLogic.swift */; };
 		2EE9361493EBF0EE092CD319 /* BookingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87EA31F8CE0EA13DE5C57F5 /* BookingViews.swift */; };
 		2F334E68CE593793D8169447 /* PointPickerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */; };
 		3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */; };
+		354FF9D10BA0F9E29B09A7B6 /* TaxiViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 783733336FB122507D85F109 /* TaxiViews.swift */; };
 		38E28AADEA9D73BC78B9C945 /* ElchiMapEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */; };
 		3B003CCFF041EA026C746E73 /* Icons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A3694A601D0778DB17F9198C /* Icons.xcassets */; };
 		3B5ACADCADEA3B0376AD4C3C /* DriverAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D96E5FDD2494A0AC2D3230D /* DriverAPI.swift */; };
@@ -42,6 +45,7 @@
 		3F69F6036336F84A2A79AB37 /* GeoAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28BF64B36C44C615562BE806 /* GeoAPI.swift */; };
 		42403EF5D537BA688F8CD4C6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 64BF397B4CEEDD77C2732C46 /* Assets.xcassets */; };
 		45AC9D438CDA4E4C55B12E3A /* GpsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C9F1B14E8357CE3DE4F5ECC /* GpsBar.swift */; };
+		45D972A89EA2D6F6265ED798 /* TaxiLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8740C872ADD8F6E5B737B5FA /* TaxiLogic.swift */; };
 		45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */; };
 		485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD96CB85D338794F3AD1FF7 /* MarketModels.swift */; };
 		48962C87ADECC021F90F4C4B /* OrdersAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC50CE982A2746D3110960D /* OrdersAPI.swift */; };
@@ -72,6 +76,7 @@
 		86E0469A8C4B537C30B261F6 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A80FE97EF8890CC6CC4A553 /* DeepLinkTests.swift */; };
 		87258CB1D69D3566CC4E76B3 /* ElchiAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FE9A7EB2E109760A5E2B8B7 /* ElchiAPI.swift */; };
 		8A650DABB21BEDC65A7D3ACE /* DriverGpsBars.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB6B48A7D779235C4709B054 /* DriverGpsBars.swift */; };
+		8A7DC6C444585548BAD01A27 /* TaxiUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7466CF87C3D97F990ED95903 /* TaxiUITests.swift */; };
 		8ABBB5990D94801EFE8DE3FE /* Poppins-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 25ADC998933154BA1C02905E /* Poppins-OFL.txt */; };
 		8B153DC9951BE2E3408FB121 /* DriverLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */; };
 		8C754C7698344577FA059522 /* ClientOffersUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */; };
@@ -95,6 +100,7 @@
 		B0F78E51A83CEFECC4F1C004 /* YandexMapsMobileLite in Frameworks */ = {isa = PBXBuildFile; productRef = CF0977FA92FA72F9DDF3847D /* YandexMapsMobileLite */; };
 		B23CD59E593AE1E368114217 /* BookingFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C0FF664AD5ECD97C0FA11E /* BookingFormatting.swift */; };
 		B3EC95ADF38F7034699746B0 /* DriverViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F2E160F1AD7CFF4946D9AB /* DriverViews.swift */; };
+		B5060CD3008755394E63CD65 /* TaxiLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096CF217FEF63626CA5346AD /* TaxiLogicTests.swift */; };
 		B89C72AC4BAE405071BEEEB8 /* DriverTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9214E09679CBA104A5D1BDD /* DriverTracker.swift */; };
 		B960A9D5AD351B96A2ECD1F7 /* ClientBookingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A189282F9DE6787F410CC3 /* ClientBookingUITests.swift */; };
 		B96AFD77FAF4F12960E96CD8 /* LegacyLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = E566FCB6E874711B2522C06E /* LegacyLogic.swift */; };
@@ -154,6 +160,7 @@
 		077C2D6194C60CE1DB103563 /* EntryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryViews.swift; sourceTree = "<group>"; };
 		0851D80624E40B0809EEA2C3 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
 		091A2CC726EB7B80E35F6690 /* Poppins-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-SemiBold.ttf"; sourceTree = "<group>"; };
+		096CF217FEF63626CA5346AD /* TaxiLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiLogicTests.swift; sourceTree = "<group>"; };
 		09F2114B14B07FC499E89951 /* AuthAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthAPI.swift; sourceTree = "<group>"; };
 		0AADBA05767DAFA193B2463D /* BookingTrackingModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingTrackingModel.swift; sourceTree = "<group>"; };
 		0C10A99C8800447B2019AB7C /* ClientHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientHome.swift; sourceTree = "<group>"; };
@@ -183,6 +190,7 @@
 		39B2ABA7C58DF674FEA29553 /* BookingMoreViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingMoreViews.swift; sourceTree = "<group>"; };
 		39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverLogicTests.swift; sourceTree = "<group>"; };
 		3A80FE97EF8890CC6CC4A553 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
+		3BA8ECF9793BFC089612969E /* TaxiFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiFormatting.swift; sourceTree = "<group>"; };
 		3C1D5A6E626D2A9700765B4F /* ParcelRequestModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParcelRequestModel.swift; sourceTree = "<group>"; };
 		3D96E5FDD2494A0AC2D3230D /* DriverAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverAPI.swift; sourceTree = "<group>"; };
 		411F2B904B1638EB593ADE46 /* OrderLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderLogic.swift; sourceTree = "<group>"; };
@@ -205,12 +213,15 @@
 		6A72B722AC59F1AB914DA87B /* BookingLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingLogicTests.swift; sourceTree = "<group>"; };
 		6E3829D24D17A5C141EDF00D /* TripViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripViews.swift; sourceTree = "<group>"; };
 		7403C98C99D03BBB70E64FD2 /* ProfileViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViews.swift; sourceTree = "<group>"; };
+		7466CF87C3D97F990ED95903 /* TaxiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiUITests.swift; sourceTree = "<group>"; };
 		765870A11E9B923B60641B1D /* BookingHosts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingHosts.swift; sourceTree = "<group>"; };
 		774BCD9CFE33E4643559CF3B /* LegacyViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyViews.swift; sourceTree = "<group>"; };
+		783733336FB122507D85F109 /* TaxiViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiViews.swift; sourceTree = "<group>"; };
 		7A61A05C9B058156AB0D42B0 /* FeedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViews.swift; sourceTree = "<group>"; };
 		7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyOrderModel.swift; sourceTree = "<group>"; };
 		82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientProfileUITests.swift; sourceTree = "<group>"; };
 		84C0FF664AD5ECD97C0FA11E /* BookingFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingFormatting.swift; sourceTree = "<group>"; };
+		8740C872ADD8F6E5B737B5FA /* TaxiLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiLogic.swift; sourceTree = "<group>"; };
 		88AA28EAF962F62889B19611 /* ElchiIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiIcon.swift; sourceTree = "<group>"; };
 		899EC15A716DEDF558E910DB /* Wallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wallet.swift; sourceTree = "<group>"; };
 		8A221EB8F4FF967F4D54A6CB /* DriverBookingLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverBookingLogic.swift; sourceTree = "<group>"; };
@@ -235,6 +246,7 @@
 		B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransportTests.swift; sourceTree = "<group>"; };
 		B9214E09679CBA104A5D1BDD /* DriverTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverTracker.swift; sourceTree = "<group>"; };
 		BBC50CE982A2746D3110960D /* OrdersAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersAPI.swift; sourceTree = "<group>"; };
+		BD04770790C53C1713FFD25F /* TaxiModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiModels.swift; sourceTree = "<group>"; };
 		BDF411664F7EACBB15965006 /* ProfileFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormatting.swift; sourceTree = "<group>"; };
 		C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLogicTests.swift; sourceTree = "<group>"; };
 		C1F2E160F1AD7CFF4946D9AB /* DriverViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverViews.swift; sourceTree = "<group>"; };
@@ -304,6 +316,7 @@
 				AEF518C44CC1D2EF0004AE1A /* DriverStage09UITests.swift */,
 				9EC1A51C8AC6A8C2978AEF47 /* DriverUITests.swift */,
 				E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */,
+				7466CF87C3D97F990ED95903 /* TaxiUITests.swift */,
 			);
 			path = ElchiUITests;
 			sourceTree = "<group>";
@@ -489,6 +502,17 @@
 			path = Links;
 			sourceTree = "<group>";
 		};
+		98820ABAA66DA25DA5C3A024 /* Taxi */ = {
+			isa = PBXGroup;
+			children = (
+				3BA8ECF9793BFC089612969E /* TaxiFormatting.swift */,
+				8740C872ADD8F6E5B737B5FA /* TaxiLogic.swift */,
+				BD04770790C53C1713FFD25F /* TaxiModels.swift */,
+				783733336FB122507D85F109 /* TaxiViews.swift */,
+			);
+			path = Taxi;
+			sourceTree = "<group>";
+		};
 		99DCC2736FD38035F8A7B74F /* Theme */ = {
 			isa = PBXGroup;
 			children = (
@@ -558,6 +582,7 @@
 				15BDD8ED2B5D3BC08BBF3187 /* Order */,
 				15128A6205406AD1680B4BBA /* Orders */,
 				2A12F9E374676548D133EF40 /* Profile */,
+				98820ABAA66DA25DA5C3A024 /* Taxi */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -591,6 +616,7 @@
 				9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */,
 				C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */,
 				B7384394017524FA15DF071D /* StringsTests.swift */,
+				096CF217FEF63626CA5346AD /* TaxiLogicTests.swift */,
 			);
 			path = ElchiTests;
 			sourceTree = "<group>";
@@ -847,6 +873,10 @@
 				FF56E624D0DDE33E0C5F2FA0 /* States.swift in Sources */,
 				AE13A0237DB5E74AA3E83A2B /* Strings.swift in Sources */,
 				001E4D22570BBE3016CA1E2B /* SupportViews.swift in Sources */,
+				27B3399240ECA0754431B80E /* TaxiFormatting.swift in Sources */,
+				45D972A89EA2D6F6265ED798 /* TaxiLogic.swift in Sources */,
+				1C14566718995E3EF2B31E0F /* TaxiModels.swift in Sources */,
+				354FF9D10BA0F9E29B09A7B6 /* TaxiViews.swift in Sources */,
 				CDD6F1E8AAD07062CA19987B /* TripViews.swift in Sources */,
 				6C5B257C6AA57A6F42C3157A /* Wallet.swift in Sources */,
 				03EF37D693012611FDF12440 /* WalletViews.swift in Sources */,
@@ -871,6 +901,7 @@
 				6679748F2B6674DBEF88D56F /* ParcelRequestModelTests.swift in Sources */,
 				1C0544993AC69F232702A4C2 /* ProfileLogicTests.swift in Sources */,
 				0968CCBD469E0B2A550AB0DA /* StringsTests.swift in Sources */,
+				B5060CD3008755394E63CD65 /* TaxiLogicTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -891,6 +922,7 @@
 				D0A51D3A01375760DA1A9EAD /* DriverStage09UITests.swift in Sources */,
 				13C7C6513818905DAD73B95E /* DriverUITests.swift in Sources */,
 				4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */,
+				8A7DC6C444585548BAD01A27 /* TaxiUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

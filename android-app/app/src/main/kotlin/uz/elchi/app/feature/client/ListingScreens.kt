@@ -50,6 +50,7 @@ import uz.elchi.app.R
 import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.ListingStatus
 import uz.elchi.app.api.generated.ParcelType
+import uz.elchi.app.api.generated.PriceBasis
 import uz.elchi.app.api.generated.ProposalThreadDTO
 import uz.elchi.app.api.generated.ShareLinkChannel
 import uz.elchi.app.api.generated.ShareLinkDTO
@@ -167,7 +168,11 @@ internal fun ListingItem(listing: ListingDTO, stats: OfferStats?, ru: Boolean, l
     ItemCard(
         title = "${OrderRules.shortEnd(listing.originStop, listing.originPoint, ru)} → ${OrderRules.shortEnd(listing.destinationStop, listing.destinationPoint, ru)}",
         badge = (tOrNull(OrderRules.listingStatusKey(listing.status)) ?: listing.status.value) to OrderRules.statusTone(listing.status.value),
-        lines = listOf(ItemLine(parts.joinToString(" · "))),
+        // Taksi: "2 kishi · 2 × 150 000 so'm" above the date line.
+        lines = listOfNotNull(
+            if (TaxiRules.isPassenger(listing.serviceType)) ItemLine(seatsLine(listing.quantity, listing.unitPriceMinor)) else null,
+            ItemLine(parts.joinToString(" · ")),
+        ),
         meta = meta,
         right = soum(listing.totalMinor),
         onClick = onClick,
@@ -189,7 +194,17 @@ private fun ListingDetails(listing: ListingDTO, ru: Boolean) {
             detail = listing.destinationPoint?.district?.nameUz?.takeIf { listing.destinationStop == null && listing.destinationPoint.address != null },
         )
         OrderRules.windowText(listing.departureWindowStart, listing.departureWindowEnd)?.let { CardRow(t(R.string.listingDetail_departureWindow), it) }
-        CardRow(t(R.string.common_price), soum(listing.totalMinor), strong = true)
+        if (TaxiRules.isPassenger(listing.serviceType)) {
+            CardRow(t(R.string.orderForm_review_passengers), t(R.string.orderForm_review_peopleCount, "count" to listing.quantity), detail = t(R.string.orderForm_review_seatNegotiated))
+            CardRow(
+                t(R.string.common_price),
+                soum(listing.totalMinor),
+                detail = t(R.string.orderForm_review_perPersonDetail, "count" to listing.quantity, "price" to soum(listing.unitPriceMinor)),
+                strong = true,
+            )
+        } else {
+            CardRow(t(R.string.common_price), soum(listing.totalMinor), strong = true)
+        }
         listing.parcel?.let { parcel ->
             val type = ParcelType.entries.firstOrNull { it == parcel.parcelType && it != ParcelType.UNKNOWN }?.let { parcelTypeLabel(it) }
             val category = parcel.category?.let { "${categoryName(it, ru)} (${categoryLimits(it)})" }
@@ -376,6 +391,8 @@ internal fun CancelSheet(
 
 private enum class EditEdge { START, END }
 
+private val WINDOW_INVALID = setOf(EditInvalid.WINDOW_INCOMPLETE, EditInvalid.WINDOW_ORDER, EditInvalid.WINDOW_PAST)
+
 @Composable
 fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -414,7 +431,8 @@ fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> U
         ElchiField(
             form.priceDigits,
             { text -> vm.editForm { it.copy(priceDigits = text.filter(Char::isDigit).trimStart('0').take(10)) } },
-            label = t(R.string.listingOwner_priceLabel),
+            // A passenger request's price is per person ("Narx (so'm) / o'rin").
+            label = t(R.string.listingOwner_priceLabel) + if (TaxiRules.isPassenger(listing.serviceType)) " " + t(R.string.listingEdit_perSeatSuffix).trim() else "",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             visualTransformation = ThousandsTransformation,
             error = if (plan?.invalid == EditInvalid.PRICE) t(R.string.listingOwner_invalid_price) else null,
@@ -428,9 +446,21 @@ fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> U
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             hint = t(R.string.app_bookingCancel_commentHint),
         )
+        if (TaxiRules.seatsEditable(listing)) {
+            // Q145: the number of people, until a booking exists; a new count closes the open offers (Q20).
+            val seatsError = plan?.invalid?.takeIf { it == EditInvalid.SEATS || it == EditInvalid.SEATS_CHILDREN }
+            ElchiField(
+                form.seats,
+                { text -> vm.editForm { it.copy(seats = text.filter(Char::isDigit).take(1)) } },
+                label = t(R.string.listingEdit_seats),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                hint = t(R.string.listingEdit_seatsHint),
+                error = seatsError?.let { tOrNull("listingOwner.invalid.${it.key}") ?: it.key },
+            )
+        }
         if (OrderRules.windowEditable(listing)) {
             val placeholder = t(R.string.client_routeSummary_windowPlaceholder)
-            val windowError = plan?.invalid?.takeIf { it != EditInvalid.PRICE }
+            val windowError = plan?.invalid?.takeIf { it in WINDOW_INVALID }
             PickerField(t(R.string.listingOwner_windowStart), form.windowStart?.let(ParcelRules::display), placeholder, { picking = EditEdge.START }, error = windowError != null)
             PickerField(t(R.string.listingOwner_windowEnd), form.windowEnd?.let(ParcelRules::display), placeholder, { picking = EditEdge.END }, error = windowError != null)
             windowError?.let { Note(tOrNull("listingOwner.invalid.${it.key}") ?: it.key, tone = Tone.ERR) }
@@ -557,6 +587,8 @@ private fun OfferCard(
     val price = version?.let { soum(it.totalMinor) }
     val route = version?.let { "${OrderRules.shortEnd(it.pickupStop, it.pickupPoint, ru)} → ${OrderRules.shortEnd(it.dropoffStop, it.dropoffPoint, ru)}" }
     val message = version?.message?.takeIf { it.isNotBlank() }?.let { ItemLine("“${it.trim()}”", c.text) }
+    // Taksi: the offer is per person - "2 × 160 000 so'm" under the total.
+    val perSeat = version?.takeIf { it.priceBasis == PriceBasis.PER_SEAT }?.let { ItemLine(seatsPrice(it.quantity, it.unitPriceMinor)) }
     when {
         version == null || !actions.open -> ItemCard(
             title = driverLabel(thread),
@@ -572,6 +604,7 @@ private fun OfferCard(
             badge = if (cheapest) t(R.string.client_listingBids_cheapest) to Tone.OK else null,
             sub = route,
             lines = listOfNotNull(
+                perSeat,
                 OrderRules.windowText(version.pickupWindowStart, version.pickupWindowEnd)?.let { ItemLine(it) },
                 summary?.let { ItemLine(it) },
                 message,
@@ -586,6 +619,7 @@ private fun OfferCard(
             underlined = true,
             sub = summary,
             lines = listOfNotNull(
+                perSeat,
                 ItemLine(t(R.string.listingBids_awaitingDriver)),
                 OrderRules.secondsLeft(version, now)?.let { ItemLine(countdownText(it), c.tone(Tone.WARN).fg) },
             ),

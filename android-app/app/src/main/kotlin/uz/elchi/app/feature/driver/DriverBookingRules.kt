@@ -1,5 +1,6 @@
 package uz.elchi.app.feature.driver
 
+import uz.elchi.app.api.BookingNoShowReviewDTO
 import uz.elchi.app.api.DriverBookingDTO
 import uz.elchi.app.api.generated.ServiceType
 import uz.elchi.app.feature.client.BookingRules
@@ -35,7 +36,7 @@ object DriverBookingRules {
     private val ARRIVE = BookingViewModel.ARRIVE_STATUSES
 
     /** The trip runs (boarding / on the way): the booking screens show the GPS bar. */
-    private val TRIP_RUNNING = setOf("awaiting_pickup", "picked_up", "in_transit")
+    private val TRIP_RUNNING = setOf("awaiting_pickup", "picked_up", "in_transit", "onboard")
 
     private val IN_TRANSIT = setOf("picked_up", "in_transit")
 
@@ -81,10 +82,11 @@ object DriverBookingRules {
         return now.isBefore(done.plus(RATING_WINDOW))
     }
 
-    fun actions(status: String, arrivedAt: String?, updatedAt: String?, now: Instant): DriverBookingActions = DriverBookingActions(
+    fun actions(status: String, arrivedAt: String?, updatedAt: String?, now: Instant, review: BookingNoShowReviewDTO? = null): DriverBookingActions = DriverBookingActions(
         arrive = canArrive(status, arrivedAt),
         amend = BookingRules.canAmend(status),
-        cancel = BookingRules.canCancel(status),
+        // Q7/Q19: while the driver's "Mijoz kelmadi" waits for the operator only the operator may cancel.
+        cancel = BookingRules.canCancel(status, review),
         rate = ratingOpen(status, updatedAt, now),
         transitNote = status in IN_TRANSIT,
     )

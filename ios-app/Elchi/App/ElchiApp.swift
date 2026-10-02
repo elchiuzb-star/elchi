@@ -77,6 +77,13 @@ struct ElchiApp: App {
             SessionStore().clear()
             if let domain = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: domain) }
         }
+        // UI tests that switch between a client and a driver: `-uiTestSession <base64 verify-otp answer>` signs in
+        // without asking for another OTP (the dev backend allows 5 per phone in 30 minutes).
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "-uiTestSession"), index + 1 < arguments.count,
+           let data = Data(base64Encoded: arguments[index + 1]), let tokens = try? JSONDecoder().decode(TokenResponse.self, from: data) {
+            SessionStore().save(Session(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, user: tokens.user))
+        }
         // "Sessiya tugadi" on demand: both stored tokens become garbage, so the first call's refresh is refused.
         if ProcessInfo.processInfo.arguments.contains("-uiTestExpireSession") {
             let store = SessionStore()

@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import uz.elchi.app.api.generated.BookingPromoClientDTO
+import uz.elchi.app.api.generated.CashReceiptDTO
 import uz.elchi.app.api.generated.MediaRefDTO
 import uz.elchi.app.api.generated.ParcelCategoryDTO
 import uz.elchi.app.api.generated.PointEndDTO
@@ -68,7 +69,11 @@ data class BookingContactDTO(
 
 /** Q7: a reported no-show the operator is reviewing - while `pending` only the operator may cancel. */
 @Serializable
-data class BookingNoShowReviewDTO(val status: String? = null)
+data class BookingNoShowReviewDTO(
+    val status: String? = null,
+    @SerialName("reported_at") val reportedAt: String? = null,
+    @SerialName("decided_at") val decidedAt: String? = null,
+)
 
 /**
  * The client's view of a booking (`BookingClientDTO` on the server: no commission, fee or wallet, Q16). The
@@ -106,6 +111,13 @@ data class BookingClientDTO(
     @SerialName("no_show_review") val noShowReview: BookingNoShowReviewDTO? = null,
     @SerialName("cancellation_policy_summary") val cancellationPolicySummary: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
+    // Taksi (passenger): statuses stay strings (onboard, arrived, no_show … are not a generated enum).
+    /** `per_seat` for a passenger booking (quantity × unit), `total` for a parcel. */
+    @SerialName("price_basis") val priceBasis: String? = null,
+    /** The newest cash record, so either side can answer it after a reload (passenger only; Q139). */
+    @SerialName("cash_receipt") val cashReceipt: CashReceiptDTO? = null,
+    /** Q145: false for every booking made on a client request - the seats stay as agreed, only the price moves. */
+    @SerialName("quantity_amendable") val quantityAmendable: Boolean = false,
 ) {
     companion object {
         /** A row of the union, or null when it is not the client's view (a driver row never belongs here). */

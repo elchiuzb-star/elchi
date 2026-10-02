@@ -13,6 +13,7 @@ import uz.elchi.app.api.BookingVehicleDTO
 import uz.elchi.app.api.generated.AmendmentDTO
 import uz.elchi.app.api.generated.ChatMessageDTO
 import uz.elchi.app.api.generated.ReputationDTO
+import uz.elchi.app.api.generated.ServiceType
 import uz.elchi.app.api.generated.SupportMessageDTO
 import uz.elchi.app.api.generated.TrackingFreshness
 import uz.elchi.app.api.generated.TrackingLastPointDTO
@@ -31,8 +32,11 @@ enum class LadderStep(val key: String) {
 
 enum class StepState { DONE, CURRENT, TODO }
 
-/** One rung: its state and, only where the booking really carries it, when it happened. */
-data class LadderItem(val step: LadderStep, val state: StepState, val at: String? = null)
+/**
+ * One rung: its state and, only where the booking really carries it, when it happened. [key] is the rung's words:
+ * the parcel's by default, the passenger's own for Taksi (Mashinada, Yetib keldi).
+ */
+data class LadderItem(val step: LadderStep, val state: StepState, val at: String? = null, val key: String = step.key)
 
 /** The plate as the client may see it now (Q64): the full number, or the masked one with "opens 30 min before". */
 data class PlateView(val text: String, val full: Boolean)
@@ -157,8 +161,20 @@ object BookingRules {
 
     // -- status ladder --------------------------------------------------------------------------------------------
 
-    /** Where a parcel status sits on the ladder; null = off the ladder (cancelled, return statuses). */
-    fun ladderIndex(status: String): Int? = when (status) {
+    /** Taksi's rungs, in the ladder's five places: confirmed → awaited → in the car → arrived → completed. */
+    private val PASSENGER_LADDER = listOf("status.confirmed", "status.awaiting_pickup", "status.onboard", "status.arrived", "app.progress.completed")
+
+    /** Where a status sits on the ladder; null = off the ladder (cancelled, no-show, the parcel's return statuses). */
+    fun ladderIndex(status: String, serviceType: ServiceType = ServiceType.PARCEL): Int? = if (serviceType == ServiceType.PASSENGER) {
+        when (status) {
+            "confirmed" -> 0
+            "awaiting_pickup" -> 1
+            "onboard" -> 2
+            "arrived" -> 3
+            "completed" -> 4
+            else -> null
+        }
+    } else when (status) {
         "confirmed" -> 0
         "awaiting_pickup" -> 1
         // The system only knows that the trip departed, not that the parcel was handed over (Q139/Q142).
@@ -174,7 +190,8 @@ object BookingRules {
      * rung that did not surely happen as to-do; the screen names the status separately.
      */
     fun ladder(booking: BookingClientDTO): List<LadderItem> {
-        val current = ladderIndex(booking.serviceStatus)
+        val passenger = booking.serviceType == ServiceType.PASSENGER
+        val current = ladderIndex(booking.serviceStatus, booking.serviceType)
         return LadderStep.entries.mapIndexed { i, step ->
             val state = when {
                 current == null -> if (i == 0) StepState.DONE else StepState.TODO
@@ -188,7 +205,7 @@ object BookingRules {
                 LadderStep.DEPARTED -> booking.contact?.visibleFrom?.takeIf { state != StepState.TODO }
                 else -> null
             }
-            LadderItem(step, state, at)
+            LadderItem(step, state, at, key = if (passenger) PASSENGER_LADDER[i] else step.key)
         }
     }
 

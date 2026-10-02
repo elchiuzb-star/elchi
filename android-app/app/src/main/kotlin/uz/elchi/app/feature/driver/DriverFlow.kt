@@ -344,6 +344,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
                     onRate = { nav.navigate(DriverBookingRating(id)) },
                     onSupport = { nav.navigate(DriverBookingSupport(id)) },
                     onSafety = { nav.navigate(DriverBookingSafety(id)) },
+                    onTrip = { tripId -> nav.navigate(TripDetail(tripId)) },
                 ),
             )
         }

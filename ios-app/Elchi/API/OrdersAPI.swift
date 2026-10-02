@@ -106,19 +106,40 @@ public struct ClientBookingDTO: Codable, Hashable, Sendable, Identifiable {
         public let supply: String?
     }
 
+    /// Q7: the driver reported a no-show; `pending` until an operator confirms or rejects it.
+    public struct NoShowReview: Codable, Hashable, Sendable {
+        public let status: String
+        public let reportedAt: String?
+        public let decidedAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case status
+            case reportedAt = "reported_at"
+            case decidedAt = "decided_at"
+        }
+    }
+
     public let id: String
     public let viewerSide: String
     public let serviceType: ServiceType
     public let serviceStatus: String
+    /// Passenger: `unpaid`, `reported_paid`, `acknowledged`, `contested` (a string: a new value must not break decoding).
     public let cashStatus: String?
     /// Every command on the booking sends it back as `expected_version`.
     public let version: Int
     public let pickup: End
     public let dropoff: End
     public let quantity: Int
+    /// `per_seat` for a passenger booking (the total is quantity x unit), `total` for a parcel.
+    public let priceBasis: PriceBasis?
     public let unitPriceMinor: Int
     public let totalMinor: Int
     public let currency: String
+    /// Q145: whether an amendment may change the quantity (false for every booking made on a client request, D9).
+    public let quantityAmendable: Bool?
+    /// The newest cash record (passenger), so the other side can answer it after a reload.
+    public let cashReceipt: CashReceiptDTO?
+    public let noShowReview: NoShowReview?
     /// Present only on a discounted booking: the client then hands over `cash_due_minor`, not the total.
     public let promo: BookingPromoClientDTO?
     public let createdAt: String
@@ -140,6 +161,10 @@ public struct ClientBookingDTO: Codable, Hashable, Sendable, Identifiable {
         case serviceStatus = "service_status"
         case cashStatus = "cash_status"
         case unitPriceMinor = "unit_price_minor"
+        case priceBasis = "price_basis"
+        case quantityAmendable = "quantity_amendable"
+        case cashReceipt = "cash_receipt"
+        case noShowReview = "no_show_review"
         case totalMinor = "total_minor"
         case createdAt = "created_at"
         case updatedAt = "updated_at"

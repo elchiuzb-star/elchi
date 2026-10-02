@@ -173,21 +173,25 @@ fun RouteSummaryScreen(vm: ParcelRequestViewModel, ru: Boolean, onBack: () -> Un
             hint = t(R.string.routeSummary_windowHint),
             error = RouteIssue.WINDOW_END in issues || RouteIssue.WINDOW_ORDER in issues,
         )
+        // Taksi (design `seat-picker`): how many people, then the price for one person.
+        if (draft.taxi) SeatPicker(draft.seats, vm::toggleSeat)
         ElchiField(
             draft.priceDigits,
             { text -> vm.edit { it.copy(priceDigits = text.filter(Char::isDigit).trimStart('0').take(10)) } },
-            label = t(R.string.listingOwner_priceLabel),
-            placeholder = "200${ParcelRules.NBSP}000",
+            label = t(if (draft.taxi) R.string.routeSummary_pricePerPerson else R.string.listingOwner_priceLabel),
+            placeholder = if (draft.taxi) "150${ParcelRules.NBSP}000" else "200${ParcelRules.NBSP}000",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
             visualTransformation = ThousandsTransformation,
         )
         val minor = ParcelRules.soumToMinor(draft.priceDigits)
+        val seats = TaxiRules.seatCount(draft).toLong()
         ElchiCard(background = c.highlight) {
             CardRow(
                 t(R.string.common_total),
-                minor?.let { ParcelRules.formatSoum(it, t(R.string.common_soum)) } ?: t(R.string.common_dash),
+                minor?.let { soum(if (draft.taxi) TaxiRules.totalMinor(it, seats) else it) } ?: t(R.string.common_dash),
                 first = true,
-                detail = t(R.string.routeSummary_driversSendOffers),
+                // "2 × 150 000 so'm · Haydovchilar o'z taklifini yuboradi."
+                detail = if (draft.taxi && minor != null) "${seatsPrice(seats, minor)} · ${t(R.string.routeSummary_driversSendOffers)}" else t(R.string.routeSummary_driversSendOffers),
                 strong = true,
             )
         }
@@ -608,13 +612,13 @@ fun OrderReviewScreen(vm: ParcelRequestViewModel, ru: Boolean, onBack: () -> Uni
     val d = s.draft
     val p = s.preview
     LaunchedEffect(s.published) { if (s.published != null) onPublished() }
-    val ready = ParcelRules.readyToPublish(d, s.directionReady, Instant.now())
+    val ready = if (d.taxi) TaxiRules.readyToPublish(d, s.directionReady, Instant.now()) else ParcelRules.readyToPublish(d, s.directionReady, Instant.now())
     StepScaffold(
         title = t(R.string.orderForm_review_title),
         onBack = onBack,
         footer = {
             s.publishError?.let { PublishError(it) }
-            if (!ready && !s.publishing) Note(t(R.string.orderForm_review_incompleteParcel), tone = Tone.WARN)
+            if (!ready && !s.publishing) Note(t(if (d.taxi) R.string.orderForm_review_incompletePassenger else R.string.orderForm_review_incompleteParcel), tone = Tone.WARN)
             ElchiButton(t(R.string.orderForm_review_publish), vm::publish, Modifier.fillMaxWidth(), enabled = ready, loading = s.publishing)
             ElchiButton(t(R.string.listingOwner_edit), onEdit, Modifier.fillMaxWidth().height(40.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, enabled = !s.publishing)
         },
@@ -631,6 +635,21 @@ fun OrderReviewScreen(vm: ParcelRequestViewModel, ru: Boolean, onBack: () -> Uni
             }
             if (d.start != null && d.endTime != null) {
                 CardRow(t(R.string.orderForm_review_window), "${ParcelRules.displayShort(d.start!!)} - ${ParcelRules.displayShort(d.endTime!!)}")
+            }
+            if (d.taxi) {
+                // Taksi: the people (the count is booked, the seat is agreed with the driver) and the price per person.
+                val seats = TaxiRules.seatCount(d).toLong()
+                CardRow(t(R.string.orderForm_review_passengers), t(R.string.orderForm_review_peopleCount, "count" to seats), detail = t(R.string.orderForm_review_seatNegotiated))
+                ParcelRules.soumToMinor(d.priceDigits)?.let {
+                    CardRow(
+                        t(R.string.common_price),
+                        soum(TaxiRules.totalMinor(it, seats)),
+                        detail = "${t(R.string.orderForm_review_perPersonDetail, "count" to seats, "price" to soum(it))} · ${t(R.string.orderForm_review_driversSendOffers)}",
+                        strong = true,
+                    )
+                }
+                if (d.comment.isNotBlank()) CardRow(t(R.string.listingOwner_commentLabel), d.comment.trim())
+                return@ElchiCard
             }
             ParcelRules.soumToMinor(d.priceDigits)?.let {
                 CardRow(t(R.string.common_price), ParcelRules.formatSoum(it, t(R.string.common_soum)), detail = t(R.string.orderForm_review_driversSendOffers), strong = true)

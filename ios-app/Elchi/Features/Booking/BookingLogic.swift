@@ -57,8 +57,11 @@ public enum StatusLadder {
     }
 
     /// The steps for a booking on the ladder; an off-ladder status gets none (the screen says the status instead).
-    public static func steps(status: String, createdAt: Date?) -> [LadderStep] {
-        guard let position = position(status) else { return [] }
+    /// A passenger booking has its own ladder (`PassengerStatus`): confirmed, driver at the stop, aboard, arrived, done.
+    public static func steps(status: String, createdAt: Date?, service: ServiceType = .parcel) -> [LadderStep] {
+        let passenger = service == .passenger
+        guard let position = passenger ? PassengerStatus.position(status) : position(status) else { return [] }
+        let keys = passenger ? PassengerStatus.ladder : keys
         return keys.enumerated().map { index, key in
             let state: LadderStep.State = index < position || (index == position && index == keys.count - 1) ? .done
                 : index == position ? .current : .ahead

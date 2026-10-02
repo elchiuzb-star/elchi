@@ -65,7 +65,13 @@ final class ParcelRequestModel {
     /// Effective service flags: country scope until a direction is found, then that corridor's (Q5). A failed read
     /// closes everything (Q26). Nil while unknown.
     private(set) var flags: EffectiveFlagValuesDTO?
+    /// The country-scope answer, kept: whether the Taksi / Pochta segment exists at all (K7/Q89).
+    private(set) var countryFlags: EffectiveFlagValuesDTO?
+    /// Pochta or Taksi. Taksi only while passenger is enabled somewhere the person can see (else back to parcel).
     var mode: ServiceType = .parcel
+
+    // Taksi: which seats the person marked (the request carries only their count).
+    var seats: [CabinSeat] = SeatPicker.defaultSeats
 
     // Step 1: route summary.
     var windowStart: Date?
@@ -154,19 +160,30 @@ final class ParcelRequestModel {
     /// The parcel service is open here (country scope before a direction exists, then its corridor).
     var parcelOpen: Bool? { flags.map(\.parcelEnabled) }
 
-    var canViewRoute: Bool { directionReady && mode == .parcel && parcelOpen == true }
+    /// The Taksi / Pochta segment: passenger enabled in the country or on the corridor of the chosen direction.
+    var taxiVisible: Bool { PassengerGate.modeVisible(countryFlags) || PassengerGate.modeVisible(flags) }
+
+    var canViewRoute: Bool { PassengerGate.canViewRoute(directionReady: directionReady, flags: flags, mode: mode) }
+
+    /// The red line under "Yo'nalishni ko'rish" when the chosen service is closed here.
+    var closedKey: String? { PassengerGate.closedKey(flags, mode: mode) }
 
     func loadCountryFlags() async {
-        guard flags == nil else { return }
-        await readFlags(corridorId: nil)
+        guard countryFlags == nil else { return }
+        let read = await readFlags(corridorId: nil)
+        countryFlags = read
+        if preview == nil { flags = read }
+        keepModeVisible()
     }
 
-    private func readFlags(corridorId: String?) async {
-        do {
-            flags = try await api.effectiveFlags(corridorId: corridorId).data.flags
-        } catch {
-            flags = EffectiveFlagValuesDTO(driverListingEnabled: false, parcelEnabled: false, passengerEnabled: false, trackingEnabled: false)
-        }
+    /// One effective-flags read; a failure closes everything (Q26).
+    private func readFlags(corridorId: String?) async -> EffectiveFlagValuesDTO {
+        (try? await api.effectiveFlags(corridorId: corridorId).data.flags) ?? PassengerGate.closed
+    }
+
+    /// Taksi chosen where the segment is gone (passenger off everywhere the person sees): back to Pochta.
+    private func keepModeVisible() {
+        if mode == .passenger && !taxiVisible { mode = .parcel }
     }
 
     private func checkDirection() {
@@ -185,7 +202,10 @@ final class ParcelRequestModel {
                 if Task.isCancelled { return }
                 direction = .ready(preview)
                 // Q5: services open per corridor - re-read the flags for this one (the web client reads the country).
-                await readFlags(corridorId: preview.corridorId)
+                let read = await readFlags(corridorId: preview.corridorId)
+                if Task.isCancelled { return }
+                flags = read
+                keepModeVisible()
             } catch let error as APIError where error.code == "ROUTE_MISMATCH" {
                 if !Task.isCancelled { direction = .mismatch }
             } catch {
@@ -200,7 +220,14 @@ final class ParcelRequestModel {
 
     /// Offers tomorrow 09:00-18:00 (Tashkent) the first time the step opens; never overwrites a choice.
     func suggestWindowIfEmpty(now: Date = Date()) {
-        let suggested = DepartureWindow.suggested(now: now)
+        var suggested = DepartureWindow.suggested(now: now)
+        #if DEBUG
+        // UI tests (Taksi): a window that starts in N minutes, so a trip boarding now can serve the request.
+        if let minutes = Int(UserDefaults.standard.string(forKey: "uiTestWindowFromNow") ?? "") {
+            let start = Date(timeIntervalSince1970: ((now.timeIntervalSince1970 / 60).rounded(.up) + Double(minutes)) * 60)
+            suggested = (start, start.addingTimeInterval(5 * 3600))
+        }
+        #endif
         if windowStart == nil { windowStart = suggested.start }
         if windowEnd == nil { windowEnd = suggested.end }
     }
@@ -272,17 +299,32 @@ final class ParcelRequestModel {
 
     /// Everything gathered, or nil while a step is incomplete.
     var draft: ParcelRequestDraft? {
-        guard let pickup, let dropoff, directionReady, let windowStart, let windowEnd, routeBlockers.isEmpty,
+        guard mode == .parcel, let pickup, let dropoff, directionReady, let windowStart, let windowEnd, routeBlockers.isEmpty,
               contacts.isComplete, let parcelType, let categoryId, parcelReady, let photoFileId else { return nil }
         return ParcelRequestDraft(pickup: pickup, dropoff: dropoff, windowStart: windowStart, windowEnd: windowEnd, priceMinor: priceMinor,
                                   contacts: contacts, parcelType: parcelType, categoryId: categoryId, photoFileId: photoFileId)
     }
 
+    /// Taksi: both places, the window, the people and the price per person (no contacts, parcel or photo steps).
+    var passengerDraft: PassengerRequestDraft? {
+        guard mode == .passenger, let pickup, let dropoff, directionReady, let windowStart, let windowEnd, routeBlockers.isEmpty,
+              !seats.isEmpty else { return nil }
+        return PassengerRequestDraft(pickup: pickup, dropoff: dropoff, windowStart: windowStart, windowEnd: windowEnd, seats: seats.count,
+                                     unitPriceMinor: priceMinor)
+    }
+
+    /// The body for the chosen service, or nil while a step is incomplete.
+    var listingCreate: ListingCreate? {
+        mode == .passenger ? passengerDraft?.listingCreate() : draft?.listingCreate()
+    }
+
+    /// Taksi: what the people pay together (`n × per person`).
+    var passengerTotalMinor: Int { PassengerMoney.total(seats: seats.count, unitMinor: priceMinor) }
+
     /// Create the draft, then publish it. If the draft was created but publishing failed, a retry publishes that
     /// same draft (never a second one) unless the person changed something in between.
     func publish() async -> Bool {
-        guard let draft, !publishing else { return false }
-        let request = draft.listingCreate()
+        guard let request = listingCreate, !publishing else { return false }
         let body = Self.fingerprint(request)
         publishing = true
         publishError = nil
@@ -329,6 +371,7 @@ final class ParcelRequestModel {
         windowStart = nil
         windowEnd = nil
         priceDigits = ""
+        seats = SeatPicker.defaultSeats
         contacts = ContactsForm()
         prefillSender()
         parcelType = nil

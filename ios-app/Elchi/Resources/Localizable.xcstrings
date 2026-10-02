@@ -868,6 +868,23 @@
         }
       }
     },
+    "app.cash.commentRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напишите, с чем вы не согласны — это прочитает оператор."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nimaga rozi emasligingizni yozing — buni operator o'qiydi."
+          }
+        }
+      }
+    },
     "app.cash.contest": {
       "extractionState": "manual",
       "localizations": {
@@ -983,6 +1000,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Naqd olindi deb qayd qilish"
+          }
+        }
+      }
+    },
+    "app.cash.noteRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сумма отличается от договорённой — укажите причину."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summa kelishilgandan farq qiladi — sababini yozing."
           }
         }
       }
@@ -6699,6 +6733,91 @@
         }
       }
     },
+    "client.taxi.complete": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Я доехал до места"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manzilga yetib keldim"
+          }
+        }
+      }
+    },
+    "client.taxi.completeConfirmTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы доехали до места?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manzilga yetib keldingizmi?"
+          }
+        }
+      }
+    },
+    "client.taxi.completeHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "После подтверждения поездка завершится, и вы сможете оценить водителя."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tasdiqlaganingizdan keyin safar yakunlanadi va haydovchini baholashingiz mumkin."
+          }
+        }
+      }
+    },
+    "client.taxi.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поездка завершена"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar yakunlandi"
+          }
+        }
+      }
+    },
+    "client.taxi.seatsTotal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} × {price}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} × {price}"
+          }
+        }
+      }
+    },
     "client.time.daysAgo": {
       "extractionState": "manual",
       "localizations": {
@@ -8960,6 +9079,23 @@
         }
       }
     },
+    "driver.board.attemptsLeft": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неверный код. Осталось попыток: {count}."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kod noto'g'ri. Yana {count} ta urinish qoldi."
+          }
+        }
+      }
+    },
     "driver.bonus.noCreditSubtitle": {
       "extractionState": "manual",
       "localizations": {
@@ -9708,6 +9844,227 @@
         }
       }
     },
+    "driver.noShow.button": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент не пришёл"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz kelmadi"
+          }
+        }
+      }
+    },
+    "driver.noShow.channel.call": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "По телефону"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon orqali"
+          }
+        }
+      }
+    },
+    "driver.noShow.channel.chat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Через чат приложения"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ilova chati orqali"
+          }
+        }
+      }
+    },
+    "driver.noShow.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xabar yuborish"
+          }
+        }
+      }
+    },
+    "driver.noShow.contactTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как вы пытались связаться с клиентом?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz bilan qanday bog'lanishga urindingiz?"
+          }
+        }
+      }
+    },
+    "driver.noShow.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Становится доступно через 10 минут после времени посадки. Сообщение проверит оператор."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Olib ketish vaqtidan 10 daqiqa o'tgach faollashadi. Xabarni operator ko'rib chiqadi."
+          }
+        }
+      }
+    },
+    "driver.noShow.pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сообщение «Клиент не пришёл» ждёт проверки оператора."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Mijoz kelmadi» xabari operator ko'rib chiqishini kutmoqda."
+          }
+        }
+      }
+    },
+    "driver.noShow.reason.arrival_not_recorded": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала нажмите «Я на месте»."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avval «Keldim» tugmasini bosing."
+          }
+        }
+      }
+    },
+    "driver.noShow.reason.driver_arrived_late": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы приехали после окончания времени посадки — напишите оператору."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siz olib ketish vaqti tugagandan keyin yetib kelgansiz — operatorga yozing."
+          }
+        }
+      }
+    },
+    "driver.noShow.reason.no_contact_attempt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала попробуйте связаться с клиентом."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avval mijoz bilan bog'lanishga urinib ko'ring."
+          }
+        }
+      }
+    },
+    "driver.noShow.reason.not_awaiting_pickup": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бронь не на этапе посадки."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bron olib ketish bosqichida emas."
+          }
+        }
+      }
+    },
+    "driver.noShow.reason.wait_time_not_elapsed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время ожидания ещё не прошло: попробуйте после {time}."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kutish vaqti hali tugamadi: {time} dan keyin urinib ko'ring."
+          }
+        }
+      }
+    },
+    "driver.noShow.sent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сообщение отправлено — оператор проверит."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xabar yuborildi — operator ko'rib chiqadi."
+          }
+        }
+      }
+    },
     "driver.orders.filterActive": {
       "extractionState": "manual",
       "localizations": {
@@ -10350,6 +10707,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Amallar tarixi"
+          }
+        }
+      }
+    },
+    "driverBid.capacityUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этой поездке нет мест для {count} человек — выберите другую поездку."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu safarda {count} kishiga bo'sh o'rin yo'q — boshqa safarni tanlang."
           }
         }
       }
@@ -14158,6 +14532,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "O'z taklifingizni o'zingiz qabul qila olmaysiz"
+          }
+        }
+      }
+    },
+    "error.NO_SHOW_NOT_ALLOWED": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сейчас нельзя отметить «Клиент не пришёл»."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hozir «Mijoz kelmadi» deb belgilab bo'lmaydi."
           }
         }
       }
@@ -27694,6 +28085,23 @@
         }
       }
     },
+    "status.arrived": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прибыл"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yetib keldi"
+          }
+        }
+      }
+    },
     "status.awaiting_pickup": {
       "extractionState": "manual",
       "localizations": {
@@ -27979,6 +28387,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kelmadi"
+          }
+        }
+      }
+    },
+    "status.onboard": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В машине"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mashinada"
           }
         }
       }

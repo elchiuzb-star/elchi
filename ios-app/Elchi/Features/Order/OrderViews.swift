@@ -51,16 +51,28 @@ struct RouteSummaryView: View {
             PickerField(label: strings.t("listingOwner.windowEnd"), value: model.windowEnd.map(DepartureWindow.text),
                         placeholder: strings.t("client.routeSummary.windowPlaceholder"), hint: strings.t("routeSummary.windowHint"),
                         error: blockers.contains(.windowEnd) || blockers.contains(.endAfterStart)) { editing = .end }
-            ElchiField(text: $priceText, label: strings.t("listingOwner.priceLabel"), keyboard: .numberPad)
+            let taxi = model.mode == .passenger
+            if taxi {
+                // Taksi (design 'seat-picker'): how many people, on a cabin picture - only the count is booked.
+                SeatPickerView(selected: $model.seats)
+            }
+            ElchiField(text: $priceText, label: strings.t(taxi ? "routeSummary.pricePerPerson" : "listingOwner.priceLabel"), keyboard: .numberPad)
                 .onChange(of: priceText) { _, typed in
                     model.priceDigits = Money.soumDigits(typed)
                     let formatted = Money.grouped(model.priceDigits)
                     if priceText != formatted { priceText = formatted }
                 }
             ElchiCard(tint: .blue) {
-                CardRow(strings.t("common.total"), strings.money(model.priceMinor), first: true, detail: strings.t("routeSummary.driversSendOffers"),
-                        strong: true)
+                if taxi {
+                    CardRow(strings.t("common.total"), strings.money(model.passengerTotalMinor), first: true,
+                            detail: "\(strings.seatsTotal(model.seats.count, unitMinor: model.priceMinor)) · \(strings.t("routeSummary.driversSendOffers"))",
+                            strong: true)
+                } else {
+                    CardRow(strings.t("common.total"), strings.money(model.priceMinor), first: true, detail: strings.t("routeSummary.driversSendOffers"),
+                            strong: true)
+                }
             }
+            .accessibilityIdentifier("elchi.route.total")
         } footer: {
             ElchiButton(strings.t("common.save"), action: onSave).disabled(!blockers.isEmpty)
             if !blockers.isEmpty {
@@ -450,21 +462,19 @@ struct ReviewView: View {
                     if let start = model.windowStart, let end = model.windowEnd {
                         CardRow(strings.t("orderForm.review.window"), "\(DepartureWindow.shortText(start)) - \(DepartureWindow.shortText(end))")
                     }
-                    CardRow(strings.t("common.price"), strings.money(model.priceMinor), detail: strings.t("orderForm.review.driversSendOffers"))
-                    if let type = model.parcelType {
-                        CardRow(strings.t("orderForm.review.parcel"), strings.parcelTypeName(type),
-                                detail: model.selectedCategory.map { "\(strings.name($0)) · \(strings.limits($0))" })
+                    if model.mode == .passenger {
+                        CardRow(strings.t("orderForm.review.passengers"), strings.t("orderForm.review.peopleCount", ("count", model.seats.count)),
+                                detail: strings.t("orderForm.review.seatNegotiated"))
+                        let perPerson = strings.t("orderForm.review.perPersonDetail", ("count", model.seats.count), ("price", strings.money(model.priceMinor)))
+                        CardRow(strings.t("common.price"), strings.money(model.passengerTotalMinor),
+                                detail: "\(perPerson) · \(strings.t("orderForm.review.driversSendOffers"))")
+                    } else {
+                        parcelRows
                     }
-                    CardRow(strings.t("orderForm.review.sender"), model.contacts.senderName, detail: UzPhone.display(UzPhone.e164(model.contacts.senderPhone)))
-                    CardRow(strings.t("orderForm.review.receiver"), model.contacts.receiverName,
-                            detail: UzPhone.display(UzPhone.e164(model.contacts.receiverPhone)))
-                    CardRow(strings.t("orderForm.photoTitle"), strings.t(model.photoFileId == nil ? "app.photo.none" : "orderForm.review.uploaded"))
-                    let comment = model.contacts.comment.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !comment.isEmpty { CardRow(strings.t("listingOwner.commentLabel"), comment) }
                 }
             }
-            if model.draft == nil {
-                Note(strings.t("orderForm.review.incompleteParcel"), tone: .err)
+            if model.listingCreate == nil {
+                Note(strings.t(model.mode == .passenger ? "orderForm.review.incompletePassenger" : "orderForm.review.incompleteParcel"), tone: .err)
             }
             if let error = model.publishError {
                 Note(strings.errorText(error), tone: .err)
@@ -473,9 +483,25 @@ struct ReviewView: View {
             ElchiButton(strings.t("orderForm.review.publish"), loading: model.publishing) {
                 Task { if await model.publish() { onPublished() } }
             }
-            .disabled(model.draft == nil)
+            .disabled(model.listingCreate == nil)
             ElchiButton(strings.t("listingOwner.edit"), variant: .ghost, size: .medium, action: onEdit)
         }
+    }
+
+    /// The parcel's own rows: price, what is sent, both people, the photo, the comment.
+    @ViewBuilder
+    private var parcelRows: some View {
+        CardRow(strings.t("common.price"), strings.money(model.priceMinor), detail: strings.t("orderForm.review.driversSendOffers"))
+        if let type = model.parcelType {
+            CardRow(strings.t("orderForm.review.parcel"), strings.parcelTypeName(type),
+                    detail: model.selectedCategory.map { "\(strings.name($0)) · \(strings.limits($0))" })
+        }
+        CardRow(strings.t("orderForm.review.sender"), model.contacts.senderName, detail: UzPhone.display(UzPhone.e164(model.contacts.senderPhone)))
+        CardRow(strings.t("orderForm.review.receiver"), model.contacts.receiverName,
+                detail: UzPhone.display(UzPhone.e164(model.contacts.receiverPhone)))
+        CardRow(strings.t("orderForm.photoTitle"), strings.t(model.photoFileId == nil ? "app.photo.none" : "orderForm.review.uploaded"))
+        let comment = model.contacts.comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !comment.isEmpty { CardRow(strings.t("listingOwner.commentLabel"), comment) }
     }
 }
 

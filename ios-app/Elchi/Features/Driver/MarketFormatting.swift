@@ -49,8 +49,9 @@ extension LocaleStore {
     /// `Status: Rejalashtirilgan`.
     func tripStatus(_ status: TripStatus) -> String { tOrNil(TripStatusStyle.key(status)) ?? status.rawValue }
 
-    /// `Kichik quti · 30×20×20 sm gacha · 5 kg gacha`.
+    /// `Kichik quti · 30×20×20 sm gacha · 5 kg gacha`; a passenger request: `2 kishi · 2 × 150 000 so'm`.
     func parcelLine(_ listing: ListingPublicDTO) -> String? {
+        if let people = peopleLine(listing) { return people }
         if let category = listing.parcelCategory { return "\(name(category)) · \(limits(category))" }
         return listing.parcelType.map(parcelTypeName)
     }
@@ -83,8 +84,11 @@ extension LocaleStore {
     }
 
     /// Offer, saved-route and negotiation refusals; the rest is the shared `error.<CODE>` sentence.
-    func marketErrorText(_ error: Error) -> String {
+    func marketErrorText(_ error: Error, seats: Int? = nil) -> String {
         switch MarketErrorText.sentence(error) {
+        case .key("driverBid.capacityUnavailable", _):
+            // Taksi: the trip cannot seat the request's people - another trip, or a new one.
+            return t("driverBid.capacityUnavailable", ("count", seats ?? 1))
         case .key(let key, let values): return t(key, values: values.map { ($0.key, $0.value as Any) })
         case .generic:
             return bannerErrorText(error)

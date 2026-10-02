@@ -52,6 +52,7 @@
     <string name="app_cash_agreedLabel">Kelishilgan summa</string>
     <string name="app_cash_awaitingOther">Ikkinchi tomonning tasdig\'i kutilmoqda.</string>
     <string name="app_cash_bothConfirmed">Ikkala tomon tasdiqladi.</string>
+    <string name="app_cash_commentRequired">Nimaga rozi emasligingizni yozing — buni operator o\'qiydi.</string>
     <string name="app_cash_contest">Rozi emasman</string>
     <string name="app_cash_contested">Kelishmovchilik qayd etildi — operator ko\'rib chiqadi.</string>
     <string name="app_cash_dueLabel">Naqd to\'lanadigan summa</string>
@@ -59,6 +60,7 @@
     <string name="app_cash_givenField">Berilgan summa (so\'m)</string>
     <string name="app_cash_markGiven">Naqd berildi deb qayd qilish</string>
     <string name="app_cash_markReceived">Naqd olindi deb qayd qilish</string>
+    <string name="app_cash_noteRequired">Summa kelishilgandan farq qiladi — sababini yozing.</string>
     <string name="app_cash_receivedField">Olingan summa (so\'m)</string>
     <string name="app_cash_reportedByMe">Siz qayd qildingiz: {amount} · {date}</string>
     <string name="app_cash_reportedByOther">Ikkinchi tomon qayd qildi: {amount} · {date}</string>
@@ -395,6 +397,11 @@
     <string name="client_support_ticket_acknowledged">Operator ko\'rdi</string>
     <string name="client_support_ticket_open">Yuborildi</string>
     <string name="client_support_ticket_resolved">Hal qilindi</string>
+    <string name="client_taxi_complete">Manzilga yetib keldim</string>
+    <string name="client_taxi_completeConfirmTitle">Manzilga yetib keldingizmi?</string>
+    <string name="client_taxi_completeHint">Tasdiqlaganingizdan keyin safar yakunlanadi va haydovchini baholashingiz mumkin.</string>
+    <string name="client_taxi_completed">Safar yakunlandi</string>
+    <string name="client_taxi_seatsTotal">{count} × {price}</string>
     <string name="client_time_daysAgo">{days} kun oldin</string>
     <string name="client_time_hoursAgo">{hours} soat oldin</string>
     <string name="client_tracking_coordinates">Oxirgi nuqta koordinatalari</string>
@@ -528,6 +535,7 @@
     <string name="docType_selfie">Selfi</string>
     <string name="driver_bid_acceptClientPrice">Mijoz narxiga roziman ({price})</string>
     <string name="driver_bid_priceBand">Odatdagi oraliq: {floor} – {ceiling}</string>
+    <string name="driver_board_attemptsLeft">Kod noto\'g\'ri. Yana {count} ta urinish qoldi.</string>
     <string name="driver_bonus_noCreditSubtitle">Kredit faqat kampaniya shartlari bajarilgandan keyin paydo bo\'ladi va komissiyangizni kamaytiradi.</string>
     <string name="driver_bonus_noCreditTitle">Hozircha kredit yo\'q</string>
     <string name="driver_booking_arrived">Keldim — mijozga xabar yuborildi</string>
@@ -572,6 +580,19 @@
     <string name="driver_gps_unavailable">Telefonda joylashuv xizmati o\'chiq yoki mavjud emas.</string>
     <string name="driver_home_availableOn">Faolman — buyurtma qabul qilishga tayyor</string>
     <string name="driver_home_verificationLabel">Tasdiqlash holati</string>
+    <string name="driver_noShow_button">Mijoz kelmadi</string>
+    <string name="driver_noShow_channel_call">Telefon orqali</string>
+    <string name="driver_noShow_channel_chat">Ilova chati orqali</string>
+    <string name="driver_noShow_confirm">Xabar yuborish</string>
+    <string name="driver_noShow_contactTitle">Mijoz bilan qanday bog\'lanishga urindingiz?</string>
+    <string name="driver_noShow_hint">Olib ketish vaqtidan 10 daqiqa o\'tgach faollashadi. Xabarni operator ko\'rib chiqadi.</string>
+    <string name="driver_noShow_pending">«Mijoz kelmadi» xabari operator ko\'rib chiqishini kutmoqda.</string>
+    <string name="driver_noShow_reason_arrival_not_recorded">Avval «Keldim» tugmasini bosing.</string>
+    <string name="driver_noShow_reason_driver_arrived_late">Siz olib ketish vaqti tugagandan keyin yetib kelgansiz — operatorga yozing.</string>
+    <string name="driver_noShow_reason_no_contact_attempt">Avval mijoz bilan bog\'lanishga urinib ko\'ring.</string>
+    <string name="driver_noShow_reason_not_awaiting_pickup">Bron olib ketish bosqichida emas.</string>
+    <string name="driver_noShow_reason_wait_time_not_elapsed">Kutish vaqti hali tugamadi: {time} dan keyin urinib ko\'ring.</string>
+    <string name="driver_noShow_sent">Xabar yuborildi — operator ko\'rib chiqadi.</string>
     <string name="driver_orders_filterActive">Faol</string>
     <string name="driver_orders_filterHistory">Tarix</string>
     <string name="driver_profile_complaints">Shikoyat</string>
@@ -610,6 +631,7 @@
     <string name="driver_wallet_requisitesNote">Bank rekvizitlarini olish uchun «Yordam» bo\'limida operatorga yozing. To\'lov maqsadida telefon raqamingizni ko\'rsating.</string>
     <string name="driver_wallet_transactionsEmpty">Hali amal yo\'q</string>
     <string name="driver_wallet_transactionsTitle">Amallar tarixi</string>
+    <string name="driverBid_capacityUnavailable">Bu safarda {count} kishiga bo\'sh o\'rin yo\'q — boshqa safarni tanlang.</string>
     <string name="driverBid_clientPrice">Mijoz narxi: {price}</string>
     <string name="driverBid_departure">Jo\'nash: {start} - {end}</string>
     <string name="driverBid_noHoldNote">Taklif o\'rin yoki balansni band qilmaydi — mijoz qabul qilganda bron yaratiladi.</string>
@@ -834,6 +856,7 @@
     <string name="error_NEGOTIATION_LIMIT_REACHED">Narxni o\'zgartirish imkoni tugadi</string>
     <string name="error_NOT_FOUND">Topilmadi</string>
     <string name="error_NOT_PROPOSAL_RECIPIENT">O\'z taklifingizni o\'zingiz qabul qila olmaysiz</string>
+    <string name="error_NO_SHOW_NOT_ALLOWED">Hozir «Mijoz kelmadi» deb belgilab bo\'lmaydi.</string>
     <string name="error_NO_SHOW_REVIEW_PENDING">Operator ko\'rib chiqmoqda</string>
     <string name="error_OTP_EXPIRED">Kod muddati tugagan</string>
     <string name="error_OTP_GLOBAL_LIMIT">Hozir kod yuborib bo\'lmadi. Birozdan keyin qayta urinib ko\'ring.</string>
@@ -1630,6 +1653,7 @@
     <string name="settingsScreen_title">Sozlamalar</string>
     <string name="status_accepted">Haydovchi tanlangan</string>
     <string name="status_approved">Tasdiqlangan</string>
+    <string name="status_arrived">Yetib keldi</string>
     <string name="status_awaiting_pickup">Olib ketish kutilmoqda</string>
     <string name="status_awaiting_second_approval">Ikkinchi tasdiq kutilmoqda</string>
     <string name="status_bidding">Takliflar bor</string>
@@ -1647,6 +1671,7 @@
     <string name="status_in_transit">Yo\'lda</string>
     <string name="status_interrupted">To\'xtatilgan</string>
     <string name="status_no_show">Kelmadi</string>
+    <string name="status_onboard">Mashinada</string>
     <string name="status_paused">To\'xtatilgan</string>
     <string name="status_pending">Kutilmoqda</string>
     <string name="status_picked_up">Olib ketildi</string>

@@ -3,7 +3,7 @@ import Observation
 
 /// Which booking command is running (one at a time).
 enum BookingCommand: Equatable {
-    case cancel, grant, revokeGrant, rate, report, block
+    case cancel, grant, revokeGrant, rate, report, block, complete
 }
 
 /// How rating the driver ended: sent now, or the server said it is done or closed (`RATING_ALREADY_EXISTS`,
@@ -56,6 +56,9 @@ final class BookingModel {
     let support: SupportChatModel
     let tracking: BookingTrackingModel
     let amendments: AmendmentsModel
+    /// Taksi: the boarding code and its reissue, and the cash record (client side).
+    let code: BoardingCodeModel
+    let cash: CashRecordModel
 
     init(id: String, initial: ClientBookingDTO?, api: ElchiAPI, keys: ActionKeys, orders: ClientOrdersModel,
          mediaURL: @escaping @Sendable (String) -> URL?, connection: TrackingConnection) {
@@ -70,7 +73,10 @@ final class BookingModel {
         support = SupportChatModel(bookingId: id, api: api, keys: keys)
         tracking = BookingTrackingModel(bookingId: id, api: api, connection: connection)
         amendments = AmendmentsModel(bookingId: id, api: api, keys: keys)
+        code = BoardingCodeModel(bookingId: id, api: api, keys: keys)
+        cash = CashRecordModel(bookingId: id, side: "client", api: api, keys: keys)
         amendments.onBookingChanged = { [weak self] in await self?.load() }
+        cash.onChanged = { [weak self] in await self?.load() }
     }
 
     /// The parcel photo's signed link, resolved (Q6: short-lived - a reload fetches a fresh one).
@@ -91,7 +97,14 @@ final class BookingModel {
         guard let dto = booking.value else { return }
         async let reputation: Void = loadReputation(dto)
         async let receiver: Void = loadReceiver(dto)
-        _ = await (reputation, receiver)
+        async let codes: Void = loadCode(dto)
+        _ = await (reputation, receiver, codes)
+    }
+
+    /// Taksi: the boarding code while the passenger is still to board (the endpoint is empty afterwards).
+    private func loadCode(_ dto: ClientBookingDTO) async {
+        guard ClientTaxiActions.of(dto).showCode else { return }
+        await code.load()
     }
 
     private func apply(_ dto: ClientBookingDTO) {
@@ -121,7 +134,34 @@ final class BookingModel {
     /// Opened afresh from the list: earlier results are not news any more, and the link was for that screen.
     func reset() {
         clearNotice()
+        cash.clear()
         grant = nil
+    }
+
+    // MARK: Taksi: "Manzilga yetib keldim"
+
+    /// The passenger confirms the arrival (`complete`, from `arrived`): the booking ends and rating opens. Without it
+    /// the booking waits for an operator.
+    func complete() async -> Bool {
+        guard running == nil, let dto = booking.value, ClientTaxiActions.of(dto).canComplete else { return false }
+        let action = "complete:\(dto.id):\(dto.version)"
+        running = .complete
+        clearNotice()
+        defer { running = nil }
+        do {
+            let result = try await api.bookingAction(bookingId: dto.id, action: .complete, body: BookingActionRequest(expectedVersion: dto.version),
+                                                    idempotencyKey: keys.key(action))
+            keys.settle(action)
+            if let fresh = ClientBookingDTO.from(result.data) { apply(fresh) } else { await load() }
+            notice = "client.taxi.completed"
+            return true
+        } catch {
+            keys.settle(action, after: error)
+            commandError = error
+            failed = .complete
+            if let code = (error as? APIError)?.code, code != APIError.network { await load() }
+            return false
+        }
     }
 
     // MARK: Cancel

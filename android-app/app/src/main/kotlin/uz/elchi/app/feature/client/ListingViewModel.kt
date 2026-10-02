@@ -300,6 +300,7 @@ class ListingViewModel(
                     comment = plan.comment,
                     departureWindowStart = plan.windowStartIso,
                     departureWindowEnd = plan.windowEndIso,
+                    passenger = plan.passenger,
                 )
                 val result = api.patchListing(listing.id, body)
                 _state.update { it.copy(listing = Load.Ready(result.data), saving = false, saved = true, notice = ListingNotice.SAVED, warnings = result.warnings) }

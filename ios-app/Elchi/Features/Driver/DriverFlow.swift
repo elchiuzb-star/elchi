@@ -316,7 +316,8 @@ struct DriverFlow: View {
             DriverBookingDetailView(model: booking, onBack: back, onChat: { path.append(.bookingChat(id)) },
                                     onTracking: { path.append(.bookingTracking(id)) }, onAmend: { path.append(.bookingAmend(id)) },
                                     onRate: { path.append(.bookingRate(id)) }, onSupport: { path.append(.bookingSupport(id)) },
-                                    onSafety: { path.append(.bookingSafety(id)) })
+                                    onSafety: { path.append(.bookingSafety(id)) },
+                                    onTrip: { if let trip = booking.booking.value?.tripId { path.append(.trip(trip)) } })
                 .environment(\.screenAccessory, AnyView(gps.tracker.map { BookingGpsBar(tracker: $0, booking: booking) }))
         case .bookingChat(let id):
             let booking = bookings.detail(id)

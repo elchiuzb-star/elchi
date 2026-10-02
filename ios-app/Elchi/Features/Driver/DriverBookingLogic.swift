@@ -178,11 +178,18 @@ public enum DriverBookingFilter: String, CaseIterable, Sendable {
     public var labelKey: String { self == .active ? "driver.orders.filterActive" : "driver.orders.filterHistory" }
 }
 
-/// "Keldim" is a signal the server keeps once; the booking does not say it was sent, so this phone remembers.
+/// "Keldim" is a signal the server keeps once; the booking does not say it was sent, so this phone remembers - and
+/// when (the no-show gate counts the wait from it; the tracking view's `driver_arrived_at` corrects it when known).
 enum ArrivedSignals {
     private static func key(_ id: String) -> String { "elchi.arrived.\(id)" }
+    private static func atKey(_ id: String) -> String { "elchi.arrivedAt.\(id)" }
     static func sent(_ id: String) -> Bool { UserDefaults.standard.bool(forKey: key(id)) }
-    static func mark(_ id: String) { UserDefaults.standard.set(true, forKey: key(id)) }
+    static func at(_ id: String) -> Date? { UserDefaults.standard.object(forKey: atKey(id)) as? Date }
+
+    static func mark(_ id: String, at date: Date = Date()) {
+        UserDefaults.standard.set(true, forKey: key(id))
+        UserDefaults.standard.set(date, forKey: atKey(id))
+    }
 }
 
 /// The client's reputation as the driver reads it: the score only when someone rated (never an invented one).

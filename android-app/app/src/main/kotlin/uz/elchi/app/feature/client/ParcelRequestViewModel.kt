@@ -88,7 +88,9 @@ class ParcelRequestViewModel(
         val flags: EffectiveFlagValuesDTO? = null,
         val flagsLoading: Boolean = false,
         val flagsFailed: Boolean = false,
-        val mode: ServiceMode = ServiceMode.PARCEL,
+        /** The country-scope flags (the Taksi/Pochta segment); a failed read hides Taksi. */
+        val countryFlags: EffectiveFlagValuesDTO? = null,
+        val countryFlagsFailed: Boolean = false,
         val catalog: Load<ParcelCategoryCatalogDTO> = Load.Loading,
         val policy: Load<ParcelPolicyDTO> = Load.Loading,
         val photoUploading: Boolean = false,
@@ -107,10 +109,19 @@ class ParcelRequestViewModel(
             else -> flags.parcelEnabled
         }
 
-        val passengerEnabled: Boolean get() = !flagsFailed && flags?.passengerEnabled == true
+        /** Taksi or Pochta: kept in the draft, so it survives process death with the rest of the request. */
+        val mode: ServiceMode get() = if (draft.taxi) ServiceMode.TAXI else ServiceMode.PARCEL
 
-        /** "Yo'nalishni ko'rish": both places on a confirmed route and the parcel service open there. */
-        val canContinueFromHome: Boolean get() = directionReady && mode == ServiceMode.PARCEL && parcelEnabled == true
+        /** The Taksi/Pochta segment shows only while the passenger service is on (K7/Q5/Q89). */
+        val passengerEnabled: Boolean get() = TaxiRules.passengerOffered(countryFlags, countryFlagsFailed)
+
+        /** The chosen service on the matched corridor: open / closed / null while its flags load. */
+        val serviceOpen: Boolean? get() = TaxiRules.serviceOpen(flags, flagsLoading, flagsFailed, passenger = draft.taxi)
+
+        val homeBlock: HomeBlock get() = TaxiRules.homeBlock(draft.taxi, directionReady, serviceOpen)
+
+        /** "Yo'nalishni ko'rish": both places on a confirmed route and the chosen service open there. */
+        val canContinueFromHome: Boolean get() = homeBlock == HomeBlock.NONE
 
         val catalogValue: ParcelCategoryCatalogDTO? get() = (catalog as? Load.Ready)?.value
     }
@@ -120,10 +131,12 @@ class ParcelRequestViewModel(
     private var progress: PublishProgress = saved.get<String>(KEY_PROGRESS)?.let { runCatching { ElchiJson.decodeFromString(PublishProgress.serializer(), it) }.getOrNull() } ?: PublishProgress()
     private var directionJob: Job? = null
     private var flagsJob: Job? = null
+    private var countryJob: Job? = null
     /** The corridor the current flags were read for; null = the country scope. */
     private var flagsCorridor: String? = null
 
     init {
+        loadCountryFlags()
         loadFlags(corridorId = null)
         refreshDirection()
         loadCatalog()
@@ -165,7 +178,10 @@ class ParcelRequestViewModel(
         refreshDirection()
     }
 
-    fun setMode(mode: ServiceMode) = _state.update { it.copy(mode = mode) }
+    fun setMode(mode: ServiceMode) = edit { it.copy(taxi = mode == ServiceMode.TAXI) }
+
+    /** A seat tapped on the cabin picture (never down to zero). */
+    fun toggleSeat(id: String) = edit { it.copy(seats = TaxiRules.toggleSeat(it.seats, id)) }
 
     // -- direction + flags ---------------------------------------------------------------------------------------
 
@@ -203,13 +219,33 @@ class ParcelRequestViewModel(
         flagsJob = viewModelScope.launch {
             try {
                 val flags = api.effectiveFlags(corridorId).data.flags
-                _state.update { it.copy(flags = flags, flagsLoading = false, mode = if (flags.passengerEnabled) it.mode else ServiceMode.PARCEL) }
+                _state.update { it.copy(flags = flags, flagsLoading = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // Unknown flags count as "off": nothing is offered that the server may refuse.
-                _state.update { it.copy(flags = null, flagsLoading = false, flagsFailed = true, mode = ServiceMode.PARCEL) }
+                _state.update { it.copy(flags = null, flagsLoading = false, flagsFailed = true) }
             }
+        }
+    }
+
+    /**
+     * The country scope, read on its own (a corridor read must not cancel it): whether the Taksi/Pochta segment is
+     * offered at all. Passenger off everywhere (or unknown) drops a Taksi draft back to Pochta; on a corridor closed
+     * for passengers the choice stays - the button is off and the screen says why.
+     */
+    private fun loadCountryFlags() {
+        countryJob?.cancel()
+        countryJob = viewModelScope.launch {
+            val flags = try {
+                api.effectiveFlags(null).data.flags
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            _state.update { it.copy(countryFlags = flags, countryFlagsFailed = flags == null) }
+            if (flags?.passengerEnabled != true && _state.value.draft.taxi) setMode(ServiceMode.PARCEL)
         }
     }
 
@@ -259,7 +295,11 @@ class ParcelRequestViewModel(
 
     // -- create + publish ----------------------------------------------------------------------------------------
 
-    fun canPublish(): Boolean = ParcelRules.readyToPublish(_state.value.draft, _state.value.directionReady, now())
+    fun canPublish(): Boolean = readyToPublish(_state.value.draft, _state.value.directionReady, now())
+
+    /** Pochta: route + contacts + parcel + photo; Taksi: route + seats (no parcel steps). */
+    private fun readyToPublish(draft: ParcelDraft, directionReady: Boolean, at: Instant): Boolean =
+        if (draft.taxi) TaxiRules.readyToPublish(draft, directionReady, at) else ParcelRules.readyToPublish(draft, directionReady, at)
 
     /**
      * Create the draft listing, then publish it. One `Idempotency-Key` per action, kept until the action is known
@@ -274,7 +314,7 @@ class ParcelRequestViewModel(
             try {
                 if (progress.listingId == null) {
                     val key = progress.createKey ?: newKey().also { saveProgress(progress.copy(createKey = it)) }
-                    val created = api.createListing(ParcelRules.buildListingCreate(s.draft), key)
+                    val created = api.createListing(if (s.draft.taxi) TaxiRules.buildListingCreate(s.draft) else ParcelRules.buildListingCreate(s.draft), key)
                     saveProgress(progress.copy(listingId = created.data.id, listingVersion = created.data.version, createWarnings = created.warnings))
                 }
                 val published = publishCreated()
@@ -316,7 +356,8 @@ class ParcelRequestViewModel(
     /** After the success screen: a clean draft for the next request (contacts are prefilled again by the screen). */
     fun startOver() {
         _state.value.draft.photoLocalPath?.let { runCatching { java.io.File(it).delete() } }
-        val fresh = freshDraft()
+        // The next request starts in the same service (Taksi stays Taksi).
+        val fresh = freshDraft().copy(taxi = _state.value.draft.taxi)
         saved[KEY_DRAFT] = ElchiJson.encodeToString(ParcelDraft.serializer(), fresh)
         saveProgress(PublishProgress())
         directionJob?.cancel()

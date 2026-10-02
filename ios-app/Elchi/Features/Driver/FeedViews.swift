@@ -314,10 +314,13 @@ struct OfferView: View {
 
     var body: some View {
         let listing = model.listing
+        let perSeat = PassengerMoney.perSeat(listing.priceBasis)
+        // Taksi: the client's price is per seat; it reads "2 × 150 000 so'm", the total is the hint under the field.
+        let clientPrice = perSeat ? strings.seatsTotal(max(listing.quantity, 1), unitMinor: listing.unitPriceMinor) : strings.money(listing.totalMinor)
         ScreenScaffold(title: strings.t("driverBid.title"), backLabel: strings.t("common.back"), onBack: onBack) {
             ElchiCard(tint: .field) {
-                CardRow(strings.route(listing), strings.t("driverBid.clientPrice", ("price", strings.money(listing.totalMinor))), first: true,
-                        detail: [strings.parcelLine(listing),
+                CardRow(strings.route(listing), strings.t("driverBid.clientPrice", ("price", clientPrice)), first: true,
+                        detail: [perSeat ? strings.t("seatPicker.peopleCount", ("count", max(listing.quantity, 1))) : strings.parcelLine(listing),
                                  strings.t("driverBid.departure", ("start", time(listing.departureWindowStart)), ("end", time(listing.departureWindowEnd)))]
                             .compactMap { $0 }.joined(separator: " · "), strong: true)
             }
@@ -330,7 +333,8 @@ struct OfferView: View {
                 }
                 .accessibilityIdentifier("elchi.offer.window")
             }
-            ElchiField(text: $priceText, label: strings.t("driverBid.priceLabel"), placeholder: strings.t("driverBid.pricePlaceholder"),
+            ElchiField(text: $priceText, label: strings.t("driverBid.priceLabel") + (perSeat ? strings.t("listingEdit.perSeatSuffix") : ""),
+                       placeholder: strings.t("driverBid.pricePlaceholder"),
                        hint: listing.priceBasis == .perSeat ? "\(strings.t("common.total")): \(strings.money(model.totalMinor))" : nil,
                        keyboard: .numberPad)
                 .onChange(of: priceText) { _, typed in
@@ -338,7 +342,7 @@ struct OfferView: View {
                     let formatted = Money.grouped(model.priceDigits)
                     if priceText != formatted { priceText = formatted }
                 }
-            ElchiButton(strings.t("driver.bid.acceptClientPrice", ("price", strings.money(listing.totalMinor))), variant: .soft,
+            ElchiButton(strings.t("driver.bid.acceptClientPrice", ("price", clientPrice)), variant: .soft,
                         loading: model.sending && model.priceMinor == listing.unitPriceMinor) {
                 Task { await send(listing.unitPriceMinor) }
             }
@@ -346,7 +350,7 @@ struct OfferView: View {
             .accessibilityIdentifier("elchi.offer.acceptClientPrice")
             commission
             ElchiField(text: $message, label: strings.t("listingOwner.commentLabel"), multiline: true)
-            if let error = model.error { Note(strings.marketErrorText(error), tone: .err).accessibilityIdentifier("elchi.offer.error") }
+            if let error = model.error { Note(strings.marketErrorText(error, seats: max(listing.quantity, 1)), tone: .err).accessibilityIdentifier("elchi.offer.error") }
             Text(strings.t("driverBid.noHoldNote")).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
         } footer: {
             ElchiButton(strings.t("driverBid.send"), loading: model.sending && model.priceMinor != listing.unitPriceMinor) {
@@ -441,7 +445,10 @@ struct OfferView: View {
 
     private func rivalLine(_ offer: ListingOfferDTO) -> String {
         let vehicle = strings.tOrNil("vehicleClass.\(offer.vehicleClass)") ?? offer.vehicleClass
-        return "\(strings.t("app.rivalBoard.vehicleSeats", ("vehicle", vehicle), ("seats", offer.seatCapacity))) · \(strings.windowDays(offer.pickupWindowStart, offer.pickupWindowEnd))"
+        let line = "\(strings.t("app.rivalBoard.vehicleSeats", ("vehicle", vehicle), ("seats", offer.seatCapacity))) · \(strings.windowDays(offer.pickupWindowStart, offer.pickupWindowEnd))"
+        // Taksi: the rivals' price per seat, comparable for the same people.
+        guard PassengerMoney.perSeat(offer.priceBasis) else { return line }
+        return "\(line) · \(strings.seatsTotal(max(offer.quantity, 1), unitMinor: offer.unitPriceMinor))"
     }
 
     /// `Yaxshi baholangan · 12 ta baho`, or "Yangi haydovchi" (never an invented score, Q40).

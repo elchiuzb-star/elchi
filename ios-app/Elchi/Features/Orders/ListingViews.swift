@@ -47,7 +47,8 @@ struct ListingDetailView: View {
 
         ListingSummaryCard(listing: listing, stats: offerStats)
         details(listing)
-        photo(listing)
+        // A passenger request has no cargo photo.
+        if listing.serviceType == .parcel { photo(listing) }
         offersEntry(listing)
 
         if actions.canEdit || actions.canPause || actions.canResume {
@@ -100,6 +101,9 @@ struct ListingDetailView: View {
                     strings.endAddress(stop: listing.destinationStop, point: listing.destinationPoint))
             CardRow(strings.t("listingDetail.departureWindow"), strings.window(listing.departureWindowStart, listing.departureWindowEnd))
             CardRow(strings.t("common.price"), strings.money(listing.totalMinor))
+            if let people = strings.peopleLine(listing) {
+                CardRow(strings.t("orderForm.review.passengers"), people, detail: strings.t("orderForm.review.seatNegotiated"))
+            }
             if let parcel = strings.parcel(listing.parcel) { CardRow(strings.t("listingDetail.parcel"), parcel) }
             if let comment = listing.comment, !comment.isEmpty { CardRow(strings.t("listingOwner.commentLabel"), comment) }
             if let expires = ServerTime.parse(listing.expiresAt) {
@@ -263,9 +267,12 @@ struct ListingEditView: View {
         let listing = model.listing.value
         let plan = listing.flatMap { dto in form.map { ListingPatchPlan.plan(dto, $0) } }
         let warnOffers = plan?.material == true && model.openOffers > 0
+        let seatsEditable = listing.map(SeatEdit.editable) ?? false
         ScreenScaffold(title: strings.t("listingOwner.editTitle"), backLabel: strings.t("common.back"), onBack: onBack) {
             if form != nil {
-                ElchiField(text: $priceText, label: strings.t("listingOwner.priceLabel"), keyboard: .numberPad)
+                ElchiField(text: $priceText,
+                           label: seatsEditable ? strings.t("listingOwner.priceLabel") + strings.t("listingEdit.perSeatSuffix")
+                                : strings.t("listingOwner.priceLabel"), keyboard: .numberPad)
                     .onChange(of: priceText) { _, typed in
                         // Local text re-synced after every edit: SwiftUI's TextField ignores a binding that rewrites the input.
                         let digits = Money.soumDigits(typed)
@@ -275,6 +282,13 @@ struct ListingEditView: View {
                     }
                 ElchiField(text: Binding(get: { form?.comment ?? "" }, set: { form?.comment = $0 }), label: strings.t("listingOwner.commentLabel"),
                            hint: strings.t("bookingChat.autoMaskNote"), multiline: true)
+                if seatsEditable {
+                    // Q145: the number of people, until a booking exists; a new number closes the open offers (Q20).
+                    ElchiField(text: Binding(get: { form?.seats ?? "" }, set: { form?.seats = String($0.filter(\.isNumber).prefix(1)) }),
+                               label: strings.t("listingEdit.seats"), hint: strings.t("listingEdit.seatsHint"),
+                               error: plan?.invalid == "seats" ? strings.t("listingOwner.invalid.seats") : nil, keyboard: .numberPad)
+                        .accessibilityIdentifier("elchi.listingEdit.seats")
+                }
                 PickerField(label: strings.t("listingOwner.windowStart"), value: form?.windowStart.map(DepartureWindow.text),
                             placeholder: strings.t("client.routeSummary.windowPlaceholder"),
                             error: plan?.invalid == "window_past" || plan?.invalid == "window_incomplete") { editing = .start }
@@ -285,7 +299,7 @@ struct ListingEditView: View {
                 if warnOffers {
                     Note("\(strings.t("listingOwner.materialWarning")) \(strings.t("listingOwner.openOffers", ("count", model.openOffers)))", tone: .warn)
                 }
-                if let invalid = plan?.invalid {
+                if let invalid = plan?.invalid, invalid != "seats" {
                     Note(strings.tOrNil("listingOwner.invalid.\(invalid)") ?? invalid, tone: .err)
                 }
                 if let error = model.commandError, model.running == nil, model.failed == .save { Note(strings.errorText(error), tone: .err) }
@@ -459,6 +473,8 @@ struct OfferCard: View {
         guard let version = thread.currentVersion else { return [] }
         var out: [ItemLine] = []
         if style == .listing && actions.open { out.append(.init(strings.window(version.pickupWindowStart, version.pickupWindowEnd))) }
+        // Taksi: the offer per seat, for the people asked for ("2 × 150 000 so'm").
+        if PassengerMoney.perSeat(version.priceBasis) { out.append(.init(strings.peopleLine(version.quantity, unitMinor: version.unitPriceMinor))) }
         if style == .listing, let summary = thread.driverSummary { out.append(.init(strings.driverSummary(summary))) }
         if style == .proposals {
             if accepted {
@@ -555,7 +571,9 @@ private struct CounterForm: View {
             if let reason = preview?.noDiscountReason, quote == nil, let text = strings.tOrNil(noDiscountKey(reason)) {
                 Note(text, tone: .gray, title: strings.t("promoScreen.whyNoDiscount"))
             }
-            ElchiField(text: $priceText, label: strings.t("listingBids.yourPrice"), hint: hint(priceMinor, quote), keyboard: .numberPad)
+            let perSeat = PassengerMoney.perSeat(version.priceBasis)
+            ElchiField(text: $priceText, label: strings.t(perSeat ? "amendment.seatPriceLabel" : "listingBids.yourPrice"), hint: hint(priceMinor, quote),
+                       keyboard: .numberPad)
                 .onChange(of: priceText) { _, typed in
                     // Local text re-synced after every edit: SwiftUI's TextField ignores a binding that rewrites the input.
                     digits = Money.soumDigits(typed)
@@ -580,7 +598,8 @@ private struct CounterForm: View {
             }
         }
         .onAppear {
-            digits = String(version.totalMinor / 100)
+            // The counter is a unit price: per seat for a passenger request, the whole price for a parcel.
+            digits = String(version.unitPriceMinor / 100)
             priceText = Money.grouped(digits)
         }
         .task(id: priceMinor) {

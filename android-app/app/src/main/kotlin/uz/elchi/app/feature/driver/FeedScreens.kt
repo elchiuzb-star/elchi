@@ -48,6 +48,7 @@ import uz.elchi.app.feature.client.OrderRules
 import uz.elchi.app.feature.client.StepScaffold
 import uz.elchi.app.feature.client.categoryLimits
 import uz.elchi.app.feature.client.categoryName
+import uz.elchi.app.feature.client.seatsLine
 import uz.elchi.app.feature.client.soum
 import uz.elchi.app.i18n.t
 import uz.elchi.app.i18n.tOrNull
@@ -164,7 +165,8 @@ private fun FeedCard(item: FeedItemDTO, alternative: Boolean, onOffer: () -> Uni
     val what = if (l.serviceType == ServiceType.PARCEL) {
         l.parcelCategory?.let { "${categoryName(it, ru)} · ${categoryLimits(it)}" }
     } else {
-        t(R.string.tripDetail_seats, "count" to l.quantity)
+        // Taksi: "2 kishi · 2 × 150 000 so'm" - the client's price is per person.
+        seatsLine(l.quantity, l.unitPriceMinor)
     }
     val shape = RoundedCornerShape(ElchiShape.card)
     val dash = c.outline

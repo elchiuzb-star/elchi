@@ -97,6 +97,9 @@ final class DriverBookingModel {
     let support: SupportChatModel
     let tracking: BookingTrackingModel
     let amendments: AmendmentsModel
+    /// Taksi: board / drop-off / no-show, and the cash record (driver side).
+    let taxi: DriverTaxiModel
+    let cash: CashRecordModel
 
     init(id: String, initial: DriverBookingDTO?, api: ElchiAPI, keys: ActionKeys, banners: BannerCenter,
          mediaURL: @escaping @Sendable (String) -> URL?, connection: TrackingConnection) {
@@ -112,7 +115,14 @@ final class DriverBookingModel {
         support = SupportChatModel(bookingId: id, api: api, keys: keys)
         tracking = BookingTrackingModel(bookingId: id, api: api, connection: connection)
         amendments = AmendmentsModel(bookingId: id, api: api, keys: keys)
+        taxi = DriverTaxiModel(bookingId: id, api: api, keys: keys)
+        cash = CashRecordModel(bookingId: id, side: "driver", api: api, keys: keys)
         amendments.onBookingChanged = { [weak self] in await self?.load() }
+        cash.onChanged = { [weak self] in await self?.load() }
+        taxi.onBooking = { [weak self] json in
+            guard let self else { return }
+            if let json, let fresh = DriverBookingDTO.from(json) { apply(fresh) } else { await load() }
+        }
     }
 
     /// The parcel photo's signed link (Q6: short-lived - a reload fetches a fresh one).
@@ -133,6 +143,11 @@ final class DriverBookingModel {
         if reputation == nil, let client = booking.value?.client {
             reputation = try? await api.getReputation(userId: client.id, serviceType: booking.value?.base.serviceType ?? .parcel).data
         }
+        // Taksi before boarding: when "Keldim" was recorded and how long the trip waits (the no-show gate).
+        if let dto = booking.value, dto.base.serviceType == .passenger, DriverBookingActions.preService.contains(dto.status) {
+            await taxi.loadGate(tripId: dto.tripId)
+            if taxi.arrivedAt != nil { arrivedSent = true }
+        }
     }
 
     private func apply(_ dto: DriverBookingDTO) {
@@ -146,6 +161,8 @@ final class DriverBookingModel {
         commandError = nil
         failed = nil
         arriveError = nil
+        taxi.clear()
+        cash.clear()
     }
 
     // MARK: Keldim
@@ -164,6 +181,7 @@ final class DriverBookingModel {
             if let fresh = DriverBookingDTO.from(result.data) { apply(fresh) }
             arrivedSent = true
             ArrivedSignals.mark(dto.id)
+            taxi.arrived(at: Date())
             banners.ok("driver.booking.arrived")
         } catch {
             keys.settle(action, after: error)

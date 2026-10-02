@@ -27,6 +27,7 @@ import uz.elchi.app.api.generated.ApiWarning
 import uz.elchi.app.api.generated.ListingOfferDTO
 import uz.elchi.app.api.generated.ListingPublicDTO
 import uz.elchi.app.api.generated.ListingStatus
+import uz.elchi.app.api.generated.PriceBasis
 import uz.elchi.app.api.generated.ProposalThreadDTO
 import uz.elchi.app.api.generated.ServiceType
 import uz.elchi.app.api.generated.TripDTO
@@ -38,6 +39,9 @@ import uz.elchi.app.feature.client.StepScaffold
 import uz.elchi.app.feature.client.categoryLimits
 import uz.elchi.app.feature.client.categoryName
 import uz.elchi.app.feature.client.rememberNow
+import uz.elchi.app.feature.client.ParcelRules
+import uz.elchi.app.feature.client.seatsLine
+import uz.elchi.app.feature.client.seatsPrice
 import uz.elchi.app.feature.client.soum
 import uz.elchi.app.i18n.errorText
 import uz.elchi.app.i18n.t
@@ -176,9 +180,20 @@ fun BidScreen(
                 }
                 RivalBoard(s.board, vm::loadBoard)
                 TripChoice(vm, ts, trip, window, onAddTrip)
+                // Taksi: the chosen trip has fewer free seats than the request needs - say so and let another be picked.
+                if (OfferRules.capacityShort(s.error)) {
+                    val count = l.value.quantity
+                    Note(
+                        t(R.string.driverBid_capacityUnavailable, "count" to count),
+                        tone = Tone.ERR,
+                    )
+                }
+                val perSeat = l.value.priceBasis == PriceBasis.PER_SEAT
                 ElchiField(
                     s.price, vm::setPrice,
-                    label = t(R.string.driverBid_priceLabel),
+                    // Taksi: the offer is per person; the total for all of them shows under the field.
+                    label = t(R.string.driverBid_priceLabel) + if (perSeat) " " + t(R.string.listingEdit_perSeatSuffix).trim() else "",
+                    hint = if (perSeat) ParcelRules.soumToMinor(s.price)?.let { "${seatsPrice(l.value.quantity, it)} = ${soum(it * l.value.quantity)}" } else null,
                     placeholder = t(R.string.driverBid_pricePlaceholder),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
@@ -202,7 +217,7 @@ private fun RequestSummary(listing: ListingPublicDTO) {
     ElchiCard(padding = PaddingValues(horizontal = 16.dp, vertical = 14.dp), background = if (c.isDark) c.field else Color(0xFFEEF1F5)) {
         Text("${FeedRules.endName(listing.originStop, listing.originPoint, ru)} → ${FeedRules.endName(listing.destinationStop, listing.destinationPoint, ru)}", style = Elchi.type.bodyStrong, color = c.text)
         Text(t(R.string.driverBid_clientPrice, "price" to soum(listing.totalMinor)), Modifier.padding(top = 4.dp), style = Elchi.type.label, color = c.muted)
-        val what = if (listing.serviceType == ServiceType.PARCEL) listing.parcelCategory?.let { "${categoryName(it, ru)} · ${categoryLimits(it)}" } else t(R.string.tripDetail_seats, "count" to listing.quantity)
+        val what = if (listing.serviceType == ServiceType.PARCEL) listing.parcelCategory?.let { "${categoryName(it, ru)} · ${categoryLimits(it)}" } else seatsLine(listing.quantity, listing.unitPriceMinor)
         what?.let { Text(it, style = Elchi.type.caption, color = c.muted) }
         if (start != null && end != null) {
             val sameDay = start.atZone(uz.elchi.app.feature.client.ParcelRules.TASHKENT).toLocalDate() == end.atZone(uz.elchi.app.feature.client.ParcelRules.TASHKENT).toLocalDate()
@@ -257,7 +272,11 @@ private fun RivalRow(row: ListingOfferDTO) {
     CardRow(
         key = label + if (row.isMine) " ★" else "",
         value = soum(row.totalMinor),
-        detail = listOfNotNull(t(R.string.app_rivalBoard_vehicleSeats, "vehicle" to vehicle, "seats" to row.seatCapacity), window, rating).joinToString(" · "),
+        // Taksi: each rival's price per person too ("2 × 160 000 so'm").
+        detail = listOfNotNull(
+            if (row.priceBasis == PriceBasis.PER_SEAT) seatsPrice(row.quantity, row.unitPriceMinor) else null,
+            t(R.string.app_rivalBoard_vehicleSeats, "vehicle" to vehicle, "seats" to row.seatCapacity), window, rating,
+        ).joinToString(" · "),
         strong = true,
     )
 }

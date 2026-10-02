@@ -543,6 +543,10 @@ public enum MarketErrorText {
             return .key("client.listingBids.termsChanged", [:])
         case "PROPOSAL_CHANGED" where error.details?["reason"] == .string("demand_already_booked"):
             return .key("client.listingBids.alreadyBooked", [:])
+        // Taksi: the trip has fewer free seats than the request's people - another trip, or a new one.
+        case "CAPACITY_UNAVAILABLE": return .key("driverBid.capacityUnavailable", [:])
+        // The offer's seats must be the request's own count (the app sends it; a changed request says so).
+        case "QUANTITY_MISMATCH": return .key("error.QUANTITY_MISMATCH", [:])
         default: return .generic
         }
     }

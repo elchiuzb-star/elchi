@@ -266,7 +266,9 @@ class OrderRulesTest {
         assertEquals("status.confirmed", OrderRules.bookingStatusKey(ServiceType.PARCEL, "confirmed"))
         assertEquals("status.cancelled", OrderRules.bookingStatusKey(ServiceType.PARCEL, "cancelled"))
         assertEquals(Tone.ERR, OrderRules.bookingTone(ServiceType.PARCEL, "delivery_failed"))
-        assertEquals("status.in_transit", OrderRules.bookingStatusKey(ServiceType.PASSENGER, "onboard"))
+        assertEquals("status.onboard", OrderRules.bookingStatusKey(ServiceType.PASSENGER, "onboard"))
+        assertEquals("status.arrived", OrderRules.bookingStatusKey(ServiceType.PASSENGER, "arrived"))
+        assertEquals("status.no_show", OrderRules.bookingStatusKey(ServiceType.PASSENGER, "no_show"))
         assertEquals("status.completed", OrderRules.legacyStatusKey("completed"))
     }
 

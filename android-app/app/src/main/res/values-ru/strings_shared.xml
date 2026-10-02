@@ -52,6 +52,7 @@
     <string name="app_cash_agreedLabel">Согласованная сумма</string>
     <string name="app_cash_awaitingOther">Ожидается подтверждение другой стороны.</string>
     <string name="app_cash_bothConfirmed">Обе стороны подтвердили.</string>
+    <string name="app_cash_commentRequired">Напишите, с чем вы не согласны — это прочитает оператор.</string>
     <string name="app_cash_contest">Не согласен</string>
     <string name="app_cash_contested">Разногласие зафиксировано — его рассмотрит оператор.</string>
     <string name="app_cash_dueLabel">Сумма к оплате наличными</string>
@@ -59,6 +60,7 @@
     <string name="app_cash_givenField">Переданная сумма (сум)</string>
     <string name="app_cash_markGiven">Отметить, что наличные переданы</string>
     <string name="app_cash_markReceived">Отметить, что наличные получены</string>
+    <string name="app_cash_noteRequired">Сумма отличается от договорённой — укажите причину.</string>
     <string name="app_cash_receivedField">Полученная сумма (сум)</string>
     <string name="app_cash_reportedByMe">Вы отметили: {amount} · {date}</string>
     <string name="app_cash_reportedByOther">Другая сторона отметила: {amount} · {date}</string>
@@ -395,6 +397,11 @@
     <string name="client_support_ticket_acknowledged">Оператор увидел</string>
     <string name="client_support_ticket_open">Отправлено</string>
     <string name="client_support_ticket_resolved">Решено</string>
+    <string name="client_taxi_complete">Я доехал до места</string>
+    <string name="client_taxi_completeConfirmTitle">Вы доехали до места?</string>
+    <string name="client_taxi_completeHint">После подтверждения поездка завершится, и вы сможете оценить водителя.</string>
+    <string name="client_taxi_completed">Поездка завершена</string>
+    <string name="client_taxi_seatsTotal">{count} × {price}</string>
     <string name="client_time_daysAgo">{days} дн. назад</string>
     <string name="client_time_hoursAgo">{hours} ч назад</string>
     <string name="client_tracking_coordinates">Координаты последней точки</string>
@@ -528,6 +535,7 @@
     <string name="docType_selfie">Селфи</string>
     <string name="driver_bid_acceptClientPrice">Согласен с ценой клиента ({price})</string>
     <string name="driver_bid_priceBand">Обычный диапазон: {floor} – {ceiling}</string>
+    <string name="driver_board_attemptsLeft">Неверный код. Осталось попыток: {count}.</string>
     <string name="driver_bonus_noCreditSubtitle">Кредит появляется только после выполнения условий кампании и уменьшает вашу комиссию.</string>
     <string name="driver_bonus_noCreditTitle">Кредита пока нет</string>
     <string name="driver_booking_arrived">Я на месте — клиенту отправлено уведомление</string>
@@ -572,6 +580,19 @@
     <string name="driver_gps_unavailable">Службы геолокации на телефоне выключены или недоступны.</string>
     <string name="driver_home_availableOn">На линии — готов принимать заказы</string>
     <string name="driver_home_verificationLabel">Статус проверки</string>
+    <string name="driver_noShow_button">Клиент не пришёл</string>
+    <string name="driver_noShow_channel_call">По телефону</string>
+    <string name="driver_noShow_channel_chat">Через чат приложения</string>
+    <string name="driver_noShow_confirm">Отправить</string>
+    <string name="driver_noShow_contactTitle">Как вы пытались связаться с клиентом?</string>
+    <string name="driver_noShow_hint">Становится доступно через 10 минут после времени посадки. Сообщение проверит оператор.</string>
+    <string name="driver_noShow_pending">Сообщение «Клиент не пришёл» ждёт проверки оператора.</string>
+    <string name="driver_noShow_reason_arrival_not_recorded">Сначала нажмите «Я на месте».</string>
+    <string name="driver_noShow_reason_driver_arrived_late">Вы приехали после окончания времени посадки — напишите оператору.</string>
+    <string name="driver_noShow_reason_no_contact_attempt">Сначала попробуйте связаться с клиентом.</string>
+    <string name="driver_noShow_reason_not_awaiting_pickup">Бронь не на этапе посадки.</string>
+    <string name="driver_noShow_reason_wait_time_not_elapsed">Время ожидания ещё не прошло: попробуйте после {time}.</string>
+    <string name="driver_noShow_sent">Сообщение отправлено — оператор проверит.</string>
     <string name="driver_orders_filterActive">Активные</string>
     <string name="driver_orders_filterHistory">История</string>
     <string name="driver_profile_complaints">Жалобы</string>
@@ -610,6 +631,7 @@
     <string name="driver_wallet_requisitesNote">Чтобы получить банковские реквизиты, напишите оператору в разделе «Помощь». В назначении платежа укажите свой номер телефона.</string>
     <string name="driver_wallet_transactionsEmpty">Операций пока нет</string>
     <string name="driver_wallet_transactionsTitle">История операций</string>
+    <string name="driverBid_capacityUnavailable">В этой поездке нет мест для {count} человек — выберите другую поездку.</string>
     <string name="driverBid_clientPrice">Цена клиента: {price}</string>
     <string name="driverBid_departure">Отправление: {start} - {end}</string>
     <string name="driverBid_noHoldNote">Предложение не занимает места и не блокирует баланс — бронь создаётся, когда клиент его примет.</string>
@@ -834,6 +856,7 @@
     <string name="error_NEGOTIATION_LIMIT_REACHED">Лимит изменения цены исчерпан</string>
     <string name="error_NOT_FOUND">Не найдено</string>
     <string name="error_NOT_PROPOSAL_RECIPIENT">Нельзя принять собственное предложение</string>
+    <string name="error_NO_SHOW_NOT_ALLOWED">Сейчас нельзя отметить «Клиент не пришёл».</string>
     <string name="error_NO_SHOW_REVIEW_PENDING">Оператор рассматривает</string>
     <string name="error_OTP_EXPIRED">Срок действия кода истёк</string>
     <string name="error_OTP_GLOBAL_LIMIT">Сейчас не удалось отправить код. Попробуйте чуть позже.</string>
@@ -1630,6 +1653,7 @@
     <string name="settingsScreen_title">Настройки</string>
     <string name="status_accepted">Водитель выбран</string>
     <string name="status_approved">Подтверждено</string>
+    <string name="status_arrived">Прибыл</string>
     <string name="status_awaiting_pickup">Ожидает подачи</string>
     <string name="status_awaiting_second_approval">Ожидает второго подтверждения</string>
     <string name="status_bidding">Есть предложения</string>
@@ -1647,6 +1671,7 @@
     <string name="status_in_transit">В пути</string>
     <string name="status_interrupted">Прервано</string>
     <string name="status_no_show">Не явился</string>
+    <string name="status_onboard">В машине</string>
     <string name="status_paused">Приостановлено</string>
     <string name="status_pending">Ожидает</string>
     <string name="status_picked_up">Забрано</string>

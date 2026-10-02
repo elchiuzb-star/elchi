@@ -26,6 +26,7 @@ import uz.elchi.app.R
 import uz.elchi.app.api.BookingClientDTO
 import uz.elchi.app.api.DriverBookingDTO
 import uz.elchi.app.api.generated.ReputationDTO
+import uz.elchi.app.api.generated.ServiceType
 import uz.elchi.app.feature.client.BookingCancelSheet
 import uz.elchi.app.feature.client.BookingNotices
 import uz.elchi.app.feature.client.BookingRules
@@ -36,6 +37,9 @@ import uz.elchi.app.feature.client.LoadingLine
 import uz.elchi.app.feature.client.OrderRules
 import uz.elchi.app.feature.client.ParcelPhotoBlock
 import uz.elchi.app.feature.client.ParcelRules
+import uz.elchi.app.feature.client.TaxiRules
+import uz.elchi.app.feature.client.seatsLine
+import uz.elchi.app.feature.client.seatsPrice
 import uz.elchi.app.feature.client.ReputationLine
 import uz.elchi.app.feature.client.StepScaffold
 import uz.elchi.app.feature.client.categoryLimits
@@ -114,6 +118,7 @@ private fun DriverBookingRow(booking: DriverBookingDTO, onClick: () -> Unit) {
         icon = ElchiIcon.PIN,
         badge = (tOrNull(DriverBookingRules.badgeKey(booking.serviceType, status)) ?: status) to DriverBookingRules.badgeTone(booking.serviceType, status),
         sub = booking.client?.displayName?.takeIf { it.isNotBlank() },
+        lines = if (TaxiRules.isPassenger(booking.serviceType)) listOf(ItemLine(seatsLine(booking.quantity, booking.unitPriceMinor))) else emptyList(),
         meta = OrderRules.dayMonth(booking.pickup.windowStart ?: booking.createdAt, languageTag()),
         // Q103: what the driver collects in cash.
         right = soum(DriverBookingRules.cashToCollectMinor(booking)),
@@ -131,6 +136,8 @@ data class DriverBookingNav(
     val onRate: () -> Unit,
     val onSupport: () -> Unit,
     val onSafety: () -> Unit,
+    /** The booking's trip (Taksi: "start boarding first" after TRIP_NOT_STARTED). */
+    val onTrip: (String) -> Unit = {},
 )
 
 /**
@@ -199,7 +206,8 @@ private fun DriverBookingBody(
 ) {
     val now by rememberNow()
     val status = view.serviceStatus
-    val actions = DriverBookingRules.actions(status, s.arrivedAt, view.updatedAt, now)
+    val actions = DriverBookingRules.actions(status, s.arrivedAt, view.updatedAt, now, view.noShowReview)
+    val passenger = TaxiRules.isPassenger(view.serviceType)
     Header(view)
     if (actions.transitNote) Note(t(R.string.driver_booking_inTransitNote), tone = Tone.BLUE)
     Details(view)
@@ -222,6 +230,7 @@ private fun DriverBookingBody(
     } else if (s.arrivedAt != null && status in BookingViewModel.ARRIVE_STATUSES) {
         Note(t(R.string.driver_booking_arrivedSent), tone = Tone.OK)
     }
+    if (passenger) PassengerActions(vm, s, view, now, nav)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ElchiButton(t(R.string.driverBooking_messages), nav.onChat, Modifier.weight(1f).height(48.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.CHAT, horizontalPadding = 10.dp)
         ElchiButton(t(R.string.driverBooking_tracking), nav.onTracking, Modifier.weight(1f).height(48.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.PIN, horizontalPadding = 10.dp)
@@ -255,12 +264,14 @@ private fun Header(view: DriverBookingDTO) {
         "${t(R.string.bookingCancel_cancelledBy)}: ${parts.joinToString(" · ")}"
     }
     val window = OrderRules.windowText(view.pickup.windowStart, view.pickup.windowEnd)
+    val passenger = TaxiRules.isPassenger(view.serviceType) && view.promo == null
     ItemCard(
         title = "${OrderRules.shortEnd(view.pickup.stop, view.pickup.point, ru)} → ${OrderRules.shortEnd(view.dropoff.stop, view.dropoff.point, ru)}",
         badge = (tOrNull(DriverBookingRules.badgeKey(view.serviceType, status)) ?: status) to DriverBookingRules.badgeTone(view.serviceType, status),
         lines = listOfNotNull(cancelled?.let { ItemLine(it, Elchi.colors.tone(Tone.ERR).fg) }),
         meta = window,
-        right = soum(view.totalMinor),
+        // Taksi: "2 × 150 000 so'm" (design), the per-seat basis.
+        right = if (passenger) seatsPrice(view.quantity, view.unitPriceMinor) else soum(view.totalMinor),
     )
 }
 
@@ -274,8 +285,26 @@ private fun Details(view: DriverBookingDTO) {
         CardRow(t(if (view.pickup.stop != null) R.string.driverBooking_pickupStop else R.string.driverBooking_pickupPoint), OrderRules.shortEnd(view.pickup.stop, view.pickup.point, ru), first = true)
         CardRow(t(if (view.dropoff.stop != null) R.string.driverBooking_dropoffStop else R.string.driverBooking_dropoffPoint), OrderRules.shortEnd(view.dropoff.stop, view.dropoff.point, ru))
         CardRow(t(R.string.driver_booking_clientTitle), view.client?.displayName?.takeIf { it.isNotBlank() } ?: t(R.string.driver_booking_clientFallback))
+        if (TaxiRules.isPassenger(view.serviceType)) {
+            // Q44: the client's phone opens when the service starts (onboard); before that the in-app chat.
+            val phone = view.client?.contactPhone?.takeIf { it.isNotBlank() && view.contact?.phonesVisible != false }
+            if (phone != null) {
+                CardRow(
+                    t(R.string.driverBooking_phone),
+                    displayPhone(phone),
+                    trailing = t(R.string.client_bookingDetail_call),
+                    onTrailing = {
+                        val dial = Intent(Intent.ACTION_DIAL, BookingRules.dialUri(phone).toUri())
+                        activity?.startActivity(dial) ?: context.startActivity(dial.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    },
+                )
+            } else {
+                CardRow(t(R.string.driverBooking_phone), t(R.string.driverBooking_phoneHidden), muted = true)
+            }
+            CardRow(t(R.string.orderForm_review_passengers), seatsLine(view.quantity, view.unitPriceMinor), detail = t(R.string.orderForm_review_seatNegotiated))
+        }
         view.parcelCategory?.let { CardRow(t(R.string.listingDetail_parcel), "${categoryName(it, ru)} · ${categoryLimits(it)}") }
-        when (val receiver = DriverBookingRules.receiver(view)) {
+        if (view.serviceType == ServiceType.PARCEL) when (val receiver = DriverBookingRules.receiver(view)) {
             is ReceiverView.Visible -> CardRow(
                 t(R.string.driverBooking_receiver),
                 listOfNotNull(receiver.name, displayPhone(receiver.phone)).joinToString(" · "),

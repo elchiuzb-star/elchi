@@ -157,6 +157,7 @@ private fun BookingRow(booking: BookingClientDTO, ru: Boolean, languageTag: Stri
         icon = ElchiIcon.PIN,
         badge = (tOrNull(OrderRules.bookingStatusKey(booking.serviceType, status)) ?: status) to OrderRules.bookingTone(booking.serviceType, status),
         meta = OrderRules.dayMonth(booking.pickup.windowStart ?: booking.createdAt, languageTag),
+        lines = if (TaxiRules.isPassenger(booking.serviceType)) listOf(ItemLine(seatsLine(booking.quantity, booking.unitPriceMinor))) else emptyList(),
         // Q103: with a discount the client hands over the cash due, not the fare.
         right = soum(booking.promo?.cashDueMinor ?: booking.totalMinor),
         onClick = onClick,

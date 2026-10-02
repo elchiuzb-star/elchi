@@ -34,6 +34,8 @@ import uz.elchi.app.api.generated.ContactDetails
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.PromoConsentInput
+import uz.elchi.app.api.generated.ProofKind
+import uz.elchi.app.api.generated.ProofReissueRequest
 import uz.elchi.app.api.generated.RatingCreate
 import uz.elchi.app.api.generated.ReportCreate
 import uz.elchi.app.api.generated.ReportReasonCode
@@ -47,7 +49,11 @@ import java.time.Instant
 import java.util.UUID
 
 /** What a booking command left to say once (a banner on the detail screen), then cleared. */
-enum class BookingNotice { DRIVER_CHOSEN, CANCELLED, AMENDMENT_SENT, AMENDMENT_ACCEPTED, AMENDMENT_REJECTED, AMENDMENT_WITHDRAWN, RATED, ARRIVED }
+enum class BookingNotice {
+    DRIVER_CHOSEN, CANCELLED, AMENDMENT_SENT, AMENDMENT_ACCEPTED, AMENDMENT_REJECTED, AMENDMENT_WITHDRAWN, RATED, ARRIVED,
+    // Taksi (passenger)
+    COMPLETED, STATUS_UPDATED, NO_SHOW_SENT, CASH_RECORDED, CASH_ANSWERED,
+}
 
 /** Whose booking screen this is: the client's (Stage 04) or the assigned driver's (Stage 09, the same screens reused). */
 enum class BookingSide(val wire: String) { CLIENT("client"), DRIVER("driver") }
@@ -124,6 +130,27 @@ class BookingViewModel(
         val arrivedAt: String? = null,
         val arriving: Boolean = false,
         val arriveError: Throwable? = null,
+        // Taksi (passenger): boarding code (client), cash record (both), complete (client), board / drop-off /
+        // no-show (driver).
+        /** The client's 6-digit boarding code while the passenger is awaited; null once onboard (the server sends none). */
+        val boardingCode: String? = null,
+        val reissuing: Boolean = false,
+        val reissued: Boolean = false,
+        val reissueError: Throwable? = null,
+        val cashDigits: String = "",
+        val cashNote: String = "",
+        val contestComment: String = "",
+        val cashBusy: Boolean = false,
+        val cashError: Throwable? = null,
+        val completing: Boolean = false,
+        val completeError: Throwable? = null,
+        val boardCode: String = "",
+        val boarding: Boolean = false,
+        val boardError: Throwable? = null,
+        val droppingOff: Boolean = false,
+        val dropOffError: Throwable? = null,
+        val noShowSending: Boolean = false,
+        val noShowError: Throwable? = null,
     ) {
         val value: BookingClientDTO? get() = (booking as? Load.Ready)?.value
         val amendmentList: List<AmendmentDTO> get() = (amendments as? Load.Ready)?.value.orEmpty()
@@ -189,7 +216,7 @@ class BookingViewModel(
             reputationFor = driverId
             viewModelScope.launch {
                 try {
-                    val reputation = api.getReputation(driverId, ServiceType.PARCEL).data
+                    val reputation = api.getReputation(driverId, booking.serviceType.takeIf { it != ServiceType.UNKNOWN } ?: ServiceType.PARCEL).data
                     _state.update { it.copy(reputation = reputation, reputationFailed = false) }
                 } catch (e: CancellationException) {
                     throw e
@@ -200,6 +227,8 @@ class BookingViewModel(
             }
         }
         if (side == BookingSide.DRIVER) loadArrival(booking)
+        if (side == BookingSide.CLIENT) loadCodes(booking)
+        prefillCash(booking)
         // The receiver is the client's own entry on its request (the booking shows it only to the driver).
         booking.listingIds?.request?.takeIf { it != receiverFor && side == BookingSide.CLIENT }?.let { listingId ->
             receiverFor = listingId
@@ -544,6 +573,210 @@ class BookingViewModel(
             }
         }
     }
+
+    // -- Taksi: boarding code (client) ---------------------------------------------------------------------------
+
+    /** `GET /bookings/{id}/codes` while the passenger is awaited; the code goes once the passenger is onboard. */
+    private fun loadCodes(booking: BookingClientDTO) {
+        if (!TaxiRules.showBoardingCode(booking.serviceType, booking.serviceStatus)) {
+            if (_state.value.boardingCode != null) _state.update { it.copy(boardingCode = null) }
+            return
+        }
+        viewModelScope.launch {
+            runCatching { api.getBookingCodes(bookingId).data.codes.firstOrNull { it.kind == ProofKind.BOARDING_CODE }?.code }
+                .onSuccess { code -> _state.update { it.copy(boardingCode = code) } }
+                .onFailure { if (it is CancellationException) throw it }
+        }
+    }
+
+    /** "Yangi kod olish": the old code stops at once; Q75 limits it (2 min apart, 3 a day) - the refusal says how long. */
+    fun reissueCode() {
+        if (_state.value.reissuing) return
+        _state.update { it.copy(reissuing = true, reissued = false, reissueError = null) }
+        viewModelScope.launch {
+            try {
+                val codes = keyed("reissue:$bookingId:${_state.value.boardingCode}") { key ->
+                    api.reissueBookingCode(bookingId, ProofKind.BOARDING_CODE, ProofReissueRequest(), key).data
+                }
+                val code = codes.codes.firstOrNull { it.kind == ProofKind.BOARDING_CODE }?.code
+                _state.update { it.copy(reissuing = false, reissued = true, boardingCode = code ?: it.boardingCode) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(reissuing = false, reissueError = e) }
+            }
+        }
+    }
+
+    // -- Taksi: cash record (both sides) ---------------------------------------------------------------------------
+
+    /** The cash this side hands over / collects: the promo's cash on a discounted booking, else the agreed total. */
+    fun cashDueMinor(s: State = _state.value): Long? =
+        if (side == BookingSide.DRIVER) s.driverView?.let { it.promo?.cashToCollectMinor ?: it.totalMinor } else s.value?.let { it.promo?.cashDueMinor ?: it.totalMinor }
+
+    fun setCashDigits(text: String) = _state.update { it.copy(cashDigits = text.filter(Char::isDigit).trimStart('0').take(10), cashError = null) }
+
+    fun setCashNote(text: String) = _state.update { it.copy(cashNote = text.take(REASON_MAX), cashError = null) }
+
+    fun setContestComment(text: String) = _state.update { it.copy(contestComment = text.take(REASON_MAX), cashError = null) }
+
+    /** The amount field starts at the cash due (the design prefills it); what the person typed is never overwritten. */
+    private fun prefillCash(booking: BookingClientDTO) {
+        if (_state.value.cashDigits.isNotEmpty() || !TaxiRules.showCash(booking.serviceType, booking.serviceStatus)) return
+        cashDueMinor()?.let { due -> _state.update { it.copy(cashDigits = ParcelRules.minorToSoum(due).toString()) } }
+    }
+
+    /** `POST /bookings/{id}/cash-receipts` against the booking's version; a differing amount carries the note. */
+    fun reportCash() {
+        val s = _state.value
+        val booking = s.value ?: return
+        val due = cashDueMinor(s) ?: return
+        if (s.cashBusy) return
+        val body = TaxiRules.cashReport(booking.version, s.cashDigits, s.cashNote, due, now()) ?: return
+        cashCommand("cash-report:${booking.id}:${booking.version}:${body.amountMinor}:${body.note.orEmpty()}", BookingNotice.CASH_RECORDED) { key ->
+            api.reportCashReceipt(booking.id, body, key)
+        }
+    }
+
+    /** "Tasdiqlayman": the other side's record is right. */
+    fun acknowledgeCash() {
+        val receipt = currentReceipt() ?: return
+        cashCommand("cash-ack:${receipt.id}:${receipt.version}", BookingNotice.CASH_ANSWERED) { key ->
+            api.acknowledgeCashReceipt(bookingId, receipt.id, TaxiRules.acknowledgeBody(receipt), key)
+        }
+    }
+
+    /** "Rozi emasman" with the comment the operator will read (Q78). */
+    fun contestCash() {
+        val receipt = currentReceipt() ?: return
+        val body = TaxiRules.contestBody(receipt, _state.value.contestComment) ?: return
+        cashCommand("cash-contest:${receipt.id}:${receipt.version}:${body.comment}", BookingNotice.CASH_ANSWERED) { key ->
+            api.contestCashReceipt(bookingId, receipt.id, body, key)
+        }
+    }
+
+    private fun currentReceipt(): uz.elchi.app.api.generated.CashReceiptDTO? {
+        val s = _state.value
+        return if (side == BookingSide.DRIVER) s.driverView?.cashReceipt else s.value?.cashReceipt
+    }
+
+    /** One cash command at a time; afterwards the booking is read again (its cash status and receipt moved). */
+    private fun cashCommand(scope: String, notice: BookingNotice, block: suspend (String) -> Any) {
+        if (_state.value.cashBusy) return
+        _state.update { it.copy(cashBusy = true, cashError = null) }
+        viewModelScope.launch {
+            try {
+                keyed(scope, block)
+                _state.update { it.copy(cashBusy = false, notice = notice, cashNote = "", contestComment = "") }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(cashBusy = false, cashError = e) }
+            }
+            loadBooking()
+        }
+    }
+
+    // -- Taksi: complete (client) ----------------------------------------------------------------------------------
+
+    /** "Manzilga yetib keldim": `complete` after the driver's drop-off - the booking completes, rating opens. */
+    fun complete() {
+        val s = _state.value
+        val booking = s.value ?: return
+        if (s.completing || side != BookingSide.CLIENT) return
+        _state.update { it.copy(completing = true, completeError = null) }
+        viewModelScope.launch {
+            try {
+                val result = keyed("complete:${booking.id}:${booking.version}") { key ->
+                    api.bookingAction(booking.id, BookingAction.COMPLETE, BookingActionRequest(expectedVersion = booking.version), key)
+                }
+                setBooking(result.data)
+                _state.update { it.copy(completing = false, notice = BookingNotice.COMPLETED) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(completing = false, completeError = e) }
+                if (e is ApiException && e.code in RELOAD_ON) loadBooking()
+            }
+        }
+    }
+
+    // -- Taksi: board / drop-off / no-show (driver) ----------------------------------------------------------------
+
+    fun setBoardCode(text: String) = _state.update { it.copy(boardCode = uz.elchi.app.feature.driver.DriverTaxiRules.normaliseCode(text), boardError = null) }
+
+    /** "Yo'lovchini chiqardim": `board {code}` - a wrong code costs an attempt (the server counts them). */
+    fun board() {
+        val s = _state.value
+        val booking = s.value ?: return
+        if (s.boarding || side != BookingSide.DRIVER || !uz.elchi.app.feature.driver.DriverTaxiRules.codeComplete(s.boardCode)) return
+        _state.update { it.copy(boarding = true, boardError = null) }
+        viewModelScope.launch {
+            try {
+                // A new key per attempt: a wrong code is a definite answer, the next code is a new action.
+                val result = keyed("board:${booking.id}:${booking.version}:${s.boardCode}") { key ->
+                    api.bookingAction(booking.id, BookingAction.BOARD, uz.elchi.app.feature.driver.DriverTaxiRules.boardBody(booking.version, s.boardCode), key)
+                }
+                setBooking(result.data)
+                _state.update { it.copy(boarding = false, boardCode = "", notice = BookingNotice.STATUS_UPDATED) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(boarding = false, boardError = e) }
+                if (e is ApiException && e.code in RELOAD_ON) loadBooking()
+            }
+        }
+    }
+
+    /** "Yo'lovchini tushirdim": `drop_off` - the passenger confirms the arrival (or the operator does). */
+    fun dropOff() {
+        val s = _state.value
+        val booking = s.value ?: return
+        if (s.droppingOff || side != BookingSide.DRIVER) return
+        _state.update { it.copy(droppingOff = true, dropOffError = null) }
+        viewModelScope.launch {
+            try {
+                val result = keyed("drop-off:${booking.id}:${booking.version}") { key ->
+                    api.bookingAction(booking.id, BookingAction.DROP_OFF, BookingActionRequest(expectedVersion = booking.version), key)
+                }
+                setBooking(result.data)
+                _state.update { it.copy(droppingOff = false, notice = BookingNotice.STATUS_UPDATED) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(droppingOff = false, dropOffError = e) }
+                if (e is ApiException && e.code in RELOAD_ON) loadBooking()
+            }
+        }
+    }
+
+    /**
+     * "Mijoz kelmadi" (Q7): the driver reports with how it tried to reach the client; the booking stays awaiting
+     * the passenger while the operator reviews it. Returns at once when no channel was chosen.
+     */
+    fun reportNoShow(channels: Set<uz.elchi.app.feature.driver.ContactChannel>) {
+        val s = _state.value
+        val booking = s.value ?: return
+        if (s.noShowSending || side != BookingSide.DRIVER) return
+        val body = uz.elchi.app.feature.driver.DriverTaxiRules.noShowBody(booking.version, channels, now()) ?: return
+        _state.update { it.copy(noShowSending = true, noShowError = null) }
+        viewModelScope.launch {
+            try {
+                val result = keyed("no-show:${booking.id}:${booking.version}:${channels.sorted()}") { key ->
+                    api.bookingAction(booking.id, BookingAction.REPORT_NO_SHOW, body, key)
+                }
+                setBooking(result.data)
+                _state.update { it.copy(noShowSending = false, notice = BookingNotice.NO_SHOW_SENT) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(noShowSending = false, noShowError = e) }
+                if (e is ApiException && e.code in RELOAD_ON) loadBooking()
+            }
+        }
+    }
+
+    fun clearNoShowError() = _state.update { it.copy(noShowError = null) }
 
     init {
         refresh()

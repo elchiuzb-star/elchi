@@ -61,6 +61,7 @@ import uz.elchi.app.ui.components.ButtonSize
 import uz.elchi.app.ui.components.ButtonVariant
 import uz.elchi.app.ui.components.CardHeader
 import uz.elchi.app.ui.components.CardRow
+import uz.elchi.app.ui.components.ElchiDialog
 import uz.elchi.app.ui.components.Chip
 import uz.elchi.app.ui.components.ElchiButton
 import uz.elchi.app.ui.components.ElchiCard
@@ -158,6 +159,11 @@ internal fun BookingNotices(s: BookingViewModel.State) {
                 BookingNotice.AMENDMENT_WITHDRAWN -> R.string.amendment_withdrawn
                 BookingNotice.RATED -> R.string.client_bookingDetail_rated
                 BookingNotice.ARRIVED -> R.string.driver_booking_arrived
+                BookingNotice.COMPLETED -> R.string.client_taxi_completed
+                BookingNotice.STATUS_UPDATED -> R.string.driverBooking_statusUpdated
+                BookingNotice.NO_SHOW_SENT -> R.string.driver_noShow_sent
+                BookingNotice.CASH_RECORDED -> R.string.driverBooking_cashRecorded
+                BookingNotice.CASH_ANSWERED -> R.string.driverBooking_cashAnswered
             },
         )
         Banner(text, Tone.OK)
@@ -181,12 +187,35 @@ private fun BookingBody(
     onCancel: () -> Unit,
 ) {
     val status = booking.serviceStatus
+    var confirmComplete by rememberSaveable { mutableStateOf(false) }
     BookingHeader(booking, ru, languageTag)
     if (BookingRules.reviewPending(booking.noShowReview)) Note(t(R.string.bookingCancel_reviewPending), tone = Tone.WARN)
     booking.driver?.let { DriverCard(booking, s.reputation, languageTag) }
+    // Taksi: the code the passenger says at the car, until it boards (Q44).
+    if (TaxiRules.showBoardingCode(booking.serviceType, status)) BoardingCodeBlock(s, vm::reissueCode)
     booking.promo?.let { PromoBlock(it) }
     FareCard(booking, s.receiver, ru)
     if (booking.parcelPhoto != null) ParcelPhotoBlock(s.photo, s.photoFailed)
+    if (TaxiRules.showCash(booking.serviceType, status)) CashRecordBlock(clientCashModel(vm, s, booking))
+    if (TaxiRules.canComplete(booking.serviceType, status)) {
+        // The web never offers it: without it the trip waits for an operator to close it.
+        s.completeError?.let { Note(errorText(it), tone = Tone.ERR) }
+        ElchiButton(t(R.string.client_taxi_complete), { confirmComplete = true }, Modifier.fillMaxWidth(), icon = ElchiIcon.CHECK_C, loading = s.completing)
+        Text(t(R.string.client_taxi_completeHint), style = Elchi.type.caption, color = Elchi.colors.muted)
+    }
+    if (confirmComplete) {
+        ElchiDialog(
+            title = t(R.string.client_taxi_completeConfirmTitle),
+            text = t(R.string.client_taxi_completeHint),
+            confirm = t(R.string.common_confirm),
+            onConfirm = {
+                confirmComplete = false
+                vm.complete()
+            },
+            onDismiss = { confirmComplete = false },
+            dismiss = t(R.string.common_cancel),
+        )
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ElchiButton(t(R.string.bookingDetail_messages), onChat, Modifier.weight(1f).height(48.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.CHAT, horizontalPadding = 10.dp)
         ElchiButton(t(R.string.bookingDetail_tracking), onTracking, Modifier.weight(1f).height(48.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.PIN, horizontalPadding = 10.dp)
@@ -223,10 +252,31 @@ private fun BookingHeader(booking: BookingClientDTO, ru: Boolean, languageTag: S
         badge = (tOrNull(OrderRules.bookingStatusKey(booking.serviceType, status)) ?: status) to OrderRules.bookingTone(booking.serviceType, status),
         lines = listOfNotNull(cancelled?.let { ItemLine(it, Elchi.colors.tone(Tone.ERR).fg) }),
         meta = windowMeta(booking.pickup.windowStart, booking.pickup.windowEnd, languageTag),
-        // Q103: with a discount the client hands over the cash due, not the fare.
-        right = soum(booking.promo?.cashDueMinor ?: booking.totalMinor),
+        // Q103: with a discount the client hands over the cash due, not the fare. Taksi: "2 × 150 000 so'm".
+        right = if (TaxiRules.isPassenger(booking.serviceType) && booking.promo == null) seatsPrice(booking.quantity, booking.unitPriceMinor) else soum(booking.promo?.cashDueMinor ?: booking.totalMinor),
     )
 }
+
+/** The cash block's inputs on the client's side ("Naqd berildi deb qayd qilish"). */
+@Composable
+private fun clientCashModel(vm: BookingViewModel, s: BookingViewModel.State, booking: BookingClientDTO) = CashBlockModel(
+    side = BookingSide.CLIENT.wire,
+    dueMinor = booking.promo?.cashDueMinor ?: booking.totalMinor,
+    promo = booking.promo != null,
+    cashStatus = booking.cashStatus,
+    receipt = booking.cashReceipt,
+    amountDigits = s.cashDigits,
+    note = s.cashNote,
+    contestComment = s.contestComment,
+    busy = s.cashBusy,
+    error = s.cashError,
+    onAmount = vm::setCashDigits,
+    onNote = vm::setCashNote,
+    onContestComment = vm::setContestComment,
+    onReport = vm::reportCash,
+    onAcknowledge = vm::acknowledgeCash,
+    onContest = vm::contestCash,
+)
 
 /** `29 sen, 09:00–18:00` (Tashkent); the full dates when the window spans days. */
 private fun windowMeta(start: String?, end: String?, languageTag: String): String? {
@@ -283,7 +333,9 @@ private fun DriverCard(booking: BookingClientDTO, reputation: ReputationDTO?, la
                 },
             )
         } else {
-            CardRow(t(R.string.driverBooking_phone), t(R.string.client_bookingDetail_phoneLater), detail = t(R.string.client_bookingDetail_phoneChatOnly), muted = true)
+            // Q44: a passenger's phones open when the service starts (boarding), a parcel's at the departure (Q142).
+            val later = if (TaxiRules.isPassenger(booking.serviceType)) R.string.driverBooking_phoneHidden else R.string.client_bookingDetail_phoneLater
+            CardRow(t(R.string.driverBooking_phone), t(later), detail = t(R.string.client_bookingDetail_phoneChatOnly), muted = true)
         }
     }
 }
@@ -320,6 +372,13 @@ private fun FareCard(booking: BookingClientDTO, receiver: ContactDetails?, ru: B
             first = true,
             detail = t(R.string.bookingDetail_fareNote),
         )
+        if (TaxiRules.isPassenger(booking.serviceType)) {
+            CardRow(
+                t(R.string.orderForm_review_passengers),
+                t(R.string.orderForm_review_peopleCount, "count" to booking.quantity),
+                detail = "${t(R.string.orderForm_review_perPersonDetail, "count" to booking.quantity, "price" to soum(booking.unitPriceMinor))} · ${t(R.string.orderForm_review_seatNegotiated)}",
+            )
+        }
         booking.parcelCategory?.let { CardRow(t(R.string.listingDetail_parcel), "${categoryName(it, ru)} · ${categoryLimits(it)}") }
         receiver?.let { r ->
             CardRow(t(R.string.driverBooking_receiver), listOf(r.name.trim(), displayPhone(r.phone)).filter { it.isNotBlank() }.joinToString(" · "))
@@ -519,7 +578,11 @@ fun AmendmentScreen(vm: BookingViewModel, onBack: () -> Unit) {
         val open = BookingRules.hasOpenAmendment(s.amendmentList, booking.serviceStatus, now)
         if (BookingRules.canAmend(booking.serviceStatus)) {
             SectionTitle(t(R.string.amendment_proposeTitle))
-            Note(t(R.string.amendment_parcelQuantityFixed), tone = Tone.GRAY)
+            // Q145: after the booking the count stays as agreed (D9) - only the price can move.
+            Note(
+                if (TaxiRules.isPassenger(booking.serviceType)) t(R.string.amendment_seatsFixed, "count" to booking.quantity) else t(R.string.amendment_parcelQuantityFixed),
+                tone = Tone.GRAY,
+            )
             if (open) {
                 Note(t(R.string.client_amendment_openExists), tone = Tone.WARN)
             } else {

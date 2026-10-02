@@ -316,7 +316,8 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 ru = ru,
                 onBack = { nav.popBackStack() },
                 onChange = { end -> nav.navigate(PickRegion(end.name)) },
-                onSave = { nav.navigate(OrderAddress) },
+                // Taksi has no contacts, parcel or photo steps: the route step leads straight to the review.
+                onSave = { nav.navigate(if (request.state.value.draft.taxi) OrderReview else OrderAddress) },
             )
         }
         composable<OrderAddress> {

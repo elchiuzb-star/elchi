@@ -44,7 +44,7 @@ struct BookingTrackingView<Host: BookingScreenHost>: View {
     @ViewBuilder
     private func ladder(_ dto: ClientBookingDTO) -> some View {
         SectionTitle(strings.t("bookingTracking.progressTitle"), description: strings.t("bookingTracking.progressHint"))
-        let steps = StatusLadder.steps(status: dto.serviceStatus, createdAt: ServerTime.parse(dto.createdAt))
+        let steps = StatusLadder.steps(status: dto.serviceStatus, createdAt: ServerTime.parse(dto.createdAt), service: dto.serviceType)
         if steps.isEmpty {
             // Off the ladder (cancelled, returned, …): the status itself, and when it was cancelled.
             let status = strings.status(.booking(dto.serviceType, dto.serviceStatus))

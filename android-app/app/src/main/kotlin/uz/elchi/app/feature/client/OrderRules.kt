@@ -7,6 +7,7 @@ import uz.elchi.app.api.generated.ActorSide
 import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.ListingKind
 import uz.elchi.app.api.generated.ListingStatus
+import uz.elchi.app.api.generated.PassengerDetails
 import uz.elchi.app.api.generated.PointEndDTO
 import uz.elchi.app.api.generated.PromoConsentInput
 import uz.elchi.app.api.generated.ProposalPromoClientDTO
@@ -56,7 +57,11 @@ data class NegotiationActions(
 enum class OfferSort { CHEAPEST, FASTEST, RATING }
 
 /** Why an edit cannot be sent as typed (`listingOwner.invalid.<name>`). */
-enum class EditInvalid(val key: String) { PRICE("price"), WINDOW_INCOMPLETE("window_incomplete"), WINDOW_ORDER("window_order"), WINDOW_PAST("window_past") }
+enum class EditInvalid(val key: String) {
+    PRICE("price"), WINDOW_INCOMPLETE("window_incomplete"), WINDOW_ORDER("window_order"), WINDOW_PAST("window_past"),
+    // Q145: a passenger request's seat count (1..8, more than the children).
+    SEATS("seats"), SEATS_CHILDREN("seats_children"),
+}
 
 /** What the edit form holds: so'm digits as typed and the window as Tashkent wall-clock times. */
 data class ListingEditForm(
@@ -64,6 +69,8 @@ data class ListingEditForm(
     val comment: String,
     val windowStart: LocalDateTime?,
     val windowEnd: LocalDateTime?,
+    /** Q145: the seat count of a passenger request, as typed; empty for other listings. */
+    val seats: String = "",
 )
 
 /**
@@ -79,8 +86,10 @@ data class ListingPatchPlan(
     val windowEndIso: String? = null,
     val material: Boolean = false,
     val invalid: EditInvalid? = null,
+    /** Q145: the whole passenger block with the new count (the server replaces the block); null = unchanged. */
+    val passenger: PassengerDetails? = null,
 ) {
-    val empty: Boolean get() = unitPriceMinor == null && comment == null && windowStartIso == null
+    val empty: Boolean get() = unitPriceMinor == null && comment == null && windowStartIso == null && passenger == null
 }
 
 /** Offers on one listing, for its row in the orders list: live ones and when the newest arrived. */
@@ -214,6 +223,7 @@ object OrderRules {
         comment = listing.comment.orEmpty(),
         windowStart = parseInstant(listing.departureWindowStart)?.let { LocalDateTime.ofInstant(it, ParcelRules.TASHKENT) },
         windowEnd = parseInstant(listing.departureWindowEnd)?.let { LocalDateTime.ofInstant(it, ParcelRules.TASHKENT) },
+        seats = listing.passenger?.takeIf { TaxiRules.seatsEditable(listing) }?.seatCount?.toString().orEmpty(),
     )
 
     /**
@@ -225,6 +235,7 @@ object OrderRules {
         comment = if (typed.comment != base.comment) typed.comment else fresh.comment,
         windowStart = if (typed.windowStart != base.windowStart) typed.windowStart else fresh.windowStart,
         windowEnd = if (typed.windowEnd != base.windowEnd) typed.windowEnd else fresh.windowEnd,
+        seats = if (typed.seats != base.seats) typed.seats else fresh.seats,
     )
 
     fun planListingPatch(listing: ListingDTO, form: ListingEditForm, now: Instant): ListingPatchPlan {
@@ -259,7 +270,18 @@ object OrderRules {
                 }
             }
         }
-        return ListingPatchPlan(price, comment, start, end, material, invalid)
+        var passenger: PassengerDetails? = null
+        if (TaxiRules.seatsEditable(listing)) {
+            val (block, seatsInvalid) = TaxiRules.seatsPatch(listing, form.seats)
+            if (seatsInvalid != null) {
+                invalid = invalid ?: seatsInvalid
+            } else if (block != null) {
+                // Q20: a new count expires the open offers - drivers offer again for the new number of people.
+                passenger = block
+                material = material || listing.status in LIVE
+            }
+        }
+        return ListingPatchPlan(price, comment, start, end, material, invalid, passenger)
     }
 
     // -- share links --------------------------------------------------------------------------------------------
@@ -302,8 +324,9 @@ object OrderRules {
     } else {
         when (status) {
             "awaiting_pickup" -> "app.progress.driverAtStop"
-            "onboard" -> "status.in_transit"
-            "arrived" -> "tripDetail.service.arrived"
+            // Taksi: "Mashinada" / "Yetib keldi" rather than the raw codes.
+            "onboard" -> "status.onboard"
+            "arrived" -> "status.arrived"
             else -> "status.$status"
         }
     }

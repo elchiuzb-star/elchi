@@ -63,7 +63,9 @@ struct DriverBookingRow: View {
     var body: some View {
         let base = booking.base
         ItemCard(title: strings.route(base), icon: .pin, badge: strings.status(.booking(base.serviceType, base.serviceStatus)),
-                 meta: ServerTime.parse(base.pickup.windowStart).map(strings.dayMonth), right: strings.money(base.totalMinor), action: onOpen)
+                 meta: ServerTime.parse(base.pickup.windowStart).map(strings.dayMonth),
+                 right: base.serviceType == .passenger && PassengerMoney.perSeat(base.priceBasis)
+                    ? strings.seatsTotal(base.quantity, unitMinor: base.unitPriceMinor) : strings.money(base.totalMinor), action: onOpen)
         .accessibilityIdentifier("elchi.driver.booking.\(booking.id)")
     }
 }
@@ -83,6 +85,8 @@ struct DriverBookingDetailView: View {
     let onRate: () -> Void
     let onSupport: () -> Void
     let onSafety: () -> Void
+    /// Taksi: `TRIP_NOT_STARTED` on board - the trip, to start boarding.
+    var onTrip: () -> Void = {}
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @Environment(\.openURL) private var openURL
@@ -122,9 +126,13 @@ struct DriverBookingDetailView: View {
         let base = booking.base
         let actions = DriverBookingActions.of(base.serviceStatus, arrivedSent: model.arrivedSent, updatedAt: ServerTime.parse(base.updatedAt))
         ForEach(model.warnings, id: \.code) { Note(strings.warningText($0), tone: .warn) }
+        let passenger = base.serviceType == .passenger
+        let taxi = DriverTaxiActions.of(base.serviceStatus, arrivedSent: model.arrivedSent, noShowReview: base.noShowReview?.status)
         ItemCard(title: strings.route(base), icon: .pin, badge: strings.status(.booking(base.serviceType, base.serviceStatus)),
                  lines: base.cancelled.map { [ItemLine(strings.cancelledLine($0), tone: .err)] } ?? [],
-                 meta: strings.bookingWhen(base), right: strings.money(base.totalMinor))
+                 meta: strings.bookingWhen(base),
+                 right: passenger && PassengerMoney.perSeat(base.priceBasis) ? strings.seatsTotal(base.quantity, unitMinor: base.unitPriceMinor)
+                    : strings.money(base.totalMinor))
             .accessibilityIdentifier("elchi.driver.booking.header")
         detailsCard(booking)
         if let promo = booking.promo { promoBlock(promo) }
@@ -139,6 +147,12 @@ struct DriverBookingDetailView: View {
             Note(strings.t("driver.booking.arrivedSent"), tone: .ok)
         }
         if let error = model.arriveError { Note(strings.errorText(error), tone: .err) }
+        if passenger {
+            DriverTaxiSection(model: model.taxi, booking: booking, actions: taxi, onTrip: onTrip)
+            if taxi.cash {
+                CashRecordSection(model: model.cash, booking: base, dueMinor: DriverBookingMoney.cashToCollect(booking))
+            }
+        }
         HStack(spacing: 8) {
             ElchiButton(strings.t("driverBooking.messages"), variant: .soft, size: .pair, icon: .chat, action: onChat)
                 .accessibilityIdentifier("elchi.driver.booking.chat")
@@ -150,7 +164,8 @@ struct DriverBookingDetailView: View {
         }
         if actions.canRate || base.serviceStatus == "completed" { rating(actions) }
         ElchiButton(strings.t("support.complain"), variant: .neutral, icon: .head, action: onSupport)
-        if actions.canCancel {
+        // Q19/Q75: while a no-show review is pending only an operator cancels - the button is not offered.
+        if actions.canCancel && !taxi.noShowPending {
             ElchiButton(strings.t("bookingCancel.button"), variant: .dangerSoft) {
                 model.clearNotice()
                 confirmCancel = true
@@ -177,10 +192,14 @@ struct DriverBookingDetailView: View {
             CardRow(strings.t(base.dropoff.stop != nil ? "driverBooking.dropoffStop" : "driverBooking.dropoffPoint"),
                     strings.endName(stop: base.dropoff.stop, point: base.dropoff.point))
             CardRow(strings.t("safety.clientTitle"), clientName(booking))
-            if let parcel = strings.parcelLine(base.parcelCategory, type: nil) {
-                CardRow(strings.t("listingDetail.parcel"), parcel)
+            if base.serviceType == .passenger {
+                passengerRows(booking)
+            } else {
+                if let parcel = strings.parcelLine(base.parcelCategory, type: nil) {
+                    CardRow(strings.t("listingDetail.parcel"), parcel)
+                }
+                receiverRow(booking)
             }
-            receiverRow(booking)
             CardRow(strings.t("driverBooking.fare"),
                     strings.t("driverBooking.fareCash", ("amount", strings.money(DriverBookingMoney.cashToCollect(booking)))),
                     detail: strings.t("bookingDetail.fareNote"))
@@ -195,6 +214,22 @@ struct DriverBookingDetailView: View {
     private func clientName(_ booking: DriverBookingDTO) -> String {
         let name = booking.client?.displayName.trimmingCharacters(in: .whitespaces) ?? ""
         return name.isEmpty ? strings.t("driver.booking.clientFallback") : name
+    }
+
+    /// Taksi: the people and the per-seat price, and the client's phone with "Qo'ng'iroq" once the passenger is aboard
+    /// (Q44: phones open at the start of the service); before, the grey "Xizmat boshlanganda ochiladi".
+    @ViewBuilder
+    private func passengerRows(_ booking: DriverBookingDTO) -> some View {
+        let base = booking.base
+        CardRow(strings.t("orderForm.review.passengers"), strings.peopleLine(base.quantity, unitMinor: base.unitPriceMinor),
+                detail: strings.t("orderForm.review.seatNegotiated"))
+        if base.contact?.phonesVisible == true, let phone = booking.client?.contactPhone, !phone.isEmpty {
+            CardRow(strings.t("driverBooking.phone"), UzPhone.display(phone), trailing: strings.t("client.bookingDetail.call")) {
+                if let url = DriverReveal.dialURL(phone) { openURL(url) }
+            }
+        } else if !BookingActions.of(booking.status).terminal {
+            CardRow(strings.t("driverBooking.phone"), strings.t("driverBooking.phoneHidden"), placeholder: true)
+        }
     }
 
     /// The receiver's name and phone with "Qo'ng'iroq" once the trip departed (Q44/Q142); before, the grey note.

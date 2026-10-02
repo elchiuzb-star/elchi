@@ -165,18 +165,21 @@ public struct OwnerListingActions: Equatable, Sendable {
     }
 }
 
-/// What the edit form holds: whole so'm as typed, the comment, the window (Tashkent wall clock, as `Date`).
+/// What the edit form holds: whole so'm as typed, the comment, the window (Tashkent wall clock, as `Date`) and - on a
+/// passenger request - the number of people (Q145; empty for anything else).
 public struct ListingEditForm: Equatable, Sendable {
     public var priceDigits: String
     public var comment: String
     public var windowStart: Date?
     public var windowEnd: Date?
+    public var seats: String
 
-    public init(priceDigits: String, comment: String, windowStart: Date?, windowEnd: Date?) {
+    public init(priceDigits: String, comment: String, windowStart: Date?, windowEnd: Date?, seats: String = "") {
         self.priceDigits = priceDigits
         self.comment = comment
         self.windowStart = windowStart
         self.windowEnd = windowEnd
+        self.seats = seats
     }
 
     /// The form as the listing is now: nothing changed yet.
@@ -185,6 +188,7 @@ public struct ListingEditForm: Equatable, Sendable {
         comment = listing.comment ?? ""
         windowStart = ServerTime.parse(listing.departureWindowStart)
         windowEnd = ServerTime.parse(listing.departureWindowEnd)
+        seats = SeatEdit.editable(listing) ? listing.passenger.map { String($0.seatCount) } ?? "" : ""
     }
 }
 
@@ -197,12 +201,15 @@ public struct ListingPatchPlan: Equatable, Sendable {
     public var comment: String?
     public var windowStart: Date?
     public var windowEnd: Date?
+    /// Q145: the whole passenger block with the new number of people (the server replaces the block).
+    public var passenger: PassengerDetails?
     /// This edit closes the open offers of a published or paused listing.
     public var material = false
-    /// Why it cannot be sent as it is: `listingOwner.invalid.<reason>` (price, window_incomplete, window_order, window_past).
+    /// Why it cannot be sent as it is: `listingOwner.invalid.<reason>` (price, window_incomplete, window_order,
+    /// window_past, seats).
     public var invalid: String?
 
-    public var empty: Bool { unitPriceMinor == nil && comment == nil && windowStart == nil }
+    public var empty: Bool { unitPriceMinor == nil && comment == nil && windowStart == nil && passenger == nil }
 
     /// Live listings: where open offers exist that an edit could close (`marketplace.service.LIVE_STATUSES`).
     static let live: [ListingStatus] = [.published, .paused]
@@ -236,6 +243,20 @@ public struct ListingPatchPlan: Equatable, Sendable {
                 plan.invalid = plan.invalid ?? "window_incomplete"
             }
         }
+
+        // Q145 (port of `listingEdit.ts`): a passenger request's people, 1 to 8, until a booking exists. Q20: a new count
+        // closes the open offers - no offer is silently stretched to more people.
+        if SeatEdit.editable(listing), let current = listing.passenger {
+            let seats = Int(form.seats.trimmingCharacters(in: .whitespaces))
+            if let seats, SeatEdit.range.contains(seats), seats > (current.children ?? 0) {
+                if seats != current.seatCount {
+                    plan.passenger = SeatEdit.block(current, seats: seats)
+                    plan.material = plan.material || live.contains(listing.status)
+                }
+            } else {
+                plan.invalid = plan.invalid ?? "seats"
+            }
+        }
         return plan
     }
 
@@ -243,7 +264,7 @@ public struct ListingPatchPlan: Equatable, Sendable {
     public func body(expectedVersion: Int) -> ListingPatch {
         ListingPatch(comment: comment, departureWindowEnd: windowEnd.map(DepartureWindow.iso),
                      departureWindowStart: windowStart.map(DepartureWindow.iso), expectedVersion: expectedVersion,
-                     unitPriceMinor: unitPriceMinor)
+                     passenger: passenger, unitPriceMinor: unitPriceMinor)
     }
 }
 
@@ -291,9 +312,14 @@ public struct StatusLabel: Equatable, Sendable {
             return StatusLabel(key: "status.awaiting_pickup", raw: status, tone: .warn)
         case (_, "cancelled"), (_, "no_show"):
             return StatusLabel(key: "status.\(status)", raw: status, tone: .err)
-        case (_, "onboard"), (_, "arrived"), (_, "return_required"), (_, "returned"), (_, "delivery_failed"):
-            let tone: Tone = status == "arrived" ? .ok : status == "onboard" ? .blue : status == "returned" ? .gray
-                : status == "delivery_failed" ? .err : .warn
+        case (_, "onboard"):
+            // Passenger aboard: "Mashinada" (never the raw `onboard`).
+            return StatusLabel(key: "status.onboard", raw: status, tone: .blue)
+        case (_, "arrived"):
+            // Dropped off at the destination: "Yetib keldi" - the passenger completes it (or an operator does).
+            return StatusLabel(key: "status.arrived", raw: status, tone: .ok)
+        case (_, "return_required"), (_, "returned"), (_, "delivery_failed"):
+            let tone: Tone = status == "returned" ? .gray : status == "delivery_failed" ? .err : .warn
             return StatusLabel(key: "tripDetail.service.\(status)", raw: status, tone: tone)
         default:
             return StatusLabel(key: "status.\(status)", raw: status, tone: .gray)

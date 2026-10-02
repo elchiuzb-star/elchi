@@ -234,6 +234,9 @@ object OfferRules {
         )
     }
 
+    /** `CAPACITY_UNAVAILABLE`: the trip has fewer free seats (or less room) than the request needs. */
+    fun capacityShort(error: Throwable?): Boolean = (error as? ApiException)?.code == "CAPACITY_UNAVAILABLE"
+
     /** `409 PROPOSAL_CHANGED`: the terms moved under the driver - read the thread again and ask to confirm again. */
     fun termsChanged(error: Throwable): Boolean = (error as? ApiException)?.code == "PROPOSAL_CHANGED"
 

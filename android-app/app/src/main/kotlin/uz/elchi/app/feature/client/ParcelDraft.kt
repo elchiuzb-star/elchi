@@ -80,6 +80,10 @@ data class ParcelDraft(
     val photoFileUrl: String? = null,
     /** The compressed JPEG in the app cache, only for the preview on screen. */
     val photoLocalPath: String? = null,
+    /** Taksi (passenger request) instead of Pochta: the same places, window and price, then seats - no parcel steps. */
+    val taxi: Boolean = false,
+    /** The seats the person pictured ([Seat] ids, in picking order); only their COUNT is sent (`TaxiRules`). */
+    val seats: List<String> = TaxiRules.DEFAULT_SEATS,
 ) {
     fun end(end: End): Place? = if (end == End.ORIGIN) origin else destination
 

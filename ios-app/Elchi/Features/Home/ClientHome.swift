@@ -148,6 +148,14 @@ struct ClientFlow: View {
                 section = .orders
                 path = [.legacyOrder(id)]
             }
+            // Screenshots / UI tests: `-uiTestOpenBooking bkg_…` or `-uiTestOpenListing lst_…` opens it over the orders list.
+            if let id = UserDefaults.standard.string(forKey: "uiTestOpenBooking"), path.isEmpty {
+                section = .orders
+                openBooking(id)
+            } else if let id = UserDefaults.standard.string(forKey: "uiTestOpenListing"), path.isEmpty {
+                section = .orders
+                openListing(id)
+            }
         }
         #endif
         // A link (cold or warm start, or one that waited for sign-in): the same screens as a notification; a referral
@@ -209,7 +217,8 @@ struct ClientFlow: View {
                 path = pickReturn
             }
         case .routeSummary:
-            RouteSummaryView(model: model, onBack: back, onChange: startPick) { path.append(.contacts) }
+            // Taksi has no contacts, parcel or photo step: straight to the review.
+            RouteSummaryView(model: model, onBack: back, onChange: startPick) { path.append(model.mode == .passenger ? .review : .contacts) }
         case .contacts:
             ContactsView(model: model, onBack: back) { path.append(.parcel) }
         case .parcel:
@@ -414,7 +423,7 @@ struct ClientFlow: View {
 
 // MARK: - Home
 
-/// Full-screen map with the request sheet: Pochta heading (Taksi/Pochta only where passenger is on), the route
+/// Full-screen map with the request sheet: Pochta heading (Taksi/Pochta only where passenger is on, K7/Q89), the route
 /// card, what the server said about the direction, and "Yo'nalishni ko'rish".
 private struct ClientHomeView: View {
     let model: ParcelRequestModel
@@ -505,19 +514,20 @@ private struct ClientHomeView: View {
                 }
                 .accessibilityIdentifier("elchi.home.referralCode")
             }
-            if model.flags?.passengerEnabled == true {
+            // K7/Q89: the Taksi / Pochta choice exists only where passenger is enabled (else the plain heading).
+            if model.taxiVisible {
                 Segmented([(ServiceType.passenger, strings.t("home.modeTaxi")), (.parcel, strings.t("home.modeParcel"))],
                           selected: model.mode) { model.mode = $0 }
+                    .accessibilityIdentifier("elchi.home.mode")
             } else {
                 Text(strings.t("home.modeParcel")).font(ElchiFont.poppins(22, .medium, relativeTo: .title)).foregroundStyle(c.text)
                     .accessibilityAddTraits(.isHeader)
             }
-            if model.mode == .passenger { Note(strings.t("client.home.taxiSoon")) }
             RouteCard(from: end(.pickup), to: end(.dropoff))
             directionState
             ElchiButton(strings.t("home.viewRoute"), action: onViewRoute).disabled(!model.canViewRoute)
-            if model.parcelOpen == false && model.mode == .parcel {
-                Text(strings.t("home.parcelClosed")).font(ElchiFont.poppins(13)).foregroundStyle(c.tone(.err).fg)
+            if let closed = model.closedKey {
+                Text(strings.t(closed)).font(ElchiFont.poppins(13)).foregroundStyle(c.tone(.err).fg)
                     .frame(maxWidth: .infinity).multilineTextAlignment(.center)
             }
         }

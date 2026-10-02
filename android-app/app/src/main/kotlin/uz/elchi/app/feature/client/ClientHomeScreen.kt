@@ -246,32 +246,34 @@ private fun HomeSheet(
             onFrom = { onPick(End.ORIGIN) },
             onTo = { onPick(End.DESTINATION) },
         )
-        if (s.mode == ServiceMode.TAXI) {
-            Note(t(R.string.client_home_taxiSoon))
-        } else {
-            when (val d = s.direction) {
-                Direction.Incomplete -> Unit
-                Direction.Checking -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CircularProgressIndicator(Modifier.size(16.dp), color = c.brand, strokeWidth = 2.dp)
-                    Text(t(R.string.home_checkingRoute), style = Elchi.type.label, color = c.muted)
+        when (val d = s.direction) {
+            Direction.Incomplete -> Unit
+            Direction.Checking -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CircularProgressIndicator(Modifier.size(16.dp), color = c.brand, strokeWidth = 2.dp)
+                Text(t(R.string.home_checkingRoute), style = Elchi.type.label, color = c.muted)
+            }
+            is Direction.Ready -> {
+                val p = d.preview
+                ElchiCard(background = c.highlight) {
+                    CardRow(t(R.string.home_estimatedTime, "corridor" to p.corridorName), roadText(p.legDistanceM, p.legDurationS), first = true, strong = true)
                 }
-                is Direction.Ready -> {
-                    val p = d.preview
-                    ElchiCard(background = c.highlight) {
-                        CardRow(t(R.string.home_estimatedTime, "corridor" to p.corridorName), roadText(p.legDistanceM, p.legDurationS), first = true, strong = true)
-                    }
-                    ParcelRules.offRouteMeters(p)?.let { Note(t(R.string.app_location_offRoute, "km" to ParcelRules.km(it)), tone = Tone.WARN) }
-                }
-                Direction.Mismatch -> Note(t(R.string.home_movePointHint), tone = Tone.ERR, title = t(R.string.app_location_previewMismatch))
-                is Direction.Failed -> {
-                    Note(errorText(d.error), tone = Tone.ERR)
-                    ElchiButton(t(R.string.common_retry), retry, Modifier.fillMaxWidth(), ButtonVariant.GHOST, ButtonSize.MEDIUM, icon = ElchiIcon.REFRESH)
-                }
+                ParcelRules.offRouteMeters(p)?.let { Note(t(R.string.app_location_offRoute, "km" to ParcelRules.km(it)), tone = Tone.WARN) }
+            }
+            Direction.Mismatch -> Note(t(R.string.home_movePointHint), tone = Tone.ERR, title = t(R.string.app_location_previewMismatch))
+            is Direction.Failed -> {
+                Note(errorText(d.error), tone = Tone.ERR)
+                ElchiButton(t(R.string.common_retry), retry, Modifier.fillMaxWidth(), ButtonVariant.GHOST, ButtonSize.MEDIUM, icon = ElchiIcon.REFRESH)
             }
         }
         ElchiButton(t(R.string.home_viewRoute), onViewRoute, Modifier.fillMaxWidth(), enabled = s.canContinueFromHome)
-        if (s.mode == ServiceMode.PARCEL && s.parcelEnabled == false) {
-            Text(t(R.string.home_parcelClosed), Modifier.fillMaxWidth(), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = Elchi.colors.danger, textAlign = TextAlign.Center)
+        // The chosen service closed on this corridor (or its flags could not be read): the button is off, and why.
+        val closed = when (s.homeBlock) {
+            HomeBlock.PARCEL_CLOSED -> t(R.string.home_parcelClosed)
+            HomeBlock.PASSENGER_CLOSED -> t(R.string.home_passengerClosed)
+            else -> null
+        }
+        if (closed != null) {
+            Text(closed, Modifier.fillMaxWidth(), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = Elchi.colors.danger, textAlign = TextAlign.Center)
         }
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }

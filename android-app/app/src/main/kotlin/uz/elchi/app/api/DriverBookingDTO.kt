@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import uz.elchi.app.api.generated.BookingPromoDriverDTO
+import uz.elchi.app.api.generated.CashReceiptDTO
 import uz.elchi.app.api.generated.MediaRefDTO
 import uz.elchi.app.api.generated.ParcelCategoryDTO
 import uz.elchi.app.api.generated.ServiceType
@@ -67,6 +68,14 @@ data class DriverBookingDTO(
     val promo: BookingPromoDriverDTO? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String? = null,
+    // Taksi (passenger): statuses stay strings (onboard, arrived, no_show … are not a generated enum).
+    @SerialName("price_basis") val priceBasis: String? = null,
+    @SerialName("cash_status") val cashStatus: String? = null,
+    /** The newest cash record (passenger only): the driver records the cash or answers the client's record. */
+    @SerialName("cash_receipt") val cashReceipt: CashReceiptDTO? = null,
+    /** Q7: the driver's "Mijoz kelmadi" while the operator reviews it (`pending`), and the decision after. */
+    @SerialName("no_show_review") val noShowReview: BookingNoShowReviewDTO? = null,
+    @SerialName("quantity_amendable") val quantityAmendable: Boolean = false,
 ) {
     companion object {
         const val DRIVER = "driver"

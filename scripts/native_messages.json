@@ -1126,5 +1126,106 @@
   "client.map.locating": {
     "uz": "Joylashuv aniqlanmoqda…",
     "ru": "Определяем местоположение…"
+  },
+  "status.onboard": {
+    "uz": "Mashinada",
+    "ru": "В машине"
+  },
+  "status.arrived": {
+    "uz": "Yetib keldi",
+    "ru": "Прибыл"
+  },
+  "error.NO_SHOW_NOT_ALLOWED": {
+    "uz": "Hozir «Mijoz kelmadi» deb belgilab bo'lmaydi.",
+    "ru": "Сейчас нельзя отметить «Клиент не пришёл»."
+  },
+  "client.taxi.complete": {
+    "uz": "Manzilga yetib keldim",
+    "ru": "Я доехал до места",
+    "_why": "Passenger: the client confirms arrival (action complete); the web never offers it, so bookings otherwise wait 24 h for an operator."
+  },
+  "client.taxi.completeHint": {
+    "uz": "Tasdiqlaganingizdan keyin safar yakunlanadi va haydovchini baholashingiz mumkin.",
+    "ru": "После подтверждения поездка завершится, и вы сможете оценить водителя."
+  },
+  "client.taxi.completeConfirmTitle": {
+    "uz": "Manzilga yetib keldingizmi?",
+    "ru": "Вы доехали до места?"
+  },
+  "client.taxi.completed": {
+    "uz": "Safar yakunlandi",
+    "ru": "Поездка завершена"
+  },
+  "client.taxi.seatsTotal": {
+    "uz": "{count} × {price}",
+    "ru": "{count} × {price}"
+  },
+  "driver.noShow.button": {
+    "uz": "Mijoz kelmadi",
+    "ru": "Клиент не пришёл"
+  },
+  "driver.noShow.hint": {
+    "uz": "Olib ketish vaqtidan 10 daqiqa o'tgach faollashadi. Xabarni operator ko'rib chiqadi.",
+    "ru": "Становится доступно через 10 минут после времени посадки. Сообщение проверит оператор."
+  },
+  "driver.noShow.contactTitle": {
+    "uz": "Mijoz bilan qanday bog'lanishga urindingiz?",
+    "ru": "Как вы пытались связаться с клиентом?"
+  },
+  "driver.noShow.channel.chat": {
+    "uz": "Ilova chati orqali",
+    "ru": "Через чат приложения"
+  },
+  "driver.noShow.channel.call": {
+    "uz": "Telefon orqali",
+    "ru": "По телефону"
+  },
+  "driver.noShow.confirm": {
+    "uz": "Xabar yuborish",
+    "ru": "Отправить"
+  },
+  "driver.noShow.sent": {
+    "uz": "Xabar yuborildi — operator ko'rib chiqadi.",
+    "ru": "Сообщение отправлено — оператор проверит."
+  },
+  "driver.noShow.pending": {
+    "uz": "«Mijoz kelmadi» xabari operator ko'rib chiqishini kutmoqda.",
+    "ru": "Сообщение «Клиент не пришёл» ждёт проверки оператора."
+  },
+  "driver.noShow.reason.not_awaiting_pickup": {
+    "uz": "Bron olib ketish bosqichida emas.",
+    "ru": "Бронь не на этапе посадки."
+  },
+  "driver.noShow.reason.arrival_not_recorded": {
+    "uz": "Avval «Keldim» tugmasini bosing.",
+    "ru": "Сначала нажмите «Я на месте»."
+  },
+  "driver.noShow.reason.driver_arrived_late": {
+    "uz": "Siz olib ketish vaqti tugagandan keyin yetib kelgansiz — operatorga yozing.",
+    "ru": "Вы приехали после окончания времени посадки — напишите оператору."
+  },
+  "driver.noShow.reason.wait_time_not_elapsed": {
+    "uz": "Kutish vaqti hali tugamadi: {time} dan keyin urinib ko'ring.",
+    "ru": "Время ожидания ещё не прошло: попробуйте после {time}."
+  },
+  "driver.noShow.reason.no_contact_attempt": {
+    "uz": "Avval mijoz bilan bog'lanishga urinib ko'ring.",
+    "ru": "Сначала попробуйте связаться с клиентом."
+  },
+  "driver.board.attemptsLeft": {
+    "uz": "Kod noto'g'ri. Yana {count} ta urinish qoldi.",
+    "ru": "Неверный код. Осталось попыток: {count}."
+  },
+  "app.cash.noteRequired": {
+    "uz": "Summa kelishilgandan farq qiladi — sababini yozing.",
+    "ru": "Сумма отличается от договорённой — укажите причину."
+  },
+  "driverBid.capacityUnavailable": {
+    "uz": "Bu safarda {count} kishiga bo'sh o'rin yo'q — boshqa safarni tanlang.",
+    "ru": "В этой поездке нет мест для {count} человек — выберите другую поездку."
+  },
+  "app.cash.commentRequired": {
+    "uz": "Nimaga rozi emasligingizni yozing — buni operator o'qiydi.",
+    "ru": "Напишите, с чем вы не согласны — это прочитает оператор."
   }
 }
