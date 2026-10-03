@@ -8,7 +8,8 @@ enum ClientRoute: Hashable {
     case point(EndSide, RegionDTO, DistrictDTO?)
     // BOSQICH 02 design: Pochta = route (1/3) -> contacts (2/3) -> review (3/3); Taksi = home -> review.
     case routeSummary, contacts, review, success
-    // Stage 03: a listing of the client's, its offers, all negotiations.
+    // Stage 03: a listing of the client's (its offers inline, BOSQICH 03), all negotiations. `listingBids` is the
+    // same detail opened at "Haydovchi takliflari" (a notification about an offer).
     case listing(String)
     case listingEdit(String)
     case listingBids(String)
@@ -122,31 +123,7 @@ struct ClientFlow: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Group {
-                switch section {
-                case .home:
-                    ClientHomeView(model: model, inbox: inbox, banners: container.banners,
-                                   referralCode: promoHidden ? nil : container.links.referralCode, editing: editing,
-                                   onMenu: openDrawer, onSupport: { path.append(.support) },
-                                   onPick: startPick, onGo: homeGo, onReferral: { path.append(.bonus) }, onPromoClose: { promoHidden = true },
-                                   toast: toast)
-                        // The map has no top bar to draw the banner under: it floats below the menu row (a link that
-                        // cannot be opened says so here).
-                        .overlay { BannerHost(center: container.banners, floating: true) }
-                case .orders:
-                    OrdersView(model: orders, onMenu: openDrawer, onNewOrder: { section = .home },
-                               onOpenListing: openListing, onOpenBooking: openBooking, onOpenLegacy: { path.append(.legacyOrder($0)) },
-                               onProposals: { path.append(.proposals) })
-                case .notifications:
-                    NotificationsView(model: inbox, leading: .menu, onLeading: openDrawer, onOpen: openTarget)
-                case .profile:
-                    ProfileView(model: profile, session: session, onMenu: openDrawer, onAction: profileAction)
-                case .support:
-                    SupportView(model: support, leading: .menu, onLeading: openDrawer) { path.append(.supportThreads) }
-                case .settings:
-                    settingsView(leading: .menu, onLeading: openDrawer)
-                }
-            }
+            sectionRoot
             .navigationDestination(for: ClientRoute.self, destination: screen)
         }
         #if DEBUG
@@ -169,19 +146,7 @@ struct ClientFlow: View {
         // A link (cold or warm start, or one that waited for sign-in): the same screens as a notification; a referral
         // link opens "Bonuslar va taklif kodi" with the code filled in.
         .onChange(of: container.links.serial, initial: true) { _, _ in takeLinks() }
-        .overlay {
-            if drawerOpen {
-                ClientDrawer(session: session, section: section, unread: inbox.unread, unreadMore: inbox.unreadMore, onSelect: { choice in
-                    section = choice
-                    path = []
-                    closeDrawer()
-                }, onClose: closeDrawer, onLogout: {
-                    closeDrawer()
-                    confirmLogout = true
-                })
-                .transition(.opacity)
-            }
-        }
+        .overlay { drawer }
         .overlay {
             if confirmLogout {
                 LogoutDialog(onLogout: logout, onStay: { confirmLogout = false })
@@ -189,10 +154,60 @@ struct ClientFlow: View {
         }
     }
 
-    /// A listing opened from the list starts clean: no earlier notice, no earlier share link.
-    private func openListing(_ id: String) {
+    /// The section the drawer chose, at the root of the stack.
+    @ViewBuilder
+    private var sectionRoot: some View {
+        switch section {
+        case .home:
+            ClientHomeView(model: model, inbox: inbox, banners: container.banners,
+                           referralCode: promoHidden ? nil : container.links.referralCode, editing: editing,
+                           onMenu: openDrawer, onSupport: { path.append(.support) },
+                           onPick: startPick, onGo: homeGo, onReferral: { path.append(.bonus) }, onPromoClose: { promoHidden = true },
+                           toast: toast)
+                // The map has no top bar to draw the banner under: it floats below the menu row (a link that
+                // cannot be opened says so here).
+                .overlay { BannerHost(center: container.banners, floating: true) }
+        case .orders:
+            OrdersView(model: orders, inbox: inbox, onMenu: openDrawer, onNotifications: { path.append(.notifications) },
+                       onNewOrder: { section = .home },
+                       onOpenListing: { openListing($0) }, onOpenBooking: openBooking, onOpenLegacy: { path.append(.legacyOrder($0)) })
+        case .notifications:
+            NotificationsView(model: inbox, leading: .menu, onLeading: openDrawer, readAll: true, onOpen: openTarget)
+        case .profile:
+            ProfileView(model: profile, session: session, onMenu: openDrawer, onAction: profileAction)
+        case .support:
+            SupportView(model: support, leading: .menu, onLeading: openDrawer) { path.append(.supportThreads) }
+        case .settings:
+            settingsView(leading: .menu, onLeading: openDrawer)
+        }
+    }
+
+    /// Side menu over everything (the unread count read again each time it opens).
+    @ViewBuilder
+    private var drawer: some View {
+        if drawerOpen {
+            ClientDrawer(session: session, section: section, unread: inbox.unread, unreadMore: inbox.unreadMore, onSelect: { choice in
+                section = choice
+                path = []
+                closeDrawer()
+            }, onProposals: {
+                // "Takliflarim" (BOSQICH 03): over the orders list, so back lands there.
+                section = .orders
+                path = [.proposals]
+                closeDrawer()
+            }, onClose: closeDrawer, onLogout: {
+                closeDrawer()
+                confirmLogout = true
+            })
+            .transition(.opacity)
+        }
+    }
+
+    /// A listing opened from the list starts clean: no earlier notice, no earlier share link. `offers`: scrolled to
+    /// its drivers' offers.
+    private func openListing(_ id: String, offers: Bool = false) {
         orders.listing(id).reset()
-        path.append(.listing(id))
+        path.append(offers ? .listingBids(id) : .listing(id))
     }
 
     /// The same for a booking: no earlier notice, no earlier tracking link.
@@ -244,12 +259,12 @@ struct ClientFlow: View {
                 path = []
             })
         case .listing(let id):
-            ListingDetailView(model: orders.listing(id), onBack: back, onEdit: { path.append(.listingEdit(id)) },
-                              onBids: { path.append(.listingBids(id)) })
+            ListingDetailView(model: orders.listing(id), onBack: back, onEdit: { path.append(.listingEdit(id)) }, onAccepted: accepted)
         case .listingEdit(let id):
             ListingEditView(model: orders.listing(id), onBack: back, onSaved: back)
         case .listingBids(let id):
-            ListingBidsView(model: orders.listing(id), onBack: back, onAccepted: accepted)
+            ListingDetailView(model: orders.listing(id), focusOffers: true, onBack: back, onEdit: { path.append(.listingEdit(id)) },
+                              onAccepted: accepted)
         case .proposals:
             ProposalsView(model: orders.proposals, onBack: back, onAccepted: accepted)
         case .booking(let id):
@@ -272,7 +287,7 @@ struct ClientFlow: View {
         case .bookingSafety(let id):
             SafetyView(booking: orders.booking(id), onBack: back)
         case .notifications:
-            NotificationsView(model: inbox, leading: .back, onLeading: back, onOpen: openTarget)
+            NotificationsView(model: inbox, leading: .back, onLeading: back, readAll: true, onOpen: openTarget)
         case .bonus:
             BonusView(model: bonus, onBack: back)
         case .safetyCenter:
@@ -327,7 +342,7 @@ struct ClientFlow: View {
             // The listing the negotiation belongs to, when the server says which; otherwise the orders list.
             Task {
                 if let listing = await inbox.listingId(ofProposal: id) {
-                    openListing(listing)
+                    openListing(listing, offers: true)
                 } else {
                     section = .orders
                     path = []
@@ -810,6 +825,7 @@ private struct ClientDrawer: View {
     let unread: Int
     let unreadMore: Bool
     let onSelect: (ClientSection) -> Void
+    let onProposals: () -> Void
     let onClose: () -> Void
     let onLogout: () -> Void
     @Environment(LocaleStore.self) private var strings
@@ -837,6 +853,10 @@ private struct ClientDrawer: View {
                         item(.orders, .pkg, "nav.orders", "nav.ordersHint")
                         item(.notifications, .bell, "app.nav.messages", "notifications.title",
                              trailing: unread > 0 ? (unreadMore ? "\(unread)+" : "\(unread)") : nil)
+                        // BOSQICH 03: "Takliflarim / Narx kelishuvlari" (a screen over the orders, not a section).
+                        ListRow(icon: .tag, title: strings.t("proposals.title"), description: strings.t("client.offers.drawerHint"),
+                                action: onProposals)
+                            .accessibilityIdentifier("elchi.drawer.proposals")
                         item(.profile, .user, "nav.profile", "nav.profileHint")
                         item(.support, .head, "support.title", "clientProfile.helpHint")
                         item(.settings, .settings, "settingsScreen.title", "driver.profile.settingsHint")

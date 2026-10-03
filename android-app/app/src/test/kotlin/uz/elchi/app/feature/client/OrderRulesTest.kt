@@ -35,8 +35,10 @@ class OrderRulesTest {
         ratings: Int = 12,
         promo: String = "null",
         withVersion: Boolean = true,
+        reason: String? = null,
+        bookingId: String? = null,
     ): ProposalThreadDTO {
-        val version = """{"id":"prv_$id","listing_terms_version":2,"revision":2,"author_side":"$author","status":"$status","status_reason":null,
+        val version = """{"id":"prv_$id","listing_terms_version":2,"revision":2,"author_side":"$author","status":"$status","status_reason":${reason?.let { "\"$it\"" } ?: "null"},
             "pickup_point":{"lat":41.3,"lng":69.2,"district":{"id":"dst_a","name_uz":"Chilonzor"},"address":"Toshkent, Chilonzor"},
             "dropoff_stop":{"id":"stp_b","name_uz":"Buxoro avtovokzali","name_ru":"Бухарский автовокзал"},
             "pickup_window_start":"$pickupStart","pickup_window_end":"2026-09-30T07:00:00Z","quantity":1,"price_basis":"total",
@@ -45,7 +47,8 @@ class OrderRulesTest {
             "price_revisions_left":{"client":$clientLeft,"driver":3}}"""
         val summary = """{"vehicle_class":"car","seat_capacity":4,"rating_bucket":${bucket?.let { "\"$it\"" } ?: "null"},"rating_count":$ratings,"completed_bookings":3}"""
         val json = """{"id":"$id","listing_id":"lst_1","listing_terms_version":2,"state":"$state","client":{"side":"client","label":"Mijoz"},
-            "driver":{"side":"driver","label":"Haydovchi #3"},"current_version":${if (withVersion) version else "null"},"driver_summary":$summary}"""
+            "driver":{"side":"driver","label":"Haydovchi #3"},"current_version":${if (withVersion) version else "null"},"driver_summary":$summary,
+            "booking_id":${bookingId?.let { "\"$it\"" } ?: "null"}}"""
         return ElchiJson.decodeFromString(ProposalThreadDTO.serializer(), json)
     }
 
@@ -328,5 +331,86 @@ class OrderRulesTest {
         assertEquals("Registon", OrderRules.shortEnd(booking.dropoff.stop, booking.dropoff.point, ru = false))
         val driver = ElchiJson.parseToJsonElement(json.toString().replace("\"viewer_side\":\"client\"", "\"viewer_side\":\"driver\""))
         assertNull(BookingClientDTO.fromJson(driver))
+    }
+
+    // -- DESIGN03 ("Elchi Takliflar") ------------------------------------------------------------------------------
+
+    @Test
+    fun `the listing row's meta follows the design's three variants`() {
+        val stats = OfferStats(open = 2, latest = Instant.parse("2026-09-29T09:48:00Z"))
+        assertEquals(ListingMeta.NewOffer(stats.latest!!, highlight = true), OrderRules.listingMeta(listing(), stats))
+        assertEquals(ListingMeta.NewOffer(stats.latest!!, highlight = false), OrderRules.listingMeta(listing(), stats.copy(open = 0)))
+        // Paused, or published without any offer: until when it runs.
+        assertEquals(ListingMeta.ValidUntil("30.09"), OrderRules.listingMeta(listing(status = "paused"), stats))
+        assertEquals(ListingMeta.ValidUntil("30.09"), OrderRules.listingMeta(listing(), OfferStats(0, null)))
+        assertEquals(ListingMeta.DriverChosen, OrderRules.listingMeta(listing(status = "fulfilled"), null))
+        // An expired or cancelled listing says nothing ("12.09 gacha" on an expired one reads wrong).
+        assertNull(OrderRules.listingMeta(listing(status = "expired"), stats))
+        assertNull(OrderRules.listingMeta(listing(status = "cancelled"), stats))
+    }
+
+    @Test
+    fun `a fulfilled request is Bron qilindi for its owner`() {
+        assertEquals("client.listing.statusFulfilled", OrderRules.clientListingStatusKey(ListingStatus.FULFILLED))
+        assertEquals("status.published", OrderRules.clientListingStatusKey(ListingStatus.PUBLISHED))
+        assertEquals("client.listing.noticePaused" to Tone.GRAY, OrderRules.listingNotice(ListingStatus.PAUSED))
+        assertEquals("client.listing.noticeCancelled" to Tone.ERR, OrderRules.listingNotice(ListingStatus.CANCELLED))
+        assertEquals("client.listing.noticeFulfilled" to Tone.OK, OrderRules.listingNotice(ListingStatus.FULFILLED))
+        assertNull(OrderRules.listingNotice(ListingStatus.PUBLISHED))
+    }
+
+    @Test
+    fun `the tracker counts offers, the choice and the booking, and stops on a dead listing`() {
+        assertEquals(ListingProgress(0, false), OrderRules.listingProgress(listing(), emptyList(), null))
+        assertEquals(ListingProgress(1, false), OrderRules.listingProgress(listing(), listOf(thread()), null))
+        assertEquals(ListingProgress(2, false), OrderRules.listingProgress(listing(status = "fulfilled"), listOf(thread()), "confirmed"))
+        assertEquals(ListingProgress(3, false), OrderRules.listingProgress(listing(status = "fulfilled"), listOf(thread()), "onboard"))
+        assertEquals(ListingProgress(4, false), OrderRules.listingProgress(listing(status = "fulfilled"), listOf(thread()), "completed"))
+        assertTrue(OrderRules.listingProgress(listing(status = "expired"), listOf(thread()), null).stopped)
+        assertTrue(OrderRules.listingProgress(listing(status = "cancelled"), emptyList(), null).stopped)
+    }
+
+    @Test
+    fun `the badge follows the chosen sort and only marks offers the client can choose`() {
+        val cheap = thread(id = "a", total = 13_000_000, pickupStart = "2026-09-30T08:00:00Z", bucket = "mixed")
+        val fast = thread(id = "b", total = 15_000_000, pickupStart = "2026-09-30T04:00:00Z", bucket = "good")
+        val mine = thread(id = "c", total = 12_000_000, pickupStart = "2026-09-30T03:00:00Z", author = "client", bucket = "good")
+        val all = listOf(cheap, fast, mine)
+        assertEquals(mapOf("a" to OfferBadge.CHEAPEST), OrderRules.sortBadges(all, OfferSort.CHEAPEST, now))
+        assertEquals(mapOf("b" to OfferBadge.FASTEST), OrderRules.sortBadges(all, OfferSort.FASTEST, now))
+        assertEquals(mapOf("b" to OfferBadge.RATED), OrderRules.sortBadges(all, OfferSort.RATING, now))
+    }
+
+    @Test
+    fun `a closed offer says why in the design's words`() {
+        fun key(status: String, reason: String?, state: String = "closed") = OrderRules.closedReasonKey(thread(state = state, status = status, reason = reason), now)
+        assertEquals("status.expired", key("expired", "ttl_expired"))
+        assertEquals("amendment.rejected", key("rejected", "rejected"))
+        assertEquals("client.offers.closed.withdrawn", key("withdrawn", "withdrawn"))
+        assertEquals("client.offers.closed.demandFulfilled", key("expired", "demand_fulfilled"))
+        assertEquals("notification.listing.cancelled.title", key("expired", "listing_closed"))
+        assertEquals("client.offers.closed.listingChanged", key("expired", "listing_changed"))
+        assertEquals("client.amendment.statusAccepted", key("accepted", "accepted", state = "accepted"))
+        // An unknown reason falls back to the status.
+        assertEquals("amendment.rejected", key("rejected", "something_new"))
+    }
+
+    @Test
+    fun `the offer's window drops the day when it is the listing's`() {
+        assertEquals("10:00 – 12:00", OrderRules.offerWindow("2026-09-30T05:00:00Z", "2026-09-30T07:00:00Z", "30.09"))
+        assertEquals("30.09, 10:00 – 12:00", OrderRules.offerWindow("2026-09-30T05:00:00Z", "2026-09-30T07:00:00Z", "29.09"))
+        assertEquals("30.09, 23:00 – 01.10, 01:00", OrderRules.offerWindow("2026-09-30T18:00:00Z", "2026-09-30T20:00:00Z", "30.09"))
+        assertEquals("Chilonzor", OrderRules.shortPlace("Chilonzor, 9-kvartal"))
+    }
+
+    @Test
+    fun `Yangi marks only offers that came while the client was away, never on a first look`() {
+        val first = thread(id = "a")
+        assertTrue(SeenOffers.fresh(null, listOf(first), now).isEmpty())
+        val baseline = setOf(SeenOffers.key(first))
+        val second = thread(id = "b")
+        assertEquals(setOf("b"), SeenOffers.fresh(baseline, listOf(first, second), now))
+        // The client's own counter is not news.
+        assertTrue(SeenOffers.fresh(baseline, listOf(thread(id = "c", author = "client")), now).isEmpty())
     }
 }

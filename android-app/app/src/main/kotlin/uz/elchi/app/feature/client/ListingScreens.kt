@@ -1,5 +1,6 @@
 package uz.elchi.app.feature.client
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -7,19 +8,28 @@ import android.content.Intent
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,23 +46,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import uz.elchi.app.R
 import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.ListingStatus
 import uz.elchi.app.api.generated.ParcelType
-import uz.elchi.app.api.generated.PriceBasis
 import uz.elchi.app.api.generated.ProposalThreadDTO
-import uz.elchi.app.api.generated.ShareLinkChannel
 import uz.elchi.app.api.generated.ShareLinkDTO
 import uz.elchi.app.i18n.errorText
 import uz.elchi.app.i18n.t
@@ -60,29 +77,39 @@ import uz.elchi.app.i18n.tOrNull
 import uz.elchi.app.ui.components.Banner
 import uz.elchi.app.ui.components.ButtonSize
 import uz.elchi.app.ui.components.ButtonVariant
-import uz.elchi.app.ui.components.CardRow
 import uz.elchi.app.ui.components.Chip
 import uz.elchi.app.ui.components.ElchiButton
-import uz.elchi.app.ui.components.ElchiCard
 import uz.elchi.app.ui.components.ElchiField
-import uz.elchi.app.ui.components.EmptyState
+import uz.elchi.app.ui.components.ElchiIconView
 import uz.elchi.app.ui.components.ItemCard
 import uz.elchi.app.ui.components.ItemLine
 import uz.elchi.app.ui.components.Note
 import uz.elchi.app.ui.components.PickerField
+import uz.elchi.app.ui.components.RoundIconButton
 import uz.elchi.app.ui.components.SectionTitle
-import uz.elchi.app.ui.components.Segmented
 import uz.elchi.app.ui.icons.ElchiIcon
+import uz.elchi.app.ui.map.ElchiMap
+import uz.elchi.app.ui.map.GeoPoint
+import uz.elchi.app.ui.map.MapFocus
+import uz.elchi.app.ui.map.MapKitSupport
+import uz.elchi.app.ui.map.MapMarker
 import uz.elchi.app.ui.theme.Elchi
 import uz.elchi.app.ui.theme.Tone
 import uz.elchi.app.ui.theme.tone
 import java.time.Instant
 
-/** How long a one-time outcome ("E'lon to'xtatildi", a server warning) stays before the screen is itself again. */
+/** How long a one-time outcome (a server warning) stays before the screen is itself again. */
 internal const val NOTICE_SHOWN_MS = 6_000L
 
 // -- client-listing-detail ---------------------------------------------------------------------------------------
 
+/**
+ * `listing` "Buyurtma tafsilotlari" (BOSQICH 03): a still map of the direction, the sheet card (status, tracker,
+ * window, facts), the status notice, then the drivers' offers inline (sort chips, offer cards, accept / counter /
+ * reject) and the owner's controls. The bar has the pencil (edit; designer to confirm) and share (a link made once
+ * on this screen, then the phone's share sheet). [scrollToOffers]: opened from a notification about an offer - the
+ * screen starts at "Haydovchi takliflari".
+ */
 @Composable
 fun ListingDetailScreen(
     vm: ListingViewModel,
@@ -90,43 +117,63 @@ fun ListingDetailScreen(
     languageTag: String,
     onBack: () -> Unit,
     onEdit: () -> Unit,
-    onBids: () -> Unit,
     onCancelled: () -> Unit,
+    onAccepted: (Accepted) -> Unit,
+    scrollToOffers: Boolean = false,
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
+    val b by vm.board.state.collectAsStateWithLifecycle()
     val now by rememberNow()
     var confirmCancel by rememberSaveable { mutableStateOf(false) }
+    val toast = LocalFlowToast.current
     LaunchedEffect(s.cancelled) { if (s.cancelled) onCancelled() }
-    LaunchedEffect(s.notice, s.warnings) {
-        if (s.notice != null || s.warnings.isNotEmpty()) {
-            delay(NOTICE_SHOWN_MS)
-            vm.consumeNotice()
+    LaunchedEffect(b.accepted) {
+        b.accepted?.let {
+            vm.board.consumeAccepted()
+            onAccepted(it)
         }
     }
+    ListingNoticeToast(s.notice, vm::consumeNotice)
+    OfferNoticeToast(b.notice) { vm.board.consumeNotice() }
+    ShareEffects(s, vm, toast)
+    val listing = s.value
     StepScaffold(
         title = t(R.string.listingDetail_title),
         onBack = onBack,
-        right = t(R.string.proposal_refresh),
-        onRight = vm::refresh,
-        banner = { ListingNotices(s) },
+        onRefresh = vm::refresh,
+        refreshing = s.refreshing && listing != null,
+        banner = {
+            s.warnings.forEach { Banner(tOrNull("warning.${it.code}") ?: it.message, Tone.WARN) }
+            OfferWarnings(b.warnings) { vm.board.consumeNotice() }
+        },
+        actions = listing?.let { l ->
+            {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (OrderRules.canEdit(l.status)) {
+                        RoundIconButton(ElchiIcon.FILE, t(R.string.listingOwner_edit), { vm.startEdit(); onEdit() }, iconRes = R.drawable.ic_pencil)
+                    }
+                    if (OrderRules.canShare(l.status)) {
+                        RoundIconButton(ElchiIcon.SHARE, t(R.string.client_share_send), vm::share, loading = s.sharing)
+                    }
+                }
+            }
+        },
     ) {
         when (val load = s.listing) {
             Load.Loading -> LoadingLine(t(R.string.common_loading))
             is Load.Failed -> LoadFailed(t(R.string.listingDetail_title), load.error, vm::refresh)
             is Load.Ready -> {
-                val listing = load.value
-                val stats = (s.threads as? Load.Ready)?.value?.let { OrderRules.offerStats(it, now) }
-                ListingItem(listing, stats, ru, languageTag)
-                ListingDetails(listing, ru)
-                ParcelPhoto(s)
-                if (listing.status != ListingStatus.DRAFT) {
-                    ElchiButton(t(R.string.client_listingDetail_viewOffers, "count" to (stats?.open ?: 0)), onBids, Modifier.fillMaxWidth())
-                }
-                OwnerControls(vm, s, listing, onEdit, onCancel = { confirmCancel = true })
+                val l = load.value
+                val stats = OrderRules.offerStats(s.threadList, now)
+                HeroMap(l)
+                ListingSheet(l, s, stats, ru, hasMap = heroMapShown(l))
+                OrderRules.listingNotice(l.status)?.let { (key, tone) -> StatusNotice(tOrNull(key) ?: key, tone) }
+                OffersSection(vm, s, b, l, stats, now, ru, scrollToOffers)
+                ShareLinkRow(s, vm)
+                OwnerControls(vm, s, l, onCancel = { confirmCancel = true })
             }
         }
     }
-    val listing = s.value
     if (confirmCancel && listing != null) {
         val open = OrderRules.offerStats(s.threadList, now).open
         CancelSheet(
@@ -139,223 +186,504 @@ fun ListingDetailScreen(
             onDismiss = { confirmCancel = false },
         )
     }
+    val confirming = s.threadList.firstOrNull { it.id == b.confirming }
+    if (confirming != null) AcceptDialogFor(confirming, b, onConfirm = { vm.board.accept(confirming) }, onDismiss = vm.board::dismissAccept)
 }
 
-/** One-time outcomes of the owner's commands (paused, resumed, saved) and the server's warnings with them. */
+/** "E'lon to'xtatildi", "Saqlandi · 2 ta ochiq taklif yopildi" ... as the design's toast. */
 @Composable
-private fun ListingNotices(s: ListingViewModel.State) {
-    s.notice?.let {
-        val text = t(
-            when (it) {
-                ListingNotice.PAUSED -> R.string.listingOwner_paused
-                ListingNotice.RESUMED -> R.string.listingOwner_resumed
-                ListingNotice.SAVED -> R.string.listingOwner_saved
-            },
-        )
-        Banner(text, Tone.OK)
+private fun ListingNoticeToast(notice: ListingNotice?, consume: () -> Unit) {
+    val toast = LocalFlowToast.current
+    val text = when (notice) {
+        ListingNotice.Paused -> t(R.string.listingOwner_paused)
+        ListingNotice.Resumed -> t(R.string.listingOwner_resumed)
+        ListingNotice.Saved -> t(R.string.listingOwner_saved)
+        is ListingNotice.SavedClosed -> t(R.string.client_listing_savedClosed, "count" to notice.count)
+        null -> null
     }
-    s.warnings.forEach { Banner(tOrNull("warning.${it.code}") ?: it.message, Tone.WARN) }
+    LaunchedEffect(notice) {
+        if (text != null) {
+            toast.show(text)
+            // The server's warnings (a banner) stay their own time; only the toast is consumed here.
+            delay(NOTICE_SHOWN_MS)
+            consume()
+        }
+    }
 }
 
-/** The listing as its row in the orders list shows it: route, status, date · views · offers, price. */
+/**
+ * The bar's share: the phone's share sheet with the server's `share_text` (never a text of our own, §3). Without one
+ * the URL is copied and the toast says the person's name and phone are not shown. A refusal (5 live links) is a toast.
+ */
 @Composable
-internal fun ListingItem(listing: ListingDTO, stats: OfferStats?, ru: Boolean, languageTag: String, meta: String? = null, onClick: (() -> Unit)? = null) {
+private fun ShareEffects(s: ListingViewModel.State, vm: ListingViewModel, toast: FlowToast) {
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    val chooserTitle = t(R.string.client_share_send)
+    val copied = t(R.string.client_listing_shareCopied)
+    LaunchedEffect(s.shareNow) {
+        val link = s.shareNow ?: return@LaunchedEffect
+        vm.consumeShareNow()
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link.shareText)
+        val chooser = Intent.createChooser(send, chooserTitle)
+        try {
+            // LocalContext is the app-language configuration context, not the Activity: start from the Activity.
+            activity?.startActivity(chooser) ?: context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: ActivityNotFoundException) {
+            copyLink(context, link)
+            toast.show(copied)
+        }
+    }
+    val error = s.shareError?.let { shareErrorText(it) }
+    LaunchedEffect(s.shareError) {
+        if (error != null) {
+            toast.show(error)
+            vm.consumeShareError()
+        }
+    }
+}
+
+private fun copyLink(context: Context, link: ShareLinkDTO) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("ELCHI", link.url))
+}
+
+/** The listing as its row in the orders list shows it: route, status, date · views · offers, meta, price. */
+@Composable
+internal fun ListingItem(listing: ListingDTO, stats: OfferStats?, ru: Boolean, languageTag: String, meta: Pair<String, Color?>? = null, onClick: (() -> Unit)? = null) {
     val parts = listOfNotNull(
         OrderRules.dayMonth(listing.departureWindowStart, languageTag),
         listing.viewCount?.let { if (it == 0L) t(R.string.listing_viewsNone) else "$it ${t(R.string.listing_viewsSuffix)}" },
         stats?.takeIf { OrderRules.isLive(listing.status) }?.let { t(R.string.app_orderCard_bids, "count" to it.open) },
     )
     ItemCard(
-        title = "${OrderRules.shortEnd(listing.originStop, listing.originPoint, ru)} → ${OrderRules.shortEnd(listing.destinationStop, listing.destinationPoint, ru)}",
-        badge = (tOrNull(OrderRules.listingStatusKey(listing.status)) ?: listing.status.value) to OrderRules.statusTone(listing.status.value),
+        title = routeTitle(listing, ru),
+        badge = listingBadge(listing.status),
         // Taksi: "2 kishi · 2 × 150 000 so'm" above the date line.
         lines = listOfNotNull(
             if (TaxiRules.isPassenger(listing.serviceType)) ItemLine(seatsLine(listing.quantity, listing.unitPriceMinor)) else null,
             ItemLine(parts.joinToString(" · ")),
         ),
-        meta = meta,
+        meta = meta?.first,
+        metaColor = meta?.second,
         right = soum(listing.totalMinor),
         onClick = onClick,
     )
 }
 
+/** "Toshkent → Buxoro" */
 @Composable
-private fun ListingDetails(listing: ListingDTO, ru: Boolean) {
-    ElchiCard(bordered = true) {
-        CardRow(
-            t(if (listing.originStop != null) R.string.listingDetail_pickupStop else R.string.listingDetail_pickupPoint),
-            OrderRules.fullEnd(listing.originStop, listing.originPoint, ru),
-            first = true,
-            detail = listing.originPoint?.district?.nameUz?.takeIf { listing.originStop == null && listing.originPoint.address != null },
+internal fun routeTitle(listing: ListingDTO, ru: Boolean): String =
+    "${OrderRules.shortEnd(listing.originStop, listing.originPoint, ru)} → ${OrderRules.shortEnd(listing.destinationStop, listing.destinationPoint, ru)}"
+
+/** The listing's status pill: "Bron qilindi" for a fulfilled request (the client's word), the shared word otherwise. */
+@Composable
+internal fun listingBadge(status: ListingStatus): Pair<String, Tone> =
+    (tOrNull(OrderRules.clientListingStatusKey(status)) ?: status.value) to OrderRules.statusTone(status.value)
+
+private fun heroMapShown(listing: ListingDTO): Boolean =
+    MapKitSupport.likelyAvailable && (listing.originPoint != null || listing.destinationPoint != null)
+
+/**
+ * The 150dp still map of the direction (design hero): the two marked places and a line between them. The pill says
+ * "Yo'nalish" - the listing carries no distance (2.1, BLOCKED). Hidden without coordinates or a usable map.
+ */
+@Composable
+private fun HeroMap(listing: ListingDTO) {
+    var usable by remember { mutableStateOf(MapKitSupport.likelyAvailable) }
+    if (!usable || !heroMapShown(listing)) return
+    val c = Elchi.colors
+    val markers = remember(listing.id) {
+        listOfNotNull(
+            listing.originPoint?.let { MapMarker(GeoPoint(it.lat, it.lng), MapMarker.Kind.ORIGIN) },
+            listing.destinationPoint?.let { MapMarker(GeoPoint(it.lat, it.lng), MapMarker.Kind.DESTINATION) },
         )
-        CardRow(
-            t(if (listing.destinationStop != null) R.string.listingDetail_dropoffStop else R.string.listingDetail_dropoffPoint),
-            OrderRules.fullEnd(listing.destinationStop, listing.destinationPoint, ru),
-            detail = listing.destinationPoint?.district?.nameUz?.takeIf { listing.destinationStop == null && listing.destinationPoint.address != null },
+    }
+    // The listing has no road geometry: a straight line between the two places shows the direction only.
+    val route = remember(markers) { if (markers.size == 2) listOf(markers[0].point, markers[1].point) else emptyList() }
+    val focus = remember(markers) { MapFocus.Fit(markers.map { it.point }) }
+    Box(Modifier.fillMaxWidth().height(150.dp).padding(horizontal = 0.dp).clip(RoundedCornerShape(24.dp))) {
+        ElchiMap(
+            Modifier.fillMaxSize(),
+            markers = markers,
+            route = route,
+            focus = focus,
+            padding = PaddingValues(start = 28.dp, end = 28.dp, top = 20.dp, bottom = 48.dp),
+            logoBottom = 40.dp,
+            interactive = false,
+            onAvailability = { usable = it },
+            placeholderTitle = t(R.string.client_map_unavailable),
         )
-        OrderRules.windowText(listing.departureWindowStart, listing.departureWindowEnd)?.let { CardRow(t(R.string.listingDetail_departureWindow), it) }
-        if (TaxiRules.isPassenger(listing.serviceType)) {
-            CardRow(t(R.string.orderForm_review_passengers), t(R.string.orderForm_review_peopleCount, "count" to listing.quantity), detail = t(R.string.orderForm_review_seatNegotiated))
-            CardRow(
-                t(R.string.common_price),
-                soum(listing.totalMinor),
-                detail = t(R.string.orderForm_review_perPersonDetail, "count" to listing.quantity, "price" to soum(listing.unitPriceMinor)),
-                strong = true,
-            )
-        } else {
-            CardRow(t(R.string.common_price), soum(listing.totalMinor), strong = true)
+        Row(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 46.dp)
+                .shadow(8.dp, CircleShape, ambientColor = c.shadow, spotColor = c.shadow)
+                .clip(CircleShape)
+                .background(c.card)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF9AA6B5)))
+            Text(t(R.string.routeSummary_direction), style = Elchi.type.label.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp), color = c.text)
         }
-        listing.parcel?.let { parcel ->
-            val type = ParcelType.entries.firstOrNull { it == parcel.parcelType && it != ParcelType.UNKNOWN }?.let { parcelTypeLabel(it) }
-            val category = parcel.category?.let { "${categoryName(it, ru)} (${categoryLimits(it)})" }
-            listOfNotNull(type, category).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { CardRow(t(R.string.listingDetail_parcel), it) }
+    }
+}
+
+/**
+ * The sheet card over the map: route and "Holat" with the status pill (there is no short public listing code, 2.2),
+ * the 5-step tracker, the window ends with their places, then the facts grid (with the parcel photo column) and the
+ * comment and expiry the design drops.
+ */
+@Composable
+private fun ListingSheet(listing: ListingDTO, s: ListingViewModel.State, stats: OfferStats, ru: Boolean, hasMap: Boolean) {
+    val c = Elchi.colors
+    val shape = RoundedCornerShape(28.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            // Overlaps the map by 34dp and gives that space back, so the next block keeps the usual gap.
+            .then(if (hasMap) Modifier.layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                val lift = 34.dp.roundToPx()
+                layout(placeable.width, placeable.height - lift) { placeable.place(0, -lift) }
+            } else Modifier)
+            .shadow(12.dp, shape, ambientColor = c.shadow, spotColor = c.shadow)
+            .clip(shape)
+            .background(c.card)
+            .padding(start = 18.dp, end = 18.dp, top = 20.dp, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Box(Modifier.fillMaxWidth()) {
+            Box(Modifier.align(Alignment.TopCenter).offset(y = (-12).dp).width(44.dp).height(5.dp).clip(CircleShape).background(c.outline))
         }
-        listing.comment?.takeIf { it.isNotBlank() }?.let { CardRow(t(R.string.listingOwner_commentLabel), it.trim()) }
-        if (OrderRules.isLive(listing.status)) {
-            OrderRules.dayDot(listing.expiresAt)?.let { CardRow(t(R.string.client_listingDetail_expires), t(R.string.client_listingDetail_until, "date" to it)) }
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(routeTitle(listing, ru), Modifier.weight(1f), style = Elchi.type.section.copy(fontSize = 18.sp, lineHeight = 23.sp), color = c.text)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(t(R.string.support_statusLabel), style = Elchi.type.caption, color = c.muted)
+                val (text, tone) = listingBadge(listing.status)
+                val colors = c.tone(tone)
+                Text(
+                    text,
+                    Modifier.clip(RoundedCornerShape(16.dp)).background(colors.bg).padding(horizontal = 14.dp, vertical = 7.dp),
+                    style = Elchi.type.label.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, lineHeight = 16.sp),
+                    color = colors.fg,
+                    textAlign = TextAlign.End,
+                )
+            }
+        }
+        Tracker(OrderRules.listingProgress(listing, s.threadList, s.bookingStatus))
+        val startPlace = OrderRules.shortPlace(OrderRules.fullEnd(listing.originStop, listing.originPoint, ru))
+        val endPlace = OrderRules.shortPlace(OrderRules.fullEnd(listing.destinationStop, listing.destinationPoint, ru))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(t(R.string.client_listing_departAt, "time" to (OrderRules.dayTime(listing.departureWindowStart) ?: "—")), style = Elchi.type.caption, color = c.muted)
+                Text(startPlace, style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp), color = c.text)
+            }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(t(R.string.client_listing_deadlineAt, "time" to (OrderRules.dayTime(listing.departureWindowEnd) ?: "—")), style = Elchi.type.caption, color = c.muted, textAlign = TextAlign.End)
+                Text(endPlace, style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp), color = c.text, textAlign = TextAlign.End)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(if (c.isDark) c.line else Color(0xFFEEF1F5)))
+        FactsGrid(listing, s, stats, ru)
+        val extras = buildList {
+            listing.comment?.takeIf { it.isNotBlank() }?.let { add(t(R.string.listingOwner_commentLabel) to it.trim()) }
+            if (OrderRules.isLive(listing.status)) {
+                OrderRules.dayDot(listing.expiresAt)?.let { add(t(R.string.client_listingDetail_expires) to t(R.string.client_listingDetail_until, "date" to it)) }
+            }
+        }
+        extras.forEach { (key, value) -> Fact(key, value) }
+    }
+}
+
+/** Five dots joined by dotted lines: E'lon qilindi · Takliflar · Haydovchi tanlandi · Yo'lda · Yakunlandi. */
+@Composable
+private fun Tracker(progress: ListingProgress) {
+    val c = Elchi.colors
+    val names = listOf(
+        t(R.string.app_orderStatus_published),
+        t(R.string.client_listing_stepOffers),
+        t(R.string.listingBids_driverChosen),
+        t(R.string.status_in_transit),
+        t(R.string.app_progress_completed),
+    )
+    val idle = if (c.isDark) c.field else Color(0xFFEEF1F5)
+    Row(
+        Modifier.fillMaxWidth().semantics { contentDescription = names.take(progress.step + 1).joinToString(" · ") },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        names.forEachIndexed { i, _ ->
+            val done = !progress.stopped && i <= progress.step
+            val crossed = progress.stopped && i == 1
+            val bg = when {
+                done -> c.brand
+                crossed -> c.tone(Tone.ERR).bg
+                else -> idle
+            }
+            Box(
+                Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(bg)
+                    .then(if (!progress.stopped && i == progress.step) Modifier.border(3.dp, Color(0xFFBFE3FF), CircleShape) else Modifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                ElchiIconView(if (crossed) ElchiIcon.X else ElchiIcon.CHECK, if (crossed) c.tone(Tone.ERR).fg else if (done) c.onBrand else c.placeholder, size = 13.dp)
+            }
+            if (i < names.lastIndex) {
+                val lineColor = if (!progress.stopped && i < progress.step) c.brand else c.outline
+                DottedLine(lineColor, Modifier.weight(1f).padding(horizontal = 4.dp))
+            }
         }
     }
 }
 
 @Composable
-private fun ParcelPhoto(s: ListingViewModel.State) {
-    if (s.value?.parcel?.photo == null) return
-    ParcelPhotoBlock(s.photo, s.photoFailed)
+private fun DottedLine(color: Color, modifier: Modifier) {
+    androidx.compose.foundation.Canvas(modifier.height(3.dp)) {
+        val r = size.height / 2
+        var x = r
+        while (x < size.width) {
+            drawCircle(color, r, androidx.compose.ui.geometry.Offset(x, r))
+            x += r * 3.2f
+        }
+    }
 }
 
-/** "Posilka rasmi": the decoded photo, a calm failure line, or progress. Shared by the listing and booking screens. */
+/**
+ * Qayerdan / Qayerga / Narx / Ko'rishlar / Posilka (Taksi: Yo'lovchilar) / Takliflar, two columns; a parcel with a
+ * photo gets the design's 92dp photo column beside the first three rows.
+ */
 @Composable
-internal fun ParcelPhotoBlock(photo: android.graphics.Bitmap?, failed: Boolean) {
+private fun FactsGrid(listing: ListingDTO, s: ListingViewModel.State, stats: OfferStats, ru: Boolean) {
+    val taxi = TaxiRules.isPassenger(listing.serviceType)
+    val facts = buildList {
+        add(Triple(t(R.string.ui_from), OrderRules.fullEnd(listing.originStop, listing.originPoint, ru), null))
+        add(Triple(t(R.string.ui_to), OrderRules.fullEnd(listing.destinationStop, listing.destinationPoint, ru), null))
+        add(Triple(t(R.string.common_price), soum(listing.totalMinor), if (taxi) seatsPrice(listing.quantity, listing.unitPriceMinor) else null))
+        add(Triple(t(R.string.client_listing_views), t(R.string.client_listing_viewsCount, "count" to (listing.viewCount ?: 0L)), null))
+        if (taxi) {
+            add(Triple(t(R.string.orderForm_review_passengers), t(R.string.orderForm_review_peopleCount, "count" to listing.quantity), null))
+        } else {
+            val parcel = listing.parcel
+            val size = parcel?.category?.let { categoryName(it, ru) }
+                ?: parcel?.parcelType?.takeIf { it != ParcelType.UNKNOWN }?.let { parcelTypeLabel(it) }
+            add(Triple(t(R.string.listingDetail_parcel), size ?: "—", null))
+        }
+        add(Triple(t(R.string.client_listing_stepOffers), t(R.string.client_listing_offersOpenShort, "count" to stats.open), null))
+    }
+    val photo = !taxi && listing.parcel?.photo != null
+    val rows = facts.chunked(2)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            rows.forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    pair.forEach { (k, v, d) -> Fact(k, v, Modifier.weight(1f), d) }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+        if (photo) PhotoColumn(s)
+    }
+}
+
+@Composable
+private fun Fact(key: String, value: String, modifier: Modifier = Modifier, detail: String? = null) {
     val c = Elchi.colors
-    SectionTitle(t(R.string.listingDetail_parcelPhoto))
-    Box(Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(18.dp)).background(c.field), contentAlignment = Alignment.Center) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(key, style = Elchi.type.caption, color = c.muted)
+        Text(value, style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium, fontSize = 14.5.sp, lineHeight = 19.sp), color = c.text)
+        if (detail != null) Text(detail, style = Elchi.type.caption, color = c.muted)
+    }
+}
+
+/** The parcel photo beside the facts (92 x 150): the signed thumbnail, a calm failure line, or progress. */
+@Composable
+private fun PhotoColumn(s: ListingViewModel.State) {
+    val c = Elchi.colors
+    Box(
+        Modifier.width(92.dp).height(150.dp).clip(RoundedCornerShape(20.dp)).background(c.field),
+        contentAlignment = Alignment.Center,
+    ) {
+        val photo = s.photo
         when {
             photo != null -> {
                 val image = remember(photo) { photo.asImageBitmap() }
                 Image(image, t(R.string.app_photo_alt), Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
-            failed -> Text(t(R.string.app_photo_failed), style = Elchi.type.caption, color = c.muted)
-            else -> LoadingLine(t(R.string.app_photo_loading))
+            s.photoFailed -> Text(t(R.string.app_photo_failed), Modifier.padding(6.dp), style = Elchi.type.caption.copy(fontSize = 10.5.sp, lineHeight = 14.sp), color = c.muted, textAlign = TextAlign.Center)
+            else -> androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = c.brand, strokeWidth = 2.dp)
         }
     }
 }
 
-/** "Boshqaruv", sharing and cancel - only what the listing's status allows (`ownerListingActions`). */
+/** The status notice under the card (paused / expired grey, cancelled red, fulfilled green). */
 @Composable
-private fun OwnerControls(vm: ListingViewModel, s: ListingViewModel.State, listing: ListingDTO, onEdit: () -> Unit, onCancel: () -> Unit) {
-    val status = listing.status
-    val canPause = OrderRules.canPause(status)
-    val canResume = OrderRules.canResume(status)
-    if (OrderRules.canEdit(status) || canPause || canResume) {
-        SectionTitle(t(R.string.client_listingDetail_manage))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (OrderRules.canEdit(status)) {
-                ElchiButton(
-                    t(R.string.listingOwner_edit), { vm.startEdit(); onEdit() }, Modifier.weight(1f).height(48.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM,
-                    icon = ElchiIcon.FILE, enabled = s.action == null, horizontalPadding = 10.dp,
-                )
-            }
-            if (canPause || canResume) {
-                ElchiButton(
-                    t(if (canPause) R.string.listingOwner_pause else R.string.listingOwner_resume),
-                    if (canPause) vm::pause else vm::resume,
-                    Modifier.weight(1f).height(48.dp),
-                    ButtonVariant.NEUTRAL,
-                    ButtonSize.MEDIUM,
-                    enabled = s.action == null,
-                    loading = s.action == OwnerAction.PAUSE || s.action == OwnerAction.RESUME,
-                    horizontalPadding = 10.dp,
-                )
-            }
-        }
-        if (canPause || canResume) {
-            Text(t(if (canPause) R.string.listingOwner_pauseHint else R.string.client_listingDetail_resumeHint), style = Elchi.type.caption, color = Elchi.colors.muted)
-        }
+private fun StatusNotice(text: String, tone: Tone) {
+    val c = Elchi.colors
+    val colors = c.tone(tone)
+    val icon = when (tone) {
+        Tone.ERR -> ElchiIcon.ALERT
+        Tone.OK -> ElchiIcon.CHECK_C
+        else -> ElchiIcon.INFO
     }
-    s.actionError?.let { Note(errorText(it), tone = Tone.ERR) }
-    if (OrderRules.canShare(status)) ShareSection(vm, s)
-    if (OrderRules.canCancel(status)) {
-        ElchiButton(t(R.string.listingDetail_cancel), onCancel, Modifier.fillMaxWidth(), ButtonVariant.DANGER_SOFT, enabled = s.action == null)
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.bg).padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ElchiIconView(icon, colors.fg, Modifier.padding(top = 1.dp), size = 18.dp)
+        Text(text, style = Elchi.type.label.copy(fontWeight = FontWeight.Normal, lineHeight = 19.sp), color = colors.noteText)
     }
 }
 
 /**
- * "E'lonni ulashish": TTL chips (days -> `ttl_hours`), the text's channel, then the link the server returns once -
- * kept only while this screen lives - with copy and the phone's share sheet.
+ * "Haydovchi takliflari" with "{n} ta ochiq taklif" / "Ochiq taklif yo'q" / "Hozircha taklif yo'q", the sort chips
+ * and the offer cards - or the small "Haydovchi javob berganda ..." card. Q43's note closes the board.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ShareSection(vm: ListingViewModel, s: ListingViewModel.State) {
-    val context = LocalContext.current
-    SectionTitle(t(R.string.listingShare_title), description = t(R.string.trackingShare_shareHint))
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OrderRules.SHARE_TTL_DAYS.forEach { days ->
-            Chip(t(R.string.trackingShare_ttlDays, "count" to days), s.shareDays == days, { vm.setShareDays(days) }, filled = true)
+private fun OffersSection(
+    vm: ListingViewModel,
+    s: ListingViewModel.State,
+    b: OfferBoard.State,
+    listing: ListingDTO,
+    stats: OfferStats,
+    now: Instant,
+    ru: Boolean,
+    scrollToOffers: Boolean,
+) {
+    if (listing.status == ListingStatus.DRAFT) return
+    val c = Elchi.colors
+    val threads = s.threadList
+    val requester = remember { BringIntoViewRequester() }
+    var scrolled by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(scrollToOffers, s.threads is Load.Ready) {
+        if (scrollToOffers && !scrolled && s.threads is Load.Ready) {
+            delay(150)
+            // A rect taller than the screen: the header lands at the top, the offers under it.
+            requester.bringIntoView(androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 100_000f))
+            scrolled = true
         }
     }
-    Segmented(
-        listOf(ShareLinkChannel.GENERIC to t(R.string.trackingShare_channelGeneric), ShareLinkChannel.TELEGRAM to t(R.string.client_share_telegram)),
-        s.shareChannel,
-        vm::setShareChannel,
-    )
-    ElchiButton(t(R.string.trackingShare_create), vm::createShareLink, Modifier.fillMaxWidth(), ButtonVariant.SOFT, icon = ElchiIcon.SHARE, loading = s.sharing)
-    s.shareError?.let { Note(shareErrorText(it), tone = Tone.ERR) }
-    if (s.linkRevoked) Note(t(R.string.trackingShare_revoked), tone = Tone.OK)
-    s.link?.let { ShareResult(it, context, onRevoke = vm::revokeShareLink, busy = s.sharing) }
+    val sub = when {
+        stats.open > 0 -> t(R.string.client_listing_offersSubOpen, "count" to stats.open)
+        threads.isNotEmpty() -> t(R.string.client_listing_offersSubNoneOpen)
+        else -> t(R.string.client_listing_offersSubNone)
+    }
+    Row(Modifier.fillMaxWidth().bringIntoViewRequester(requester).padding(top = 4.dp), verticalAlignment = Alignment.Bottom) {
+        Text(t(R.string.listingBids_title), Modifier.weight(1f), style = Elchi.type.section, color = c.text)
+        if (s.threads is Load.Ready) Text(sub, style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = c.muted)
+    }
+    when (val load = s.threads) {
+        Load.Loading -> LoadingLine(t(R.string.common_loading))
+        is Load.Failed -> LoadFailed(t(R.string.listingBids_title), load.error, vm::refresh)
+        is Load.Ready -> if (load.value.isEmpty()) {
+            OffersWaitCard()
+        } else {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    OfferSort.CHEAPEST to R.string.client_listingBids_sortCheapest,
+                    OfferSort.FASTEST to R.string.client_listingBids_sortFastest,
+                    OfferSort.RATING to R.string.client_listingBids_sortRating,
+                ).forEach { (sort, label) -> Chip(t(label), s.sort == sort, { vm.setSort(sort) }, filled = true) }
+            }
+            val sorted = OrderRules.sortOffers(threads, s.sort, now)
+            val badges = OrderRules.sortBadges(threads, s.sort, now)
+            val handlers = remember(vm) { OfferHandlers(vm.board) }
+            val listingDay = OrderRules.dayDot(listing.departureWindowStart)
+            sorted.forEach { thread ->
+                OfferCard(
+                    thread, b, handlers, now, ru,
+                    badge = badges[thread.id],
+                    fresh = thread.id in s.freshOffers,
+                    previousTotal = s.previousTotals[thread.id],
+                    listingDay = listingDay,
+                    route = offerRouteIfDifferent(thread, listing, ru),
+                    paused = listing.status == ListingStatus.PAUSED,
+                )
+            }
+            Note(t(R.string.listingBids_identityHidden), tone = Tone.BLUE)
+        }
+    }
 }
 
+/** An offer's own route, only when it is not the listing's ("Chilonzor → Registon" for a driver's other stop). */
 @Composable
-private fun ShareResult(link: ShareLinkDTO, context: Context, onRevoke: () -> Unit, busy: Boolean) {
+private fun offerRouteIfDifferent(thread: ProposalThreadDTO, listing: ListingDTO, ru: Boolean): String? {
+    val v = thread.currentVersion ?: return null
+    val offer = "${OrderRules.shortEnd(v.pickupStop, v.pickupPoint, ru)} → ${OrderRules.shortEnd(v.dropoffStop, v.dropoffPoint, ru)}"
+    return offer.takeIf { it != routeTitle(listing, ru) }
+}
+
+/** After the bar's share made a link: the URL with "Havolani bekor qilish" (the design's `revokeLink` is unbound). */
+@Composable
+private fun ShareLinkRow(s: ListingViewModel.State, vm: ListingViewModel) {
     val c = Elchi.colors
-    val activity = LocalActivity.current
-    var copied by remember(link.id) { mutableStateOf(false) }
-    val chooserTitle = t(R.string.client_share_send)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (s.linkRevoked) Note(t(R.string.trackingShare_revoked), tone = Tone.OK)
+    val link = s.link ?: return
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Text(t(R.string.client_share_link), style = Elchi.type.caption, color = c.muted)
-        Text(
-            link.url,
-            Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(14.dp)).background(c.field).padding(horizontal = 14.dp, vertical = 12.dp),
-            style = Elchi.type.label.copy(fontFamily = FontFamily.Monospace),
-            color = c.text,
-        )
-        Text(t(R.string.client_share_text), style = Elchi.type.caption, color = c.muted)
-        Text(link.shareText, Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.field).padding(horizontal = 14.dp, vertical = 10.dp), style = Elchi.type.caption, color = c.text)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ElchiButton(
-                t(if (copied) R.string.promoScreen_copied else R.string.promoScreen_copy),
-                {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("ELCHI", link.url))
-                    copied = true
-                },
-                Modifier.weight(1f).height(48.dp),
-                ButtonVariant.NEUTRAL,
-                ButtonSize.MEDIUM,
-                icon = ElchiIcon.COPY,
-                horizontalPadding = 10.dp,
-            )
-            ElchiButton(
-                chooserTitle,
-                {
-                    // Nothing is posted for the person (§20.2): the phone's own share sheet, with the server's text.
-                    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link.shareText)
-                    val chooser = Intent.createChooser(send, chooserTitle)
-                    // LocalContext is the app-language configuration context, not the Activity: start from the
-                    // Activity when there is one, else as a new task.
-                    activity?.startActivity(chooser) ?: context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                },
-                Modifier.weight(1f).height(48.dp),
-                ButtonVariant.SOFT,
-                ButtonSize.MEDIUM,
-                icon = ElchiIcon.SHARE,
-                horizontalPadding = 10.dp,
-            )
-        }
+        Text(link.url, style = Elchi.type.label.copy(fontFamily = FontFamily.Monospace), color = c.text, maxLines = 2)
         OrderRules.dayDot(link.expiresAt)?.let { day ->
             val time = OrderRules.tashkent(link.expiresAt)?.let { "$day, %02d:%02d".format(it.hour, it.minute) } ?: day
             Text(t(R.string.trackingShare_validUntil, "time" to time), style = Elchi.type.caption, color = c.muted)
         }
-        Text(t(R.string.trackingShare_urlOnce), style = Elchi.type.caption, color = c.muted)
-        ElchiButton(t(R.string.client_share_revoke), onRevoke, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, enabled = !busy)
+        ElchiButton(t(R.string.client_share_revoke), vm::revokeShareLink, Modifier.align(Alignment.End).height(36.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, enabled = !s.sharing, horizontalPadding = 14.dp)
+    }
+}
+
+/**
+ * Pause / resume as one compact row with its hint (designer to confirm, 2.9), the last command's refusal, and the
+ * centred red "Buyurtmani bekor qilish" text button (2.10) - only what the status allows (`ownerListingActions`).
+ */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.OwnerControls(vm: ListingViewModel, s: ListingViewModel.State, listing: ListingDTO, onCancel: () -> Unit) {
+    val c = Elchi.colors
+    val status = listing.status
+    val canPause = OrderRules.canPause(status)
+    val canResume = OrderRules.canResume(status)
+    if (canPause || canResume) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                t(if (canPause) R.string.listingOwner_pauseHint else R.string.client_listingDetail_resumeHint),
+                Modifier.weight(1f),
+                style = Elchi.type.caption,
+                color = c.muted,
+            )
+            ElchiButton(
+                t(if (canPause) R.string.listingOwner_pause else R.string.listingOwner_resume),
+                if (canPause) vm::pause else vm::resume,
+                Modifier.height(40.dp),
+                ButtonVariant.NEUTRAL,
+                ButtonSize.MEDIUM,
+                enabled = s.action == null,
+                loading = s.action == OwnerAction.PAUSE || s.action == OwnerAction.RESUME,
+                horizontalPadding = 14.dp,
+            )
+        }
+    }
+    s.actionError?.let { Note(errorText(it), tone = Tone.ERR) }
+    if (OrderRules.canCancel(status)) {
+        Text(
+            t(R.string.listingDetail_cancel),
+            Modifier
+                .align(Alignment.CenterHorizontally)
+                .heightIn(min = 44.dp)
+                .clip(CircleShape)
+                .clickable(enabled = s.action == null, role = Role.Button, onClick = onCancel)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium),
+            color = c.tone(Tone.ERR).fg,
+        )
     }
 }
 
@@ -378,11 +706,28 @@ internal fun CancelSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.card) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = Elchi.type.title.copy(fontSize = androidx.compose.ui.unit.TextUnit(20f, androidx.compose.ui.unit.TextUnitType.Sp), lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp)), color = c.text)
+                Text(title, style = Elchi.type.title.copy(fontSize = 20.sp, lineHeight = 24.sp), color = c.text)
                 Text(text, style = Elchi.type.secondary, color = c.muted)
             }
             ElchiButton(confirm, onConfirm, Modifier.fillMaxWidth(), confirmVariant, loading = busy)
             ElchiButton(back, onDismiss, Modifier.fillMaxWidth(), ButtonVariant.NEUTRAL, enabled = !busy)
+        }
+    }
+}
+
+/** "Posilka rasmi": the decoded photo, a calm failure line, or progress. Shared by the booking and v1 screens. */
+@Composable
+internal fun ParcelPhotoBlock(photo: android.graphics.Bitmap?, failed: Boolean) {
+    val c = Elchi.colors
+    SectionTitle(t(R.string.listingDetail_parcelPhoto))
+    Box(Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(18.dp)).background(c.field), contentAlignment = Alignment.Center) {
+        when {
+            photo != null -> {
+                val image = remember(photo) { photo.asImageBitmap() }
+                Image(image, t(R.string.app_photo_alt), Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            }
+            failed -> Text(t(R.string.app_photo_failed), style = Elchi.type.caption, color = c.muted)
+            else -> LoadingLine(t(R.string.app_photo_loading))
         }
     }
 }
@@ -393,6 +738,11 @@ private enum class EditEdge { START, END }
 
 private val WINDOW_INVALID = setOf(EditInvalid.WINDOW_INCOMPLETE, EditInvalid.WINDOW_ORDER, EditInvalid.WINDOW_PAST)
 
+/**
+ * `edit` "E'lonni tahrirlash": price (so'm), comment (300), seats (Taksi, Q145), the window. "Saqlash" is always
+ * tappable: a tap with something invalid shows the red box at the top and the red field (DESIGN02 6.9). Moving the
+ * window with open offers asks for "Tushundim, saqlash" (Q20).
+ */
 @Composable
 fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -410,16 +760,20 @@ fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> U
     val openOffers = OrderRules.offerStats(s.threadList, Instant.now()).open
     // Q20: ask for the second, explicit tap only when the edit really closes offers that exist.
     val warnMaterial = plan?.material == true && openOffers > 0
+    val shown = plan?.invalid?.takeIf { s.editTried }
+    val scroll = rememberScrollState()
+    LaunchedEffect(s.editTried, shown) { if (shown != null) scroll.animateScrollTo(0) }
     StepScaffold(
         title = t(R.string.listingOwner_editTitle),
         onBack = onBack,
+        scrollState = scroll,
         footer = {
             s.saveError?.let { Note(errorText(it), tone = Tone.ERR) }
             ElchiButton(
                 t(if (warnMaterial) R.string.listingOwner_materialConfirm else R.string.common_save),
                 vm::save,
                 Modifier.fillMaxWidth(),
-                enabled = plan != null && !plan.empty && plan.invalid == null,
+                enabled = plan != null,
                 loading = s.saving,
             )
         },
@@ -428,18 +782,20 @@ fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> U
             LoadingLine(t(R.string.common_loading))
             return@StepScaffold
         }
+        shown?.let { Note(tOrNull("listingOwner.invalid.${it.key}") ?: it.key, tone = Tone.ERR) }
         ElchiField(
             form.priceDigits,
-            { text -> vm.editForm { it.copy(priceDigits = text.filter(Char::isDigit).trimStart('0').take(10)) } },
+            { text -> vm.editForm { it.copy(priceDigits = text.filter(Char::isDigit).trimStart('0').take(OfferBoard.MAX_DIGITS)) } },
             // A passenger request's price is per person ("Narx (so'm) / o'rin").
             label = t(R.string.listingOwner_priceLabel) + if (TaxiRules.isPassenger(listing.serviceType)) " " + t(R.string.listingEdit_perSeatSuffix).trim() else "",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             visualTransformation = ThousandsTransformation,
-            error = if (plan?.invalid == EditInvalid.PRICE) t(R.string.listingOwner_invalid_price) else null,
+            suffix = t(R.string.common_soum),
+            error = if (shown == EditInvalid.PRICE) t(R.string.listingOwner_invalid_price) else null,
         )
         ElchiField(
             form.comment,
-            { text -> vm.editForm { it.copy(comment = text.take(1000)) } },
+            { text -> vm.editForm { it.copy(comment = text.take(COMMENT_MAX)) } },
             label = t(R.string.listingOwner_commentLabel),
             singleLine = false,
             minHeight = 96.dp,
@@ -448,7 +804,7 @@ fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> U
         )
         if (TaxiRules.seatsEditable(listing)) {
             // Q145: the number of people, until a booking exists; a new count closes the open offers (Q20).
-            val seatsError = plan?.invalid?.takeIf { it == EditInvalid.SEATS || it == EditInvalid.SEATS_CHILDREN }
+            val seatsError = shown?.takeIf { it == EditInvalid.SEATS || it == EditInvalid.SEATS_CHILDREN }
             ElchiField(
                 form.seats,
                 { text -> vm.editForm { it.copy(seats = text.filter(Char::isDigit).take(1)) } },
@@ -460,14 +816,20 @@ fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> U
         }
         if (OrderRules.windowEditable(listing)) {
             val placeholder = t(R.string.client_routeSummary_windowPlaceholder)
-            val windowError = plan?.invalid?.takeIf { it in WINDOW_INVALID }
+            val windowError = shown?.takeIf { it in WINDOW_INVALID }
             PickerField(t(R.string.listingOwner_windowStart), form.windowStart?.let(ParcelRules::display), placeholder, { picking = EditEdge.START }, error = windowError != null)
             PickerField(t(R.string.listingOwner_windowEnd), form.windowEnd?.let(ParcelRules::display), placeholder, { picking = EditEdge.END }, error = windowError != null)
-            windowError?.let { Note(tOrNull("listingOwner.invalid.${it.key}") ?: it.key, tone = Tone.ERR) }
         }
-        Text(t(R.string.listingOwner_nonMaterialNote), style = Elchi.type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = Elchi.colors.muted)
+        // 4.6: kept - it is true (Q20) and tells what an edit does not do.
+        Text(t(R.string.listingOwner_nonMaterialNote), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = Elchi.colors.muted)
         if (warnMaterial) {
-            Note("${t(R.string.listingOwner_materialWarning)} ${t(R.string.listingOwner_openOffers, "count" to openOffers)}", tone = Tone.WARN)
+            // Parcel: the design's sentence. Taksi keeps the longer one - it also covers the seat count (Q145).
+            val text = if (TaxiRules.isPassenger(listing.serviceType)) {
+                "${t(R.string.listingOwner_materialWarning)} ${t(R.string.listingOwner_openOffers, "count" to openOffers)}"
+            } else {
+                t(R.string.client_listing_editWindowWarn, "count" to openOffers)
+            }
+            Note(text, tone = Tone.WARN)
         }
     }
     picking?.let { edge ->
@@ -484,150 +846,5 @@ fun ListingEditScreen(vm: ListingViewModel, onBack: () -> Unit, onSaved: () -> U
     }
 }
 
-// -- client-listing-bids -----------------------------------------------------------------------------------------
-
-@Composable
-fun ListingBidsScreen(vm: ListingViewModel, ru: Boolean, onBack: () -> Unit, onAccepted: (Accepted) -> Unit) {
-    val s by vm.state.collectAsStateWithLifecycle()
-    val b by vm.board.state.collectAsStateWithLifecycle()
-    val now by rememberNow()
-    LaunchedEffect(b.accepted) {
-        b.accepted?.let {
-            vm.board.consumeAccepted()
-            onAccepted(it)
-        }
-    }
-    val threads = OrderRules.sortOffers(s.threadList, s.sort, now)
-    val cheapest = OrderRules.cheapestOpen(s.threadList, now)
-    val paused = s.value?.status == ListingStatus.PAUSED
-    // Offers move while the screen is away: every visit reads them again (the list stays on screen meanwhile).
-    LaunchedEffect(Unit) { vm.refresh() }
-    LaunchedEffect(b.notice, b.warnings) {
-        if (b.notice != null || b.warnings.isNotEmpty()) {
-            delay(NOTICE_SHOWN_MS)
-            vm.board.consumeNotice()
-        }
-    }
-    StepScaffold(
-        title = t(R.string.listingBids_title),
-        onBack = onBack,
-        right = t(R.string.proposal_refresh),
-        onRight = vm::refresh,
-        banner = { OfferNoticeBanner(b.notice, b.warnings) },
-    ) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                OfferSort.CHEAPEST to R.string.client_listingBids_sortCheapest,
-                OfferSort.FASTEST to R.string.client_listingBids_sortFastest,
-                OfferSort.RATING to R.string.client_listingBids_sortRating,
-            ).forEach { (sort, label) -> Chip(t(label), s.sort == sort, { vm.setSort(sort) }, filled = true) }
-        }
-        when (val load = s.threads) {
-            Load.Loading -> LoadingLine(t(R.string.common_loading))
-            is Load.Failed -> LoadFailed(t(R.string.listingBids_title), load.error, vm::refresh)
-            is Load.Ready -> if (load.value.isEmpty()) {
-                EmptyState(ElchiIcon.TAG, t(R.string.listingBids_emptyTitle), description = t(R.string.listingBids_emptySubtitle))
-            } else {
-                threads.forEach { thread ->
-                    val actions = OrderRules.negotiationActions(thread, now)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // The answer buttons live inside their own offer's card, so they cannot be read as the next one's.
-                        val answer: (@Composable ColumnScope.() -> Unit)? = if (actions.open && actions.theirTurn) {
-                            {
-                                OfferAnswer(
-                                    thread, actions, b,
-                                    acceptLabel = t(R.string.listingBids_chooseDriver),
-                                    onBonus = { vm.board.toggleAcceptBonus(thread.id) },
-                                    onAccept = { vm.board.askAccept(thread) },
-                                    onReject = { vm.board.reject(thread) },
-                                    onCounter = { vm.board.openCounter(thread) },
-                                    onCounterDigits = { vm.board.setCounterDigits(thread, it) },
-                                    onCounterBonus = vm.board::setCounterBonus,
-                                    onSendCounter = { vm.board.sendCounter(thread) },
-                                    onCloseCounter = vm.board::closeCounter,
-                                    counterPrice = vm.board.counterPrice(thread),
-                                    listingPaused = paused,
-                                )
-                            }
-                        } else {
-                            null
-                        }
-                        OfferCard(thread, actions, cheapest == thread.id, now, ru, busy = b.busyThread == thread.id, onWithdraw = { vm.board.withdraw(thread) }, answer = answer)
-                        if (answer == null && b.errorThread == thread.id) {
-                            b.error?.let { Note(offerErrorText(it), tone = Tone.ERR) }
-                        }
-                    }
-                }
-            }
-        }
-        Note(t(R.string.listingBids_identityHidden), tone = Tone.BLUE)
-    }
-    val confirming = s.threadList.firstOrNull { it.id == b.confirming }
-    if (confirming != null) AcceptDialogFor(confirming, b, onConfirm = { vm.board.accept(confirming) }, onDismiss = vm.board::dismissAccept)
-}
-
-/**
- * One driver's offer (`item` with the "Haydovchi #N" rule): live and waiting for the client, waiting for the
- * driver (the client's counter; it can be withdrawn), or closed (grey, why, nothing to press).
- */
-@Composable
-private fun OfferCard(
-    thread: ProposalThreadDTO,
-    actions: NegotiationActions,
-    cheapest: Boolean,
-    now: Instant,
-    ru: Boolean,
-    busy: Boolean,
-    onWithdraw: () -> Unit,
-    answer: (@Composable ColumnScope.() -> Unit)? = null,
-) {
-    val c = Elchi.colors
-    val version = thread.currentVersion
-    val summary = thread.driverSummary?.let { driverSummary(it) }
-    val price = version?.let { soum(it.totalMinor) }
-    val route = version?.let { "${OrderRules.shortEnd(it.pickupStop, it.pickupPoint, ru)} → ${OrderRules.shortEnd(it.dropoffStop, it.dropoffPoint, ru)}" }
-    val message = version?.message?.takeIf { it.isNotBlank() }?.let { ItemLine("“${it.trim()}”", c.text) }
-    // Taksi: the offer is per person - "2 × 160 000 so'm" under the total.
-    val perSeat = version?.takeIf { it.priceBasis == PriceBasis.PER_SEAT }?.let { ItemLine(seatsPrice(it.quantity, it.unitPriceMinor)) }
-    when {
-        version == null || !actions.open -> ItemCard(
-            title = driverLabel(thread),
-            underlined = true,
-            sub = t(R.string.listingBids_closed, "status" to closedStatus(thread, now)),
-            right = price,
-            rightColor = c.placeholder,
-        )
-        actions.theirTurn -> ItemCard(
-            title = driverLabel(thread),
-            underlined = true,
-            highlighted = cheapest,
-            badge = if (cheapest) t(R.string.client_listingBids_cheapest) to Tone.OK else null,
-            sub = route,
-            lines = listOfNotNull(
-                perSeat,
-                OrderRules.windowText(version.pickupWindowStart, version.pickupWindowEnd)?.let { ItemLine(it) },
-                summary?.let { ItemLine(it) },
-                message,
-                OrderRules.secondsLeft(version, now)?.let { ItemLine(countdownText(it), c.tone(Tone.WARN).fg) },
-            ),
-            right = price,
-            rightColor = c.accentText,
-            footer = answer,
-        )
-        else -> ItemCard(
-            title = driverLabel(thread),
-            underlined = true,
-            sub = summary,
-            lines = listOfNotNull(
-                perSeat,
-                ItemLine(t(R.string.listingBids_awaitingDriver)),
-                OrderRules.secondsLeft(version, now)?.let { ItemLine(countdownText(it), c.tone(Tone.WARN).fg) },
-            ),
-            right = price,
-            rightColor = c.accentText,
-            footer = {
-                ElchiButton(t(R.string.proposals_withdraw), onWithdraw, Modifier.fillMaxWidth().height(46.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, enabled = actions.canWithdraw, loading = busy)
-            },
-        )
-    }
-}
+/** The design's comment limit (the server takes 1000). */
+private const val COMMENT_MAX = 300

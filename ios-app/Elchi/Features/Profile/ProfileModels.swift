@@ -59,6 +59,23 @@ final class InboxModel {
         Task { _ = try? await api.readNotification(notificationId: item.id) }
     }
 
+    /// "Hammasini o'qilgan deb belgilash": v2 has no read-all, so every loaded unread row is marked one by one (at most
+    /// a page; a failure is ignored - the row is read here either way and the count is asked again after).
+    func readAll() async {
+        guard var list = items.value else { return }
+        let unreadRows = list.filter { !$0.isRead }.prefix(Self.pageSize)
+        guard !unreadRows.isEmpty else { return }
+        for index in list.indices where !list[index].isRead { list[index].isRead = true }
+        items = .loaded(list)
+        unread = 0
+        unreadMore = false
+        let api = api
+        await withTaskGroup(of: Void.self) { group in
+            for row in unreadRows { group.addTask { _ = try? await api.readNotification(notificationId: row.id) } }
+        }
+        await refreshUnread()
+    }
+
     /// The listing a negotiation belongs to, for a `/proposals/{id}` link.
     func listingId(ofProposal id: String) async -> String? {
         try? await api.getProposal(threadId: id).data.listingId

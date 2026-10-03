@@ -127,6 +127,63 @@ extension LocaleStore {
         }
     }
 
+    // MARK: BOSQICH 03
+
+    /// Line 3 of a listing card.
+    func listingMeta(_ meta: ListingMeta) -> String {
+        switch meta {
+        case .newOffer(let date): t("client.listing.metaNewOffer", ("ago", ago(date)))
+        case .driverChosen: t("listingBids.driverChosen")
+        case .validUntil(let date): t("client.listing.metaValidUntil", ("date", String(DepartureWindow.shortText(date).prefix(5))))
+        }
+    }
+
+    /// `29 sen, 10:00–12:00` - a booking's day with its pickup window (the design's booking card).
+    func dayWindow(_ start: String?, _ end: String?) -> String? {
+        guard let from = ServerTime.parse(start) else { return nil }
+        guard let to = ServerTime.parse(end) else { return dayMonth(from) }
+        return "\(dayMonth(from)), \(Self.clock(from))–\(Self.clock(to))"
+    }
+
+    /// `09:00` in Tashkent.
+    static func clock(_ date: Date) -> String {
+        String(DepartureWindow.shortText(date).suffix(5))
+    }
+
+    /// An offer's pickup window in its card: `10:00 – 12:00` on the listing's own day, otherwise with the day
+    /// (`30.09, 10:00 – 12:00`, or both days when it runs past midnight).
+    func offerWindow(_ version: ProposalVersionDTO, listingStart: String?) -> String? {
+        guard let start = ServerTime.parse(version.pickupWindowStart), let end = ServerTime.parse(version.pickupWindowEnd) else { return nil }
+        let startText = DepartureWindow.shortText(start), endText = DepartureWindow.shortText(end)
+        let startDay = String(startText.prefix(5)), endDay = String(endText.prefix(5))
+        if startDay != endDay { return "\(startText) – \(endText)" }
+        let listingDay = ServerTime.parse(listingStart).map { String(DepartureWindow.shortText($0).prefix(5)) }
+        let times = "\(Self.clock(start)) – \(Self.clock(end))"
+        return listingDay == startDay ? times : "\(startDay), \(times)"
+    }
+
+    /// `Quti · Kichik quti` - the parcel without the size limits (the facts grid's "Posilka").
+    func parcelShort(_ details: ParcelDetails?) -> String? {
+        guard let details else { return nil }
+        let parts = [details.parcelType.map(parcelTypeName), details.category.map(name)].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The offer's route only where it differs from the listing's (`Chilonzor → Buxoro avtovokzali`).
+    func offerRouteIfDifferent(_ version: ProposalVersionDTO, listing: ListingDTO?) -> String? {
+        let from = endName(stop: version.pickupStop, point: version.pickupPoint)
+        let to = endName(stop: version.dropoffStop, point: version.dropoffPoint)
+        if let listing, from == endName(stop: listing.originStop, point: listing.originPoint),
+           to == endName(stop: listing.destinationStop, point: listing.destinationPoint) { return nil }
+        return "\(from) → \(to)"
+    }
+
+    /// `1 soat 40 daqiqa qoldi`, or nil once the offer's time is over.
+    func timeLeft(_ version: ProposalVersionDTO, now: Date) -> String? {
+        guard let expires = ServerTime.parse(version.expiresAt), let left = Countdown.left(until: expires, now: now) else { return nil }
+        return t("client.offers.timeLeft", ("time", duration(hours: left.hours, minutes: left.minutes)))
+    }
+
     /// Share-link refusals: the active-link limit gets its own sentence.
     func shareErrorText(_ error: Error) -> String {
         if let error = error as? APIError, error.code == "VALIDATION_ERROR", error.details?["reason"] == .string("too_many_active") {

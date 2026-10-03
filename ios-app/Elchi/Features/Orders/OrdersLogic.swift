@@ -295,7 +295,9 @@ public struct StatusLabel: Equatable, Sendable {
         case .cancelled: .err
         default: .gray
         }
-        return StatusLabel(key: "status.\(status.rawValue)", raw: status.rawValue, tone: tone)
+        // The client's side of `fulfilled`: its request became a booking ("Bron qilindi", not "Bajarilgan").
+        let key = status == .fulfilled ? "client.listing.statusFulfilled" : "status.\(status.rawValue)"
+        return StatusLabel(key: key, raw: status.rawValue, tone: tone)
     }
 
     /// A booking's `service_status`. Parcel `in_transit` is set by the system when the trip departs: "Haydovchi yo'lga
@@ -376,5 +378,193 @@ final class ActionKeys {
     func settle(_ action: String, after error: Error? = nil) {
         if let error = error as? APIError, error.code == APIError.network || error.status >= 500 { return }
         keys[action] = nil
+    }
+}
+
+// MARK: - BOSQICH 03 design: what the listing and offer cards say
+
+/// Line 3 of a listing card: "Yangi taklif: 12 daqiqa oldin" (blue while an open offer exists), "Haydovchi tanlandi",
+/// or "E'lon amal qiladi: 02.10 gacha". A closed listing (expired, cancelled) says nothing: its expiry is no news.
+enum ListingMeta: Equatable, Sendable {
+    case newOffer(Date)
+    case driverChosen
+    case validUntil(Date)
+
+    static func of(_ listing: ListingDTO, stats: OfferStats?) -> ListingMeta? {
+        switch listing.status {
+        case .published, .paused:
+            if listing.status == .published, let stats, stats.open > 0, let newest = stats.newest { return .newOffer(newest) }
+            return ServerTime.parse(listing.expiresAt).map(ListingMeta.validUntil)
+        case .fulfilled:
+            return .driverChosen
+        default:
+            return nil
+        }
+    }
+
+    /// The accent colour: an open offer is waiting for the client.
+    var highlighted: Bool {
+        if case .newOffer = self { return true }
+        return false
+    }
+}
+
+/// The detail's five-step tracker: "E'lon qilindi · Takliflar · Haydovchi tanlandi · Yo'lda · Yakunlandi". Steps 0-2
+/// come from the listing and its threads, 3-4 from the booking made from it (when the orders list has it). An expired
+/// or cancelled listing is `dead`: every step grey and the second one a red cross.
+struct ListingProgress: Equatable, Sendable {
+    static let stepKeys = ["app.orderStatus.published", "client.listing.stepOffers", "listingBids.driverChosen", "status.in_transit",
+                           "app.progress.completed"]
+
+    let current: Int
+    let dead: Bool
+
+    static func of(_ listing: ListingDTO, hasThreads: Bool, bookingStatus: String?) -> ListingProgress {
+        switch listing.status {
+        case .expired, .cancelled:
+            return ListingProgress(current: 0, dead: true)
+        case .fulfilled:
+            switch bookingStatus {
+            case "completed"?: return ListingProgress(current: 4, dead: false)
+            case "in_transit"?, "picked_up"?, "delivered"?, "onboard"?, "arrived"?: return ListingProgress(current: 3, dead: false)
+            default: return ListingProgress(current: 2, dead: false)
+            }
+        default:
+            return ListingProgress(current: hasThreads ? 1 : 0, dead: false)
+        }
+    }
+}
+
+/// The one badge an offer card carries. The driver's answer to the client's counter wins; then the badge of the chosen
+/// sort ("Eng arzon" also draws the brand border); then "Yangi" for an offer this phone has not shown before.
+enum OfferBadge: Equatable, Sendable {
+    case cheapest, fastest, bestRated, counter, new
+
+    var key: String {
+        switch self {
+        case .cheapest: "client.listingBids.cheapest"
+        case .fastest: "client.offers.badgeFastest"
+        case .bestRated: "ratingBucket.good"
+        case .counter: "client.offers.badgeCounter"
+        case .new: "client.notifications.new"
+        }
+    }
+
+    var tone: Tone {
+        switch self {
+        case .cheapest: .ok
+        case .fastest, .bestRated: .blue
+        case .counter: .warn
+        case .new: .err
+        }
+    }
+
+    /// Badges for every thread of one board. Sort badges compare live offers only, and only when there are two or more
+    /// (a lone offer is not "the cheapest" of anything); "Yaxshi baholangan" is the server's `good` bucket, never a score.
+    static func badges(_ threads: [ProposalThreadDTO], sort: OfferSort, unseen: Set<String>, now: Date = Date()) -> [String: OfferBadge] {
+        let open = threads.filter { NegotiationActions.of($0, now: now).open }
+        var sortTargets: Set<String> = []
+        switch sort {
+        case .cheapest:
+            if let id = OfferSort.cheapestOpenId(threads, now: now) { sortTargets = [id] }
+        case .fastest:
+            if open.count >= 2, let first = OfferSort.fastest.sorted(open, now: now).first,
+               ServerTime.parse(first.currentVersion?.pickupWindowStart) != nil {
+                sortTargets = [first.id]
+            }
+        case .bestRated:
+            sortTargets = Set(open.filter { $0.driverSummary?.ratingBucket == .good }.map(\.id))
+        }
+        var out: [String: OfferBadge] = [:]
+        for thread in open {
+            if thread.driverCountered(now: now) {
+                out[thread.id] = .counter
+            } else if sortTargets.contains(thread.id) {
+                out[thread.id] = sort == .cheapest ? .cheapest : sort == .fastest ? .fastest : .bestRated
+            } else if unseen.contains(thread.id) && NegotiationActions.of(thread, now: now).theirTurn {
+                out[thread.id] = .new
+            }
+        }
+        return out
+    }
+}
+
+extension ProposalThreadDTO {
+    /// The driver answered the client's counter with a price of its own (revision 1 is the driver's first offer).
+    func driverCountered(now: Date = Date()) -> Bool {
+        guard let version = currentVersion else { return false }
+        return NegotiationActions.of(self, now: now).theirTurn && version.revision > 1
+    }
+
+    /// Why a closed offer is closed, in the design's words (`status_reason` first, then the version's status).
+    /// `accepted` is not "closed" but the agreed one.
+    func closedReasonKey(now: Date = Date()) -> String {
+        if state == "accepted" || currentVersion?.status == .accepted { return "client.amendment.statusAccepted" }
+        if NegotiationActions.of(self, now: now).expiredByClock { return "status.expired" }
+        switch currentVersion?.statusReason {
+        case "ttl_expired"?: return "status.expired"
+        case "rejected"?: return "amendment.rejected"
+        case "withdrawn"?: return "client.offers.closed.withdrawn"
+        case "demand_fulfilled"?: return "client.offers.closed.demandFulfilled"
+        case "listing_closed"?: return "notification.listing.cancelled.title"
+        case "listing_changed"?: return "client.offers.closed.listingChanged"
+        default: break
+        }
+        switch currentVersion?.status {
+        case .rejected?: return "amendment.rejected"
+        case .withdrawn?: return "client.offers.closed.withdrawn"
+        default: return "status.expired"
+        }
+    }
+
+    /// Identifies one driver-written version: a new revision from the same driver is news again.
+    var seenKey: String? {
+        guard let version = currentVersion, version.authorSide != .client else { return nil }
+        return "\(id):\(version.revision)"
+    }
+}
+
+/// "Yangi" on an offer card: the live driver versions this phone has not shown before. Remembered per listing in the
+/// app's defaults (a handful of short strings); a listing opened afresh from the list shows its news once.
+enum OfferSeen {
+    static let limit = 200
+
+    /// Thread ids whose current driver version is not in `seen`.
+    static func fresh(_ threads: [ProposalThreadDTO], seen: Set<String>, now: Date = Date()) -> Set<String> {
+        Set(threads.filter { thread in
+            guard NegotiationActions.of(thread, now: now).open, let key = thread.seenKey else { return false }
+            return !seen.contains(key)
+        }.map(\.id))
+    }
+
+    private static func defaultsKey(_ listingId: String) -> String { "elchi.offers.seen.\(listingId)" }
+
+    @MainActor static func load(_ listingId: String) -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: defaultsKey(listingId)) ?? [])
+    }
+
+    @MainActor static func remember(_ threads: [ProposalThreadDTO], listingId: String) {
+        let known = UserDefaults.standard.stringArray(forKey: defaultsKey(listingId)) ?? []
+        let added = threads.compactMap(\.seenKey).filter { !known.contains($0) }
+        guard !added.isEmpty else { return }
+        UserDefaults.standard.set(Array((known + added).suffix(limit)), forKey: defaultsKey(listingId))
+    }
+}
+
+/// The client's counter as typed: tap-to-validate ("Narxni kiriting.", "Haydovchi narxidan farqli narx kiriting.").
+/// The counter is a unit price (per seat for a passenger request), compared with the driver's unit price.
+enum CounterCheck {
+    static func error(priceMinor: Int, driverUnitMinor: Int) -> String? {
+        if priceMinor <= 0 { return "listingOwner.invalid.price" }
+        if priceMinor == driverUnitMinor { return "client.offers.counterSame" }
+        return nil
+    }
+}
+
+/// `Jo'nash` / `Oxirgi muddat` places: the first part of the address ("Chilonzor, 9-kvartal" -> "Chilonzor").
+enum PlaceShort {
+    static func of(_ text: String) -> String {
+        let first = text.split(separator: ",", maxSplits: 1).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? text
+        return first.isEmpty ? text : first
     }
 }

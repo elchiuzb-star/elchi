@@ -73,9 +73,9 @@ import uz.elchi.app.ui.theme.Elchi
 @Serializable private data object OrderSuccess
 @Serializable private data object Orders
 @Serializable private data object Proposals
-@Serializable private data class ListingDetail(val id: String)
+/** [offers]: opened for an offer (a notification, a push) - the detail starts at its inline "Haydovchi takliflari". */
+@Serializable private data class ListingDetail(val id: String, val offers: Boolean = false)
 @Serializable private data class ListingEdit(val id: String)
-@Serializable private data class ListingBids(val id: String)
 @Serializable private data class BookingDetail(val id: String, val accepted: Boolean = false)
 @Serializable private data class BookingChat(val id: String)
 @Serializable private data class BookingTracking(val id: String)
@@ -84,6 +84,8 @@ import uz.elchi.app.ui.theme.Elchi
 @Serializable private data class BookingSafety(val id: String)
 @Serializable private data class BookingSupport(val id: String)
 @Serializable private data object Notifications
+/** The same list pushed from the orders bell (design `notif` with a back button), not the drawer's root. */
+@Serializable private data object NotificationsPushed
 @Serializable private data object Profile
 @Serializable private data object Bonus
 @Serializable private data object SafetyCenter
@@ -190,6 +192,7 @@ fun ClientFlow(container: AppContainer, session: Session) {
         onHome = { nav.popBackStack<Home>(inclusive = false) },
         onOrders = toOrdersTop,
         onNotifications = { nav.navigate(Notifications) { popUpTo<Home> { inclusive = false }; launchSingleTop = true } },
+        onProposals = { nav.navigate(Proposals) { launchSingleTop = true } },
         onProfile = { nav.navigate(Profile) { launchSingleTop = true } },
         onHelp = { nav.navigate(Help) { launchSingleTop = true } },
         onSettings = { nav.navigate(Settings) { launchSingleTop = true } },
@@ -204,7 +207,8 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 if (target.chat) nav.navigate(BookingChat(target.id))
             }
             is InboxTarget.Listing -> nav.navigate(ListingDetail(target.id))
-            is InboxTarget.Proposal -> target.listingId?.let { nav.navigate(ListingDetail(it)) } ?: toOrdersTop()
+            // An offer opens its listing at the inline board (§0: the bids screen is now part of the detail).
+            is InboxTarget.Proposal -> target.listingId?.let { nav.navigate(ListingDetail(it, offers = true)) } ?: nav.navigate(Proposals) { launchSingleTop = true }
             is InboxTarget.SupportThread -> nav.navigate(SupportThread(target.id))
             is InboxTarget.Trip, InboxTarget.Wallet -> Unit
         }
@@ -401,7 +405,7 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 onListing = { id -> nav.navigate(ListingDetail(id)) },
                 onBooking = { id -> nav.navigate(BookingDetail(id)) },
                 onLegacy = { id -> nav.navigate(LegacyDetail(id)) },
-                onProposals = { nav.navigate(Proposals) },
+                onNotifications = { nav.navigate(NotificationsPushed) { launchSingleTop = true } },
                 drawer = drawer,
             )
         }
@@ -437,29 +441,26 @@ fun ClientFlow(container: AppContainer, session: Session) {
             ProposalsScreen(vm = orders, ru = ru, onBack = { nav.popBackStack() }, onAccepted = accepted)
         }
         composable<ListingDetail> { entry ->
-            val vm = listingViewModel(entry, entry.toRoute<ListingDetail>().id, container)
+            val route = entry.toRoute<ListingDetail>()
+            val vm = listingViewModel(entry, route.id, container)
             ListingDetailScreen(
                 vm = vm,
                 ru = ru,
                 languageTag = locale.tag,
                 onBack = { nav.popBackStack() },
                 onEdit = { nav.navigate(ListingEdit(vm.listingId)) },
-                onBids = { nav.navigate(ListingBids(vm.listingId)) },
                 onCancelled = {
                     orders.show(OrdersNotice.LISTING_CANCELLED)
                     backToOrders()
                 },
+                onAccepted = accepted,
+                scrollToOffers = route.offers,
             )
         }
         composable<ListingEdit> { entry ->
             val owner = remember(entry) { nav.getBackStackEntry<ListingDetail>() }
             val vm = listingViewModel(owner, entry.toRoute<ListingEdit>().id, container)
             ListingEditScreen(vm = vm, onBack = { nav.popBackStack() }, onSaved = { nav.popBackStack() })
-        }
-        composable<ListingBids> { entry ->
-            val owner = remember(entry) { nav.getBackStackEntry<ListingDetail>() }
-            val vm = listingViewModel(owner, entry.toRoute<ListingBids>().id, container)
-            ListingBidsScreen(vm = vm, ru = ru, onBack = { nav.popBackStack() }, onAccepted = accepted)
         }
         composable<BookingDetail> { entry ->
             val route = entry.toRoute<BookingDetail>()
@@ -508,6 +509,9 @@ fun ClientFlow(container: AppContainer, session: Session) {
         }
         composable<Notifications> {
             NotificationsScreen(vm = inbox, drawer = drawer, languageTag = locale.tag, onTarget = openTarget)
+        }
+        composable<NotificationsPushed> {
+            NotificationsScreen(vm = inbox, drawer = null, languageTag = locale.tag, onTarget = openTarget, onBack = { nav.popBackStack() })
         }
         composable<Profile> {
             val vm: ProfileViewModel = viewModel(factory = viewModelFactory {
@@ -636,13 +640,15 @@ internal fun StepScaffold(
     step: Pair<Int, Int>? = null,
     /** The body's scroll, when the screen moves it (back to the top to show its error list). */
     scrollState: ScrollState? = null,
+    /** Round icon buttons at the right of the title bar (share, edit, refresh). */
+    actions: (@Composable () -> Unit)? = null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Elchi.colors
     SystemBarIcons(dark = !c.isDark)
     Column(Modifier.fillMaxSize().background(c.page).imePadding()) {
         Column(Modifier.statusBarsPadding()) {
-            TitleBar(onBack, t(R.string.common_back), title, right = right, onRight = onRight, trailing = step?.let { (n, total) -> { StepPill(n, total) } })
+            TitleBar(onBack, t(R.string.common_back), title, right = right, onRight = onRight, trailing = step?.let { (n, total) -> { StepPill(n, total) } } ?: actions)
             if (step != null) StepProgress(step.first, step.second)
             banner?.invoke(this)
         }

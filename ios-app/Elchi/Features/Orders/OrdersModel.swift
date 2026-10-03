@@ -284,14 +284,18 @@ final class ListingModel {
     private(set) var commandError: Error?
     /// Which command `commandError` belongs to (the share section and the edit screen show only their own).
     private(set) var failed: OwnerCommand?
-    /// What the last command said: an ok sentence key, plus any server warnings (masked contacts, Q43).
+    /// What the last command said: an ok sentence key (with `{count}` = `noticeCount`), plus any server warnings
+    /// (masked contacts, Q43).
     private(set) var notice: String?
+    private(set) var noticeCount = 0
     private(set) var warnings: [ApiWarning] = []
 
-    // Share (the URL comes back only once: kept for this screen only).
-    var shareDays = ShareTTL.defaultDays
-    var shareChannel: ShareLinkChannel = .generic
+    /// The share link made on this screen (the URL comes back only once): the bar's share icon sends it again rather
+    /// than spending another of the five active links.
     private(set) var shareLink: ShareLinkDTO?
+
+    /// Offers this phone shows for the first time since the listing was opened ("Yangi").
+    private(set) var unseen: Set<String> = []
 
     init(id: String, initial: ListingDTO?, api: ElchiAPI, keys: ActionKeys, orders: ClientOrdersModel) {
         self.id = id
@@ -302,7 +306,10 @@ final class ListingModel {
         offers = OfferThreads(api: api, keys: keys) {
             try await api.listListingProposals(listingId: id, limit: 100).data
         }
-        offers.onChanged = { [weak orders] threads in orders?.updateStats(id, threads: threads) }
+        offers.onChanged = { [weak orders, weak self] threads in
+            orders?.updateStats(id, threads: threads)
+            self?.noteSeen(threads)
+        }
         // A refused answer can mean the listing itself moved on (edited, booked, closed): show its current state too.
         offers.onRefused = { [weak self] in await self?.reloadListing() }
         offers.termsVersion = { [weak self] _ in self?.listing.value?.termsVersion }
@@ -329,8 +336,20 @@ final class ListingModel {
         offers.threads.value?.filter { NegotiationActions.of($0).open }.count ?? 0
     }
 
+    /// The booking made from this listing, when the orders list has it (the tracker's "Yo'lda" / "Yakunlandi").
+    var bookingStatus: String? {
+        orders?.bookings.value?.first { $0.listingIds?.request == id }?.serviceStatus
+    }
+
+    /// New driver versions become "Yangi" for as long as the screen is open, and are remembered as shown.
+    private func noteSeen(_ threads: [ProposalThreadDTO]) {
+        unseen.formUnion(OfferSeen.fresh(threads, seen: OfferSeen.load(id)))
+        OfferSeen.remember(threads.filter { NegotiationActions.of($0).open }, listingId: id)
+    }
+
     func clearNotice() {
         notice = nil
+        noticeCount = 0
         warnings = []
         commandError = nil
         failed = nil
@@ -340,6 +359,7 @@ final class ListingModel {
     func reset() {
         clearNotice()
         shareLink = nil
+        unseen = []
         offers.useBonus = [:]
     }
 
@@ -395,6 +415,8 @@ final class ListingModel {
     /// again (the form keeps what was typed).
     func save(_ plan: ListingPatchPlan) async -> Bool {
         guard running == nil, let dto = listing.value, plan.invalid == nil, !plan.empty else { return false }
+        // Q20: a material edit closes the open offers; the toast says how many went.
+        let closing = plan.material ? openOffers : 0
         running = .save
         clearNotice()
         defer { running = nil }
@@ -402,7 +424,8 @@ final class ListingModel {
             let result = try await api.patchListing(listingId: dto.id, body: plan.body(expectedVersion: dto.version))
             listing = .loaded(result.data)
             orders?.replace(result.data)
-            notice = "listingOwner.saved"
+            notice = closing > 0 ? "client.listing.savedClosed" : "listingOwner.saved"
+            noticeCount = closing
             warnings = result.warnings
             await offers.reload()
             return true
@@ -416,23 +439,28 @@ final class ListingModel {
 
     // MARK: Share
 
-    func createShareLink() async {
-        guard running == nil, let dto = listing.value else { return }
-        let hours = ShareTTL.hours(days: shareDays)
-        let action = "share:\(dto.id):\(shareChannel.rawValue):\(hours)"
+    /// The bar's share icon: the link already made on this screen while it is still valid, else a new generic one for
+    /// two days (the design's default). nil = refused (`commandError`: five active links, a closed listing).
+    func shareLinkForSharing(now: Date = Date()) async -> ShareLinkDTO? {
+        if let link = shareLink, (ServerTime.parse(link.expiresAt) ?? .distantFuture) > now { return link }
+        guard running == nil, let dto = listing.value else { return nil }
+        let hours = ShareTTL.hours(days: ShareTTL.defaultDays)
+        let action = "share:\(dto.id):\(ShareLinkChannel.generic.rawValue):\(hours)"
         running = .share
         commandError = nil
         failed = nil
         defer { running = nil }
         do {
-            let result = try await api.createShareLink(listingId: dto.id, body: ShareLinkCreate(channel: shareChannel, ttlHours: hours),
+            let result = try await api.createShareLink(listingId: dto.id, body: ShareLinkCreate(channel: .generic, ttlHours: hours),
                                                        idempotencyKey: keys.key(action))
             keys.settle(action)
             shareLink = result.data
+            return result.data
         } catch {
             keys.settle(action, after: error)
             commandError = error
             failed = .share
+            return nil
         }
     }
 
@@ -473,6 +501,9 @@ final class OfferThreads {
     private(set) var warnings: [String: [ApiWarning]] = [:]
     /// "Bonusni ishlataman" ticks, per thread; always start unticked (no pre-filled consent).
     var useBonus: [String: Bool] = [:]
+    /// The client's own last price on a thread the driver has countered, keyed `thread:revision` ("(sizniki …)"): the
+    /// list leaves `versions` out, so it is read from the thread itself, once per driver revision.
+    private(set) var clientPrices: [String: Int] = [:]
 
     init(api: ElchiAPI, keys: ActionKeys, fetch: @escaping @MainActor () async throws -> [ProposalThreadDTO]) {
         self.api = api
@@ -485,8 +516,23 @@ final class OfferThreads {
             let list = try await fetch()
             threads = .loaded(list)
             await onChanged?(list)
+            await loadClientPrices(list)
         } catch {
             if threads.value == nil { threads = .failed(error) }
+        }
+    }
+
+    /// The client's previous price on a driver's counter, when known.
+    func clientPrice(_ thread: ProposalThreadDTO) -> Int? {
+        thread.currentVersion.flatMap { clientPrices["\(thread.id):\($0.revision)"] }
+    }
+
+    private func loadClientPrices(_ list: [ProposalThreadDTO]) async {
+        for thread in list where thread.driverCountered() {
+            guard let revision = thread.currentVersion?.revision, clientPrices["\(thread.id):\(revision)"] == nil,
+                  let full = try? await api.getProposal(threadId: thread.id).data else { continue }
+            let mine = (full.versions ?? []).filter { $0.authorSide == .client && $0.revision < revision }.max { $0.revision < $1.revision }
+            if let mine { clientPrices["\(thread.id):\(revision)"] = mine.totalMinor }
         }
     }
 

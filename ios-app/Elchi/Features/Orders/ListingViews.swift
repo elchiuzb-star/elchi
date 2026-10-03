@@ -3,19 +3,28 @@ import UIKit
 
 // MARK: - Buyurtma tafsilotlari
 
-/// One listing of the client's: the summary card, its details, the parcel photo, the offers button, the owner's
-/// controls (edit, pause / resume), share links, and cancel behind a confirmation sheet.
+/// One listing of the client's (BOSQICH 03): a route map, the summary sheet (status, tracker, window, facts, photo),
+/// the status notice, the drivers' offers inline (sort, counter, reject, choose), pause / resume, cancel behind a
+/// confirmation sheet. The bar carries the pencil (edit) and share: the link made on this screen goes to the system
+/// share sheet with the server's own text.
 struct ListingDetailView: View {
     let model: ListingModel
+    /// Opened for its offers (a notification, the old offers route): the body scrolls to "Haydovchi takliflari".
+    var focusOffers = false
     let onBack: () -> Void
     let onEdit: () -> Void
-    let onBids: () -> Void
+    /// The listing and the booking the accept made (the flow opens its detail, then its chat - Q100).
+    let onAccepted: (String, ClientBookingDTO) -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @State private var confirmCancel = false
+    @State private var accepting: ProposalThreadDTO?
+
+    static let offersAnchor = "elchi.listing.offers"
 
     var body: some View {
-        ScreenScaffold(title: strings.t("listingDetail.title"), backLabel: strings.t("common.back"), onBack: onBack, banner: banner) {
+        ScreenScaffold(title: strings.t("listingDetail.title"), backLabel: strings.t("common.back"), onBack: onBack, banner: banner,
+                       actions: barActions, initialScroll: focusOffers ? Self.offersAnchor : nil) {
             switch model.listing {
             case .loading:
                 SkeletonCards(count: 3)
@@ -38,45 +47,177 @@ struct ListingDetailView: View {
                 }
             }, onBack: { confirmCancel = false })
         }
+        .overlay {
+            if let thread = accepting {
+                AcceptDialog(thread: thread, offers: model.offers, onClose: { accepting = nil }) { onAccepted(thread.listingId, $0) }
+            }
+        }
+    }
+
+    private var barActions: [BarAction] {
+        guard let listing = model.listing.value else { return [] }
+        let actions = OwnerListingActions.of(listing.status)
+        var out: [BarAction] = []
+        // The design registers a pencil but draws no edit control: the pencil sits beside share (designer to confirm).
+        if actions.canEdit {
+            out.append(BarAction(id: "edit", systemImage: "pencil.line", label: strings.t("listingOwner.edit"), action: onEdit))
+        }
+        if actions.canShare {
+            out.append(BarAction(id: "share", icon: .share, label: strings.t("client.share.send"), loading: model.running == .share) {
+                Task { await share() }
+            })
+        }
+        return out
+    }
+
+    /// The link already made on this screen, else a new one (the URL comes back once); then the system share sheet with
+    /// the server's text, which carries the link itself.
+    private func share() async {
+        guard let link = await model.shareLinkForSharing() else { return }
+        SystemShare.present([link.shareText])
     }
 
     @ViewBuilder
     private func content(_ listing: ListingDTO) -> some View {
         let actions = OwnerListingActions.of(listing.status)
         ForEach(model.warnings, id: \.code) { Note(strings.warningText($0), tone: .warn) }
+        if let error = model.commandError, model.running == nil, model.failed == .share {
+            Note(strings.shareErrorText(error), tone: .err)
+        }
 
-        ListingSummaryCard(listing: listing, stats: offerStats)
-        details(listing)
-        // A passenger request has no cargo photo.
-        if listing.serviceType == .parcel { photo(listing) }
-        offersEntry(listing)
+        let markers = mapMarkers(listing)
+        if markers.count == 2 { hero(markers) }
+        ListingSheetCard(listing: listing, model: model, overlapsMap: markers.count == 2)
+        if let notice = notice(listing) { Note(strings.t(notice.key), tone: notice.tone) }
 
-        if actions.canEdit || actions.canPause || actions.canResume {
-            SectionTitle(strings.t("client.listingDetail.manage"))
-            HStack(spacing: 8) {
-                if actions.canEdit { ElchiButton(strings.t("listingOwner.edit"), variant: .neutral, size: .pair, icon: .file, action: onEdit) }
-                if actions.canPause {
-                    ElchiButton(strings.t("listingOwner.pause"), variant: .neutral, size: .pair, loading: model.running == .pause) {
-                        Task { await model.pause() }
-                    }
-                } else if actions.canResume {
-                    ElchiButton(strings.t("listingOwner.resume"), variant: .neutral, size: .pair, loading: model.running == .resume) {
-                        Task { await model.resume() }
-                    }
+        offersSection(listing)
+
+        if let link = model.shareLink { shareRow(link) }
+        if actions.canPause || actions.canResume { pauseRow(actions) }
+        if actions.canCancel {
+            Button { confirmCancel = true } label: {
+                Text(strings.t("listingDetail.cancel")).font(ElchiFont.poppins(14, .medium)).foregroundStyle(c.tone(.err).fg)
+                    .padding(8).frame(minHeight: 44)
+            }
+            .buttonStyle(PressFade())
+            .disabled(model.running != nil)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// The route's two ends on a small, still map ("Yo'nalish": the listing has no distance to show - BLOCKED km).
+    private func hero(_ markers: [MapMarker]) -> some View {
+        ElchiMap(markers: markers, zoom: 9, interactive: false, placeholder: strings.t("routeSummary.direction"))
+            .frame(height: 150)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .overlay(alignment: .bottomTrailing) {
+                HStack(spacing: 6) {
+                    Circle().fill(Color(hex: 0x9AA6B5)).frame(width: 8, height: 8)
+                    Text(strings.t("routeSummary.direction")).font(ElchiFont.poppins(12.5, .semibold)).foregroundStyle(c.text)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(c.card, in: Capsule())
+                .shadow(color: c.shadow, radius: 7, y: 4)
+                .padding(.trailing, 12).padding(.bottom, 46)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .padding(.horizontal, -4)
+    }
+
+    private func mapMarkers(_ listing: ListingDTO) -> [MapMarker] {
+        let ends = [listing.originPoint.map { MapMarker(GeoPoint(lat: $0.lat, lng: $0.lng), .origin) },
+                    listing.destinationPoint.map { MapMarker(GeoPoint(lat: $0.lat, lng: $0.lng), .destination) }]
+        return ends.compactMap { $0 }
+    }
+
+    private func notice(_ listing: ListingDTO) -> (key: String, tone: Tone)? {
+        switch listing.status {
+        case .paused: ("client.listing.noticePaused", .gray)
+        case .expired: ("client.listing.noticeExpired", .gray)
+        case .cancelled: ("client.listing.noticeCancelled", .err)
+        case .fulfilled: ("client.listing.noticeFulfilled", .ok)
+        default: nil
+        }
+    }
+
+    @ViewBuilder
+    private func offersSection(_ listing: ListingDTO) -> some View {
+        let threads = model.offers.threads.value
+        HStack(alignment: .firstTextBaseline) {
+            Text(strings.t("listingBids.title")).font(ElchiFont.section).foregroundStyle(c.text).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            if let threads {
+                let open = model.openOffers
+                Text(open > 0 ? strings.t("client.listing.offersSubOpen", ("count", open))
+                     : strings.t(threads.isEmpty ? "client.listing.offersSubNone" : "client.listing.offersSubNoneOpen"))
+                    .font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+            }
+        }
+        .padding(.top, 4)
+        .id(Self.offersAnchor)
+        switch model.offers.threads {
+        case .loading:
+            SkeletonCards(count: 2)
+        case .failed(let error):
+            Note(strings.errorText(error), tone: .err)
+            ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await model.load() } }
+        case .loaded(let threads) where threads.isEmpty:
+            HStack(spacing: 12) {
+                ElchiIcon.tag.image(size: 18).foregroundStyle(c.accentText)
+                    .frame(width: 38, height: 38)
+                    .background(c.isDark ? c.soft : Color(hex: 0xEEF4FA), in: Circle())
+                Text(strings.t("client.offers.waitHint")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .background { RoundedRectangle(cornerRadius: 18).fill(c.card).shadow(color: c.shadow, radius: 12, y: 6) }
+        case .loaded(let threads):
+            OffersBoard(threads: threads, listing: listing, offers: model.offers, unseen: model.unseen) { accepting = $0 }
+            // Q43: who the driver is stays hidden until accept.
+            Note(strings.t("listingBids.identityHidden"))
+        }
+    }
+
+    /// The link made on this screen stays revocable ("Havolani bekor qilish"): the design's revoke is unbound.
+    private func shareRow(_ link: ShareLinkDTO) -> some View {
+        HStack(spacing: 10) {
+            ElchiIcon.share.image(size: 18).foregroundStyle(c.accentText)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(strings.t("client.share.link")).font(ElchiFont.poppins(13, .semibold)).foregroundStyle(c.text)
+                if let expires = ServerTime.parse(link.expiresAt) {
+                    Text(strings.t("trackingShare.validUntil", ("time", DepartureWindow.text(expires))))
+                        .font(ElchiFont.caption).foregroundStyle(c.muted)
                 }
             }
-            .disabled(model.running != nil)
-            if actions.canPause || actions.canResume {
-                Text(strings.t(actions.canPause ? "listingOwner.pauseHint" : "client.listingDetail.resumeHint"))
-                    .font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button { Task { await model.revokeShareLink() } } label: {
+                Text(strings.t("client.share.revoke")).font(ElchiFont.poppins(13, .medium)).foregroundStyle(c.tone(.err).fg)
+                    .multilineTextAlignment(.trailing)
             }
+            .buttonStyle(PressFade())
+            .frame(minHeight: 44)
         }
-        if actions.canShare { ShareSection(model: model) }
-        if actions.canCancel {
-            ElchiButton(strings.t("listingDetail.cancel"), variant: .dangerSoft) { confirmCancel = true }
-                .disabled(model.running != nil)
-                .padding(.top, 4)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(c.card, in: RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(c.line, lineWidth: 1) }
+    }
+
+    /// Pause / resume stay reachable (the design draws no control for them): one compact row with its hint.
+    private func pauseRow(_ actions: OwnerListingActions) -> some View {
+        HStack(spacing: 12) {
+            Text(strings.t(actions.canPause ? "listingOwner.pauseHint" : "client.listingDetail.resumeHint"))
+                .font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            ElchiButton(strings.t(actions.canPause ? "listingOwner.pause" : "listingOwner.resume"), variant: .neutral, size: .medium,
+                        loading: model.running == .pause || model.running == .resume) {
+                Task { if actions.canPause { await model.pause() } else { await model.resume() } }
+            }
+            .fixedSize()
+            .disabled(model.running != nil)
         }
+        .padding(.top, 4)
     }
 
     /// What the last owner command did (or why it failed), kept in sight under the top bar.
@@ -84,72 +225,204 @@ struct ListingDetailView: View {
         if let error = model.commandError, model.running == nil, model.failed != .share, model.failed != .save {
             return (strings.errorText(error), .err)
         }
-        return model.notice.map { (strings.t($0), .ok) }
+        return model.notice.map { (strings.t($0, ("count", model.noticeCount)), .ok) }
+    }
+}
+
+/// The detail's sheet card: "Holat" and the badge, the tracker, the window's two ends, the facts grid with the parcel
+/// photo, then the comment and the expiry. No "E'lon ID": there is no short public code (BLOCKED).
+private struct ListingSheetCard: View {
+    let listing: ListingDTO
+    let model: ListingModel
+    let overlapsMap: Bool
+    @Environment(LocaleStore.self) private var strings
+    @Environment(\.elchi) private var c
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            let status = strings.status(.listing(listing.status))
+            HStack(alignment: .center, spacing: 12) {
+                Text(strings.t("driverProfile.status")).font(ElchiFont.caption).foregroundStyle(c.muted)
+                Spacer(minLength: 8)
+                Text(status.text).font(ElchiFont.poppins(12.5, .semibold)).foregroundStyle(c.tone(status.tone).fg)
+                    .multilineTextAlignment(.trailing)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(c.tone(status.tone).bg, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .padding(.top, overlapsMap ? 4 : 0)
+            .accessibilityElement(children: .combine)
+            ProgressTracker(progress: ListingProgress.of(listing, hasThreads: !(model.offers.threads.value ?? []).isEmpty,
+                                                         bookingStatus: model.bookingStatus), statusText: status.text)
+            windowEnds
+            Rectangle().fill(c.field).frame(height: 1)
+            facts
+            extras
+        }
+        .padding(.horizontal, 18).padding(.vertical, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { RoundedRectangle(cornerRadius: 28).fill(c.card).shadow(color: c.shadow, radius: 12, y: 6) }
+        .overlay(alignment: .top) {
+            if overlapsMap { Capsule().fill(c.outline).frame(width: 44, height: 5).padding(.top, 8).accessibilityHidden(true) }
+        }
+        .padding(.top, overlapsMap ? -34 : 0)
     }
 
-    private var offerStats: OfferStats? {
-        guard let threads = model.offers.threads.value else { return nil }
-        let open = threads.filter { NegotiationActions.of($0).open }
-        return OfferStats(open: open.count, newest: open.compactMap { ServerTime.parse($0.currentVersion?.createdAt) }.max())
-    }
-
-    private func details(_ listing: ListingDTO) -> some View {
-        ElchiCard {
-            CardRow(strings.t(listing.originStop == nil ? "listingDetail.pickupPoint" : "listingDetail.pickupStop"),
-                    strings.endAddress(stop: listing.originStop, point: listing.originPoint), first: true)
-            CardRow(strings.t(listing.destinationStop == nil ? "listingDetail.dropoffPoint" : "listingDetail.dropoffStop"),
-                    strings.endAddress(stop: listing.destinationStop, point: listing.destinationPoint))
-            CardRow(strings.t("listingDetail.departureWindow"), strings.window(listing.departureWindowStart, listing.departureWindowEnd))
-            CardRow(strings.t("common.price"), strings.money(listing.totalMinor))
-            if let people = strings.peopleLine(listing) {
-                CardRow(strings.t("orderForm.review.passengers"), people, detail: strings.t("orderForm.review.seatNegotiated"))
+    private var windowEnds: some View {
+        let start = ServerTime.parse(listing.departureWindowStart).map(DepartureWindow.shortText) ?? "?"
+        let end = ServerTime.parse(listing.departureWindowEnd).map(DepartureWindow.shortText) ?? "?"
+        let from = PlaceShort.of(strings.endAddress(stop: listing.originStop, point: listing.originPoint))
+        let to = PlaceShort.of(strings.endAddress(stop: listing.destinationStop, point: listing.destinationPoint))
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(strings.t("client.listing.departAt", ("time", start))).font(ElchiFont.caption).foregroundStyle(c.muted)
+                Text(from).font(ElchiFont.poppins(15, .medium)).foregroundStyle(c.text)
             }
-            if let parcel = strings.parcel(listing.parcel) { CardRow(strings.t("listingDetail.parcel"), parcel) }
-            if let comment = listing.comment, !comment.isEmpty { CardRow(strings.t("listingOwner.commentLabel"), comment) }
-            if let expires = ServerTime.parse(listing.expiresAt) {
-                CardRow(strings.t("client.listingDetail.expires"),
-                        strings.t("client.listingDetail.until", ("date", String(DepartureWindow.shortText(expires).prefix(5)))))
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(strings.t("client.listing.deadlineAt", ("time", end))).font(ElchiFont.caption).foregroundStyle(c.muted)
+                Text(to).font(ElchiFont.poppins(15, .medium)).foregroundStyle(c.text)
             }
+            .multilineTextAlignment(.trailing)
+            .accessibilityElement(children: .combine)
         }
     }
 
-    @ViewBuilder
-    private func photo(_ listing: ListingDTO) -> some View {
-        SectionTitle(strings.t("listingDetail.parcelPhoto"))
-        if let url = model.photoURL {
-            // A short-lived signed link (Q6): when it has expired, pulling to refresh fetches a new one.
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                case .failure:
-                    Text(strings.t("app.photo.reload")).font(ElchiFont.caption).foregroundStyle(c.muted)
-                default:
-                    ProgressView()
+    /// Two columns of facts and, for a parcel, the photo column (92 x 150). Taksi: people instead of the parcel and
+    /// the full width.
+    private var facts: some View {
+        let parcel = listing.serviceType == .parcel
+        let items: [(String, String, String?)] = [
+            (strings.t("ui.from"), strings.endAddress(stop: listing.originStop, point: listing.originPoint), nil),
+            (strings.t("ui.to"), strings.endAddress(stop: listing.destinationStop, point: listing.destinationPoint), nil),
+            (strings.t("common.price"), strings.money(listing.totalMinor),
+             parcel ? nil : strings.seatsTotal(listing.passenger?.seatCount ?? listing.quantity, unitMinor: listing.unitPriceMinor)),
+            (strings.t("client.listing.views"), strings.t("client.listing.viewsCount", ("count", listing.viewCount ?? 0)), nil),
+            parcel ? (strings.t("listingDetail.parcel"), strings.parcelShort(listing.parcel) ?? "—", nil)
+                : (strings.t("orderForm.review.passengers"),
+                   strings.t("orderForm.review.peopleCount", ("count", listing.passenger?.seatCount ?? listing.quantity)), nil),
+            (strings.t("client.listing.stepOffers"), strings.t("client.listing.offersOpenShort", ("count", model.openOffers)), nil),
+        ]
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 16) {
+                ForEach(0..<3, id: \.self) { row in
+                    HStack(alignment: .top, spacing: 12) {
+                        fact(items[row * 2])
+                        fact(items[row * 2 + 1])
+                    }
                 }
             }
-            .frame(maxWidth: .infinity).frame(height: 170)
-            .background(c.field)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            .accessibilityLabel(strings.t("app.photo.alt"))
-        } else {
-            Text(strings.t("app.photo.none")).font(ElchiFont.caption).foregroundStyle(c.muted)
+            if parcel { photo }
         }
     }
 
-    @ViewBuilder
-    private func offersEntry(_ listing: ListingDTO) -> some View {
-        switch model.offers.threads {
-        case .loaded(let threads) where threads.isEmpty:
-            if listing.status == .published {
-                Note(strings.t("listingBids.emptySubtitle"), tone: .gray, title: strings.t("listingBids.emptyTitle"))
+    private func fact(_ item: (String, String, String?), limit: Int? = 3) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(item.0).font(ElchiFont.caption).foregroundStyle(c.muted)
+            // A long street address stops at three lines (the full one is the driver's after accept anyway).
+            Text(item.1).font(ElchiFont.poppins(14.5, .medium)).foregroundStyle(c.text).lineSpacing(1).lineLimit(limit)
+                .fixedSize(horizontal: false, vertical: true)
+            if let detail = item.2 { Text(detail).font(ElchiFont.caption).foregroundStyle(c.muted) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The parcel photo's signed link (Q6: short-lived - pulling to refresh fetches a new one).
+    private var photo: some View {
+        Group {
+            if let url = model.photoURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image): image.resizable().scaledToFill()
+                    case .failure: caption(strings.t("app.photo.reload"))
+                    default: ProgressView()
+                    }
+                }
+            } else {
+                caption(strings.t("app.photo.none"))
             }
-        case .loaded:
-            ElchiButton(strings.t("client.listingDetail.viewOffers", ("count", model.openOffers)), action: onBids)
-        case .failed(let error):
-            Note(strings.errorText(error), tone: .err)
-        case .loading:
-            EmptyView()
+        }
+        .frame(width: 92, height: 150)
+        .background(c.field)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .accessibilityElement()
+        .accessibilityLabel(strings.t("app.photo.alt"))
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text).font(ElchiFont.poppins(10.5)).foregroundStyle(c.muted).multilineTextAlignment(.center).padding(6)
+    }
+
+    /// Kept under the grid (the design drops them): the comment, and while the listing is live its expiry.
+    @ViewBuilder
+    private var extras: some View {
+        let comment = listing.comment.flatMap { $0.isEmpty ? nil : $0 }
+        let expires = listing.status == .published || listing.status == .paused ? ServerTime.parse(listing.expiresAt) : nil
+        if comment != nil || expires != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                Rectangle().fill(c.field).frame(height: 1)
+                if let comment { fact((strings.t("listingOwner.commentLabel"), comment, nil), limit: nil) }
+                if let expires {
+                    fact((strings.t("client.listingDetail.expires"),
+                          strings.t("client.listingDetail.until", ("date", String(DepartureWindow.shortText(expires).prefix(5)))), nil))
+                }
+            }
+        }
+    }
+}
+
+/// Five dots on a dotted line: done steps brand blue with a tick, the current one ringed; a dead listing all grey with
+/// a red cross on "Takliflar". VoiceOver hears the step reached.
+private struct ProgressTracker: View {
+    let progress: ListingProgress
+    /// Said instead of a step when the listing is closed.
+    let statusText: String
+    @Environment(LocaleStore.self) private var strings
+    @Environment(\.elchi) private var c
+
+    var body: some View {
+        let count = ListingProgress.stepKeys.count
+        HStack(spacing: 0) {
+            ForEach(0..<count, id: \.self) { index in
+                dot(index)
+                if index < count - 1 {
+                    Line().stroke(lineColor(index), style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [0.1, 6]))
+                        .frame(height: 3).padding(.horizontal, 4)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(progress.dead ? statusText : strings.t(ListingProgress.stepKeys[progress.current]))
+    }
+
+    private func done(_ index: Int) -> Bool { !progress.dead && index <= progress.current }
+
+    private func dot(_ index: Int) -> some View {
+        let cross = progress.dead && index == 1
+        let fill = done(index) ? c.brand : cross ? c.tone(.err).bg : c.field
+        let icon: ElchiIcon = cross ? .x : .check
+        let tint = done(index) ? c.onBrand : cross ? c.tone(.err).fg : Color(hex: 0x9AA6B5)
+        return icon.image(size: 13).foregroundStyle(tint)
+            .frame(width: 26, height: 26)
+            .background(fill, in: Circle())
+            .overlay {
+                if !progress.dead && index == progress.current {
+                    Circle().strokeBorder(c.isDark ? c.soft : Color(hex: 0xBFE3FF), lineWidth: 3)
+                }
+            }
+    }
+
+    private func lineColor(_ index: Int) -> Color {
+        !progress.dead && index < progress.current ? c.brand : c.outline
+    }
+
+    private struct Line: Shape {
+        func path(in rect: CGRect) -> Path {
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            return path
         }
     }
 }
@@ -183,76 +456,25 @@ private struct CancelListingSheet: View {
     }
 }
 
-/// Share links: TTL in days (the API takes hours), generic or Telegram text; the URL is returned once, so it is
-/// shown here with copy and the system share sheet.
-private struct ShareSection: View {
-    let model: ListingModel
-    @Environment(LocaleStore.self) private var strings
-    @Environment(\.elchi) private var c
-    @State private var copied = false
-
-    var body: some View {
-        SectionTitle(strings.t("listingShare.title"), description: strings.t("trackingShare.shareHint"))
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(ShareTTL.days, id: \.self) { days in
-                    Chip(strings.t("trackingShare.ttlDays", ("count", days)), selected: model.shareDays == days, filled: true) { model.shareDays = days }
-                }
-            }
-        }
-        .accessibilityLabel(strings.t("trackingShare.ttlLabel"))
-        Segmented([(ShareLinkChannel.generic, strings.t("trackingShare.channelGeneric")), (.telegram, strings.t("client.share.telegram"))],
-                  selected: model.shareChannel) { model.shareChannel = $0 }
-        ElchiButton(strings.t("trackingShare.create"), variant: .soft, icon: .share, loading: model.running == .share) {
-            copied = false
-            Task { await model.createShareLink() }
-        }
-        .disabled(model.running != nil)
-        if let error = model.commandError, model.running == nil, model.failed == .share {
-            Note(strings.shareErrorText(error), tone: .err)
-        }
-        if let link = model.shareLink { linkBox(link) }
-    }
-
-    private func linkBox(_ link: ShareLinkDTO) -> some View {
-        ElchiCard(padding: EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(strings.t("client.share.link")).font(ElchiFont.caption).foregroundStyle(c.muted)
-                Text(link.url).font(.system(size: 13, design: .monospaced)).foregroundStyle(c.text).lineLimit(2).textSelection(.enabled)
-                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(c.field, in: RoundedRectangle(cornerRadius: 14))
-                Text(strings.t("client.share.text")).font(ElchiFont.caption).foregroundStyle(c.muted)
-                Text(link.shareText).font(ElchiFont.poppins(13)).foregroundStyle(c.text).textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let expires = ServerTime.parse(link.expiresAt) {
-                    Text(strings.t("trackingShare.validUntil", ("time", DepartureWindow.text(expires)))).font(ElchiFont.caption).foregroundStyle(c.muted)
-                }
-                HStack(spacing: 8) {
-                    ElchiButton(strings.t(copied ? "trackingShare.copied" : "promoScreen.copy"), variant: .soft, size: .pair, icon: .copy) {
-                        UIPasteboard.general.string = link.url
-                        copied = true
-                    }
-                    ShareLink(item: link.url, message: Text(link.shareText)) {
-                        HStack(spacing: 6) {
-                            ElchiIcon.share.image(size: 18)
-                            Text(strings.t("client.share.send")).font(ElchiFont.buttonSmall).lineLimit(1)
-                        }
-                        .foregroundStyle(c.onBrand)
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(c.brand, in: Capsule())
-                    }
-                }
-                Text(strings.t("trackingShare.urlOnce")).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
-                ElchiButton(strings.t("client.share.revoke"), variant: .ghost, size: .medium) { Task { await model.revokeShareLink() } }
-            }
-        }
+/// The system share sheet over whatever is on screen (the bar's share icon creates the link first, then shares).
+@MainActor
+enum SystemShare {
+    static func present(_ items: [Any]) {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        guard var top = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController else { return }
+        while let next = top.presentedViewController { top = next }
+        let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = top.view
+        top.present(sheet, animated: true)
     }
 }
 
 // MARK: - E'lonni tahrirlash
 
 /// Price, comment and the departure window. Q20: moving the window of a live listing closes its open offers - when
-/// there are any, the warning says how many and the button asks for the explicit "Tushundim, saqlash".
+/// there are any, the warning says how many and the button asks for the explicit "Tushundim, saqlash". The button is
+/// always tappable: what is wrong shows on tap (a red box at the top, the field's red border).
 struct ListingEditView: View {
     let model: ListingModel
     let onBack: () -> Void
@@ -264,50 +486,62 @@ struct ListingEditView: View {
     @State private var editing: WindowEdge?
     /// The price or the people count is being typed: the number pad is up.
     @State private var typing = false
+    /// "Saqlash" was tapped with something wrong: the errors show (and follow the form until it is right).
+    @State private var showErrors = false
+    @State private var scrollTop = 0
+
+    static let commentLimit = 300
+    static let priceDigits = 8
 
     var body: some View {
         let listing = model.listing.value
         let plan = listing.flatMap { dto in form.map { ListingPatchPlan.plan(dto, $0) } }
         let warnOffers = plan?.material == true && model.openOffers > 0
         let seatsEditable = listing.map(SeatEdit.editable) ?? false
-        let offersWarning = "\(strings.t("listingOwner.materialWarning")) \(strings.t("listingOwner.openOffers", ("count", model.openOffers)))"
+        // Pochta: the design's sentence; Taksi keeps the longer one (it also covers the number of people, Q145).
+        let offersWarning = listing?.serviceType == .parcel
+            ? strings.t("client.listing.editWindowWarn", ("count", model.openOffers))
+            : "\(strings.t("listingOwner.materialWarning")) \(strings.t("listingOwner.openOffers", ("count", model.openOffers)))"
+        let invalid = showErrors ? plan?.invalid : nil
         ScreenScaffold(title: strings.t("listingOwner.editTitle"), backLabel: strings.t("common.back"), onBack: onBack,
-                       keyboardDone: strings.t("client.keyboard.done")) {
+                       keyboardDone: strings.t("client.keyboard.done"), scrollTop: scrollTop) {
             if form != nil {
+                if let invalid { Note(strings.tOrNil("listingOwner.invalid.\(invalid)") ?? invalid, tone: .err) }
+                if let error = model.commandError, model.running == nil, model.failed == .save { Note(strings.errorText(error), tone: .err) }
                 ElchiField(text: $priceText,
                            label: seatsEditable ? strings.t("listingOwner.priceLabel") + strings.t("listingEdit.perSeatSuffix")
-                                : strings.t("listingOwner.priceLabel"), keyboard: .numberPad, onFocus: { typing = $0 })
+                                : strings.t("listingOwner.priceLabel"),
+                           error: invalid == "price" ? "" : nil, keyboard: .numberPad, suffix: strings.t("common.soum"),
+                           onFocus: { typing = $0 })
                     .onChange(of: priceText) { _, typed in
                         // Local text re-synced after every edit: SwiftUI's TextField ignores a binding that rewrites the input.
-                        let digits = Money.soumDigits(typed)
+                        let digits = String(Money.soumDigits(typed).prefix(Self.priceDigits))
                         form?.priceDigits = digits
                         let formatted = Money.grouped(digits)
                         if priceText != formatted { priceText = formatted }
                     }
-                ElchiField(text: Binding(get: { form?.comment ?? "" }, set: { form?.comment = $0 }), label: strings.t("listingOwner.commentLabel"),
-                           hint: strings.t("bookingChat.autoMaskNote"), multiline: true)
+                ElchiField(text: Binding(get: { form?.comment ?? "" }, set: { form?.comment = String($0.prefix(Self.commentLimit)) }),
+                           label: strings.t("listingOwner.commentLabel"), hint: strings.t("bookingChat.autoMaskNote"), multiline: true)
                 if seatsEditable {
                     // Q145: the number of people, until a booking exists; a new number closes the open offers (Q20).
                     ElchiField(text: Binding(get: { form?.seats ?? "" }, set: { form?.seats = String($0.filter(\.isNumber).prefix(1)) }),
                                label: strings.t("listingEdit.seats"), hint: strings.t("listingEdit.seatsHint"),
-                               error: plan?.invalid == "seats" ? strings.t("listingOwner.invalid.seats") : nil, keyboard: .numberPad,
+                               error: invalid == "seats" ? strings.t("listingOwner.invalid.seats") : nil, keyboard: .numberPad,
                                onFocus: { typing = $0 })
                         .accessibilityIdentifier("elchi.listingEdit.seats")
                 }
+                let windowError = invalid?.hasPrefix("window") == true
                 PickerField(label: strings.t("listingOwner.windowStart"), value: form?.windowStart.map(DepartureWindow.text),
                             placeholder: strings.t("client.routeSummary.windowPlaceholder"),
-                            error: plan?.invalid == "window_past" || plan?.invalid == "window_incomplete") { editing = .start }
+                            error: windowError && invalid != "window_order") { editing = .start }
                 PickerField(label: strings.t("listingOwner.windowEnd"), value: form?.windowEnd.map(DepartureWindow.text),
-                            placeholder: strings.t("client.routeSummary.windowPlaceholder"), error: plan?.invalid == "window_order") { editing = .end }
+                            placeholder: strings.t("client.routeSummary.windowPlaceholder"), error: windowError) { editing = .end }
+                // Truthful (Q20), though the design leaves it out.
                 Text(strings.t("listingOwner.nonMaterialNote")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 if warnOffers && !typing {
                     Note(offersWarning, tone: .warn)
                 }
-                if let invalid = plan?.invalid, invalid != "seats" {
-                    Note(strings.tOrNil("listingOwner.invalid.\(invalid)") ?? invalid, tone: .err)
-                }
-                if let error = model.commandError, model.running == nil, model.failed == .save { Note(strings.errorText(error), tone: .err) }
             } else {
                 SkeletonCards(count: 2)
             }
@@ -319,9 +553,18 @@ struct ListingEditView: View {
             }
             ElchiButton(strings.t(warnOffers ? "listingOwner.materialConfirm" : "common.save"), loading: model.running == .save) {
                 guard let plan else { return }
+                if plan.invalid != nil {
+                    showErrors = true
+                    scrollTop += 1
+                    return
+                }
+                // Nothing changed: nothing to send.
+                if plan.empty {
+                    onBack()
+                    return
+                }
                 Task { if await model.save(plan) { onSaved() } }
             }
-            .disabled(plan == nil || plan?.empty == true || plan?.invalid != nil)
         }
         .onAppear {
             model.clearNotice()
@@ -349,23 +592,23 @@ struct ListingEditView: View {
     }
 }
 
-// MARK: - Haydovchi takliflari
+// MARK: - Haydovchi takliflari (inline on the detail)
 
-/// The drivers' offers on one listing, sorted, with the client's answers: choose (confirmation dialog), reject,
-/// another price (inline), withdraw its own counter. A live countdown hides the answers the moment an offer lapses.
-struct ListingBidsView: View {
-    let model: ListingModel
-    let onBack: () -> Void
-    /// The listing and the booking the accept made (the flow opens its detail, then its chat - Q100).
-    let onAccepted: (String, ClientBookingDTO) -> Void
+/// The drivers' offers on one listing: sort chips, then one card per thread (live first). A live countdown hides the
+/// answers the moment an offer lapses; it ticks here only, not on the whole detail (the map stays still).
+private struct OffersBoard: View {
+    let threads: [ProposalThreadDTO]
+    let listing: ListingDTO
+    let offers: OfferThreads
+    let unseen: Set<String>
+    let onAccept: (ProposalThreadDTO) -> Void
     @Environment(LocaleStore.self) private var strings
     @State private var sort: OfferSort = .cheapest
     @State private var counterFor: String?
-    @State private var accepting: ProposalThreadDTO?
     @State private var now = Date()
 
     var body: some View {
-        ScreenScaffold(title: strings.t("listingBids.title"), backLabel: strings.t("common.back"), onBack: onBack) {
+        VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(OfferSort.allCases, id: \.self) { option in
@@ -373,36 +616,16 @@ struct ListingBidsView: View {
                     }
                 }
             }
-            if model.listing.value?.status == .paused { Note(strings.t("client.listingBids.pausedNote"), tone: .warn) }
-            switch model.offers.threads {
-            case .loading:
-                SkeletonCards(count: 3)
-            case .failed(let error):
-                Note(strings.errorText(error), tone: .err)
-                ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await model.load() } }
-            case .loaded(let threads):
-                if threads.isEmpty {
-                    EmptyState(icon: .pkg, title: strings.t("listingBids.emptyTitle"), description: strings.t("listingBids.emptySubtitle"))
-                }
-                let cheapest = OfferSort.cheapestOpenId(threads, now: now)
-                ForEach(sort.sorted(threads, now: now), id: \.id) { thread in
-                    OfferCard(thread: thread, listing: model.listing.value, style: .listing, offers: model.offers, now: now,
-                              cheapest: thread.id == cheapest, counterOpen: counterFor == thread.id,
-                              onCounter: { counterFor = $0 ? thread.id : nil }, onAccept: { accepting = thread })
-                }
+            // A paused listing takes no counter and no accept (`LISTING_NOT_OPEN`): said once, above the cards.
+            if listing.status == .paused { Note(strings.t("client.listingBids.pausedNote"), tone: .warn) }
+            let badges = OfferBadge.badges(threads, sort: sort, unseen: unseen, now: now)
+            ForEach(sort.sorted(threads, now: now), id: \.id) { thread in
+                OfferCard(thread: thread, listing: listing, style: .listing, offers: offers, now: now, badge: badges[thread.id],
+                          counterOpen: counterFor == thread.id, onCounter: { counterFor = $0 ? thread.id : nil },
+                          onAccept: { onAccept(thread) })
             }
-            Note(strings.t("listingBids.identityHidden"))
-        } footer: {
-            EmptyView()
         }
-        .refreshable { await model.load() }
-        .task { await model.load() }
         .task { await tick() }
-        .overlay {
-            if let thread = accepting {
-                AcceptDialog(thread: thread, offers: model.offers, onClose: { accepting = nil }) { onAccepted(thread.listingId, $0) }
-            }
-        }
     }
 
     private func sortKey(_ sort: OfferSort) -> String {
@@ -423,9 +646,10 @@ struct ListingBidsView: View {
 
 // MARK: - One offer
 
-/// One negotiation thread as a card. `.listing` (the listing's offers screen): the driver's label and the offer's
-/// places; `.proposals` ("Takliflarim"): the listing's route and whose turn it is. The answers follow
-/// `NegotiationActions` - nothing the server would refuse is offered.
+/// One negotiation thread as the design's offer card: "Haydovchi #N", one badge, the price; a grey box with the
+/// window, vehicle and rating bucket (never a score), the time left or what happened; then the answers in one row
+/// (✕, "Boshqa narx · N", "Tanlash" / "Qabul qilish"). `.proposals` ("Takliflarim") puts the listing's route first.
+/// The answers follow `NegotiationActions` - nothing the server would refuse is offered.
 struct OfferCard: View {
     enum Style { case listing, proposals }
 
@@ -434,71 +658,115 @@ struct OfferCard: View {
     let style: Style
     let offers: OfferThreads
     let now: Date
-    let cheapest: Bool
+    let badge: OfferBadge?
     let counterOpen: Bool
     let onCounter: (Bool) -> Void
     let onAccept: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
 
     var body: some View {
         let actions = NegotiationActions.of(thread, now: now)
-        let version = thread.currentVersion
-        ItemCard(title: title, badge: cheapest ? (text: strings.t("client.listingBids.cheapest"), tone: Tone.ok) : nil, sub: sub(actions), lines: lines(actions),
-                 right: version.map { strings.money($0.totalMinor) }, highlighted: cheapest, underline: style == .listing,
-                 muted: !actions.open && !accepted) {
-            if let error = offers.errors[thread.id] { Note(strings.offerErrorText(error), tone: .err).padding(.top, 6) }
-            ForEach(offers.warnings[thread.id] ?? [], id: \.code) { Note(strings.warningText($0), tone: .warn).padding(.top, 6) }
-            if let version, actions.open {
-                answers(actions, version, paused: listing?.status == .paused).padding(.top, 8)
+        let closed = !actions.open && !accepted
+        let shape = RoundedRectangle(cornerRadius: ElchiShape.card)
+        VStack(alignment: .leading, spacing: 10) {
+            header(closed: closed)
+            let lines = lines(actions)
+            if !lines.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(lines, id: \.self) { line in
+                        Text(line.text).font(ElchiFont.poppins(12.5)).lineSpacing(2)
+                            .foregroundStyle(line.tone.map { c.tone($0).fg } ?? (c.isDark ? c.text.opacity(0.85) : Color(hex: 0x3A4556)))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(c.isDark ? c.field : Color(hex: 0xF6F8FA), in: RoundedRectangle(cornerRadius: 14))
+            }
+            if let error = offers.errors[thread.id] { Note(strings.offerErrorText(error), tone: .err) }
+            ForEach(offers.warnings[thread.id] ?? [], id: \.code) { Note(strings.warningText($0), tone: .warn) }
+            if let version = thread.currentVersion, actions.open {
+                answers(actions, version, paused: listing?.status == .paused)
             }
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // The shadow on the card's shape only (on the whole stack it would fall under every inner box and button).
+        .background { shape.fill(c.card).shadow(color: c.shadow, radius: 12, y: 6) }
+        .overlay { shape.strokeBorder(badge == .cheapest ? c.brand : c.line, lineWidth: badge == .cheapest ? 2 : 1) }
+        .opacity(closed ? 0.72 : 1)
     }
 
     /// The offer the booking was made from: not "closed", the agreed one.
     private var accepted: Bool { thread.state == "accepted" }
 
-    private var title: String {
-        switch style {
-        case .listing: strings.driverLabel(thread)
-        case .proposals: listing.map(strings.route) ?? strings.driverLabel(thread)
+    /// Title, badge and price on one line; where a language's badge does not fit ("Встречное предложение"), the
+    /// badge goes under the title instead of being cut.
+    private func header(closed: Bool) -> some View {
+        let title = Text(strings.driverLabel(thread)).font(ElchiFont.poppins(15, .semibold)).foregroundStyle(c.text).lineLimit(1)
+        let price = Text(thread.currentVersion.map { strings.money($0.totalMinor) } ?? "").font(ElchiFont.poppins(17, .semibold)).lineLimit(1)
+            .foregroundStyle(closed ? c.placeholder : c.accentText)
+        let pill = badge.map { badge in
+            Text(strings.t(badge.key)).font(ElchiFont.badge).lineLimit(1)
+                .foregroundStyle(c.tone(badge.tone).fg)
+                .padding(.horizontal, 9).padding(.vertical, 3)
+                .background(c.tone(badge.tone).bg, in: Capsule())
         }
-    }
-
-    private func sub(_ actions: NegotiationActions) -> String? {
-        guard let version = thread.currentVersion else { return nil }
-        if accepted && style == .listing { return strings.t("status.accepted") }
-        if !actions.open && style == .listing {
-            return strings.t("listingBids.closed", ("status", strings.t(thread.closedStatusKey(now: now))))
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                title
+                pill
+                Spacer(minLength: 4)
+                price
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    title
+                    Spacer(minLength: 4)
+                    price
+                }
+                pill
+            }
         }
-        switch style {
-        case .listing:
-            return "\(strings.endName(stop: version.pickupStop, point: version.pickupPoint)) → \(strings.endName(stop: version.dropoffStop, point: version.dropoffPoint))"
-        case .proposals:
-            return "\(strings.driverLabel(thread)) · \(strings.windowDays(version.pickupWindowStart, version.pickupWindowEnd))"
-        }
+        .accessibilityElement(children: .combine)
     }
 
     private func lines(_ actions: NegotiationActions) -> [ItemLine] {
         guard let version = thread.currentVersion else { return [] }
         var out: [ItemLine] = []
-        if style == .listing && actions.open { out.append(.init(strings.window(version.pickupWindowStart, version.pickupWindowEnd))) }
+        // Threads span listings in "Takliflarim": the route comes first there; on a listing only when the driver's differs.
+        if style == .proposals, let listing {
+            out.append(.init(strings.route(listing)))
+        } else if style == .listing, let route = strings.offerRouteIfDifferent(version, listing: listing) {
+            out.append(.init(route))
+        }
+        let window = strings.offerWindow(version, listingStart: style == .listing ? listing?.departureWindowStart : nil)
+        let summary = thread.driverSummary.map(strings.driverSummary)
+        let first = [window, summary].compactMap { $0 }.joined(separator: " · ")
+        if !first.isEmpty { out.append(.init(first)) }
         // Taksi: the offer per seat, for the people asked for ("2 × 150 000 so'm").
         if PassengerMoney.perSeat(version.priceBasis) { out.append(.init(strings.peopleLine(version.quantity, unitMinor: version.unitPriceMinor))) }
-        if style == .listing, let summary = thread.driverSummary { out.append(.init(strings.driverSummary(summary))) }
-        if style == .proposals {
-            if accepted {
-                out.append(.init(strings.t("status.accepted"), tone: .ok))
-            } else if !actions.open {
-                out.append(.init(strings.t("proposals.closed", ("status", strings.t(thread.closedStatusKey(now: now))))))
-            } else {
-                out.append(.init(strings.t(actions.theirTurn ? "negotiation.driverCountered" : "negotiation.waitingForAnswer"),
-                                 tone: actions.theirTurn ? .warn : nil))
-            }
-        }
         if actions.open, let message = version.message, !message.isEmpty { out.append(.init(message)) }
-        if actions.open && actions.canWithdraw && style == .listing { out.append(.init(strings.t("listingBids.awaitingDriver"))) }
-        if actions.open, let left = strings.expiresIn(version, now: now) { out.append(.init(left, tone: .warn)) }
+        if accepted {
+            out.append(.init(strings.t("client.amendment.statusAccepted"), tone: .ok))
+        } else if !actions.open {
+            out.append(.init(strings.t(thread.closedReasonKey(now: now))))
+        } else if actions.canWithdraw {
+            out.append(.init(strings.t("client.offers.myCounterWaiting", ("price", strings.money(version.totalMinor))), tone: .blue))
+        } else {
+            if thread.driverCountered(now: now) {
+                // "(sizniki …)" needs the client's previous version (read from the thread; without it, the price alone).
+                if let mine = offers.clientPrice(thread) {
+                    out.append(.init(strings.t("client.offers.driverCounter", ("price", strings.money(version.totalMinor)),
+                                               ("mine", strings.money(mine))), tone: .warn))
+                } else {
+                    out.append(.init("\(strings.t("client.offers.badgeCounter")): \(strings.money(version.totalMinor))", tone: .warn))
+                }
+            }
+            if let left = strings.timeLeft(version, now: now) { out.append(.init(left, tone: .warn)) }
+        }
         return out
     }
 
@@ -506,61 +774,114 @@ struct OfferCard: View {
     @ViewBuilder
     private func answers(_ actions: NegotiationActions, _ version: ProposalVersionDTO, paused: Bool) -> some View {
         let busy = offers.busy == thread.id
-        let canCounter = actions.canCounter && !paused
-        VStack(spacing: 8) {
+        Group {
             if actions.theirTurn && paused {
-                ElchiButton(strings.t("proposal.reject"), variant: .dangerSoft, size: .pair, loading: busy) {
-                    Task { _ = await offers.reject(thread) }
-                }
+                ElchiButton(strings.t("proposal.reject"), variant: .dangerSoft, size: .medium, loading: busy) { reject() }
             } else if actions.theirTurn {
                 if counterOpen {
                     CounterForm(thread: thread, version: version, listingId: thread.listingId, offers: offers, onClose: { onCounter(false) })
                 } else {
-                    if let quote = OfferThreads.clientQuote(version) {
-                        MoneyLines(rows: [
-                            MoneyLines.Row(strings.t("promo.line.offerPrice"), strings.money(quote.fareMinor)),
-                            MoneyLines.Row(strings.t("promo.line.bonusDiscount"), "−\(strings.money(quote.passengerDiscountMinor))", tone: .ok),
-                            MoneyLines.Row(strings.t("promo.line.cashToDriver"), strings.money(quote.cashDueMinor), emphasis: true),
-                        ], check: strings.t("promoScreen.useBonusShort", ("amount", strings.money(quote.passengerDiscountMinor))),
-                           checked: Binding(get: { offers.useBonus[thread.id] == true }, set: { offers.useBonus[thread.id] = $0 }))
-                    }
-                    ElchiButton(strings.t(style == .listing ? "listingBids.chooseDriver" : "proposals.acceptDriverPrice"), action: onAccept)
-                    let reject = ElchiButton(strings.t("proposal.reject"), variant: .dangerSoft, size: .pair, loading: busy) {
-                        Task { _ = await offers.reject(thread) }
-                    }
-                    if canCounter {
-                        // "Boshqa narx (N marta qoldi)" is the long one: it gets the wider share of the row.
-                        GeometryReader { geometry in
-                            HStack(spacing: 8) {
-                                reject.frame(width: (geometry.size.width - 8) * 0.38)
-                                ElchiButton(strings.t("client.listingBids.counterShort", ("count", actions.revisionsLeft)), variant: .neutral,
-                                            size: .pair) {
-                                    offers.clearError(thread.id)
-                                    onCounter(true)
-                                }
-                            }
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let quote = OfferThreads.clientQuote(version) {
+                            // Only with the server's quote, unticked (Q104 explicit consent).
+                            MoneyLines(rows: [
+                                MoneyLines.Row(strings.t("promo.line.offerPrice"), strings.money(quote.fareMinor)),
+                                MoneyLines.Row(strings.t("promo.line.bonusDiscount"), "−\(strings.money(quote.passengerDiscountMinor))", tone: .ok),
+                                MoneyLines.Row(strings.t("promo.line.cashToDriver"), strings.money(quote.cashDueMinor), emphasis: true),
+                            ], check: strings.t("promoScreen.useBonusShort", ("amount", strings.money(quote.passengerDiscountMinor))),
+                               checked: Binding(get: { offers.useBonus[thread.id] == true }, set: { offers.useBonus[thread.id] = $0 }))
+                            Text(strings.t("client.offers.bonusCovered")).font(ElchiFont.caption).foregroundStyle(c.muted)
                         }
-                        .frame(height: ButtonSize.pair.height)
-                    } else {
-                        reject
-                    }
-                    if !actions.canCounter {
-                        Text(strings.t("listingBids.noRevisionsLeft")).font(ElchiFont.caption).foregroundStyle(c.muted)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        actionRow(actions, busy: busy)
                     }
                 }
             } else if actions.canWithdraw {
-                ElchiButton(strings.t("proposals.withdraw"), variant: .neutral, size: .pair, loading: busy) {
-                    Task { _ = await offers.withdraw(thread) }
+                Button {
+                    Task {
+                        if await offers.withdraw(thread) { banners?.show(.key("client.offers.counterWithdrawn"), tone: .info, hideAfter: .seconds(3)) }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        if busy { ProgressView().controlSize(.small) }
+                        Text(strings.t("proposals.withdraw")).font(ElchiFont.poppins(13, .medium)).lineLimit(1)
+                    }
+                    .foregroundStyle(c.text)
+                    .padding(.horizontal, 14).frame(height: 36)
+                    .background(c.field, in: Capsule())
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(PressFade())
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .frame(minHeight: 44)
             }
         }
         .disabled(offers.busy != nil && !busy)
     }
+
+    /// ✕, "Boshqa narx · N" and the primary in one row; where a language does not fit, the primary goes on its own row
+    /// above the other two.
+    private func actionRow(_ actions: NegotiationActions, busy: Bool) -> some View {
+        let primaryTitle = strings.t(thread.driverCountered(now: now) ? "amendment.accept" : "confirmDialog.selectDriver.confirm")
+        let rejectButton = Button { reject() } label: {
+            Group {
+                if busy { ProgressView().controlSize(.small).tint(c.tone(.err).fg) } else { ElchiIcon.x.image(size: 16) }
+            }
+            .foregroundStyle(c.tone(.err).fg)
+            .frame(width: 42, height: 42)
+            .background(c.tone(.err).bg, in: Circle())
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
+        }
+        .buttonStyle(PressFade())
+        .accessibilityLabel(strings.t("proposal.reject"))
+        let counter = pill(strings.t("client.offers.counterButton", ("count", actions.revisionsLeft)), weight: .medium, size: 13,
+                           bg: actions.canCounter ? c.field : (c.isDark ? c.field.opacity(0.5) : Color(hex: 0xF3F5F8)),
+                           fg: actions.canCounter ? c.text : Color(hex: 0x9AA6B5)) {
+            guard actions.canCounter else {
+                banners?.show(.key("client.offers.counterLimit"), tone: .info, hideAfter: .seconds(3))
+                return
+            }
+            offers.clearError(thread.id)
+            onCounter(true)
+        }
+        let primary = pill(primaryTitle, weight: .semibold, size: 13.5, bg: c.brand, fg: c.onBrand, action: onAccept)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                rejectButton
+                counter
+                primary
+            }
+            VStack(spacing: 8) {
+                primary
+                HStack(spacing: 8) { rejectButton; counter }
+            }
+        }
+    }
+
+    private func pill(_ title: String, weight: ElchiFont.Weight, size: CGFloat, bg: Color, fg: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(ElchiFont.poppins(size, weight, relativeTo: .subheadline)).lineLimit(1)
+                .foregroundStyle(fg)
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, minHeight: 42)
+                .background(bg, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PressFade())
+    }
+
+    private func reject() {
+        Task {
+            guard await offers.reject(thread) else { return }
+            let text = thread.driverNumber.map { strings.t("client.offers.rejectedDriver", ("number", $0)) } ?? strings.t("proposal.rejected")
+            banners?.show(.text(text), tone: .info, hideAfter: .seconds(3))
+        }
+    }
 }
 
-/// "Boshqa narx": the client's price for this offer (a parcel request sends only the price). Before sending, the
-/// server says what the client's own bonus would do to it - or, plainly, why there is none.
+/// "Boshqa narx": the client's price for this offer (a parcel request sends only the price; Taksi a price per seat).
+/// Before sending, the server says what the client's own bonus would do to it - or, plainly, why there is none.
+/// Tap-to-validate: an empty price or the driver's own price says so under the field.
 private struct CounterForm: View {
     let thread: ProposalThreadDTO
     let version: ProposalVersionDTO
@@ -569,10 +890,12 @@ private struct CounterForm: View {
     let onClose: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
     @State private var priceText = ""
     @State private var digits = ""
     @State private var preview: PromoPreviewDTO?
     @State private var useBonus = false
+    @State private var error: String?
 
     var body: some View {
         let priceMinor = Money.minor(fromSoum: digits)
@@ -582,13 +905,14 @@ private struct CounterForm: View {
                 Note(text, tone: .gray, title: strings.t("promoScreen.whyNoDiscount"))
             }
             let perSeat = PassengerMoney.perSeat(version.priceBasis)
-            ElchiField(text: $priceText, label: strings.t(perSeat ? "amendment.seatPriceLabel" : "listingBids.yourPrice"), hint: hint(priceMinor, quote),
-                       keyboard: .numberPad)
+            ElchiField(text: $priceText, label: strings.t(perSeat ? "amendment.seatPriceLabel" : "listingBids.yourPrice"),
+                       hint: hint(priceMinor, quote), error: error.map { strings.t($0) }, keyboard: .numberPad, suffix: strings.t("common.soum"))
                 .onChange(of: priceText) { _, typed in
                     // Local text re-synced after every edit: SwiftUI's TextField ignores a binding that rewrites the input.
-                    digits = Money.soumDigits(typed)
+                    digits = String(Money.soumDigits(typed).prefix(8))
                     let formatted = Money.grouped(digits)
                     if priceText != formatted { priceText = formatted }
+                    error = nil
                 }
             if let quote {
                 MoneyLines(rows: [
@@ -598,15 +922,23 @@ private struct CounterForm: View {
                 ], check: strings.t("promoScreen.useBonusShort", ("amount", strings.money(quote.passengerDiscountMinor))), checked: $useBonus)
             }
             HStack(spacing: 8) {
-                ElchiButton(strings.t("common.send"), size: .pair, loading: offers.busy == thread.id) {
+                ElchiButton(strings.t("common.send"), size: .medium, loading: offers.busy == thread.id) {
+                    if let problem = CounterCheck.error(priceMinor: priceMinor, driverUnitMinor: version.unitPriceMinor) {
+                        error = problem
+                        return
+                    }
                     Task {
-                        if await offers.counter(thread, priceMinor: priceMinor, consent: useBonus ? quote : nil) { onClose() }
+                        if await offers.counter(thread, priceMinor: priceMinor, consent: useBonus ? quote : nil) {
+                            banners?.show(.text(strings.t("client.offers.counterSentPrice", ("price", strings.money(total(priceMinor))))),
+                                          tone: .info, hideAfter: .seconds(3))
+                            onClose()
+                        }
                     }
                 }
-                .disabled(priceMinor <= 0)
-                ElchiButton(strings.t("common.cancel"), variant: .neutral, size: .pair, action: onClose)
+                ElchiButton(strings.t("common.cancel"), variant: .neutral, size: .medium, action: onClose)
             }
         }
+        .padding(.top, 4)
         .onAppear {
             // The counter is a unit price: per seat for a passenger request, the whole price for a parcel.
             digits = String(version.unitPriceMinor / 100)
@@ -622,9 +954,13 @@ private struct CounterForm: View {
         }
     }
 
+    private func total(_ priceMinor: Int) -> Int {
+        version.priceBasis == .total ? priceMinor : priceMinor * max(version.quantity, 1)
+    }
+
+    /// "Jami: 135 000 so'm" (never "the driver answers once": the driver has its own revisions).
     private func hint(_ priceMinor: Int, _ quote: ProposalPromoClientDTO?) -> String {
-        let total = version.priceBasis == .total ? priceMinor : priceMinor * max(version.quantity, 1)
-        let base = "\(strings.t("common.total")): \(strings.money(total))"
+        let base = "\(strings.t("common.total")): \(priceMinor > 0 ? strings.money(total(priceMinor)) : "—")"
         return quote == nil ? base : "\(base) · \(strings.t("client.listingBids.bonusOptIn"))"
     }
 
@@ -663,7 +999,7 @@ struct AcceptDialog: View {
                 MoneyLines(rows: quote.map { quote in
                     [MoneyLines.Row(strings.t("promo.line.agreedPrice"), strings.money(version.totalMinor)),
                      MoneyLines.Row(strings.t("promo.line.bonusDiscount"), "−\(strings.money(quote.passengerDiscountMinor))", tone: .ok),
-                     MoneyLines.Row(strings.t("promo.line.cashToDriver"), strings.money(quote.cashDueMinor), emphasis: true)]
+                     MoneyLines.Row(strings.t("client.offers.cashToDriverShort"), strings.money(quote.cashDueMinor), emphasis: true)]
                 } ?? [MoneyLines.Row(strings.t("promo.line.agreedPrice"), strings.money(version.totalMinor), emphasis: true)])
             }
             ElchiButton(strings.t("client.accept.confirm"), loading: working) {

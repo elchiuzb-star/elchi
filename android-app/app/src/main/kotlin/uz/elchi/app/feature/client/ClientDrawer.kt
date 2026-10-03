@@ -56,6 +56,8 @@ data class DrawerNav(
     val onHome: () -> Unit,
     val onOrders: () -> Unit,
     val onNotifications: () -> Unit,
+    /** "Takliflarim" (8.1): every price negotiation, pushed over the current screen. */
+    val onProposals: () -> Unit,
     val onProfile: () -> Unit,
     val onHelp: () -> Unit,
     val onSettings: () -> Unit,
@@ -159,6 +161,7 @@ private fun ClientDrawer(nav: DrawerNav, current: DrawerPlace, go: (DrawerPlace?
                 t(R.string.notifications_title), icon = ElchiIcon.BELL, description = t(R.string.clientProfile_notificationsHint),
                 style = style(DrawerPlace.NOTIFICATIONS), count = nav.unreadText, onClick = go(DrawerPlace.NOTIFICATIONS, nav.onNotifications),
             )
+            ListRow(t(R.string.proposals_title), icon = ElchiIcon.TAG, description = t(R.string.client_offers_drawerHint), onClick = go(null, nav.onProposals))
             ListRow(t(R.string.nav_profile), icon = ElchiIcon.USER, description = t(R.string.nav_profileHint), onClick = go(null, nav.onProfile))
             ListRow(t(R.string.support_title), icon = ElchiIcon.HEAD, description = t(R.string.clientProfile_helpHint), onClick = go(null, nav.onHelp))
             ListRow(t(R.string.settingsScreen_title), icon = ElchiIcon.SETTINGS, description = t(R.string.clientProfile_settingsHint), onClick = go(null, nav.onSettings))

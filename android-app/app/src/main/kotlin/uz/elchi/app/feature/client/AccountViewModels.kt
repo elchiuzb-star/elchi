@@ -132,6 +132,20 @@ class InboxViewModel(private val api: ElchiApi) : ViewModel() {
         return InboxRules.parseLink(item.link, item.params)
     }
 
+    /**
+     * "Hammasini o'qilgan deb belgilash" (§9): v2 has no read-all endpoint, so each loaded unread row is marked read
+     * (at most one page, side by side); the list reads as read at once and a failed call is not undone.
+     */
+    fun readAll() {
+        val unread = _state.value.items.filter { !it.isRead }.take(PAGE.toInt())
+        if (unread.isEmpty()) return
+        _state.update { s -> s.copy(items = s.items.map { if (it.isRead) it else it.copy(isRead = true) }, unread = 0, unreadMore = false) }
+        viewModelScope.launch {
+            unread.map { item -> async { attempt { api.readNotification(item.id) } } }.awaitAll()
+            refreshUnread()
+        }
+    }
+
     private companion object {
         const val PAGE = 30L
     }

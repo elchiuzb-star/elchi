@@ -32,8 +32,15 @@ import java.util.UUID
 /** An owner command on the listing, while it runs (its button shows progress). */
 enum class OwnerAction { PAUSE, RESUME, CANCEL }
 
-/** What an owner command left to say once. */
-enum class ListingNotice { PAUSED, RESUMED, SAVED }
+/** What an owner command left to say once (a toast on the detail screen). */
+sealed interface ListingNotice {
+    data object Paused : ListingNotice
+    data object Resumed : ListingNotice
+    /** "E'lon yangilandi" */
+    data object Saved : ListingNotice
+    /** "Saqlandi · 2 ta ochiq taklif yopildi" - a moved window or a new seat count closed the open offers (Q20). */
+    data class SavedClosed(val count: Int) : ListingNotice
+}
 
 /**
  * Stage 03, one listing of the signed-in client (scoped to its detail screen, shared with the edit and bids
@@ -58,12 +65,12 @@ class ListingViewModel(
         val notice: ListingNotice? = null,
         val warnings: List<ApiWarning> = emptyList(),
         val cancelled: Boolean = false,
-        // share (the URL comes back once: it lives only here, for as long as this screen does)
-        val shareDays: Int = OrderRules.SHARE_TTL_DEFAULT_DAYS,
-        val shareChannel: ShareLinkChannel = ShareLinkChannel.GENERIC,
+        // share (the URL comes back once: it lives only here, for as long as this screen does, and is reused)
         val sharing: Boolean = false,
         val shareError: Throwable? = null,
         val link: ShareLinkDTO? = null,
+        /** The link to hand to the phone's share sheet now (set once per tap on the bar's share icon). */
+        val shareNow: ShareLinkDTO? = null,
         val linkRevoked: Boolean = false,
         // edit
         val form: ListingEditForm? = null,
@@ -72,8 +79,16 @@ class ListingViewModel(
         val saving: Boolean = false,
         val saveError: Throwable? = null,
         val saved: Boolean = false,
+        /** "Saqlash" was tapped with something invalid: the errors show from now on (tap-to-validate). */
+        val editTried: Boolean = false,
         // bids
         val sort: OfferSort = OfferSort.CHEAPEST,
+        /** Offers that arrived while this listing was open ("Yangi"). */
+        val freshOffers: Set<String> = emptySet(),
+        /** Thread id -> the client's own earlier total the driver answered ("sizniki ..."). */
+        val previousTotals: Map<String, Long> = emptyMap(),
+        /** The booking's service status once a driver was chosen (the tracker's last two steps). */
+        val bookingStatus: String? = null,
     ) {
         val value: ListingDTO? get() = (listing as? Load.Ready)?.value
         val threadList: List<ProposalThreadDTO> get() = (threads as? Load.Ready)?.value.orEmpty()
@@ -125,14 +140,40 @@ class ListingViewModel(
         }
     }
 
+    /** What this app had shown of the listing's offers before this visit ("Yangi" is what is not in it). */
+    private var seenBefore: Set<String>? = null
+    private var seenRead = false
+
     private suspend fun loadThreads() {
         try {
             val threads = api.listListingProposals(listingId, limit = THREADS_LIMIT).data
-            _state.update { it.copy(threads = Load.Ready(threads)) }
+            if (!seenRead) {
+                seenBefore = SeenOffers.snapshot(listingId)
+                seenRead = true
+            }
+            val fresh = SeenOffers.fresh(seenBefore, threads, now())
+            SeenOffers.add(listingId, threads)
+            _state.update { it.copy(threads = Load.Ready(threads), freshOffers = fresh) }
+            val previous = previousClientTotals(api, threads)
+            _state.update { it.copy(previousTotals = previous) }
+            loadBookingStatus(threads)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             _state.update { if (it.threads is Load.Ready) it else it.copy(threads = Load.Failed(e)) }
+        }
+    }
+
+    /** The accepted offer's booking: how far it got (tracker steps 3-4). A failed read just stops at step 2. */
+    private suspend fun loadBookingStatus(threads: List<ProposalThreadDTO>) {
+        val bookingId = threads.firstOrNull { it.state == OrderRules.STATE_ACCEPTED && it.bookingId != null }?.bookingId ?: return
+        try {
+            val booking = uz.elchi.app.api.BookingClientDTO.fromJson(api.getBooking(bookingId).data)
+            _state.update { it.copy(bookingStatus = booking?.serviceStatus) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The tracker stays at "Haydovchi tanlandi".
         }
     }
 
@@ -199,8 +240,8 @@ class ListingViewModel(
                         listing = Load.Ready(result.data),
                         action = null,
                         notice = when (action) {
-                            OwnerAction.PAUSE -> ListingNotice.PAUSED
-                            OwnerAction.RESUME -> ListingNotice.RESUMED
+                            OwnerAction.PAUSE -> ListingNotice.Paused
+                            OwnerAction.RESUME -> ListingNotice.Resumed
                             OwnerAction.CANCEL -> null
                         },
                         warnings = result.warnings,
@@ -222,22 +263,27 @@ class ListingViewModel(
 
     // -- share --------------------------------------------------------------------------------------------------
 
-    fun setShareDays(days: Int) = _state.update { it.copy(shareDays = days, shareError = null) }
-
-    fun setShareChannel(channel: ShareLinkChannel) = _state.update { it.copy(shareChannel = channel, shareError = null) }
-
-    /** Each tap is a new link (up to 5 live ones, `too_many_active`); a timed-out tap is retried with its own key. */
-    fun createShareLink() {
+    /**
+     * The bar's share icon (design `shareListing`): the link already made on this screen is handed to the share sheet
+     * again (its URL comes back only once, and 5 live links are the limit - `too_many_active`); otherwise one generic
+     * link for 2 days is made first. A timed-out tap is retried with its own key.
+     */
+    fun share() {
         val s = _state.value
         if (s.sharing) return
+        s.link?.let { link ->
+            _state.update { it.copy(shareNow = link, shareError = null) }
+            return
+        }
         _state.update { it.copy(sharing = true, shareError = null) }
-        val scope = "share:${s.shareDays}:${s.shareChannel.value}"
+        val scope = "share:$listingId"
         viewModelScope.launch {
             val key = keys.getOrPut(scope) { UUID.randomUUID().toString() }
             try {
-                val link = api.createShareLink(listingId, ShareLinkCreate(channel = s.shareChannel, ttlHours = OrderRules.shareTtlHours(s.shareDays)), key).data
+                val body = ShareLinkCreate(channel = ShareLinkChannel.GENERIC, ttlHours = OrderRules.shareTtlHours(OrderRules.SHARE_TTL_DEFAULT_DAYS))
+                val link = api.createShareLink(listingId, body, key).data
                 keys.remove(scope)
-                _state.update { it.copy(sharing = false, link = link, linkRevoked = false) }
+                _state.update { it.copy(sharing = false, link = link, shareNow = link, linkRevoked = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -246,6 +292,10 @@ class ListingViewModel(
             }
         }
     }
+
+    fun consumeShareNow() = _state.update { it.copy(shareNow = null) }
+
+    fun consumeShareError() = _state.update { it.copy(shareError = null) }
 
     /** `DELETE /share-links/{id}`: the link on screen stops working (and frees one of the 5 live ones). */
     fun revokeShareLink() {
@@ -270,7 +320,7 @@ class ListingViewModel(
     fun startEdit() {
         val listing = _state.value.value ?: return
         val form = OrderRules.editForm(listing)
-        _state.update { it.copy(form = form, formBase = form, saveError = null, saved = false) }
+        _state.update { it.copy(form = form, formBase = form, saveError = null, saved = false, editTried = false) }
     }
 
     fun editForm(transform: (ListingEditForm) -> ListingEditForm) = _state.update { s -> s.copy(form = s.form?.let(transform), saveError = null) }
@@ -285,12 +335,26 @@ class ListingViewModel(
     /** Open offers the material edit would close (Q20), for the warning. */
     fun openOffers(): Int = OrderRules.offerStats(_state.value.threadList, now()).open
 
-    /** `PATCH /listings/{id}` is not idempotent: one request per tap, the button is off while it runs. */
+    /**
+     * `PATCH /listings/{id}` is not idempotent: one request per tap, the button is off while it runs. The button is
+     * always tappable: with something invalid the tap shows the errors (tap-to-validate); with nothing changed it
+     * just goes back.
+     */
     fun save() {
         val s = _state.value
         val listing = s.value ?: return
         val plan = plan() ?: return
-        if (s.saving || plan.empty || plan.invalid != null) return
+        if (s.saving) return
+        if (plan.invalid != null) {
+            _state.update { it.copy(editTried = true) }
+            return
+        }
+        if (plan.empty) {
+            _state.update { it.copy(saved = true) }
+            return
+        }
+        // Counted before the request: the offers this save closes are the ones open now.
+        val closing = if (plan.material) openOffers() else 0
         _state.update { it.copy(saving = true, saveError = null) }
         viewModelScope.launch {
             try {
@@ -303,7 +367,8 @@ class ListingViewModel(
                     passenger = plan.passenger,
                 )
                 val result = api.patchListing(listing.id, body)
-                _state.update { it.copy(listing = Load.Ready(result.data), saving = false, saved = true, notice = ListingNotice.SAVED, warnings = result.warnings) }
+                val notice = if (closing > 0) ListingNotice.SavedClosed(closing) else ListingNotice.Saved
+                _state.update { it.copy(listing = Load.Ready(result.data), saving = false, saved = true, notice = notice, warnings = result.warnings) }
                 loadThreads()
             } catch (e: CancellationException) {
                 throw e
@@ -325,7 +390,7 @@ class ListingViewModel(
         }
     }
 
-    fun consumeSaved() = _state.update { it.copy(saved = false, form = null, formBase = null) }
+    fun consumeSaved() = _state.update { it.copy(saved = false, form = null, formBase = null, editTried = false) }
 
     private companion object {
         const val THREADS_LIMIT = 50L

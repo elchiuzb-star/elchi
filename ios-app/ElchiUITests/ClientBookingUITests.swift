@@ -380,12 +380,12 @@ final class ClientBookingUITests: ClientUITestCase {
         let listing = app.buttons.containing(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "→", "E'lon qilingan")).firstMatch
         XCTAssertTrue(listing.waitForExistence(timeout: 20))
         listing.tap()
-        tap("Takliflarni ko'rish")
+        // BOSQICH 03: the offers are inline on the listing's detail.
         // Stage 03 alignment: an unrated driver is "Hali baholanmagan" (never "0 ta baho"), answers inside the card.
         waitFor("Hali baholanmagan", timeout: 20)
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "0 ta baho")).firstMatch.exists)
         snap("159-offer-card")
-        tap("Shu haydovchini tanlash")
+        scrollTap("Tanlash")
         tap("Ha, tanlayman")
         // Q100: straight into the new booking's chat.
         waitFor("Xabar yo'q", timeout: 30)

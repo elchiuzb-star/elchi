@@ -15,13 +15,14 @@ enum Fixture {
     static func thread(id: String = "prt_1", state: String = "open", author: String = "driver", status: String = "active",
                        clientLeft: Int = 3, total: Int = 14_000_000, expires: String = "2026-09-29T12:00:00Z",
                        pickupStart: String = "2026-09-30T05:00:00Z", bucket: String? = "good", ratings: Int = 12,
-                       label: String = "Haydovchi #3") -> ProposalThreadDTO {
+                       label: String = "Haydovchi #3", revision: Int = 1, reason: String? = nil) -> ProposalThreadDTO {
         let bucketJSON = bucket.map { "\"\($0)\"" } ?? "null"
+        let reasonJSON = reason.map { "\"\($0)\"" } ?? "null"
         return decode(ProposalThreadDTO.self, """
             {"id":"\(id)","listing_id":"lst_1","listing_terms_version":2,"state":"\(state)","booking_id":null,
              "client":{"side":"client","label":"Mijoz"},"driver":{"side":"driver","label":"\(label)"},
              "driver_summary":{"vehicle_class":"car","seat_capacity":4,"rating_bucket":\(bucketJSON),"rating_count":\(ratings),"completed_bookings":3},
-             "current_version":{"id":"prv_\(id)","revision":1,"author_side":"\(author)","status":"\(status)","created_at":"2026-09-29T09:00:00Z",
+             "current_version":{"id":"prv_\(id)","revision":\(revision),"author_side":"\(author)","status":"\(status)","status_reason":\(reasonJSON),"created_at":"2026-09-29T09:00:00Z",
                "listing_terms_version":2,"currency":"UZS","demand":{"baggage_ml":0,"cargo_volume_ml":12000,"cargo_weight_g":5000},
                "expires_at":"\(expires)","pickup_window_start":"\(pickupStart)","pickup_window_end":"2026-09-30T07:00:00Z",
                "price_basis":"total","price_revisions_left":{"client":\(clientLeft),"driver":2},"quantity":1,
@@ -203,6 +204,8 @@ struct ShareAndStatusTests {
         #expect(StatusLabel.listing(.paused).tone == .gray)
         #expect(StatusLabel.listing(.expired).tone == .gray)
         #expect(StatusLabel.listing(.fulfilled).tone == .ok)
+        // The client's side of `fulfilled` is "Bron qilindi", not "Bajarilgan".
+        #expect(StatusLabel.listing(.fulfilled).key == "client.listing.statusFulfilled")
         #expect(StatusLabel.listing(.cancelled).tone == .err)
         #expect(StatusLabel.listing(.unknown("archived")).key == "status.archived")
     }

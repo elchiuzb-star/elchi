@@ -53,6 +53,8 @@ class OrdersViewModel(
         val notice: OrdersNotice? = null,
         val proposals: Load<List<ProposalThreadDTO>> = Load.Loading,
         val proposalsRefreshing: Boolean = false,
+        /** Thread id -> the client's own earlier total the driver answered ("sizniki ..."). */
+        val previousTotals: Map<String, Long> = emptyMap(),
     ) {
         val loaded: Boolean get() = bookings.loaded && listings.loaded && legacy.loaded
         val empty: Boolean get() = loaded && bookings.items.isEmpty() && listings.items.isEmpty() && legacy.items.isEmpty()
@@ -172,6 +174,8 @@ class OrdersViewModel(
             // Newest activity first: the thread that moved last is the one most likely waiting for an answer.
             val sorted = threads.sortedByDescending { t -> t.currentVersion?.createdAt?.let(OrderRules::parseInstant) ?: Instant.MIN }
             _state.update { it.copy(proposals = Load.Ready(sorted)) }
+            val previous = previousClientTotals(api, sorted)
+            _state.update { it.copy(previousTotals = previous) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

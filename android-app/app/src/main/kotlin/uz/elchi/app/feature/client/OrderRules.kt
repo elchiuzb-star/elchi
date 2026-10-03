@@ -9,6 +9,7 @@ import uz.elchi.app.api.generated.ListingKind
 import uz.elchi.app.api.generated.ListingStatus
 import uz.elchi.app.api.generated.PassengerDetails
 import uz.elchi.app.api.generated.PointEndDTO
+import uz.elchi.app.api.generated.PriceBasis
 import uz.elchi.app.api.generated.PromoConsentInput
 import uz.elchi.app.api.generated.ProposalPromoClientDTO
 import uz.elchi.app.api.generated.ProposalPromoConsent
@@ -94,6 +95,34 @@ data class ListingPatchPlan(
 
 /** Offers on one listing, for its row in the orders list: live ones and when the newest arrived. */
 data class OfferStats(val open: Int, val latest: Instant?)
+
+/** The third line of a listing's row (design `meta`): what is new, that a driver was chosen, or how long it runs. */
+sealed interface ListingMeta {
+    /** "Yangi taklif: 12 daqiqa oldin" - [highlight] (blue) while an offer is still open. */
+    data class NewOffer(val at: Instant, val highlight: Boolean) : ListingMeta
+    /** "Haydovchi tanlandi" */
+    data object DriverChosen : ListingMeta
+    /** "E'lon amal qiladi: 02.10 gacha" */
+    data class ValidUntil(val date: String) : ListingMeta
+}
+
+/** The offer card's badge, following the chosen sort (design `badges`). */
+enum class OfferBadge { CHEAPEST, FASTEST, RATED }
+
+/** Why the counter form cannot be sent as typed (shown in red under the field after a tap on "Yuborish"). */
+enum class CounterProblem { EMPTY, SAME }
+
+/**
+ * What the counter form works in: the per-seat price for a Taksi request priced per person (the server multiplies
+ * by the seats), else the whole price. [base] prefills the field and is what "the same price" compares with.
+ */
+data class CounterUnits(val perSeat: Boolean, val quantity: Long, val base: Long) {
+    /** The total the client would agree to for [unitMinor] ("Jami: ..."). */
+    fun total(unitMinor: Long): Long = if (perSeat) unitMinor * quantity else unitMinor
+}
+
+/** The 5-step tracker under the listing's status (design `L.steps`): how far it got, or that it stopped. */
+data class ListingProgress(val step: Int, val stopped: Boolean)
 
 /** Pure rules of the orders, listing and offers screens: no Android, no network - unit-tested. */
 object OrderRules {
@@ -183,6 +212,150 @@ object OrderRules {
         open = threads.count { negotiationActions(it, now).open },
         latest = threads.mapNotNull { t -> t.currentVersion?.createdAt?.let(::parseInstant) }.maxOrNull(),
     )
+
+    /**
+     * The badge each offer the client can choose gets under the chosen sort: the cheapest one ("Eng arzon"), the
+     * earliest pickup ("Eng tez"), or every driver in the `good` rating group ("Yaxshi baholangan" - a group, never
+     * a number, U6). Offers waiting for the driver and closed ones get none.
+     */
+    fun sortBadges(threads: List<ProposalThreadDTO>, sort: OfferSort, now: Instant): Map<String, OfferBadge> {
+        val choosable = threads.filter { negotiationActions(it, now).canAccept }
+        return when (sort) {
+            OfferSort.CHEAPEST -> cheapestOpen(threads, now)?.let { mapOf(it to OfferBadge.CHEAPEST) }.orEmpty()
+            OfferSort.FASTEST -> choosable.minByOrNull { it.currentVersion?.pickupWindowStart?.let(::parseInstant) ?: Instant.MAX }
+                ?.takeIf { it.currentVersion?.pickupWindowStart?.let(::parseInstant) != null }
+                ?.let { mapOf(it.id to OfferBadge.FASTEST) }.orEmpty()
+            OfferSort.RATING -> choosable.filter { it.driverSummary?.ratingBucket == RatingBucket.GOOD }.associate { it.id to OfferBadge.RATED }
+        }
+    }
+
+    /** "Qarshi taklif": the driver answered the client's counter with a price of its own (its version after the first). */
+    fun driverCountered(thread: ProposalThreadDTO): Boolean {
+        val version = thread.currentVersion ?: return false
+        return version.authorSide == ActorSide.DRIVER && version.revision > 1
+    }
+
+    /**
+     * The client's own price the driver answered ("sizniki 135 000 so'm"): the newest earlier version the client
+     * wrote. Only a thread read with its versions (`GET /proposals/{id}`) knows it; the list sends none.
+     */
+    fun clientPreviousTotal(thread: ProposalThreadDTO): Long? {
+        val current = thread.currentVersion ?: return null
+        return thread.versions.orEmpty()
+            .filter { it.authorSide == ActorSide.CLIENT && it.revision < current.revision }
+            .maxByOrNull { it.revision }?.totalMinor
+    }
+
+    /**
+     * Why a closed offer closed, in the design's words (`status_reason`): expired, rejected, withdrawn, another
+     * driver chosen, the listing cancelled, its terms changed; an accepted one says so. Unknown reasons fall back
+     * to the version's status.
+     */
+    fun closedReasonKey(thread: ProposalThreadDTO, now: Instant): String {
+        val version = thread.currentVersion ?: return "status.expired"
+        if (thread.state == STATE_ACCEPTED || version.status == ProposalStatus.ACCEPTED) return "client.amendment.statusAccepted"
+        // Still "active" on the server, but its time ran out (the sweep has not run yet).
+        if (version.status == ProposalStatus.ACTIVE) return "status.expired"
+        return when (version.statusReason) {
+            "ttl_expired", "listing_expired", "expired" -> "status.expired"
+            "rejected" -> "amendment.rejected"
+            "withdrawn" -> "client.offers.closed.withdrawn"
+            "demand_fulfilled", "capacity_gone" -> "client.offers.closed.demandFulfilled"
+            "listing_closed" -> "notification.listing.cancelled.title"
+            "listing_changed" -> "client.offers.closed.listingChanged"
+            else -> when (version.status) {
+                ProposalStatus.REJECTED -> "amendment.rejected"
+                ProposalStatus.WITHDRAWN -> "client.offers.closed.withdrawn"
+                else -> "status.expired"
+            }
+        }
+    }
+
+    /**
+     * The counter form's units for [version] (§6, the Taksi fix): a `per_seat` offer is countered per person - the
+     * field holds and compares the seat price and `unit_price_minor` carries it; anything else is the whole price.
+     */
+    fun counterUnits(version: ProposalVersionDTO): CounterUnits {
+        val perSeat = version.priceBasis == PriceBasis.PER_SEAT
+        return CounterUnits(perSeat = perSeat, quantity = version.quantity.coerceAtLeast(1), base = if (perSeat) version.unitPriceMinor else version.totalMinor)
+    }
+
+    /** The price the counter sends as `unit_price_minor`; null with the reason the tap is refused. */
+    fun counterCheck(digits: String, units: CounterUnits): Pair<Long?, CounterProblem?> {
+        val minor = ParcelRules.soumToMinor(digits) ?: return null to CounterProblem.EMPTY
+        if (minor == units.base) return null to CounterProblem.SAME
+        return minor to null
+    }
+
+    // -- listing detail -----------------------------------------------------------------------------------------
+
+    /**
+     * The row's meta line: a published listing with offers says when the newest came (blue while one is open); a
+     * fulfilled one that a driver was chosen; a live one until when it runs; an expired or cancelled one nothing.
+     */
+    fun listingMeta(listing: ListingDTO, stats: OfferStats?): ListingMeta? = when {
+        listing.status == ListingStatus.FULFILLED -> ListingMeta.DriverChosen
+        listing.status == ListingStatus.PUBLISHED && stats?.latest != null -> ListingMeta.NewOffer(stats.latest, highlight = stats.open > 0)
+        listing.status in LIVE -> dayDot(listing.expiresAt)?.let { ListingMeta.ValidUntil(it) }
+        else -> null
+    }
+
+    /** The client calls a fulfilled request "Bron qilindi"; every other status keeps its shared word. */
+    fun clientListingStatusKey(status: ListingStatus): String =
+        if (status == ListingStatus.FULFILLED) "client.listing.statusFulfilled" else listingStatusKey(status)
+
+    /**
+     * Tracker: 0 published, 1 once any offer exists, 2 a driver was chosen, 3 on the way, 4 done (the booking's
+     * status, when known). An expired or cancelled listing stopped: all grey, the offers step crossed out.
+     */
+    fun listingProgress(listing: ListingDTO, threads: List<ProposalThreadDTO>, bookingStatus: String?): ListingProgress {
+        if (listing.status == ListingStatus.EXPIRED || listing.status == ListingStatus.CANCELLED) return ListingProgress(1, stopped = true)
+        val step = when {
+            bookingStatus == "completed" -> 4
+            bookingStatus in ON_THE_WAY -> 3
+            listing.status == ListingStatus.FULFILLED -> 2
+            threads.isNotEmpty() -> 1
+            else -> 0
+        }
+        return ListingProgress(step, stopped = false)
+    }
+
+    private val ON_THE_WAY = setOf("in_transit", "picked_up", "onboard", "arrived", "delivered")
+
+    /** The status notice under the listing card: (dictionary key, tone), or null for a published one. */
+    fun listingNotice(status: ListingStatus): Pair<String, Tone>? = when (status) {
+        ListingStatus.PAUSED -> "client.listing.noticePaused" to Tone.GRAY
+        ListingStatus.EXPIRED -> "client.listing.noticeExpired" to Tone.GRAY
+        ListingStatus.CANCELLED -> "client.listing.noticeCancelled" to Tone.ERR
+        ListingStatus.FULFILLED -> "client.listing.noticeFulfilled" to Tone.OK
+        else -> null
+    }
+
+    /** "Chilonzor, 9-kvartal" -> "Chilonzor": the first comma part of a place name. */
+    fun shortPlace(name: String): String = name.substringBefore(',').trim().ifEmpty { name }
+
+    /** `29.09, 09:00` */
+    fun dayTime(value: String?): String? = tashkent(value)?.let(ParcelRules::displayShort)
+
+    /** `10:00` */
+    fun hourMinute(value: String?): String? = tashkent(value)?.let { "%02d:%02d".format(it.hour, it.minute) }
+
+    /**
+     * The offer's pickup window for its grey box: times only when it is the listing's day ("10:00 – 12:00"), else
+     * with the day ("30.09, 10:00 – 12:00").
+     */
+    fun offerWindow(start: String?, end: String?, listingDay: String?): String? {
+        val s = tashkent(start) ?: return null
+        val e = tashkent(end)
+        val day = s.format(DateTimeFormatter.ofPattern("dd.MM"))
+        val times = listOfNotNull(hourMinute(start), e?.let { hourMinute(end) }).joinToString(" – ")
+        val endDay = e?.format(DateTimeFormatter.ofPattern("dd.MM"))
+        return when {
+            endDay != null && endDay != day -> "${ParcelRules.displayShort(s)} – ${ParcelRules.displayShort(e)}"
+            listingDay == null || listingDay == day -> times
+            else -> "$day, $times"
+        }
+    }
 
     // -- promo (only when the server sends a quote; never in dev, Q131/Q147) -------------------------------------
 

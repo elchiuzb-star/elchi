@@ -1,6 +1,14 @@
 package uz.elchi.app.feature.client
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -80,6 +88,16 @@ private fun InboxContent(vm: InboxViewModel, languageTag: String, onTarget: (Inb
                         EmptyState(ElchiIcon.BELL, t(R.string.notifications_empty), Modifier.padding(top = 40.dp), description = t(R.string.client_notifications_emptyHint))
                     }
                     else -> {
+                        if (s.items.any { !it.isRead }) item(key = "read-all") {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                                Text(
+                                    t(R.string.client_inbox_readAll),
+                                    Modifier.heightIn(min = 36.dp).clip(CircleShape).clickable(role = Role.Button, onClick = vm::readAll).padding(horizontal = 6.dp, vertical = 8.dp),
+                                    style = Elchi.type.label.copy(fontWeight = FontWeight.SemiBold),
+                                    color = c.accentText,
+                                )
+                            }
+                        }
                         val now = Instant.now()
                         items(s.items, key = { it.id }) { item -> NotificationRow(item, now, languageTag) { vm.open(item)?.let(onTarget) } }
                         if (s.next != null) item(key = "more") {

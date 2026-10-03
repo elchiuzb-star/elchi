@@ -15,8 +15,11 @@ struct NotificationsView: View {
     let model: InboxModel
     let leading: ElchiIcon
     let onLeading: () -> Void
+    /// The client's "Hammasini o'qilgan deb belgilash" (one read call per loaded unread row: v2 has no read-all).
+    var readAll = false
     let onOpen: (InboxTarget) -> Void
     @Environment(LocaleStore.self) private var strings
+    @Environment(\.elchi) private var c
 
     var body: some View {
         ScreenScaffold(title: strings.t("notifications.title"), leading: leading, backLabel: strings.t(leading == .menu ? "nav.menu" : "common.back"),
@@ -30,6 +33,15 @@ struct NotificationsView: View {
             case .loaded(let items) where items.isEmpty:
                 EmptyState(icon: .bell, title: strings.t("notifications.empty"), description: strings.t("client.notifications.emptyHint"))
             case .loaded(let items):
+                if readAll && items.contains(where: { !$0.isRead }) {
+                    Button { Task { await model.readAll() } } label: {
+                        Text(strings.t("client.inbox.readAll")).font(ElchiFont.poppins(13, .semibold)).foregroundStyle(c.accentText)
+                            .padding(.vertical, 2).frame(minHeight: 36)
+                    }
+                    .buttonStyle(PressFade())
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityIdentifier("elchi.inbox.readAll")
+                }
                 ForEach(items, id: \.id) { item in
                     let body = strings.inboxBody(item)
                     ItemCard(title: strings.inboxTitle(item), badge: item.isRead ? nil : (strings.t("client.notifications.new"), .err),

@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -159,7 +161,19 @@ fun ElchiButton(
  * (default: the text colour); [loading] swaps it for a small spinner (the button stays tappable).
  */
 @Composable
-fun RoundIconButton(icon: ElchiIcon, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier, dot: Boolean = false, tint: Color? = null, loading: Boolean = false) {
+fun RoundIconButton(
+    icon: ElchiIcon,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    dot: Boolean = false,
+    tint: Color? = null,
+    loading: Boolean = false,
+    /** A drawable outside the kit's generated set (the pencil); replaces [icon]'s picture. */
+    @androidx.annotation.DrawableRes iconRes: Int? = null,
+    /** The red count bubble on the corner (the orders bell's unread count, "3" / "30+"); replaces [dot]. */
+    count: String? = null,
+) {
     val c = Elchi.colors
     Box(modifier.size(44.dp)) {
         Box(
@@ -172,9 +186,33 @@ fun RoundIconButton(icon: ElchiIcon, contentDescription: String, onClick: () -> 
                 .semantics { this.contentDescription = contentDescription },
             contentAlignment = Alignment.Center,
         ) {
-            if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = c.brand, strokeWidth = 2.dp) else ElchiIconView(icon, tint ?: c.text)
+            when {
+                loading -> CircularProgressIndicator(Modifier.size(18.dp), color = c.brand, strokeWidth = 2.dp)
+                iconRes != null -> Icon(painterResource(iconRes), null, Modifier.size(18.dp), tint = tint ?: c.text)
+                else -> ElchiIconView(icon, tint ?: c.text)
+            }
         }
-        if (dot) {
+        if (count != null) {
+            Text(
+                count,
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-4).dp)
+                    .defaultMinSize(minWidth = 20.dp)
+                    .height(20.dp)
+                    .clip(CircleShape)
+                    .background(c.page)
+                    .padding(2.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE0413A))
+                    .padding(horizontal = 4.dp)
+                    .wrapContentHeight(Alignment.CenterVertically),
+                style = Elchi.type.badge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp), lineHeight = androidx.compose.ui.unit.TextUnit(12f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                color = Color.White,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 1,
+            )
+        } else if (dot) {
             Box(Modifier.align(Alignment.TopEnd).padding(top = 7.dp, end = 7.dp).size(10.dp).clip(CircleShape).background(c.card).padding(1.5.dp).clip(CircleShape).background(c.tone(Tone.ERR).fg))
         }
     }
@@ -432,6 +470,8 @@ fun ElchiField(
     fieldModifier: Modifier = Modifier,
     /** Entered once and kept by the server (Q94): read-only, a lock on the right, the hint says who can change it. */
     locked: Boolean = false,
+    /** A fixed unit after the text ("so'm"). */
+    suffix: String? = null,
 ) {
     val c = Elchi.colors
     val shape = RoundedCornerShape(ElchiShape.field)
@@ -479,6 +519,7 @@ fun ElchiField(
                     }
                 },
             )
+            if (suffix != null) Text(suffix, Modifier.align(Alignment.CenterVertically), style = Elchi.type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = c.muted)
             if (locked) ElchiIconView(ElchiIcon.LOCK, c.placeholder, size = 18.dp)
         }
         val below = error ?: hint
@@ -1065,6 +1106,8 @@ fun ItemCard(
     sub: String? = null,
     lines: List<ItemLine> = emptyList(),
     meta: String? = null,
+    /** The meta line's colour (the listing row's "Yangi taklif" is blue while an offer is open); null = muted. */
+    metaColor: Color? = null,
     right: String? = null,
     rightColor: Color? = null,
     highlighted: Boolean = false,
@@ -1105,7 +1148,7 @@ fun ItemCard(
         lines.forEach { line -> Text(line.text, style = Elchi.type.caption, color = line.color ?: c.muted) }
         if (meta != null || right != null) {
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(meta.orEmpty(), Modifier.weight(1f), style = Elchi.type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = c.muted)
+                Text(meta.orEmpty(), Modifier.weight(1f), style = Elchi.type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = metaColor ?: c.muted)
                 if (right != null) Text(right, style = Elchi.type.section.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = rightColor ?: c.text, maxLines = 1)
             }
         }

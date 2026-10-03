@@ -3,8 +3,11 @@ import XCTest
 /// Stage 03 end to end against the running development backend, in phases the shell drives (run each with
 /// `-only-testing:ElchiUITests/ClientOffersUITests/<phase>`, the same `TEST_RUNNER_ELCHI_PHONE` for all):
 ///
+/// BOSQICH 03 design: the offers are inline on the listing's detail; edit (pencil) and share are bar icons; the
+/// orders bar has the notifications bell; "Takliflarim" is in the drawer.
+///
 /// 1. `test1_PublishManageShare` - a new client: empty orders, posts a request, orders -> detail, edits price
-///    (not material) and window (material, no offers yet), pauses and resumes, creates a share link.
+///    (not material) and window (material, no offers yet), pauses and resumes, shares (system sheet) and revokes.
 ///    Shell: `offers.py latest --client +998<phone>` then `offers.py offer <listing>` (two demo drivers answer).
 /// 2. `test2_OffersCounterReject` - orders show the offers; offers screen (sorts), the material-edit warning with
 ///    the open-offer count (not saved), the cancel sheet (not confirmed), a counter to the cheapest driver, a
@@ -31,7 +34,28 @@ final class ClientOffersUITests: ClientUITestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 20), "no listing card '\(status)'")
         card.tap()
         waitFor("Buyurtma tafsilotlari")
-        waitFor("Olib ketish joyi")
+        waitFor("Holat")
+    }
+
+    /// Scrolls the body until the button can be tapped.
+    private func scrollTap(_ label: String, maxSwipes: Int = 6) {
+        let element = button(label)
+        var swipes = 0
+        while !element.isHittable && swipes < maxSwipes {
+            app.swipeUp()
+            swipes += 1
+        }
+        waitEnabled(element, label)
+        element.tap()
+    }
+
+    /// Back to the orders list, then the drawer's "Takliflarim".
+    private func openProposalsFromDrawer(menu: String = "Menyu", row: String = "Takliflarim") {
+        let menuButton = app.buttons[menu].firstMatch
+        XCTAssertTrue(menuButton.waitForExistence(timeout: 20), "no menu button")
+        menuButton.tap()
+        tap(row)
+        waitFor(row)
     }
 
     /// The departure window's end on the date picker sheet: moves the hour to `hour` and confirms.
@@ -51,6 +75,16 @@ final class ClientOffersUITests: ClientUITestCase {
         tap("Tasdiqlash")
     }
 
+    /// Closes the system share sheet (its own close button, else a swipe down).
+    private func closeShareSheet() {
+        let close = app.otherElements["ActivityListView"].buttons["Close"].firstMatch
+        if close.waitForExistence(timeout: 5) {
+            close.tap()
+        } else {
+            app.swipeDown(velocity: .fast)
+        }
+    }
+
     func test1_PublishManageShare() {
         launch()
         signInAsClient(phone: Self.runPhone)
@@ -66,20 +100,28 @@ final class ClientOffersUITests: ClientUITestCase {
         tap("Buyurtmalarimga o'tish")
         waitFor("E'lonlarim", timeout: 20)
         waitFor("E'lon qilingan")
+        waitFor("E'lon amal qiladi")
         snap("42-orders-listing")
 
         openNewestListing()
-        waitFor("E'lon amal qiladi")
+        waitFor("Jo'nash, ")
+        waitFor("Hozircha taklif yo'q")
         snap("43-detail-top")
         app.swipeUp()
-        waitFor("Boshqaruv")
+        waitFor("Haydovchi javob berganda shu yerda ko'rinadi")
+        waitFor("Vaqtincha to'xtatish")
         snap("44-detail-manage")
 
-        // Price only: not material, nothing to warn about.
+        // Price only: not material, nothing to warn about (the pencil in the bar).
         tap("Tahrirlash")
         waitFor("E'lonni tahrirlash")
         waitFor("Narx va izohni o'zgartirish ochiq takliflarni yopmaydi")
         snap("45-edit")
+        // Tap-to-validate: an empty price says so on "Saqlash".
+        replace("Narx (so'm)", with: "")
+        tap("Saqlash")
+        waitFor("Narxni kiriting.")
+        snap("45-edit-error")
         replace("Narx (so'm)", with: "130000")
         tap("Saqlash")
         waitFor("E'lon yangilandi", timeout: 20)
@@ -98,25 +140,31 @@ final class ClientOffersUITests: ClientUITestCase {
         waitFor("19:00")
 
         // Pause, then resume.
-        app.swipeUp()
-        tap("Vaqtincha to'xtatish")
+        scrollTap("Vaqtincha to'xtatish")
         waitFor("E'lon to'xtatildi", timeout: 20)
-        waitFor("To'xtatilgan")
+        waitFor("E'lon lentadan yashirilgan.")
         app.swipeDown()
         snap("48-detail-paused")
-        app.swipeUp()
-        tap("Qayta ochish")
+        scrollTap("Qayta ochish")
         waitFor("E'lon qayta ochildi", timeout: 20)
+        app.swipeDown()
 
-        // Share link: 7 days, Telegram text.
+        // Share: the bar icon makes the link and opens the system sheet with the server's text.
+        tap("Ulashish")
+        let sheet = app.otherElements["ActivityListView"].firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 20), "no share sheet")
+        snap("49-share-sheet")
+        closeShareSheet()
         app.swipeUp()
-        tap("7 kun")
-        tap("Telegram")
-        snap("49-share-options")
-        tap("Havola yaratish")
-        waitFor("Nusxa olish", timeout: 20)
-        app.swipeUp()
+        waitFor("Havolani bekor qilish")
         snap("49-share-link")
+        // The same link is shared again (the five-link limit is not spent).
+        app.swipeDown()
+        tap("Ulashish")
+        XCTAssertTrue(sheet.waitForExistence(timeout: 20), "no share sheet the second time")
+        closeShareSheet()
+        scrollTap("Havolani bekor qilish")
+        waitFor("Havola bekor qilindi", timeout: 20)
     }
 
     /// Home -> drawer -> Buyurtmalar (and, for a new client, its empty state).
@@ -134,14 +182,15 @@ final class ClientOffersUITests: ClientUITestCase {
         launch(reset: false)
         openOrders()
         waitFor("2 ta taklif", timeout: 20)
-        waitFor("Eng yangi taklif")
+        waitFor("Yangi taklif:")
         snap("50-orders-offers")
 
         openNewestListing()
-        tap("Takliflarni ko'rish (2)")
-        waitFor("Haydovchi takliflari")
-        waitFor("Shu haydovchini tanlash")
-        waitFor("amal qiladi")
+        waitFor("2 ta ochiq taklif")
+        snap("51-detail-offers-top")
+        app.swipeUp()
+        waitFor("Tanlash")
+        waitFor("qoldi")
         snap("51-bids-cheapest")
         tap("Eng tez")
         snap("52-bids-fastest")
@@ -150,48 +199,49 @@ final class ClientOffersUITests: ClientUITestCase {
         snap("51-bids-bottom")
 
         // The material-edit warning with the open-offer count - not saved.
-        tap("Orqaga")
+        app.swipeDown()
+        app.swipeDown()
         tap("Tahrirlash")
         waitFor("E'lonni tahrirlash")
         moveWindowEnd(toHour: "20")
-        waitFor("Ochiq takliflar: 2 ta")
+        waitFor("2 ta ochiq taklif yopiladi")
         XCTAssertTrue(button("Tushundim, saqlash").exists)
         snap("53-edit-material-warning")
         tap("Orqaga")
 
         // The cancel sheet counts the open offers - not confirmed.
-        app.swipeUp()
-        tap("Buyurtmani bekor qilish")
+        scrollTap("Buyurtmani bekor qilish")
         waitFor("2 ta ochiq taklif rad etiladi")
         snap("54-cancel-sheet")
         tap("Ortga")
         waitGone("2 ta ochiq taklif rad etiladi")
 
         // Another price to the cheapest driver (first card), then refuse the other one.
+        let counter = app.buttons.containing(NSPredicate(format: "label BEGINSWITH %@", "Boshqa narx")).firstMatch
+        XCTAssertTrue(counter.waitForExistence(timeout: 15))
         app.swipeDown()
-        tap("Takliflarni ko'rish (2)")
-        waitFor("Shu haydovchini tanlash")
-        tap("Boshqa narx (3 marta qoldi)")
+        scrollTap("Boshqa narx")
         waitFor("Sizning narxingiz (so'm)")
+        // The driver's own price is refused on tap.
+        tap("Yuborish")
+        waitFor("Haydovchi narxidan farqli narx kiriting.")
         snap("55-counter-form")
         replace("Sizning narxingiz (so'm)", with: "115000")
         tap("Yuborish")
-        waitFor("haydovchining javobi kutilmoqda", timeout: 20)
+        waitFor("javob kutilmoqda", timeout: 20)
         waitFor("Taklifni qaytarib olish")
         snap("56-counter-waiting")
-        tap("Rad etish")
-        waitFor("rad etilgan", timeout: 20)
+        scrollTap("Rad etish")
+        waitFor("taklifi rad etildi", timeout: 20)
         snap("57-rejected")
 
         tap("Orqaga")
-        tap("Orqaga")
-        tap("Takliflarim")
-        waitFor("Takliflarim")
+        openProposalsFromDrawer()
         waitFor("javob kutilmoqda", timeout: 20)
         snap("58-proposals")
     }
 
-    /// Russian + dark: orders, detail, the offers screen, Takliflarim (run between phases 2 and 3, read-only).
+    /// Russian + dark: orders, detail, the inline offers, Takliflarim (run between phases 2 and 3, read-only).
     func test2b_RussianDark() {
         launch(locale: "ru", theme: "dark", reset: false)
         let menu = app.buttons["Меню"].firstMatch
@@ -204,37 +254,56 @@ final class ClientOffersUITests: ClientUITestCase {
         waitFor("Детали заказа")
         snap("71-ru-dark-detail")
         app.swipeUp()
-        snap("72-ru-dark-detail-manage")
-        app.swipeDown()
-        tap("Посмотреть предложения")
-        waitFor("Предложения водителей")
+        snap("72-ru-dark-detail-offers")
+        app.swipeUp()
         snap("73-ru-dark-bids")
         tap("Назад")
-        tap("Назад")
-        tap("Мои предложения")
-        waitFor("Мои предложения")
+        openProposalsFromDrawer(menu: "Меню", row: "Мои предложения")
         snap("74-ru-dark-proposals")
     }
 
-    /// Uzbek + dark: the offers screen and the counter form.
+    /// Uzbek + dark: the detail, the inline offers and the notifications from the bell.
     func test2c_UzbekDark() {
         launch(theme: "dark", reset: false)
         openOrders()
         snap("75-uz-dark-orders")
         openNewestListing()
-        tap("Takliflarni ko'rish")
-        waitFor("Haydovchi takliflari")
+        snap("76-uz-dark-detail")
+        app.swipeUp()
         snap("76-uz-dark-bids")
+        tap("Orqaga")
+        tap("Bildirishnomalar")
+        waitFor("Bildirishnomalar")
+        snap("77-uz-dark-notifications")
+    }
+
+    /// The bell on the orders bar: notifications pushed with a back button, "Hammasini o'qilgan deb belgilash".
+    func test2d_Notifications() {
+        launch(reset: false)
+        openOrders()
+        snap("78-orders-bell")
+        tap("Bildirishnomalar")
+        waitFor("Bildirishnomalar")
+        snap("79-notifications")
+        let readAll = app.buttons["elchi.inbox.readAll"].firstMatch
+        if readAll.waitForExistence(timeout: 5) {
+            readAll.tap()
+            waitGone("Hammasini o'qilgan deb belgilash")
+            snap("79-notifications-read")
+        }
+        tap("Orqaga")
+        waitFor("E'lonlarim")
     }
 
     func test3_Accept() {
         launch(reset: false)
         openOrders()
         openNewestListing()
-        tap("Takliflarni ko'rish")
-        waitFor("Shu haydovchini tanlash", timeout: 20)
+        // The driver answered the client's counter: "Qarshi taklif" and "Qabul qilish".
+        waitFor("Qarshi taklif", timeout: 20)
+        app.swipeUp()
         snap("60-bids-driver-countered")
-        tap("Shu haydovchini tanlash")
+        scrollTap("Qabul qilish")
         waitFor("ni tanlaysizmi?")
         waitFor("Kelishilgan narx")
         snap("61-accept-dialog")
@@ -245,8 +314,8 @@ final class ClientOffersUITests: ClientUITestCase {
         app.swipeUp()
         snap("63-orders-booking-bottom")
         app.swipeDown()
-        tap("Takliflarim")
-        waitFor("qabul qilingan", timeout: 20)
+        openProposalsFromDrawer()
+        waitFor("Qabul qilingan", timeout: 20)
         snap("64-proposals-after-accept")
     }
 
@@ -255,8 +324,7 @@ final class ClientOffersUITests: ClientUITestCase {
         launch(reset: false)
         openOrders()
         openNewestListing()
-        tap("Takliflarni ko'rish")
-        tap("Shu haydovchini tanlash")
+        scrollTap("Tanlash")
         tap("Ha, tanlayman")
         waitFor("Bu haydovchi hozir buyurtmani ola olmaydi", timeout: 30)
         snap("68-accept-refused")
@@ -267,19 +335,19 @@ final class ClientOffersUITests: ClientUITestCase {
         launch(reset: false)
         openOrders()
         openNewestListing()
-        app.swipeUp()
-        tap("Buyurtmani bekor qilish")
+        scrollTap("Buyurtmani bekor qilish")
         waitFor("Buyurtmani bekor qilasizmi?")
         snap("65-cancel-sheet")
         tap("Ha, bekor qilish")
         waitFor("Buyurtma bekor qilindi", timeout: 20)
-        waitFor("Bekor qilingan")
+        waitFor("E'lon bekor qilindi, ochiq takliflar rad etildi.")
+        app.swipeDown()
         snap("66-cancelled")
         tap("Orqaga")
         waitFor("Bekor qilingan")
         snap("67-orders-final")
-        tap("Takliflarim")
-        waitFor("Yopilgan", timeout: 20)
+        openProposalsFromDrawer()
+        waitFor("E'lon bekor qilindi", timeout: 20)
         snap("69-proposals-after-cancel")
     }
 }

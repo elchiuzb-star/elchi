@@ -394,6 +394,8 @@ public struct Badge: View {
 public struct ElchiField: View {
     @Binding var text: String
     let label: String?, placeholder: String?, prefix: String?, icon: ElchiIcon?, hint: String?, error: String?
+    /// A fixed unit after the text ("so'm").
+    let suffix: String?
     let keyboard: UIKeyboardType
     let contentType: UITextContentType?
     let multiline: Bool
@@ -405,8 +407,9 @@ public struct ElchiField: View {
 
     public init(text: Binding<String>, label: String? = nil, placeholder: String? = nil, prefix: String? = nil, icon: ElchiIcon? = nil,
                 hint: String? = nil, error: String? = nil, keyboard: UIKeyboardType = .default, contentType: UITextContentType? = nil,
-                multiline: Bool = false, monospaced: Bool = false, onFocus: ((Bool) -> Void)? = nil) {
+                multiline: Bool = false, monospaced: Bool = false, suffix: String? = nil, onFocus: ((Bool) -> Void)? = nil) {
         self.onFocus = onFocus
+        self.suffix = suffix
         _text = text
         self.label = label
         self.placeholder = placeholder
@@ -441,6 +444,7 @@ public struct ElchiField: View {
                     .accessibilityLabel(label ?? placeholder ?? "")
                     .focused($focused)
                     .onChange(of: focused) { _, now in onFocus?(now) }
+                if let suffix { Text(suffix).font(ElchiFont.poppins(14)).foregroundStyle(c.muted).accessibilityHidden(true) }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, multiline ? 14 : 0)
@@ -707,6 +711,12 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
     let step: (Int, Int)?
     /// Each change scrolls the body back to its top (where a tap-to-validate error list appears).
     let scrollTop: Int
+    /// Round icon buttons at the right of the bar (BOSQICH 03: the orders bell, the detail's pencil and share).
+    let actions: [BarAction]
+    /// The section roots' big title (26 pt: "Buyurtmalar").
+    let largeTitle: Bool
+    /// A view id the body scrolls to once it has appeared (a link to a listing's offers).
+    let initialScroll: AnyHashable?
     let content: Content
     let footer: Footer
     @Environment(\.elchi) private var c
@@ -718,7 +728,11 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
     public init(title: String, right: String? = nil, rightIcon: ElchiIcon? = nil, onRight: (() -> Void)? = nil, leading: ElchiIcon = .back,
                 backLabel: String, onBack: (() -> Void)?, showsFooter: Bool = true, banner: (text: String, tone: Tone)? = nil,
                 keepVisible: AnyHashable? = nil, keyboardDone: String? = nil, step: (Int, Int)? = nil, scrollTop: Int = 0,
+                actions: [BarAction] = [], largeTitle: Bool = false, initialScroll: AnyHashable? = nil,
                 @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.actions = actions
+        self.largeTitle = largeTitle
+        self.initialScroll = initialScroll
         self.step = step
         self.scrollTop = scrollTop
         self.keepVisible = keepVisible
@@ -740,9 +754,11 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 if let onBack { RoundIconButton(leading, label: backLabel, action: onBack) }
-                Text(title).font(ElchiFont.poppins(18, .medium, relativeTo: .headline)).foregroundStyle(c.text)
-                    .lineLimit(1).accessibilityAddTraits(.isHeader)
+                Text(title).font(largeTitle ? ElchiFont.poppins(26, .medium, relativeTo: .title) : ElchiFont.poppins(18, .medium, relativeTo: .headline))
+                    .foregroundStyle(c.text)
+                    .lineLimit(1).minimumScaleFactor(0.8).accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
+                ForEach(actions) { BarActionButton(action: $0) }
                 if let right, let onRight {
                     Button(action: onRight) {
                         HStack(spacing: 6) {
@@ -788,6 +804,12 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: scrollTop) { _, _ in withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.topID, anchor: .top) } }
+                .task(id: initialScroll) {
+                    guard let initialScroll else { return }
+                    // After the first layout pass, so the target exists.
+                    try? await Task.sleep(for: .milliseconds(350))
+                    withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(initialScroll, anchor: .top) }
+                }
                 // `keepVisible`: the view (by id) that must stay above the keyboard while a field is being typed in -
                 // once now, and again when the keyboard has finished rising and the scroll area has shrunk.
                 .onChange(of: keepVisible) { _, id in reveal(id, proxy) }
@@ -1223,13 +1245,16 @@ public struct ItemCard<Actions: View>: View {
 
     let title: String, icon: ElchiIcon?, badge: (text: String, tone: Tone)?, sub: String?, lines: [Line], meta: String?, right: String?
     let highlighted: Bool, underline: Bool, muted: Bool
+    /// The meta line in the accent colour ("Yangi taklif: …" while an open offer waits).
+    let metaAccent: Bool
     let action: (() -> Void)?
     let actions: Actions
     @Environment(\.elchi) private var c
 
     public init(title: String, icon: ElchiIcon? = nil, badge: (text: String, tone: Tone)? = nil, sub: String? = nil, lines: [Line] = [],
                 meta: String? = nil, right: String? = nil, highlighted: Bool = false, underline: Bool = false, muted: Bool = false,
-                action: (() -> Void)? = nil, @ViewBuilder actions: () -> Actions) {
+                metaAccent: Bool = false, action: (() -> Void)? = nil, @ViewBuilder actions: () -> Actions) {
+        self.metaAccent = metaAccent
         self.title = title
         self.icon = icon
         self.badge = badge
@@ -1284,7 +1309,7 @@ public struct ItemCard<Actions: View>: View {
             }
             if meta != nil || right != nil {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(meta ?? "").font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                    Text(meta ?? "").font(ElchiFont.poppins(13)).foregroundStyle(metaAccent ? c.accentText : c.muted)
                     Spacer(minLength: 0)
                     if let right {
                         Text(right).font(ElchiFont.poppins(16, .semibold)).foregroundStyle(muted ? c.placeholder : c.accentText).lineLimit(1)
@@ -1305,9 +1330,9 @@ public struct ItemCard<Actions: View>: View {
 extension ItemCard where Actions == EmptyView {
     public init(title: String, icon: ElchiIcon? = nil, badge: (text: String, tone: Tone)? = nil, sub: String? = nil, lines: [Line] = [],
                 meta: String? = nil, right: String? = nil, highlighted: Bool = false, underline: Bool = false, muted: Bool = false,
-                action: (() -> Void)? = nil) {
+                metaAccent: Bool = false, action: (() -> Void)? = nil) {
         self.init(title: title, icon: icon, badge: badge, sub: sub, lines: lines, meta: meta, right: right, highlighted: highlighted,
-                  underline: underline, muted: muted, action: action) { EmptyView() }
+                  underline: underline, muted: muted, metaAccent: metaAccent, action: action) { EmptyView() }
     }
 }
 
@@ -1856,5 +1881,69 @@ public struct ChoiceTile: View {
         .buttonStyle(PressFade())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+
+// MARK: - Bar actions
+
+/// A round icon button at the right of a screen's bar (44 pt, card colour, shadow), with an optional red count.
+public struct BarAction: Identifiable {
+    public let id: String
+    let icon: ElchiIcon?
+    /// An SF Symbol where the kit has no glyph (the design's pencil, registered but not in the generated set).
+    let systemImage: String?
+    let label: String
+    let badge: String?
+    let loading: Bool
+    let action: () -> Void
+
+    public init(id: String, icon: ElchiIcon? = nil, systemImage: String? = nil, label: String, badge: String? = nil, loading: Bool = false,
+                action: @escaping () -> Void) {
+        self.id = id
+        self.icon = icon
+        self.systemImage = systemImage
+        self.label = label
+        self.badge = badge
+        self.loading = loading
+        self.action = action
+    }
+}
+
+struct BarActionButton: View {
+    let action: BarAction
+    @Environment(\.elchi) private var c
+
+    var body: some View {
+        Button(action: action.action) {
+            Group {
+                if action.loading {
+                    ProgressView().tint(c.text)
+                } else if let icon = action.icon {
+                    icon.image(size: 19)
+                } else if let name = action.systemImage {
+                    Image(systemName: name).font(.system(size: 17, weight: .medium))
+                }
+            }
+            .foregroundStyle(c.text)
+            .frame(width: 44, height: 44)
+            .background(c.card, in: Circle())
+            .overlay(alignment: .topTrailing) {
+                if let badge = action.badge {
+                    Text(badge).font(ElchiFont.poppins(11, .bold)).foregroundStyle(.white).lineLimit(1)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 20, minHeight: 20)
+                        .background(Color(hex: 0xE0413A), in: Capsule())
+                        .overlay { Capsule().strokeBorder(c.page, lineWidth: 2) }
+                        .offset(x: 4, y: -4)
+                }
+            }
+            .shadow(color: c.shadow, radius: 12, y: 6)
+        }
+        .buttonStyle(PressFade())
+        .disabled(action.loading)
+        .accessibilityLabel(action.label)
+        .accessibilityValue(action.badge ?? "")
+        .accessibilityIdentifier("elchi.bar.\(action.id)")
     }
 }

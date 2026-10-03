@@ -21,6 +21,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,6 +44,7 @@ import uz.elchi.app.ui.components.Note
 import uz.elchi.app.ui.components.SectionTitle
 import uz.elchi.app.ui.components.SystemBarIcons
 import uz.elchi.app.ui.components.TitleBar
+import uz.elchi.app.ui.components.RoundIconButton
 import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.theme.Elchi
 import uz.elchi.app.ui.theme.Tone
@@ -65,7 +67,7 @@ fun ClientOrdersScreen(
     onListing: (String) -> Unit,
     onBooking: (String) -> Unit,
     onLegacy: (Long) -> Unit,
-    onProposals: () -> Unit,
+    onNotifications: () -> Unit,
     drawer: DrawerNav,
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -85,7 +87,12 @@ fun ClientOrdersScreen(
     ClientDrawerFrame(drawer, DrawerPlace.ORDERS) { openDrawer ->
         Column(Modifier.fillMaxSize().background(c.page)) {
             Column(Modifier.statusBarsPadding()) {
-                TitleBar(openDrawer, menuLabel(drawer.unreadText), t(R.string.orders_title), right = t(R.string.proposals_title), onRight = onProposals, leadingIcon = ElchiIcon.MENU, leadingDot = drawer.unreadText != null)
+                // The bell with the unread count opens the notifications (design `barBell`); "Takliflarim" moved to the drawer.
+                val bellLabel = drawer.unreadText?.let { "${t(R.string.notifications_title)}, $it" } ?: t(R.string.notifications_title)
+                TitleBar(
+                    openDrawer, menuLabel(drawer.unreadText), t(R.string.orders_title), leadingIcon = ElchiIcon.MENU, leadingDot = drawer.unreadText != null,
+                    trailing = { RoundIconButton(ElchiIcon.BELL, bellLabel, onNotifications, count = drawer.unreadText) },
+                )
                 s.notice?.let {
                     Banner(t(if (it == OrdersNotice.DRIVER_CHOSEN) R.string.listingBids_driverChosen else R.string.listingDetail_cancelled), Tone.OK)
                 }
@@ -156,7 +163,11 @@ private fun BookingRow(booking: BookingClientDTO, ru: Boolean, languageTag: Stri
         title = "${OrderRules.shortEnd(booking.pickup.stop, booking.pickup.point, ru)} → ${OrderRules.shortEnd(booking.dropoff.stop, booking.dropoff.point, ru)}",
         icon = ElchiIcon.PIN,
         badge = (tOrNull(OrderRules.bookingStatusKey(booking.serviceType, status)) ?: status) to OrderRules.bookingTone(booking.serviceType, status),
-        meta = OrderRules.dayMonth(booking.pickup.windowStart ?: booking.createdAt, languageTag),
+        // "29 sen, 10:00–12:00": the day and the agreed pickup window.
+        meta = listOfNotNull(
+            OrderRules.dayMonth(booking.pickup.windowStart ?: booking.createdAt, languageTag),
+            OrderRules.hourMinute(booking.pickup.windowStart)?.let { s -> OrderRules.hourMinute(booking.pickup.windowEnd)?.let { "$s–$it" } ?: s },
+        ).joinToString(", "),
         lines = if (TaxiRules.isPassenger(booking.serviceType)) listOf(ItemLine(seatsLine(booking.quantity, booking.unitPriceMinor))) else emptyList(),
         // Q103: with a discount the client hands over the cash due, not the fare.
         right = soum(booking.promo?.cashDueMinor ?: booking.totalMinor),
@@ -164,10 +175,17 @@ private fun BookingRow(booking: BookingClientDTO, ru: Boolean, languageTag: Stri
     )
 }
 
+/** Line 3 (1.4): "Yangi taklif: {ago}" (blue while an offer is open), "Haydovchi tanlandi", or "E'lon amal qiladi: 02.10 gacha". */
 @Composable
 private fun ListingRow(listing: ListingDTO, stats: OfferStats?, ru: Boolean, languageTag: String, onClick: () -> Unit) {
-    val latest = stats?.latest?.takeIf { OrderRules.isLive(listing.status) }?.let { t(R.string.client_orders_newestOffer, "ago" to agoText(OrderRules.ago(it, Instant.now()))) }
-    ListingItem(listing, stats, ru, languageTag, meta = latest, onClick = onClick)
+    val c = Elchi.colors
+    val meta = when (val m = OrderRules.listingMeta(listing, stats)) {
+        is ListingMeta.NewOffer -> t(R.string.client_listing_metaNewOffer, "ago" to agoText(OrderRules.ago(m.at, Instant.now()))) to (if (m.highlight) c.accentText else null)
+        ListingMeta.DriverChosen -> t(R.string.listingBids_driverChosen) to null
+        is ListingMeta.ValidUntil -> t(R.string.client_listing_metaValidUntil, "date" to m.date) to null
+        null -> null
+    }
+    ListingItem(listing, stats, ru, languageTag, meta = meta, onClick = onClick)
 }
 
 /**
@@ -182,7 +200,7 @@ private fun LegacyRow(order: LegacyOrder, languageTag: String, onClick: () -> Un
         badge = (tOrNull(OrderRules.legacyStatusKey(order.status)) ?: order.status) to OrderRules.statusTone(order.status),
         lines = if (bids > 0 && LegacyRules.bidsOpen(order.status)) listOf(ItemLine(t(R.string.app_orderCard_bids, "count" to bids), Elchi.colors.accentText)) else emptyList(),
         // v1 may send a naive timestamp (Q9: timestamptz migration pending); it is read as UTC, only the day is shown.
-        meta = OrderRules.dayMonth(LegacyRules.isoInstant(order.createdAt), languageTag),
+        meta = OrderRules.dayMonth(LegacyRules.isoInstant(order.createdAt), languageTag)?.let { "$it · ${t(R.string.client_listing_legacyArchive)}" },
         right = OrderRules.legacyPriceMinor(order.finalPrice, order.suggestedPrice, order.clientPrice)?.let { soum(it) },
         onClick = onClick,
     )
@@ -192,7 +210,10 @@ private const val NOTICE_MS = 4_000L
 
 // -- client-proposals --------------------------------------------------------------------------------------------
 
-/** `client-proposals` "Takliflarim": every negotiation the client is a party of, with the same actions. */
+/**
+ * `props` "Takliflarim": every negotiation the client is a party of, as the same offer card as the listing's board
+ * (8.3) with the route as its first line (the threads span listings); live first. Refresh is the bar's icon.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProposalsScreen(vm: OrdersViewModel, ru: Boolean, onBack: () -> Unit, onAccepted: (Accepted) -> Unit) {
@@ -202,28 +223,27 @@ fun ProposalsScreen(vm: OrdersViewModel, ru: Boolean, onBack: () -> Unit, onAcce
     val c = Elchi.colors
     SystemBarIcons(dark = !c.isDark)
     LaunchedEffect(Unit) { vm.refreshProposals() }
-    LaunchedEffect(b.notice, b.warnings) {
-        if (b.notice != null || b.warnings.isNotEmpty()) {
-            delay(NOTICE_SHOWN_MS)
-            vm.board.consumeNotice()
-        }
-    }
+    OfferNoticeToast(b.notice) { vm.board.consumeNotice() }
     LaunchedEffect(b.accepted) {
         b.accepted?.let {
             vm.board.consumeAccepted()
             onAccepted(it)
         }
     }
+    val handlers = remember(vm) { OfferHandlers(vm.board) }
     Column(Modifier.fillMaxSize().background(c.page)) {
         Column(Modifier.statusBarsPadding()) {
-            TitleBar(onBack, t(R.string.common_back), t(R.string.proposals_title), right = t(R.string.proposal_refresh), onRight = vm::refreshProposals)
-            OfferNoticeBanner(b.notice, b.warnings)
+            TitleBar(
+                onBack, t(R.string.common_back), t(R.string.proposals_title),
+                trailing = { RoundIconButton(ElchiIcon.REFRESH, t(R.string.proposal_refresh), vm::refreshProposals, loading = s.proposalsRefreshing && s.proposals is Load.Ready) },
+            )
+            OfferWarnings(b.warnings) { vm.board.consumeNotice() }
         }
         PullToRefreshBox(isRefreshing = s.proposalsRefreshing && s.proposals is Load.Ready, onRefresh = vm::refreshProposals, modifier = Modifier.weight(1f)) {
             LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 when (val load = s.proposals) {
                     Load.Loading -> item { LoadingLine(t(R.string.common_loading)) }
@@ -231,7 +251,15 @@ fun ProposalsScreen(vm: OrdersViewModel, ru: Boolean, onBack: () -> Unit, onAcce
                     is Load.Ready -> if (load.value.isEmpty()) {
                         item { EmptyState(ElchiIcon.TAG, t(R.string.client_proposals_emptyTitle), description = t(R.string.client_proposals_emptyText)) }
                     } else {
-                        items(load.value, key = { it.id }) { thread -> ProposalItem(vm, thread, b, now, ru) }
+                        val sorted = load.value.sortedBy { if (OrderRules.negotiationActions(it, now).open) 0 else 1 }
+                        items(sorted, key = { it.id }) { thread ->
+                            OfferCard(
+                                thread, b, handlers, now, ru,
+                                previousTotal = s.previousTotals[thread.id],
+                                route = thread.currentVersion?.let { "${OrderRules.shortEnd(it.pickupStop, it.pickupPoint, ru)} → ${OrderRules.shortEnd(it.dropoffStop, it.dropoffPoint, ru)}" },
+                            )
+                        }
+                        item { Note(t(R.string.listingBids_identityHidden), tone = Tone.BLUE) }
                     }
                 }
                 item { Box(Modifier.navigationBarsPadding()) }
@@ -240,70 +268,4 @@ fun ProposalsScreen(vm: OrdersViewModel, ru: Boolean, onBack: () -> Unit, onAcce
     }
     val confirming = (s.proposals as? Load.Ready)?.value?.firstOrNull { it.id == b.confirming }
     if (confirming != null) AcceptDialogFor(confirming, b, onConfirm = { vm.board.accept(confirming) }, onDismiss = vm.board::dismissAccept)
-}
-
-@Composable
-private fun ProposalItem(vm: OrdersViewModel, thread: ProposalThreadDTO, b: OfferBoard.State, now: Instant, ru: Boolean) {
-    val c = Elchi.colors
-    val version = thread.currentVersion
-    val actions = OrderRules.negotiationActions(thread, now)
-    val title = version?.let { "${OrderRules.shortEnd(it.pickupStop, it.pickupPoint, ru)} → ${OrderRules.shortEnd(it.dropoffStop, it.dropoffPoint, ru)}" } ?: thread.driver.label
-    val price = version?.let { soum(it.totalMinor) }
-    // The answer buttons live inside their own offer's card, so they cannot be read as the next one's.
-    val answer: (@Composable ColumnScope.() -> Unit)? = if (version != null && actions.open && actions.theirTurn) {
-        {
-            OfferAnswer(
-                thread, actions, b,
-                acceptLabel = t(R.string.proposals_acceptDriverPrice),
-                onBonus = { vm.board.toggleAcceptBonus(thread.id) },
-                onAccept = { vm.board.askAccept(thread) },
-                onReject = { vm.board.reject(thread) },
-                onCounter = { vm.board.openCounter(thread) },
-                onCounterDigits = { vm.board.setCounterDigits(thread, it) },
-                onCounterBonus = vm.board::setCounterBonus,
-                onSendCounter = { vm.board.sendCounter(thread) },
-                onCloseCounter = vm.board::closeCounter,
-                counterPrice = vm.board.counterPrice(thread),
-            )
-        }
-    } else {
-        null
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        when {
-            version == null || !actions.open -> ItemCard(
-                title = title,
-                sub = t(R.string.proposals_closed, "status" to closedStatus(thread, now)),
-                right = price,
-                rightColor = c.placeholder,
-            )
-            actions.theirTurn -> ItemCard(
-                title = title,
-                sub = listOfNotNull(driverLabel(thread), OrderRules.dayRange(version.pickupWindowStart, version.pickupWindowEnd)).joinToString(" · "),
-                lines = listOfNotNull(
-                    ItemLine(t(R.string.negotiation_driverCountered), c.tone(Tone.WARN).fg),
-                    OrderRules.secondsLeft(version, now)?.let { ItemLine(countdownText(it), c.tone(Tone.WARN).fg) },
-                ),
-                right = price,
-                rightColor = c.accentText,
-                footer = answer,
-            )
-            else -> ItemCard(
-                title = title,
-                sub = listOfNotNull(driverLabel(thread), OrderRules.dayRange(version.pickupWindowStart, version.pickupWindowEnd)).joinToString(" · "),
-                lines = listOf(ItemLine(t(R.string.negotiation_waitingForAnswer))),
-                right = price,
-                rightColor = c.accentText,
-                footer = {
-                    ElchiButton(
-                        t(R.string.proposals_withdraw), { vm.board.withdraw(thread) }, Modifier.fillMaxWidth().height(46.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM,
-                        enabled = actions.canWithdraw && b.busyThread == null, loading = b.busyThread == thread.id,
-                    )
-                },
-            )
-        }
-        if (answer == null && b.errorThread == thread.id) {
-            b.error?.let { Note(offerErrorText(it), tone = Tone.ERR) }
-        }
-    }
 }

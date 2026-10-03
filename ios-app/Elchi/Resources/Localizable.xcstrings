@@ -5050,6 +5050,23 @@
         }
       }
     },
+    "client.inbox.readAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отметить все как прочитанные"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hammasini o'qilgan deb belgilash"
+          }
+        }
+      }
+    },
     "client.keyboard.done": {
       "extractionState": "manual",
       "localizations": {
@@ -5386,6 +5403,346 @@
           "stringUnit": {
             "state": "translated",
             "value": "Telefon haydovchi tanlangandan keyin ko'rinadi"
+          }
+        }
+      }
+    },
+    "client.listing.deadlineAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Крайний срок, {time}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oxirgi muddat, {time}"
+          }
+        }
+      }
+    },
+    "client.listing.departAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправление, {time}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jo'nash, {time}"
+          }
+        }
+      }
+    },
+    "client.listing.editWindowWarn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Если измените время, открытые предложения ({count}) будут закрыты."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vaqtni o'zgartirsangiz, {count} ta ochiq taklif yopiladi."
+          }
+        }
+      }
+    },
+    "client.listing.legacyArchive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "архив"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "arxiv"
+          }
+        }
+      }
+    },
+    "client.listing.metaNewOffer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новое предложение: {ago}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yangi taklif: {ago}"
+          }
+        }
+      }
+    },
+    "client.listing.metaValidUntil": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Объявление действует до {date}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E'lon amal qiladi: {date} gacha"
+          }
+        }
+      }
+    },
+    "client.listing.noticeCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Объявление отменено, открытые предложения отклонены."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E'lon bekor qilindi, ochiq takliflar rad etildi."
+          }
+        }
+      }
+    },
+    "client.listing.noticeExpired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Срок объявления истёк. Разместите новое с главного экрана."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E'lon muddati tugagan. Yangi e'lonni bosh sahifadan bering."
+          }
+        }
+      }
+    },
+    "client.listing.noticeFulfilled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Водитель выбран — бронь создана."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi tanlandi — bron yaratildi."
+          }
+        }
+      }
+    },
+    "client.listing.noticePaused": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Объявление скрыто из ленты."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E'lon lentadan yashirilgan."
+          }
+        }
+      }
+    },
+    "client.listing.offersOpenShort": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} открытых"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta ochiq"
+          }
+        }
+      }
+    },
+    "client.listing.offersSubNone": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока нет предложений"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hozircha taklif yo'q"
+          }
+        }
+      }
+    },
+    "client.listing.offersSubNoneOpen": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет открытых предложений"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ochiq taklif yo'q"
+          }
+        }
+      }
+    },
+    "client.listing.offersSubOpen": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открытых предложений: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta ochiq taklif"
+          }
+        }
+      }
+    },
+    "client.listing.savedClosed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранено · закрыто открытых предложений: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saqlandi · {count} ta ochiq taklif yopildi"
+          }
+        }
+      }
+    },
+    "client.listing.shareCopied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ссылка скопирована · ваши имя и телефон не показываются"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Havola nusxalandi · ism va telefoningiz ko'rsatilmaydi"
+          }
+        }
+      }
+    },
+    "client.listing.statusFulfilled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бронь создана"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bron qilindi"
+          }
+        }
+      }
+    },
+    "client.listing.stepOffers": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложения"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Takliflar"
+          }
+        }
+      }
+    },
+    "client.listing.views": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Просмотры"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ko'rishlar"
+          }
+        }
+      }
+    },
+    "client.listing.viewsCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta"
           }
         }
       }
@@ -5930,6 +6287,312 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kecha, {time}"
+          }
+        }
+      }
+    },
+    "client.offers.badgeCounter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встречное предложение"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklif"
+          }
+        }
+      }
+    },
+    "client.offers.badgeFastest": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Самый ранний"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eng tez"
+          }
+        }
+      }
+    },
+    "client.offers.bonusCovered": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скидку покрывает ELCHI."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chegirmani ELCHI qoplaydi."
+          }
+        }
+      }
+    },
+    "client.offers.cashToDriverShort": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Водителю наличными"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchiga naqd"
+          }
+        }
+      }
+    },
+    "client.offers.closed.demandFulfilled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выбран другой водитель"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boshqa haydovchi tanlandi"
+          }
+        }
+      }
+    },
+    "client.offers.closed.listingChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Условия объявления изменились"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E'lon shartlari o'zgardi"
+          }
+        }
+      }
+    },
+    "client.offers.closed.withdrawn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отозвано"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qaytarib olindi"
+          }
+        }
+      }
+    },
+    "client.offers.counterButton": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Другая цена · {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boshqa narx · {count}"
+          }
+        }
+      }
+    },
+    "client.offers.counterLimit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лимит встречных предложений исчерпан — примите или отклоните"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklif limiti tugadi — qabul qiling yoki rad eting"
+          }
+        }
+      }
+    },
+    "client.offers.counterSame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите цену, отличную от цены водителя."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi narxidan farqli narx kiriting."
+          }
+        }
+      }
+    },
+    "client.offers.counterSentPrice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встречное предложение отправлено: {price}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklif yuborildi: {price}"
+          }
+        }
+      }
+    },
+    "client.offers.counterWithdrawn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встречное предложение отозвано"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklif qaytarib olindi"
+          }
+        }
+      }
+    },
+    "client.offers.drawerHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Согласование цены"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Narx kelishuvlari"
+          }
+        }
+      }
+    },
+    "client.offers.driverCounter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встречное предложение: {price} (ваше {mine})"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklif: {price} (sizniki {mine})"
+          }
+        }
+      }
+    },
+    "client.offers.myCounterWaiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше встречное предложение: {price} · ждём ответа"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklifingiz: {price} · javob kutilmoqda"
+          }
+        }
+      }
+    },
+    "client.offers.rejectedDriver": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложение водителя #{number} отклонено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi #{number} taklifi rad etildi"
+          }
+        }
+      }
+    },
+    "client.offers.timeLeft": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Осталось {time}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{time} qoldi"
+          }
+        }
+      }
+    },
+    "client.offers.waitHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Появится здесь, когда водитель ответит."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi javob berganda shu yerda ko'rinadi."
           }
         }
       }

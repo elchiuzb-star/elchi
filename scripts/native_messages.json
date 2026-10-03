@@ -1551,5 +1551,161 @@
   "client.order.picker.monthsFull": {
     "uz": "Yanvar,Fevral,Mart,Aprel,May,Iyun,Iyul,Avgust,Sentabr,Oktabr,Noyabr,Dekabr",
     "ru": "Январь,Февраль,Март,Апрель,Май,Июнь,Июль,Август,Сентябрь,Октябрь,Ноябрь,Декабрь"
+  },
+  "client.listing.statusFulfilled": {
+    "uz": "Bron qilindi",
+    "ru": "Бронь создана"
+  },
+  "client.listing.metaNewOffer": {
+    "uz": "Yangi taklif: {ago}",
+    "ru": "Новое предложение: {ago}"
+  },
+  "client.listing.metaValidUntil": {
+    "uz": "E'lon amal qiladi: {date} gacha",
+    "ru": "Объявление действует до {date}"
+  },
+  "client.listing.legacyArchive": {
+    "uz": "arxiv",
+    "ru": "архив"
+  },
+  "client.listing.stepOffers": {
+    "uz": "Takliflar",
+    "ru": "Предложения"
+  },
+  "client.listing.departAt": {
+    "uz": "Jo'nash, {time}",
+    "ru": "Отправление, {time}"
+  },
+  "client.listing.deadlineAt": {
+    "uz": "Oxirgi muddat, {time}",
+    "ru": "Крайний срок, {time}"
+  },
+  "client.listing.views": {
+    "uz": "Ko'rishlar",
+    "ru": "Просмотры"
+  },
+  "client.listing.viewsCount": {
+    "uz": "{count} ta",
+    "ru": "{count}"
+  },
+  "client.listing.offersOpenShort": {
+    "uz": "{count} ta ochiq",
+    "ru": "{count} открытых"
+  },
+  "client.listing.noticePaused": {
+    "uz": "E'lon lentadan yashirilgan.",
+    "ru": "Объявление скрыто из ленты."
+  },
+  "client.listing.noticeExpired": {
+    "uz": "E'lon muddati tugagan. Yangi e'lonni bosh sahifadan bering.",
+    "ru": "Срок объявления истёк. Разместите новое с главного экрана."
+  },
+  "client.listing.noticeCancelled": {
+    "uz": "E'lon bekor qilindi, ochiq takliflar rad etildi.",
+    "ru": "Объявление отменено, открытые предложения отклонены."
+  },
+  "client.listing.noticeFulfilled": {
+    "uz": "Haydovchi tanlandi — bron yaratildi.",
+    "ru": "Водитель выбран — бронь создана."
+  },
+  "client.listing.offersSubOpen": {
+    "uz": "{count} ta ochiq taklif",
+    "ru": "Открытых предложений: {count}"
+  },
+  "client.listing.offersSubNoneOpen": {
+    "uz": "Ochiq taklif yo'q",
+    "ru": "Нет открытых предложений"
+  },
+  "client.listing.offersSubNone": {
+    "uz": "Hozircha taklif yo'q",
+    "ru": "Пока нет предложений"
+  },
+  "client.listing.shareCopied": {
+    "uz": "Havola nusxalandi · ism va telefoningiz ko'rsatilmaydi",
+    "ru": "Ссылка скопирована · ваши имя и телефон не показываются"
+  },
+  "client.listing.editWindowWarn": {
+    "uz": "Vaqtni o'zgartirsangiz, {count} ta ochiq taklif yopiladi.",
+    "ru": "Если измените время, открытые предложения ({count}) будут закрыты."
+  },
+  "client.listing.savedClosed": {
+    "uz": "Saqlandi · {count} ta ochiq taklif yopildi",
+    "ru": "Сохранено · закрыто открытых предложений: {count}"
+  },
+  "client.offers.waitHint": {
+    "uz": "Haydovchi javob berganda shu yerda ko'rinadi.",
+    "ru": "Появится здесь, когда водитель ответит."
+  },
+  "client.offers.badgeCounter": {
+    "uz": "Qarshi taklif",
+    "ru": "Встречное предложение"
+  },
+  "client.offers.timeLeft": {
+    "uz": "{time} qoldi",
+    "ru": "Осталось {time}"
+  },
+  "client.offers.driverCounter": {
+    "uz": "Qarshi taklif: {price} (sizniki {mine})",
+    "ru": "Встречное предложение: {price} (ваше {mine})"
+  },
+  "client.offers.myCounterWaiting": {
+    "uz": "Qarshi taklifingiz: {price} · javob kutilmoqda",
+    "ru": "Ваше встречное предложение: {price} · ждём ответа"
+  },
+  "client.offers.closed.withdrawn": {
+    "uz": "Qaytarib olindi",
+    "ru": "Отозвано"
+  },
+  "client.offers.closed.demandFulfilled": {
+    "uz": "Boshqa haydovchi tanlandi",
+    "ru": "Выбран другой водитель"
+  },
+  "client.offers.closed.listingChanged": {
+    "uz": "E'lon shartlari o'zgardi",
+    "ru": "Условия объявления изменились"
+  },
+  "client.offers.counterButton": {
+    "uz": "Boshqa narx · {count}",
+    "ru": "Другая цена · {count}"
+  },
+  "client.offers.counterLimit": {
+    "uz": "Qarshi taklif limiti tugadi — qabul qiling yoki rad eting",
+    "ru": "Лимит встречных предложений исчерпан — примите или отклоните"
+  },
+  "client.offers.counterSame": {
+    "uz": "Haydovchi narxidan farqli narx kiriting.",
+    "ru": "Введите цену, отличную от цены водителя."
+  },
+  "client.offers.rejectedDriver": {
+    "uz": "Haydovchi #{number} taklifi rad etildi",
+    "ru": "Предложение водителя #{number} отклонено"
+  },
+  "client.offers.counterWithdrawn": {
+    "uz": "Qarshi taklif qaytarib olindi",
+    "ru": "Встречное предложение отозвано"
+  },
+  "client.offers.counterSentPrice": {
+    "uz": "Qarshi taklif yuborildi: {price}",
+    "ru": "Встречное предложение отправлено: {price}"
+  },
+  "client.offers.cashToDriverShort": {
+    "uz": "Haydovchiga naqd",
+    "ru": "Водителю наличными"
+  },
+  "client.offers.bonusCovered": {
+    "uz": "Chegirmani ELCHI qoplaydi.",
+    "ru": "Скидку покрывает ELCHI."
+  },
+  "client.offers.drawerHint": {
+    "uz": "Narx kelishuvlari",
+    "ru": "Согласование цены"
+  },
+  "client.inbox.readAll": {
+    "uz": "Hammasini o'qilgan deb belgilash",
+    "ru": "Отметить все как прочитанные"
+  },
+  "client.offers.badgeFastest": {
+    "uz": "Eng tez",
+    "ru": "Самый ранний"
   }
 }
