@@ -33,7 +33,8 @@ public struct BookingActions: Equatable, Sendable {
 /// One step of "Holat kuzatuvi": the dictionary key, whether it is behind, current or ahead, and the time when the
 /// booking says it (only `confirmed` = created and `cancelled` carry one - nothing is invented).
 public struct LadderStep: Equatable, Sendable {
-    public enum State: Equatable, Sendable { case done, current, ahead }
+    /// `failed`: the design's red cross ("Bekor qilindi" on a cancelled booking's two-step ladder).
+    public enum State: Equatable, Sendable { case done, current, ahead, failed }
     public let key: String
     public let state: State
     public let at: Date?
@@ -67,6 +68,14 @@ public enum StatusLadder {
                 : index == position ? .current : .ahead
             return LadderStep(key: key, state: state, at: index == 0 ? createdAt : nil)
         }
+    }
+
+    /// A cancelled (or no-show) booking: the design's two steps - "Tasdiqlandi" with when it was made, then
+    /// "Bekor qilindi" (red cross) with when it was cancelled. Nil for any other status.
+    public static func cancelledSteps(status: String, createdAt: Date?, cancelledAt: Date?) -> [LadderStep]? {
+        guard status == "cancelled" || status == "no_show" else { return nil }
+        return [LadderStep(key: "status.confirmed", state: .done, at: createdAt),
+                LadderStep(key: status == "no_show" ? "status.no_show" : "bookingCancel.cancelledBy", state: .failed, at: cancelledAt)]
     }
 }
 
@@ -250,9 +259,10 @@ public struct AmendmentActions: Equatable, Sendable {
             : !amendable(bookingStatus, side: side) ? "closed" : "proposed"
         switch status {
         case "proposed": return StatusLabel(key: "status.proposed", raw: status, tone: .warn)
-        case "accepted": return StatusLabel(key: "client.amendment.statusAccepted", raw: status, tone: .ok)
+        // BOSQICH 04: the past tense ("Qabul qilindi", "Rad etildi", "Qaytarib olindi").
+        case "accepted": return StatusLabel(key: "client.booking.amendStatusAccepted", raw: status, tone: .ok)
         case "rejected": return StatusLabel(key: "amendment.rejected", raw: status, tone: .err)
-        case "withdrawn": return StatusLabel(key: "status.withdrawn", raw: status, tone: .gray)
+        case "withdrawn": return StatusLabel(key: "client.offers.closed.withdrawn", raw: status, tone: .gray)
         case "closed": return StatusLabel(key: "client.amendment.statusClosed", raw: status, tone: .gray)
         default: return StatusLabel(key: "status.expired", raw: status, tone: .gray)
         }
@@ -268,4 +278,222 @@ public enum SupportStatus {
     }
 
     public static func isClosed(_ thread: SupportThreadDTO?) -> Bool { thread?.status == "closed" }
+}
+
+// MARK: - BOSQICH 04 design ("Elchi Bron"): the detail
+
+/// What the redesigned booking detail draws, from the booking alone (no actions field on the DTO).
+public enum BookingDetailRules {
+    /// Where the status sits on its service's five-step path (nil off it: cancelled, no-show, return and custody).
+    static func position(_ status: String, _ service: ServiceType) -> Int? {
+        service == .passenger ? PassengerStatus.position(status) : StatusLadder.position(status)
+    }
+
+    /// The bar's share icon (design `!cancelled && s < 3`): until the parcel is delivered / the passenger has arrived.
+    /// The server still decides (`grant_too_early`, finished) and its refusal is said as a toast.
+    public static func canShare(_ status: String, service: ServiceType) -> Bool {
+        guard let position = position(status, service) else { return false }
+        return position < 3
+    }
+
+    /// The map pill's dot is green only while the service runs (the tracking window can be open). It never says a
+    /// point is fresh - that is the tracking screen's job (§10.5: no false "GPS faol").
+    public static func liveDot(_ status: String) -> Bool {
+        ["in_transit", "picked_up", "onboard"].contains(status)
+    }
+
+    /// The five dots under the badge: how far the booking got, or the cancelled picture (all grey, a red cross on the
+    /// second dot). Nil for the off-path statuses (return, custody), which show only the badge.
+    public struct Tracker: Equatable, Sendable {
+        public static let count = 5
+        public let current: Int?
+        public let cancelled: Bool
+    }
+
+    public static func tracker(_ status: String, service: ServiceType) -> Tracker? {
+        if status == "cancelled" || status == "no_show" { return Tracker(current: nil, cancelled: true) }
+        return position(status, service).map { Tracker(current: $0, cancelled: false) }
+    }
+
+    /// The coloured boxes under the sheet card, in the design's order.
+    public enum Notice: Equatable, Sendable {
+        /// Pochta `in_transit`: "Haydovchi yo'lda." (info)
+        case onTheWay
+        /// Pochta `delivered`: "Posilka yetkazildi." (ok) - the operator's record; nothing for the client to confirm (Q139).
+        case delivered
+        /// Taksi `arrived`: "Yetib keldingiz." (ok)
+        case arrived
+        /// "Bekor qilindi: Siz · 27.09, 14:30 · Rejalarim o'zgardi" (err)
+        case cancelled(ClientBookingDTO.Cancelled)
+        /// Q7: the driver reported a no-show; an operator decides (warn).
+        case noShowPending
+        /// The client blocked this driver (`GET /blocks`): "Haydovchi bloklangan." (warn) - the booking goes on.
+        case blocked
+
+        public var tone: Tone {
+            switch self {
+            case .onTheWay: .blue
+            case .delivered, .arrived: .ok
+            case .cancelled: .err
+            case .noShowPending, .blocked: .warn
+            }
+        }
+    }
+
+    public static func notices(_ booking: ClientBookingDTO, blocked: Bool) -> [Notice] {
+        var out: [Notice] = []
+        let status = booking.serviceStatus
+        if let cancelled = booking.cancelled, status == "cancelled" || status == "no_show" {
+            out.append(.cancelled(cancelled))
+        } else if booking.serviceType == .parcel && (status == "in_transit" || status == "picked_up") {
+            out.append(.onTheWay)
+        } else if booking.serviceType == .parcel && status == "delivered" {
+            out.append(.delivered)
+        } else if booking.serviceType == .passenger && status == "arrived" {
+            out.append(.arrived)
+        }
+        if booking.noShowReview?.status == "pending" { out.append(.noShowPending) }
+        if blocked { out.append(.blocked) }
+        return out
+    }
+
+    /// The driver's phone as the card and the bar's call button show it (Q44/Q142, 24 h after the end): open, not
+    /// yet open, or closed for good (the booking is over and the server hides it again - "Yopilgan").
+    public enum Phone: Equatable, Sendable {
+        case visible(String)
+        case locked
+        case closed
+    }
+
+    public static func phone(_ booking: ClientBookingDTO) -> Phone {
+        if let phone = DriverReveal.of(booking)?.phone { return .visible(phone) }
+        return BookingActions.of(booking.serviceStatus).terminal ? .closed : .locked
+    }
+
+    /// The toast for a tap on the grey call button: closed for good, or when it opens - a passenger at boarding
+    /// (Q44), a parcel when the trip departs (Q142; the design's "posilka olib ketilganda" is not the rule).
+    public static func callRefusalKey(_ phone: Phone, service: ServiceType) -> String? {
+        switch phone {
+        case .visible: nil
+        case .closed: "client.booking.callClosed"
+        case .locked: service == .passenger ? "client.booking.callLockedTaxi" : "client.booking.callLockedParcel"
+        }
+    }
+
+    /// The chat button's red count: messages the server counts minus those the phone had when the chat was last
+    /// left (no unread count exists on the server - BLOCKED; never negative).
+    public static func unread(messageCount: Int?, seen: Int) -> Int {
+        max(0, (messageCount ?? 0) - max(0, seen))
+    }
+
+    /// `JT` from "Jasur Toshmatov", `J` from "Jasur" (the DTO carries the first name only).
+    public static func initials(_ name: String) -> String {
+        let words = name.split(whereSeparator: { $0.isWhitespace }).prefix(2)
+        let letters = words.compactMap(\.first).map { String($0).uppercased() }.joined()
+        return letters.isEmpty ? "?" : letters
+    }
+
+    /// "Haydovchini baholang" with five stars: only once the booking is completed and not yet rated (the design ties
+    /// it to the cash block before the end - not followed: no rating before `completed`).
+    public static func showsRatingCard(_ status: String, rated: Bool) -> Bool {
+        BookingActions.of(status).canRate && !rated
+    }
+
+    /// `★★★★ (4 / 5)` - the stars just sent.
+    public static func starsText(_ stars: Int) -> String {
+        let n = min(max(stars, 1), 5)
+        return "\(String(repeating: "★", count: n)) (\(n) / 5)"
+    }
+
+    /// The word under the rating stars: "Yulduzni bosing" until one is chosen, then Yomon ... A'lo.
+    public static func starLabelKey(_ stars: Int) -> String {
+        (1...5).contains(stars) ? "client.booking.rateLabel\(stars)" : "client.booking.rateTapStar"
+    }
+
+    /// `5 kg gacha` from the category's grams (a whole number when it is one, else one decimal with a comma).
+    public static func weightText(grams: Int) -> String {
+        let kg = Double(grams) / 1000
+        if kg == kg.rounded() { return String(Int(kg)) }
+        return String(format: "%.1f", kg).replacingOccurrences(of: ".", with: ",")
+    }
+}
+
+// MARK: - Chat: what the phone has seen
+
+/// How many messages the booking chat had when this phone last left it (local only: the server has no read marks).
+public enum ChatSeen {
+    private static func key(_ id: String) -> String { "elchi.chatSeen.\(id)" }
+
+    public static func count(_ bookingId: String, defaults: UserDefaults = .standard) -> Int {
+        defaults.integer(forKey: key(bookingId))
+    }
+
+    public static func mark(_ bookingId: String, count: Int, defaults: UserDefaults = .standard) {
+        guard count > Self.count(bookingId, defaults: defaults) else { return }
+        defaults.set(count, forKey: key(bookingId))
+    }
+}
+
+// MARK: - Amendment form (tap to validate)
+
+/// "Taklif yuborish" is always tappable (design): a tap with a missing price, the current price again, or a reason
+/// shorter than three characters says what is wrong on the field instead.
+public enum AmendmentForm {
+    public enum Problem: Equatable, Sendable {
+        case priceMissing, noChange, reasonShort
+
+        /// The sentence under the field (`listingOwner.invalid.price`, `client.amendment.noChange`,
+        /// `client.booking.amendReasonRequired`).
+        public var key: String {
+            switch self {
+            case .priceMissing: "listingOwner.invalid.price"
+            case .noChange: "client.amendment.noChange"
+            case .reasonShort: "client.booking.amendReasonRequired"
+            }
+        }
+    }
+
+    public static let maxPriceDigits = 8
+    public static let maxReason = 120
+
+    public static func validate(priceMinor: Int, currentUnitMinor: Int, reason: String) -> Problem? {
+        if priceMinor <= 0 { return .priceMissing }
+        if priceMinor == currentUnitMinor { return .noChange }
+        if reason.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 { return .reasonShort }
+        return nil
+    }
+}
+
+// MARK: - Tracking: the closed window and the freshness notes
+
+public enum TrackingCard {
+    /// The closed-window card: its title key and where its text comes from. A cancelled booking says so; a finished
+    /// one says live location is closed; anything else has not started. The text is the server's reason
+    /// (`trackingWindow.*`) - the window is the server's (Taksi opens 30 min before pickup), never guessed from status.
+    public static func closedTitleKey(reason: String, bookingStatus: String?) -> String {
+        if bookingStatus == "cancelled" || bookingStatus == "no_show" { return "client.tracking.bookingCancelled" }
+        switch reason {
+        case "booking_finished", "trip_finished", "feature_off": return "client.tracking.liveClosed"
+        default: return "client.tracking.notStarted"
+        }
+    }
+
+    /// The note under the map: delayed (with the point's real age in minutes, at least one), lost, or no point yet.
+    public enum Note: Equatable, Sendable {
+        case none
+        case delayed(minutes: Int)
+        case lost
+        case noData
+    }
+
+    public static func note(_ freshness: TrackingFreshness, capturedAt: Date?, now: Date) -> Note {
+        switch freshness {
+        case .fresh: return .none
+        case .delayed:
+            let age = capturedAt.map { now.timeIntervalSince($0) } ?? 60
+            return .delayed(minutes: max(1, Int(age / 60)))
+        case .lost: return .lost
+        default: return .noData
+        }
+    }
 }

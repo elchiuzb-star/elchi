@@ -28,6 +28,12 @@ protocol SafetyHost: AnyObject, Sendable {
     func sendReport(reason: ReportReasonCode, details: String) async -> Bool
     func reportAgain()
     func block() async -> Bool
+    /// The other side's first name, when the screen may name it ("Jasur bloklandi"); nil = the generic sentences.
+    var counterpartyName: String? { get }
+}
+
+extension SafetyHost {
+    var counterpartyName: String? { nil }
 }
 
 /// Rating the other side after completion.
@@ -37,10 +43,16 @@ protocol RatingHost: AnyObject, Sendable {
     var failed: BookingCommand? { get }
     var running: BookingCommand? { get }
     func rate(stars: Int, comment: String) async -> Bool
+    /// Stars already chosen before the screen opened (the client's detail star card); 0 = none.
+    var initialStars: Int { get }
+}
+
+extension RatingHost {
+    var initialStars: Int { 0 }
 }
 
 /// The sentences that differ between the client's and the driver's safety and rating screens.
-struct BookingSideTexts {
+struct BookingSideTexts: Equatable {
     let safetyNote: String
     let blockedNote: String
     let blockConfirmTitle: String
@@ -56,6 +68,8 @@ extension BookingModel: BookingScreenHost, SafetyHost, RatingHost {
     var bookingBase: ClientBookingDTO? { booking.value }
     var side: String { "client" }
     var counterpartyKnown: Bool { booking.value?.driver != nil }
+    var counterpartyName: String? { booking.value?.driver?.displayName }
+    var initialStars: Int { ratingDraft }
 }
 
 // MARK: - A line under the top bar (the driver's GPS bar)

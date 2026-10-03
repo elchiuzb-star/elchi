@@ -75,8 +75,11 @@ object BookingRules {
     /** `PARCEL_BOOKING.cancel` leaves only these; after departure it is the return flow or support, not a cancel. */
     private val CANCELLABLE = setOf("confirmed", "awaiting_pickup")
 
-    /** Live-location links make sense until the parcel is delivered or the booking is closed. */
-    private val SHAREABLE = setOf("confirmed", "awaiting_pickup", "picked_up", "in_transit", "return_required")
+    /**
+     * Live-location links make sense until the parcel is delivered or the booking is closed; a Taksi passenger can
+     * share the ride while in the car (design 04 `canShare`: `s < 3`).
+     */
+    private val SHAREABLE = setOf("confirmed", "awaiting_pickup", "picked_up", "in_transit", "return_required", "onboard")
 
     /** No further service state follows these (chat still reads, support still works). */
     val TERMINAL = setOf("completed", "cancelled", "no_show", "returned", "delivery_failed")
@@ -130,8 +133,16 @@ object BookingRules {
         else -> null
     }
 
-    /** An amendment's word (`status.<status>`); "accepted" has its own - `status.accepted` means "driver chosen". */
-    fun amendmentStatusKey(status: String): String = if (status == "accepted") "client.amendment.statusAccepted" else "status.$status"
+    /**
+     * An amendment's word, past tense as in design 04: Javob kutilmoqda / Qabul qilindi / Rad etildi / Qaytarib
+     * olindi (`status.accepted` would mean "driver chosen").
+     */
+    fun amendmentStatusKey(status: String): String = when (status) {
+        "accepted" -> "client.booking.amendStatusAccepted"
+        "rejected" -> "amendment.rejected"
+        "withdrawn" -> "client.offers.closed.withdrawn"
+        else -> "status.$status"
+    }
 
     /** Waiting for an answer amber, in force green, refused red, taken back or lapsed grey. */
     fun amendmentTone(status: String): uz.elchi.app.ui.theme.Tone = when (status) {
@@ -330,4 +341,110 @@ object BookingRules {
 
     /** A price the amendment may send: positive whole so'm that differs from the agreed one. */
     fun amendmentPrice(digits: String, currentUnitMinor: Long): Long? = ParcelRules.soumToMinor(digits)?.takeIf { it != currentUnitMinor }
+
+    // -- design 04: the detail screen -------------------------------------------------------------------------------
+
+    /**
+     * The 5-dot tracker under the badge: how many rungs are reached (0-based index of the current one), or, for a
+     * booking that stopped off the ladder (cancelled, no-show, the parcel's return statuses), null - the screen
+     * then draws "agreed" done and the second dot crossed.
+     */
+    fun trackerStep(booking: BookingClientDTO): Int? = ladderIndex(booking.serviceStatus, booking.serviceType)
+
+    /** The hero pill's dot: green while the service runs (design `liveDot`, s 2..3) - a status, never a GPS claim. */
+    fun serviceRunning(status: String): Boolean = status in RUNNING
+
+    private val RUNNING = setOf("picked_up", "in_transit", "delivered", "onboard", "arrived")
+
+    /** The notice under the sheet card for this status (design `notices`), or null. */
+    fun statusNotice(serviceType: ServiceType, status: String): StatusNoticeKind? = when {
+        status == "cancelled" -> StatusNoticeKind.CANCELLED
+        serviceType == ServiceType.PASSENGER && status == "arrived" -> StatusNoticeKind.ARRIVED
+        serviceType != ServiceType.PASSENGER && status == "delivered" -> StatusNoticeKind.DELIVERED
+        serviceType != ServiceType.PASSENGER && (status == "in_transit" || status == "picked_up") -> StatusNoticeKind.ON_THE_WAY
+        else -> null
+    }
+
+    /**
+     * Why the call button is grey (its toast): closed once the booking is over and the server hid the phones again
+     * (Q44: 24 h after the end), else when they open - a passenger's at boarding, a parcel's at the departure (Q142).
+     */
+    fun callLock(serviceType: ServiceType, status: String): CallLock = when {
+        isTerminal(status) -> CallLock.CLOSED
+        serviceType == ServiceType.PASSENGER -> CallLock.TAXI
+        else -> CallLock.PARCEL
+    }
+
+    /** The driver's initials for the bar's avatar: the first letters of up to two words ("Jasur T." -> "JT"). */
+    fun initials(name: String): String =
+        name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2).mapNotNull { w -> w.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar() }
+            .joinToString("").ifEmpty { "?" }
+
+    /**
+     * The chat icon's red count: messages since this phone last had the chat open. There is no server unread count,
+     * so it is `message_count` minus the count seen at the last visit; nothing when the chat was never opened here
+     * (the count would include the client's own messages).
+     */
+    fun unreadCount(messageCount: Long?, seenCount: Long?): Int =
+        if (messageCount == null || seenCount == null) 0 else (messageCount - seenCount).coerceIn(0, 99).toInt()
+
+    /** "★★★★ (4 / 5)" for the rated note. */
+    fun starsText(stars: Int): String = "★".repeat(stars.coerceIn(0, 5)) + " (" + stars.coerceIn(0, 5) + " / 5)"
+
+    /** `{weight} kg gacha` from the category's grams: whole kilograms, or one decimal under 10 kg ("0,5"). */
+    fun weightKg(grams: Long): String {
+        if (grams % 1000 == 0L) return (grams / 1000).toString()
+        return String.format(Locale.ROOT, "%.1f", grams / 1000.0).replace('.', ',')
+    }
+
+    // -- design 04: forms -------------------------------------------------------------------------------------------
+
+    /**
+     * Why "Taklif yuborish" cannot send yet (the button stays tappable, design `sendAmend`): no price, the same price,
+     * or a reason shorter than three letters. Null = it can go.
+     */
+    fun amendmentFormError(digits: String, reason: String, currentUnitMinor: Long): AmendFormError? {
+        val price = ParcelRules.soumToMinor(digits)
+        return when {
+            price == null -> AmendFormError.PRICE_MISSING
+            price == currentUnitMinor -> AmendFormError.PRICE_SAME
+            reason.trim().length < AMEND_REASON_MIN -> AmendFormError.REASON
+            else -> null
+        }
+    }
+
+    const val AMEND_REASON_MIN = 3
+    const val AMEND_REASON_MAX = 120
+    const val AMEND_DIGITS_MAX = 8
+    const val RATING_COMMENT_MAX = 300
+    const val REPORT_DETAILS_MAX = 300
+    const val CANCEL_COMMENT_MAX = 200
+
+    /** The rating screen's word under the stars: "Yulduzni bosing" until one is tapped, then Yomon .. A'lo. */
+    fun starLabelKey(stars: Int): String = if (stars in 1..5) "client.booking.rateLabel$stars" else "client.booking.rateTapStar"
+
+    // -- design 04: tracking ----------------------------------------------------------------------------------------
+
+    /** The point's age on this phone's clock, for "oxirgi nuqta {time} oldin" (never negative). */
+    fun pointAgeSeconds(capturedAt: String?, now: Instant): Long? =
+        OrderRules.parseInstant(capturedAt)?.let { Duration.between(it, now).seconds.coerceAtLeast(0) }
+
+    /** The closed-window card's title: cancelled, finished (the window will not reopen) or not started yet. */
+    fun closedWindowTitle(status: String?, reason: String?): ClosedWindow = when {
+        status == "cancelled" || status == "no_show" -> ClosedWindow.CANCELLED
+        reason in setOf("booking_finished", "trip_finished") || (status != null && isTerminal(status)) -> ClosedWindow.FINISHED
+        else -> ClosedWindow.NOT_STARTED
+    }
 }
+
+/** The notice box under the detail's sheet card (design 04 `notices`). */
+enum class StatusNoticeKind { CANCELLED, ON_THE_WAY, DELIVERED, ARRIVED }
+
+/** Which sentence the grey call button says. */
+enum class CallLock { CLOSED, TAXI, PARCEL }
+
+/** The amendment form's first problem (design `sendAmend`). */
+enum class AmendFormError { PRICE_MISSING, PRICE_SAME, REASON }
+
+/** The tracking screen's closed live-location card (design `liveOffT`). */
+enum class ClosedWindow { NOT_STARTED, FINISHED, CANCELLED }

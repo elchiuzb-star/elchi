@@ -765,6 +765,8 @@ fun TitleBar(
     leadingDot: Boolean = false,
     /** Anything else at the right edge (a step pill "1 / 3"). */
     trailing: (@Composable () -> Unit)? = null,
+    /** A smaller line under the title (the chat's "Jasur · Chevrolet Cobalt"). */
+    subtitle: String? = null,
 ) {
     Row(
         modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp),
@@ -772,14 +774,17 @@ fun TitleBar(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (onBack != null) RoundIconButton(leadingIcon, backLabel, onBack, dot = leadingDot)
-        Text(
-            title,
-            Modifier.weight(1f).semantics { heading() },
-            style = Elchi.type.section.copy(fontSize = androidx.compose.ui.unit.TextUnit(18f, androidx.compose.ui.unit.TextUnitType.Sp)),
-            color = Elchi.colors.text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                Modifier.semantics { heading() },
+                style = Elchi.type.section.copy(fontSize = androidx.compose.ui.unit.TextUnit(18f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                color = Elchi.colors.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle != null) Text(subtitle, style = Elchi.type.caption, color = Elchi.colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         if (right != null) {
             Box(
                 Modifier.heightIn(min = 44.dp).then(if (onRight != null) Modifier.clip(CircleShape).clickable(role = Role.Button, onClick = onRight).padding(horizontal = 6.dp) else Modifier),
@@ -1203,7 +1208,7 @@ fun CheckRow(text: String, checked: Boolean, onChange: (Boolean) -> Unit, modifi
 // -- Stage 04 blocks (the prototype's steps, gps, chat, composer, stars, select) ----------------------------------
 
 /** A rung of [StatusLadder]: done (green), current (brand), or still ahead (hollow, grey text). */
-enum class LadderState { DONE, CURRENT, TODO }
+enum class LadderState { DONE, CURRENT, TODO, FAILED }
 
 data class LadderRow(val title: String, val time: String?, val state: LadderState)
 
@@ -1226,7 +1231,7 @@ fun StatusLadder(rows: List<LadderRow>, modifier: Modifier = Modifier, stateLabe
                 Column(Modifier.width(14.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         Modifier.size(14.dp).clip(CircleShape)
-                            .background(when (row.state) { LadderState.DONE -> ok; LadderState.CURRENT -> c.brand; LadderState.TODO -> c.card })
+                            .background(when (row.state) { LadderState.DONE -> ok; LadderState.CURRENT -> c.brand; LadderState.TODO -> c.card; LadderState.FAILED -> c.danger })
                             .then(if (row.state == LadderState.TODO) Modifier.border(2.dp, c.outline, CircleShape) else Modifier),
                     )
                     if (i != rows.lastIndex) Box(Modifier.width(2.dp).weight(1f).heightIn(min = 20.dp).background(if (row.state == LadderState.DONE) ok else c.line))
@@ -1235,7 +1240,11 @@ fun StatusLadder(rows: List<LadderRow>, modifier: Modifier = Modifier, stateLabe
                     Text(
                         row.title,
                         style = Elchi.type.secondary.copy(fontWeight = if (reached) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
-                        color = if (reached) c.text else c.placeholder,
+                        color = when {
+                            row.state == LadderState.FAILED -> c.tone(Tone.ERR).fg
+                            reached -> c.text
+                            else -> c.placeholder
+                        },
                     )
                     if (row.time != null) Text(row.time, style = Elchi.type.caption, color = c.muted)
                 }

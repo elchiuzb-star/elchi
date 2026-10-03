@@ -441,7 +441,7 @@ private fun Tracker(progress: ListingProgress) {
 }
 
 @Composable
-private fun DottedLine(color: Color, modifier: Modifier) {
+internal fun DottedLine(color: Color, modifier: Modifier) {
     androidx.compose.foundation.Canvas(modifier.height(3.dp)) {
         val r = size.height / 2
         var x = r
@@ -490,7 +490,7 @@ private fun FactsGrid(listing: ListingDTO, s: ListingViewModel.State, stats: Off
 }
 
 @Composable
-private fun Fact(key: String, value: String, modifier: Modifier = Modifier, detail: String? = null) {
+internal fun Fact(key: String, value: String, modifier: Modifier = Modifier, detail: String? = null) {
     val c = Elchi.colors
     Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(key, style = Elchi.type.caption, color = c.muted)
@@ -521,7 +521,7 @@ private fun PhotoColumn(s: ListingViewModel.State) {
 
 /** The status notice under the card (paused / expired grey, cancelled red, fulfilled green). */
 @Composable
-private fun StatusNotice(text: String, tone: Tone) {
+internal fun StatusNotice(text: String, tone: Tone) {
     val c = Elchi.colors
     val colors = c.tone(tone)
     val icon = when (tone) {

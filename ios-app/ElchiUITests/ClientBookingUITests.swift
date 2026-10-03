@@ -58,16 +58,6 @@ final class ClientBookingUITests: ClientUITestCase {
 
     private func back() { tap("Orqaga") }
 
-    /// Picks an option from a `SelectField` (a system menu).
-    private func choose(_ field: String, _ option: String) {
-        let menu = app.buttons[field].firstMatch
-        XCTAssertTrue(menu.waitForExistence(timeout: 10), "no select '\(field)'")
-        menu.tap()
-        let item = app.buttons[option].firstMatch
-        XCTAssertTrue(item.waitForExistence(timeout: 5), "no option '\(option)'")
-        item.tap()
-    }
-
     // MARK: Phases
 
     func test0_SignIn() {
@@ -87,25 +77,32 @@ final class ClientBookingUITests: ClientUITestCase {
         waitFor("Safar jo'naganda ochiladi")
         snap("81-detail-top")
         app.swipeUp()
-        waitFor("haydovchiga naqd to'lanadi")
+        waitFor("To'lov ilova orqali o'tmaydi")
         snap("82-detail-middle")
         app.swipeUp()
         snap("83-detail-bottom")
 
-        // Recipient link: 1 hour.
-        scrollTap("1 soat")
-        scrollTap("Havola yaratish")
-        waitFor("Havola matni faqat birinchi javobda keladi", timeout: 20)
-        snap("84-share-link")
-        scrollTap("Havolani bekor qilish")
-        waitFor("Havola bekor qilindi", timeout: 20)
+        // BOSQICH 04: the bar's share icon makes the link (1 hour) and opens the system share sheet - or says why not.
+        app.swipeDown()
+        tap("Kuzatuv havolasini ulashish")
+        let sheet = app.otherElements["ActivityListView"].firstMatch
+        if sheet.waitForExistence(timeout: 15) {
+            snap("84-share-link")
+            let close = sheet.buttons["Close"].firstMatch
+            if close.exists { close.tap() } else { app.swipeDown(velocity: .fast) }
+            scrollTap("Havolani bekor qilish")
+            waitFor("Havola bekor qilindi", timeout: 20)
+        } else {
+            waitFor("Havolani hozir yaratib bo'lmaydi", timeout: 10)
+            snap("84-share-too-early")
+        }
 
         // The cancel sheet: reasons, not confirmed.
         scrollTap("Bronni bekor qilish")
         waitFor("Bronni bekor qilasizmi?")
         snap("85-cancel-sheet")
-        choose("Sabab", "Boshqa yo'l topdim")
-        waitFor("Boshqa yo'l topdim")
+        tap("Boshqa yo'l topdim")
+        XCTAssertTrue(app.buttons["Boshqa yo'l topdim"].isSelected)
         tap("Bronni saqlash")
         waitGone("Bronni bekor qilasizmi?")
 
@@ -121,7 +118,7 @@ final class ClientBookingUITests: ClientUITestCase {
         waitFor("Taklif yuborildi", timeout: 20)
         waitFor("Sizning taklifingiz")
         snap("87-amend-sent")
-        tap("Taklifni qaytarib olish")
+        tap("Qaytarib olish")
         waitFor("Taklif qaytarib olindi", timeout: 20)
         snap("88-amend-withdrawn")
         back()
@@ -156,13 +153,14 @@ final class ClientBookingUITests: ClientUITestCase {
         scrollTap("Xavfsizlik haqida xabar berish")
         waitFor("Oddiy muammo uchun")
         snap("93-safety")
-        choose("Sabab", "Narx bo'yicha bosim")
+        scrollTap("Narx bo'yicha bosim")
         type("Narxni oshirishni talab qildi", into: "Izoh (ixtiyoriy)")
         scrollTap("Yuborish")
         waitFor("Shikoyat yuborildi", timeout: 20)
         snap("94-safety-sent")
         scrollTap("Bloklash")
-        waitFor("Haydovchini bloklaysizmi?")
+        waitFor("bloklaysizmi?")
+        waitFor("Bu bron davom etadi.")
         snap("95-block-confirm")
         tap("Ortga")
         back()
@@ -209,7 +207,7 @@ final class ClientBookingUITests: ClientUITestCase {
         waitFor("Я на месте", timeout: 20)
         snap("107-ru-dark-chat")
         tap("Назад")
-        scrollTap("Отслеживание")
+        scrollTap("Открыть отслеживание")
         waitFor("Ход выполнения")
         snap("108-ru-dark-tracking")
         tap("Назад")
@@ -268,15 +266,16 @@ final class ClientBookingUITests: ClientUITestCase {
     func test3_Boarded() {
         launch(reset: false)
         openOrders()
-        openBooking(status: "Olib ketish kutilmoqda")
+        openBooking(status: "Safarga tayyorlanmoqda")
         waitFor("To'liq raqam ochildi", timeout: 20)
         snap("120-detail-boarded")
         app.swipeUp()
         XCTAssertFalse(app.buttons["Shartlarni o'zgartirish"].exists, "amend offered while awaiting pickup")
         snap("121-detail-boarded-bottom")
         app.swipeDown()
-        scrollTap("Kuzatuv")
+        scrollTap("Kuzatuvni ochish")
         waitFor("Safarga tayyorlanmoqda")
+        waitFor("Hali boshlanmagan", timeout: 20)
         waitFor("posilka olib ketilgandan keyin", timeout: 20)
         snap("122-tracking-not-picked-up")
     }
@@ -287,8 +286,9 @@ final class ClientBookingUITests: ClientUITestCase {
         openBooking(status: "Haydovchi yo'lga chiqdi")
         waitFor("Aloqa ochiq", timeout: 20)
         waitFor("Qo'ng'iroq")
+        waitFor("Haydovchi yo'lda.")
         snap("130-detail-in-transit")
-        scrollTap("Kuzatuv")
+        scrollTap("Kuzatuvni ochish")
         waitFor("Jonli joylashuv", timeout: 30)
         waitFor("So'nggi 30 soniya ichida yangilangan", timeout: 40)
         waitFor("Oxirgi nuqta")
@@ -308,7 +308,7 @@ final class ClientBookingUITests: ClientUITestCase {
         openOrders(locale: "ru")
         openBooking(status: "Водитель выехал", detail: "Водитель и автомобиль")
         snap("137-ru-dark-in-transit")
-        scrollTap("Отслеживание")
+        scrollTap("Открыть отслеживание")
         waitFor("Местоположение в реальном времени", timeout: 40)
         snap("138-ru-dark-tracking-live")
     }
@@ -317,8 +317,9 @@ final class ClientBookingUITests: ClientUITestCase {
         launch(reset: false)
         openOrders()
         openBooking(status: "Operator yetkazilganini qayd etdi")
+        waitFor("Posilka yetkazildi.")
         snap("135-detail-delivered")
-        scrollTap("Kuzatuv")
+        scrollTap("Kuzatuvni ochish")
         waitFor("Holat kuzatuvi")
         snap("136-tracking-delivered")
     }
@@ -326,18 +327,20 @@ final class ClientBookingUITests: ClientUITestCase {
     func test5_CompletedRate() {
         launch(reset: false)
         openOrders()
-        openBooking(status: "Yakunlangan")
+        openBooking(status: "Yakunlandi")
         snap("140-detail-completed")
-        scrollTap("Haydovchini baholash")
+        // The design's star card: a star opens the rating screen with it chosen.
+        scrollTap("4 yulduz")
         waitFor("1 dan 5 gacha baho bering")
+        waitFor("Yaxshi")
         snap("141-rating")
-        tap("4 yulduz")
-        type("Vaqtida yetkazdi, xushmuomala", into: "Izoh qoldiring")
+        type("Vaqtida yetkazdi, xushmuomala", into: "Izoh qoldiring (ixtiyoriy)")
         snap("142-rating-filled")
         tap("Bahoni yuborish")
-        waitFor("Baho berildi", timeout: 20)
+        waitFor("Baho berildi: ★★★★ (4 / 5)", timeout: 20)
         snap("143-rated")
-        scrollTap("Kuzatuv")
+        app.swipeDown()
+        scrollTap("Kuzatuvni ochish")
         waitFor("Holat kuzatuvi")
         snap("144-tracking-completed")
         back()
@@ -352,7 +355,7 @@ final class ClientBookingUITests: ClientUITestCase {
         openBooking(status: "Tasdiqlandi")
         scrollTap("Bronni bekor qilish")
         waitFor("Bronni bekor qilasizmi?")
-        choose("Sabab", "Rejalarim o'zgardi")
+        tap("Rejalarim o'zgardi")
         type("Boshqa kunga qoldirdim", into: "Izoh (ixtiyoriy)")
         tap("Ha, bekor qilish")
         waitFor("Bron bekor qilindi", timeout: 20)
@@ -406,7 +409,7 @@ final class ClientBookingUITests: ClientUITestCase {
         openBooking(status: "Tasdiqlandi")
         scrollTap("Xavfsizlik haqida xabar berish")
         scrollTap("Bloklash")
-        waitFor("Haydovchini bloklaysizmi?")
+        waitFor("bloklaysizmi?")
         tap("Ha, bloklash")
         waitFor("Haydovchi bloklandi", timeout: 20)
         snap("170-blocked")

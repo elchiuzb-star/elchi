@@ -162,7 +162,7 @@ private fun BookingRow(booking: BookingClientDTO, ru: Boolean, languageTag: Stri
     ItemCard(
         title = "${OrderRules.shortEnd(booking.pickup.stop, booking.pickup.point, ru)} → ${OrderRules.shortEnd(booking.dropoff.stop, booking.dropoff.point, ru)}",
         icon = ElchiIcon.PIN,
-        badge = (tOrNull(OrderRules.bookingStatusKey(booking.serviceType, status)) ?: status) to OrderRules.bookingTone(booking.serviceType, status),
+        badge = (tOrNull(OrderRules.bookingStatusKey(booking.serviceType, status)) ?: status) to OrderRules.clientBookingTone(booking.serviceType, status),
         // "29 sen, 10:00–12:00": the day and the agreed pickup window.
         meta = listOfNotNull(
             OrderRules.dayMonth(booking.pickup.windowStart ?: booking.createdAt, languageTag),

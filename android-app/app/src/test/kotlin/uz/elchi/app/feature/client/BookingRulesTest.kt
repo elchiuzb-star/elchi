@@ -302,8 +302,12 @@ class BookingRulesTest {
         assertNull(BookingRules.amendmentPrice("120000", 12_000_000))
         assertEquals(13_000_000L, BookingRules.amendmentPrice("130000", 12_000_000))
         assertNull(BookingRules.amendmentPrice("", 12_000_000))
-        assertEquals("client.amendment.statusAccepted", BookingRules.amendmentStatusKey("accepted"))
-        assertEquals("status.withdrawn", BookingRules.amendmentStatusKey("withdrawn"))
+        // Design 04: the past-tense words.
+        assertEquals("client.booking.amendStatusAccepted", BookingRules.amendmentStatusKey("accepted"))
+        assertEquals("amendment.rejected", BookingRules.amendmentStatusKey("rejected"))
+        assertEquals("client.offers.closed.withdrawn", BookingRules.amendmentStatusKey("withdrawn"))
+        assertEquals("status.proposed", BookingRules.amendmentStatusKey("proposed"))
+        assertEquals("status.expired", BookingRules.amendmentStatusKey("expired"))
         assertEquals(Tone.OK, BookingRules.amendmentTone("accepted"))
         assertEquals(Tone.WARN, BookingRules.amendmentTone("proposed"))
         assertEquals(Tone.GRAY, BookingRules.amendmentTone("expired"))
@@ -326,5 +330,113 @@ class BookingRulesTest {
         assertEquals("pending", b.noShowReview?.status)
         assertEquals("/api/v1/files/x", b.parcelPhoto?.url)
         assertEquals("lst_1", b.listingIds?.request)
+    }
+
+    // -- design 04 ----------------------------------------------------------------------------------------------
+
+    @Test
+    fun design04_trackerStepAndRunningDot() {
+        assertEquals(0, BookingRules.trackerStep(booking("confirmed")))
+        assertEquals(2, BookingRules.trackerStep(booking("in_transit")))
+        assertEquals(4, BookingRules.trackerStep(booking("completed")))
+        // Off the ladder: the screen crosses the second dot.
+        assertNull(BookingRules.trackerStep(booking("cancelled")))
+        assertTrue(BookingRules.serviceRunning("in_transit"))
+        assertTrue(BookingRules.serviceRunning("onboard"))
+        assertFalse(BookingRules.serviceRunning("confirmed"))
+        assertFalse(BookingRules.serviceRunning("completed"))
+    }
+
+    @Test
+    fun design04_statusNoticesPerServiceAndStatus() {
+        val parcel = uz.elchi.app.api.generated.ServiceType.PARCEL
+        val taxi = uz.elchi.app.api.generated.ServiceType.PASSENGER
+        assertEquals(StatusNoticeKind.ON_THE_WAY, BookingRules.statusNotice(parcel, "in_transit"))
+        assertEquals(StatusNoticeKind.DELIVERED, BookingRules.statusNotice(parcel, "delivered"))
+        assertEquals(StatusNoticeKind.ARRIVED, BookingRules.statusNotice(taxi, "arrived"))
+        assertEquals(StatusNoticeKind.CANCELLED, BookingRules.statusNotice(taxi, "cancelled"))
+        assertNull(BookingRules.statusNotice(taxi, "onboard"))
+        assertNull(BookingRules.statusNotice(parcel, "confirmed"))
+        assertNull(BookingRules.statusNotice(parcel, "completed"))
+    }
+
+    @Test
+    fun design04_callLockSaysWhenThePhoneOpensOrThatItClosed() {
+        val parcel = uz.elchi.app.api.generated.ServiceType.PARCEL
+        val taxi = uz.elchi.app.api.generated.ServiceType.PASSENGER
+        assertEquals(CallLock.PARCEL, BookingRules.callLock(parcel, "awaiting_pickup"))
+        assertEquals(CallLock.TAXI, BookingRules.callLock(taxi, "confirmed"))
+        assertEquals(CallLock.CLOSED, BookingRules.callLock(parcel, "completed"))
+        assertEquals(CallLock.CLOSED, BookingRules.callLock(taxi, "cancelled"))
+    }
+
+    @Test
+    fun design04_shareAllowedOnboardButNotAfterArrival() {
+        assertTrue(BookingRules.canShareTracking("onboard"))
+        assertTrue(BookingRules.canShareTracking("in_transit"))
+        assertFalse(BookingRules.canShareTracking("arrived"))
+        assertFalse(BookingRules.canShareTracking("delivered"))
+        assertFalse(BookingRules.canShareTracking("cancelled"))
+    }
+
+    @Test
+    fun design04_initialsUnreadStarsWeight() {
+        assertEquals("J", BookingRules.initials("Jasur"))
+        assertEquals("JT", BookingRules.initials("Jasur  Toshmatov"))
+        assertEquals("?", BookingRules.initials("  "))
+        assertEquals(0, BookingRules.unreadCount(5, null))
+        assertEquals(0, BookingRules.unreadCount(null, 3))
+        assertEquals(2, BookingRules.unreadCount(5, 3))
+        assertEquals(0, BookingRules.unreadCount(3, 5))
+        assertEquals("★★★★ (4 / 5)", BookingRules.starsText(4))
+        assertEquals("5", BookingRules.weightKg(5000))
+        assertEquals("0,5", BookingRules.weightKg(500))
+        assertEquals("client.booking.rateTapStar", BookingRules.starLabelKey(0))
+        assertEquals("client.booking.rateLabel5", BookingRules.starLabelKey(5))
+    }
+
+    @Test
+    fun design04_amendmentFormSaysTheFirstProblem() {
+        assertEquals(AmendFormError.PRICE_MISSING, BookingRules.amendmentFormError("", "yuk og'ir", 12_000_000))
+        assertEquals(AmendFormError.PRICE_SAME, BookingRules.amendmentFormError("120000", "yuk og'ir", 12_000_000))
+        assertEquals(AmendFormError.REASON, BookingRules.amendmentFormError("130000", " ab ", 12_000_000))
+        assertNull(BookingRules.amendmentFormError("130000", "abc", 12_000_000))
+    }
+
+    @Test
+    fun design04_trackingClosedTitleAndPointAge() {
+        assertEquals(ClosedWindow.CANCELLED, BookingRules.closedWindowTitle("cancelled", "booking_finished"))
+        assertEquals(ClosedWindow.FINISHED, BookingRules.closedWindowTitle("completed", "booking_finished"))
+        assertEquals(ClosedWindow.FINISHED, BookingRules.closedWindowTitle(null, "trip_finished"))
+        assertEquals(ClosedWindow.NOT_STARTED, BookingRules.closedWindowTitle("awaiting_pickup", "parcel_not_picked_up"))
+        assertEquals(75L, BookingRules.pointAgeSeconds("2026-09-29T12:58:45Z", now))
+        assertEquals(0L, BookingRules.pointAgeSeconds("2026-09-29T13:05:00Z", now))
+        assertNull(BookingRules.pointAgeSeconds(null, now))
+    }
+
+    @Test
+    fun design04_clientBadgeWordsAndTones() {
+        val parcel = uz.elchi.app.api.generated.ServiceType.PARCEL
+        val taxi = uz.elchi.app.api.generated.ServiceType.PASSENGER
+        assertEquals("app.progress.completed", OrderRules.bookingStatusKey(parcel, "completed"))
+        assertEquals("app.progress.completed", OrderRules.bookingStatusKey(taxi, "completed"))
+        assertEquals("status.awaiting_pickup", OrderRules.bookingStatusKey(taxi, "awaiting_pickup"))
+        assertEquals(Tone.WARN, OrderRules.clientBookingTone(parcel, "confirmed"))
+        assertEquals(Tone.WARN, OrderRules.clientBookingTone(taxi, "awaiting_pickup"))
+        assertEquals(Tone.BLUE, OrderRules.clientBookingTone(parcel, "in_transit"))
+        assertEquals(Tone.OK, OrderRules.clientBookingTone(taxi, "arrived"))
+        assertEquals(Tone.OK, OrderRules.clientBookingTone(parcel, "completed"))
+        assertEquals(Tone.ERR, OrderRules.clientBookingTone(parcel, "cancelled"))
+        // The driver's badge keeps its own tones.
+        assertEquals(Tone.OK, OrderRules.bookingTone(parcel, "confirmed"))
+    }
+
+    @Test
+    fun design04_chatSeenCountsIgnoreOwnSends() {
+        ChatSeenCounts.mark("bkg_seen", 4)
+        ChatSeenCounts.bump("bkg_seen")
+        assertEquals(5L, ChatSeenCounts.seen("bkg_seen"))
+        ChatSeenCounts.bump("bkg_never")
+        assertNull(ChatSeenCounts.seen("bkg_never"))
     }
 }

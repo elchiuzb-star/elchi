@@ -61,17 +61,21 @@ internal fun seatsPrice(count: Long, unitMinor: Long): String = t(R.string.clien
 internal fun BoardingCodeBlock(s: BookingViewModel.State, onReissue: () -> Unit) {
     val c = Elchi.colors
     val code = s.boardingCode ?: return
-    ElchiCard(padding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
-        Text(t(R.string.proofCode_boarding_code), style = Elchi.type.caption, color = c.muted)
+    // Design 04: the dark code card (navy, pale caption, 30sp mono spaced digits).
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF1B3563) else c.navy).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(t(R.string.proofCode_boarding_code), style = Elchi.type.caption, color = androidx.compose.ui.graphics.Color(0xFF9FB6D6))
         Text(
             code.chunked(3).joinToString(" "),
-            Modifier.padding(vertical = 6.dp).semantics { contentDescription = code.toList().joinToString(" ") },
-            style = Elchi.type.title.copy(fontFamily = FontFamily.Monospace, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = 4.sp, fontWeight = FontWeight.SemiBold),
-            color = c.text,
+            Modifier.semantics { contentDescription = code.toList().joinToString(" ") },
+            style = Elchi.type.title.copy(fontFamily = FontFamily.Monospace, fontSize = 30.sp, lineHeight = 38.sp, letterSpacing = 9.sp, fontWeight = FontWeight.SemiBold),
+            color = androidx.compose.ui.graphics.Color.White,
         )
-        Text(t(R.string.proofHint_boarding), style = Elchi.type.caption, color = c.muted)
+        Text(t(R.string.proofHint_boarding), style = Elchi.type.caption, color = androidx.compose.ui.graphics.Color(0xFFC9D6E8))
     }
-    ElchiButton(t(R.string.reissue_button), onReissue, Modifier.fillMaxWidth(), ButtonVariant.NEUTRAL, icon = ElchiIcon.REFRESH, loading = s.reissuing)
+    ElchiButton(t(R.string.reissue_button), onReissue, Modifier.fillMaxWidth().height(48.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, icon = ElchiIcon.REFRESH, loading = s.reissuing)
     Text(t(R.string.reissue_hint), style = Elchi.type.caption, color = c.muted)
     if (s.reissued) Note(t(R.string.reissue_done), tone = Tone.OK)
     s.reissueError?.let { e ->
@@ -169,7 +173,14 @@ internal fun CashRecordBlock(m: CashBlockModel) {
         }
         CashView.DECIDE -> {
             if (receipt != null) {
-                ElchiCard { CardRow(t(R.string.app_cash_title), cashReportedText(receipt, mine = false), first = true) }
+                // Design 04: "Naqd to'lovni tasdiqlang" with the amount the other side recorded.
+                ElchiCard(padding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(t(R.string.client_booking_cashConfirmTitle), Modifier.weight(1f), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = c.muted)
+                        Text(soum(receipt.amountMinor), style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp), color = c.text, maxLines = 1)
+                    }
+                    Text(cashReportedText(receipt, mine = false), Modifier.padding(top = 4.dp), style = Elchi.type.caption, color = c.muted)
+                }
                 ElchiField(
                     m.contestComment,
                     m.onContestComment,
@@ -180,11 +191,12 @@ internal fun CashRecordBlock(m: CashBlockModel) {
                     hint = t(R.string.driver_trip_reasonHint),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ElchiButton(t(R.string.app_cash_acknowledge), m.onAcknowledge, Modifier.weight(1f).height(48.dp), size = ButtonSize.MEDIUM, enabled = !m.busy, loading = m.busy, horizontalPadding = 10.dp)
+                    // Design 04: "Rozi emasman" first, "Tasdiqlayman" (the brand button) on the right.
                     ElchiButton(
                         t(R.string.app_cash_contest), m.onContest, Modifier.weight(1f).height(48.dp), ButtonVariant.DANGER_SOFT, ButtonSize.MEDIUM,
                         enabled = !m.busy && m.contestComment.isNotBlank(), horizontalPadding = 10.dp,
                     )
+                    ElchiButton(t(R.string.app_cash_acknowledge), m.onAcknowledge, Modifier.weight(1f).height(48.dp), size = ButtonSize.MEDIUM, enabled = !m.busy, loading = m.busy, horizontalPadding = 10.dp)
                 }
             }
         }

@@ -157,8 +157,9 @@ public enum SeatEdit {
 // MARK: - Booking status (both sides)
 
 public enum PassengerStatus {
-    /// confirmed -> awaiting_pickup -> onboard -> arrived -> completed (no_show / cancelled off the line).
-    public static let ladder = ["status.confirmed", "app.progress.driverAtStop", "status.onboard", "status.arrived", "app.progress.completed"]
+    /// confirmed -> awaiting_pickup -> onboard -> arrived -> completed (no_show / cancelled off the line). BOSQICH 04:
+    /// the second rung reads "Olib ketish kutilmoqda" (the status itself), not "Haydovchi bekatda".
+    public static let ladder = ["status.confirmed", "status.awaiting_pickup", "status.onboard", "status.arrived", "app.progress.completed"]
 
     public static func position(_ status: String) -> Int? {
         switch status {

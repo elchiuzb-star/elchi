@@ -328,6 +328,18 @@ public struct StatusLabel: Equatable, Sendable {
         }
     }
 
+    /// The client's booking badge (BOSQICH 04 "Elchi Bron"): the driver's screens keep `booking`. Confirmed is amber
+    /// until the service starts, a parcel in `awaiting_pickup` reads "Safarga tayyorlanmoqda" (its ladder step), and a
+    /// completed booking "Yakunlandi".
+    public static func clientBooking(_ service: ServiceType, _ status: String) -> StatusLabel {
+        switch (service, status) {
+        case (_, "confirmed"): StatusLabel(key: "status.confirmed", raw: status, tone: .warn)
+        case (_, "completed"): StatusLabel(key: "app.progress.completed", raw: status, tone: .ok)
+        case (.parcel, "awaiting_pickup"): StatusLabel(key: "parcel.progress.tripPreparing", raw: status, tone: .warn)
+        default: booking(service, status)
+        }
+    }
+
     /// A v1 order status (read-only history).
     public static func legacy(_ status: String) -> StatusLabel {
         let tone: Tone = switch status {

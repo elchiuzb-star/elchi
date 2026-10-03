@@ -59,6 +59,7 @@ import uz.elchi.app.ui.components.ElchiButton
 import uz.elchi.app.ui.components.ElchiCard
 import uz.elchi.app.ui.components.EmptyState
 import uz.elchi.app.ui.components.Note
+import uz.elchi.app.ui.components.RoundIconButton
 import uz.elchi.app.ui.components.SystemBarIcons
 import uz.elchi.app.ui.components.TitleBar
 import uz.elchi.app.ui.icons.ElchiIcon
@@ -99,8 +100,10 @@ private fun ChatFrame(
     onRefresh: () -> Unit,
     unseen: Int,
     onPill: () -> Unit,
-    right: String? = null,
-    onRight: (() -> Unit)? = null,
+    /** Round icon buttons at the right of the title bar (the support chat's refresh). */
+    actions: (@Composable () -> Unit)? = null,
+    /** The line under the title (design 04: "Jasur · Chevrolet Cobalt"). */
+    subtitle: String? = null,
     /** A strip under the title that stays put (the driver's GPS bar while the trip runs). */
     top: (@Composable () -> Unit)? = null,
     footer: (@Composable () -> Unit)?,
@@ -110,7 +113,7 @@ private fun ChatFrame(
     SystemBarIcons(dark = !c.isDark)
     Column(Modifier.fillMaxSize().background(c.page).imePadding()) {
         Column(Modifier.statusBarsPadding()) {
-            TitleBar(onBack, t(R.string.common_back), title, right = right, onRight = onRight)
+            TitleBar(onBack, t(R.string.common_back), title, trailing = actions, subtitle = subtitle)
             top?.invoke()
         }
         Box(Modifier.weight(1f)) {
@@ -179,8 +182,11 @@ fun BookingChatScreen(
         }
     }
     val chat = s.chat
+    val booking = s.booking
+    val driver = booking?.driver?.takeIf { side == BookingSide.CLIENT }
     ChatFrame(
         title = t(R.string.bookingChat_title),
+        subtitle = driver?.let { listOf(it.displayName, it.vehicle.makeModel).filter(String::isNotBlank).joinToString(" · ") },
         onBack = onBack,
         list = list,
         refreshing = s.refreshing && s.loaded,
@@ -190,7 +196,11 @@ fun BookingChatScreen(
         top = top,
         footer = when {
             chat == null -> null
-            !chat.writable -> ({ Note(t(R.string.chat_closedBody), tone = Tone.GRAY, title = t(R.string.chat_closedTitle)) })
+            // The server's `writable` decides (Q100: open 24 h after the end), not the status; the reason in words.
+            !chat.writable -> ({
+                val body = if (booking?.serviceStatus == "cancelled") R.string.client_chat_closedCancelled else R.string.chat_closedBody
+                Note(t(body), tone = Tone.GRAY, title = t(R.string.chat_closedTitle))
+            })
             else -> ({
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     chatTime(chat.writableUntil)?.let { Text("${t(R.string.chat_closesSoon)} $it", style = Elchi.type.caption, color = Elchi.colors.muted) }
@@ -219,7 +229,15 @@ fun BookingChatScreen(
                 }
             }
         }
-        if (s.messages.isEmpty() && s.outgoing.isEmpty()) {
+        // Design 04: the chat opens with the agreement ("Kelishuv tuzildi · 27.09, 08:12") once the oldest page is here.
+        if (s.olderCursor == null && booking != null) {
+            item(key = "agreed") {
+                val at = OrderRules.tashkent(booking.createdAt)?.let(ParcelRules::displayShort)
+                ChatBubble(BubbleKind.SYSTEM, listOfNotNull(t(R.string.notification_booking_accepted_title), at).joinToString(" · "))
+            }
+        }
+        // A closed chat with nothing in it needs no "write here" hint: the footer says it is closed.
+        if (s.messages.isEmpty() && s.outgoing.isEmpty() && chat?.writable != false) {
             item(key = "empty") { EmptyState(ElchiIcon.CHAT, t(R.string.bookingChat_emptyTitle), description = t(R.string.bookingChat_emptySubtitle)) }
         }
         items(s.messages, key = { it.id }) { message ->
@@ -229,6 +247,12 @@ fun BookingChatScreen(
             }
         }
         items(s.outgoing, key = { "out-${it.localId}" }) { message -> OutgoingBubble(message, onRetry = { vm.retry(message.localId) }, onDiscard = { vm.discard(message.localId) }) }
+        // Closed: when it stopped accepting messages, under the last one.
+        if (chat != null && !chat.writable) {
+            chatTime(chat.writableUntil)?.let { until ->
+                item(key = "closed-at") { ChatBubble(BubbleKind.SYSTEM, t(R.string.client_chat_openUntil, "time" to until)) }
+            }
+        }
     }
 }
 
@@ -317,6 +341,8 @@ fun SupportChatScreen(vm: SupportViewModel, onBack: () -> Unit) {
     WhileStarted(vm) { vm.watch() }
     LaunchedEffect(s.scrollNonce) { if (s.scrollNonce > 0) list.animateScrollToItem((list.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)) }
     val thread = s.thread
+    val toast = LocalFlowToast.current
+    val refreshed = t(R.string.client_booking_refreshed)
     ChatFrame(
         title = t(R.string.support_threadTitle),
         onBack = onBack,
@@ -325,8 +351,12 @@ fun SupportChatScreen(vm: SupportViewModel, onBack: () -> Unit) {
         onRefresh = vm::refresh,
         unseen = 0,
         onPill = {},
-        right = t(R.string.support_refresh),
-        onRight = vm::refresh,
+        actions = {
+            RoundIconButton(ElchiIcon.REFRESH, t(R.string.support_refresh), {
+                vm.refresh()
+                toast.show(refreshed)
+            })
+        },
         footer = when {
             !s.loaded -> null
             s.canWrite -> ({
@@ -360,6 +390,8 @@ fun SupportChatScreen(vm: SupportViewModel, onBack: () -> Unit) {
         if (thread == null || (s.startingNew && thread.status == SupportViewModel.CLOSED)) {
             item(key = "intro") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Design 04: "Holat · Yangi murojaat" before the first message.
+                    ElchiCard { CardRow(t(R.string.support_statusLabel), t(R.string.client_support_newThread), first = true, strong = true) }
                     Note(t(R.string.support_noPhoneLine), tone = Tone.BLUE, title = t(R.string.support_cardTitle))
                     EmptyState(ElchiIcon.HEAD, t(R.string.support_threadTitle), description = t(R.string.support_emptyThread))
                     Text(t(R.string.support_noPromise), style = Elchi.type.caption, color = Elchi.colors.muted)

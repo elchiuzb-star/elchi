@@ -51,6 +51,14 @@ final class BookingChatModel {
         _ = await (state, page)
     }
 
+    /// The thread's state alone (the detail's unread count reads `message_count`).
+    func refreshState() async { await loadState() }
+
+    /// Leaving the chat: what it holds now counts as seen (the detail's red count starts from here).
+    func markSeen() {
+        ChatSeen.mark(bookingId, count: max(state.value?.messageCount ?? 0, messages.count))
+    }
+
     private func loadState() async {
         do {
             state = .loaded(try await api.getBookingChatState(bookingId: bookingId).data)

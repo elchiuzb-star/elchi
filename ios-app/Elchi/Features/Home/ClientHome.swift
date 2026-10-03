@@ -275,7 +275,11 @@ struct ClientFlow: View {
                               onSafety: { path.append(.bookingSafety(id)) })
         case .bookingChat(let id):
             let booking = orders.booking(id)
-            BookingChatView(model: booking.chat, agreedAt: ServerTime.parse(booking.booking.value?.createdAt), onBack: back)
+            let dto = booking.booking.value
+            // BOSQICH 04: the bar's second line "Jasur · Chevrolet Cobalt"; a cancelled booking's closed chat says so.
+            BookingChatView(model: booking.chat, agreedAt: ServerTime.parse(dto?.createdAt), onBack: back,
+                            subtitle: dto?.driver.map { [$0.displayName, $0.vehicle.makeModel].filter { !$0.isEmpty }.joined(separator: " · ") },
+                            cancelled: dto?.serviceStatus == "cancelled" || dto?.serviceStatus == "no_show")
         case .bookingTracking(let id):
             BookingTrackingView(booking: orders.booking(id), onBack: back)
         case .bookingAmend(let id):

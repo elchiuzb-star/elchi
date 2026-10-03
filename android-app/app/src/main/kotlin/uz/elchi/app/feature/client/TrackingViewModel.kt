@@ -1,6 +1,7 @@
 package uz.elchi.app.feature.client
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -50,6 +51,16 @@ class TrackingViewModel(
             accessToken = accessToken,
             update = { transform -> _state.update { it.copy(live = transform(it.live)) } },
         ).run()
+    }
+
+    /** The bar's refresh: the booking and one tracking read now (the socket / poll keep running as they were). */
+    fun refresh() {
+        viewModelScope.launch {
+            loadBooking()
+            runCatching { api.getBookingTracking(bookingId).data }
+                .onSuccess { value -> _state.update { it.copy(live = it.live.copy(data = value, error = null, loaded = true)) } }
+                .onFailure { if (it is CancellationException) throw it }
+        }
     }
 
     private suspend fun loadBooking() {

@@ -49,8 +49,15 @@ final class BookingModel {
     private(set) var grant: TrackingGrantDTO?
 
     private(set) var rating: RatingOutcome?
+    /// The stars sent from this screen session ("Baho berildi: ★★★★ (4 / 5)"); the booking DTO has no rating, so after
+    /// a reload only "Baho berildi" is known.
+    private(set) var ratedStars: Int?
+    /// The stars tapped on the detail's "Haydovchini baholang" card: the rating screen opens with them chosen.
+    var ratingDraft = 0
     private(set) var report: ReportDTO?
+    /// Blocked from this phone, or found among the client's blocks (`GET /blocks`): "Haydovchi bloklangan."
     private(set) var blocked = false
+    private var blocksChecked = false
 
     let chat: BookingChatModel
     let support: SupportChatModel
@@ -98,7 +105,22 @@ final class BookingModel {
         async let reputation: Void = loadReputation(dto)
         async let receiver: Void = loadReceiver(dto)
         async let codes: Void = loadCode(dto)
-        _ = await (reputation, receiver, codes)
+        async let chatState: Void = chat.refreshState()
+        async let blocks: Void = loadBlocks(dto)
+        _ = await (reputation, receiver, codes, chatState, blocks)
+    }
+
+    /// The chat button's red count (no server unread count: messages counted minus those seen on this phone).
+    var unreadChat: Int {
+        BookingDetailRules.unread(messageCount: chat.state.value?.messageCount, seen: ChatSeen.count(id))
+    }
+
+    /// Once per screen model: is this driver among the client's blocks?
+    private func loadBlocks(_ dto: ClientBookingDTO) async {
+        guard !blocksChecked, !blocked, let driver = dto.driver else { return }
+        guard let blocks = try? await api.listBlocks().data else { return }
+        blocksChecked = true
+        if blocks.contains(where: { $0.userId == driver.id }) { blocked = true }
     }
 
     /// Taksi: the boarding code while the passenger is still to board (the endpoint is empty afterwards).
@@ -193,6 +215,14 @@ final class BookingModel {
 
     // MARK: Recipient link
 
+    /// The bar's share icon: the link made on this screen again (the URL comes back once), else a new one with the
+    /// default lifetime (1 hour). Nil when the server refused (the error is in `commandError`).
+    func trackingLinkForSharing() async -> URL? {
+        if let url = grantURL { return url }
+        await createGrant()
+        return grantURL
+    }
+
     func createGrant() async {
         guard running == nil, booking.value != nil else { return }
         let minutes = TrackingTTL.clamp(grantMinutes)
@@ -243,6 +273,7 @@ final class BookingModel {
                                            idempotencyKey: keys.key(action))
             keys.settle(action)
             finishRating(.sent)
+            ratedStars = stars
             return true
         } catch {
             keys.settle(action, after: error)
@@ -347,6 +378,8 @@ final class AmendmentsModel {
     /// Which action `error` belongs to ("new" or an amendment id).
     private(set) var errorFor: String?
     private(set) var notice: String?
+    /// The new unit price an accepted amendment set (`client.booking.amendAcceptedPrice` says it).
+    private(set) var noticePrice: Int?
     private(set) var warnings: [ApiWarning] = []
 
     init(bookingId: String, api: ElchiAPI, keys: ActionKeys) {
@@ -367,6 +400,7 @@ final class AmendmentsModel {
         error = nil
         errorFor = nil
         notice = nil
+        noticePrice = nil
         warnings = []
     }
 
@@ -387,15 +421,18 @@ final class AmendmentsModel {
     }
 
     func accept(_ amendment: AmendmentDTO) async {
-        let ok = await run(amendment.id, action: "amend-accept:\(amendment.id):\(amendment.version)", notice: "amendment.accepted") { api, key in
+        let ok = await run(amendment.id, action: "amend-accept:\(amendment.id):\(amendment.version)", notice: "client.booking.amendAcceptedPrice") { api, key in
             try await api.acceptAmendment(amendmentId: amendment.id, body: AmendmentAccept(expectedVersion: amendment.version),
                                           idempotencyKey: key).warnings
         }
-        if ok { await onBookingChanged?() }
+        if ok {
+            noticePrice = amendment.newUnitPriceMinor
+            await onBookingChanged?()
+        }
     }
 
     func reject(_ amendment: AmendmentDTO) async {
-        _ = await run(amendment.id, action: "amend-reject:\(amendment.id):\(amendment.version)", notice: "amendment.rejected") { api, key in
+        _ = await run(amendment.id, action: "amend-reject:\(amendment.id):\(amendment.version)", notice: "proposal.rejected") { api, key in
             try await api.rejectAmendment(amendmentId: amendment.id, body: AmendmentDecision(expectedVersion: amendment.version),
                                           idempotencyKey: key).warnings
         }

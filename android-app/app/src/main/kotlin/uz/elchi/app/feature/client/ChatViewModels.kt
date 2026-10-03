@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import uz.elchi.app.api.ApiException
+import uz.elchi.app.api.BookingClientDTO
 import uz.elchi.app.api.generated.ApiWarning
 import uz.elchi.app.api.generated.ChatMessageCreate
 import uz.elchi.app.api.generated.ChatMessageDTO
@@ -20,6 +21,26 @@ import uz.elchi.app.api.generated.SupportMessageCreate
 import uz.elchi.app.api.generated.SupportThreadDTO
 import uz.elchi.app.api.generated.SupportThreadOpen
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * How many messages the booking chat had when this phone last had it open (design 04's unread badge on the driver
+ * bar). There is no server unread count; this lives for the app's process only.
+ */
+object ChatSeenCounts {
+    private val seen = ConcurrentHashMap<String, Long>()
+
+    fun seen(bookingId: String): Long? = seen[bookingId]
+
+    fun mark(bookingId: String, count: Long?) {
+        if (count != null) seen[bookingId] = count
+    }
+
+    /** One more message this phone sent itself: never counted as unread. */
+    fun bump(bookingId: String) {
+        seen.computeIfPresent(bookingId) { _, n -> n + 1 }
+    }
+}
 
 /**
  * `booking-chat` "Xabarlar" (Q100: the client's only chat is the booking's). There is no realtime channel for chat,
@@ -50,6 +71,8 @@ class BookingChatViewModel(private val api: ElchiApi, val bookingId: String) : V
         val unseen: Int = 0,
         /** Bumped when a new message should bring the list to its end (own send, a poll while at the end). */
         val scrollNonce: Int = 0,
+        /** The booking (design 04: the bar's "Jasur · Chevrolet Cobalt", "Kelishuv tuzildi", the closed reason). */
+        val booking: BookingClientDTO? = null,
     ) {
         /** Unknown until the state is read: the composer waits rather than offering a closed chat. */
         val writable: Boolean get() = chat?.writable == true
@@ -68,6 +91,11 @@ class BookingChatViewModel(private val api: ElchiApi, val bookingId: String) : V
             load(first = !_state.value.loaded)
             _state.update { it.copy(refreshing = false) }
         }
+        viewModelScope.launch {
+            runCatching { BookingClientDTO.anySide(api.getBooking(bookingId).data) }
+                .onSuccess { booking -> if (booking != null) _state.update { it.copy(booking = booking) } }
+                .onFailure { if (it is CancellationException) throw it }
+        }
     }
 
     /** Polls while the caller's coroutine lives (the screen, while started). */
@@ -82,6 +110,8 @@ class BookingChatViewModel(private val api: ElchiApi, val bookingId: String) : V
         try {
             val chat = api.getBookingChatState(bookingId).data
             val page = api.listBookingMessages(bookingId, limit = PAGE)
+            // Read while the chat is open: the detail's badge counts from here.
+            ChatSeenCounts.mark(bookingId, chat.messageCount)
             _state.update { s ->
                 val merged = BookingRules.mergeMessages(s.messages, page.data)
                 val fresh = if (first) 0 else BookingRules.newFromOthers(s.messages, merged)
@@ -146,6 +176,7 @@ class BookingChatViewModel(private val api: ElchiApi, val bookingId: String) : V
             try {
                 val body = ChatMessageCreate(text = message.text, quickReplyCode = message.quickReply?.let { code -> QuickReplyCode.entries.first { it.value == code } })
                 val result = api.postBookingMessage(bookingId, body, message.idempotencyKey)
+                ChatSeenCounts.bump(bookingId)
                 _state.update { s ->
                     s.copy(
                         messages = BookingRules.mergeMessages(s.messages, listOf(result.data)),

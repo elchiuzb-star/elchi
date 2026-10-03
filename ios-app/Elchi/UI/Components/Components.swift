@@ -717,6 +717,10 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
     let largeTitle: Bool
     /// A view id the body scrolls to once it has appeared (a link to a listing's offers).
     let initialScroll: AnyHashable?
+    /// A second line under the title (BOSQICH 04 chat: "Jasur · Chevrolet Cobalt").
+    let subtitle: String?
+    /// The footer on the page colour without the hairline (BOSQICH 04 detail: the floating driver bar).
+    let plainFooter: Bool
     let content: Content
     let footer: Footer
     @Environment(\.elchi) private var c
@@ -729,7 +733,10 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
                 backLabel: String, onBack: (() -> Void)?, showsFooter: Bool = true, banner: (text: String, tone: Tone)? = nil,
                 keepVisible: AnyHashable? = nil, keyboardDone: String? = nil, step: (Int, Int)? = nil, scrollTop: Int = 0,
                 actions: [BarAction] = [], largeTitle: Bool = false, initialScroll: AnyHashable? = nil,
+                subtitle: String? = nil, plainFooter: Bool = false,
                 @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.subtitle = subtitle
+        self.plainFooter = plainFooter
         self.actions = actions
         self.largeTitle = largeTitle
         self.initialScroll = initialScroll
@@ -754,9 +761,15 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 if let onBack { RoundIconButton(leading, label: backLabel, action: onBack) }
-                Text(title).font(largeTitle ? ElchiFont.poppins(26, .medium, relativeTo: .title) : ElchiFont.poppins(18, .medium, relativeTo: .headline))
-                    .foregroundStyle(c.text)
-                    .lineLimit(1).minimumScaleFactor(0.8).accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).font(largeTitle ? ElchiFont.poppins(26, .medium, relativeTo: .title) : ElchiFont.poppins(18, .medium, relativeTo: .headline))
+                        .foregroundStyle(c.text)
+                        .lineLimit(1).minimumScaleFactor(0.8).accessibilityAddTraits(.isHeader)
+                    if let subtitle {
+                        Text(subtitle).font(ElchiFont.caption).foregroundStyle(c.muted).lineLimit(1)
+                            .accessibilityIdentifier("elchi.bar.subtitle")
+                    }
+                }
                 Spacer(minLength: 0)
                 ForEach(actions) { BarActionButton(action: $0) }
                 if let right, let onRight {
@@ -817,11 +830,18 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
             }
             let footerView = VStack(spacing: 8) { footer }
             if showsFooter && !(footer is EmptyView) {
-                footerView
-                    .padding(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
-                    .frame(maxWidth: .infinity)
-                    .background(c.card.ignoresSafeArea(edges: .bottom))
-                    .overlay(alignment: .top) { Rectangle().fill(c.line).frame(height: 1) }
+                if plainFooter {
+                    footerView
+                        .padding(EdgeInsets(top: 10, leading: 12, bottom: 4, trailing: 12))
+                        .frame(maxWidth: .infinity)
+                        .background(c.page.ignoresSafeArea(edges: .bottom))
+                } else {
+                    footerView
+                        .padding(EdgeInsets(top: 12, leading: 16, bottom: 6, trailing: 16))
+                        .frame(maxWidth: .infinity)
+                        .background(c.card.ignoresSafeArea(edges: .bottom))
+                        .overlay(alignment: .top) { Rectangle().fill(c.line).frame(height: 1) }
+                }
             }
         }
         .background(c.page.ignoresSafeArea())
@@ -1521,7 +1541,8 @@ public struct SelectField<Value: Hashable>: View {
 /// ring ahead. The state is also said in words to VoiceOver, not only in colour.
 public struct StepLadder: View {
     public struct Step: Hashable {
-        public enum State: Hashable { case done, current, ahead }
+        /// `failed`: the red step of a cancelled booking ("Bekor qilindi").
+        public enum State: Hashable { case done, current, ahead, failed }
         let title: String, detail: String?, state: State
         public init(_ title: String, detail: String? = nil, state: State) {
             self.title = title
@@ -1546,7 +1567,7 @@ public struct StepLadder: View {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(spacing: 0) {
                         Circle()
-                            .fill(step.state == .done ? ok : step.state == .current ? c.brand : c.card)
+                            .fill(step.state == .done ? ok : step.state == .current ? c.brand : step.state == .failed ? c.danger : c.card)
                             .overlay { if step.state == .ahead { Circle().strokeBorder(c.outline, lineWidth: 2) } }
                             .frame(width: 14, height: 14)
                         Rectangle().fill(index == steps.count - 1 ? .clear : step.state == .done ? ok : c.line)
@@ -1555,7 +1576,7 @@ public struct StepLadder: View {
                     .frame(width: 14)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(step.title).font(ElchiFont.poppins(14, step.state == .ahead ? .medium : .semibold))
-                            .foregroundStyle(step.state == .ahead ? c.placeholder : c.text)
+                            .foregroundStyle(step.state == .ahead ? c.placeholder : step.state == .failed ? c.tone(.err).fg : c.text)
                         if let detail = step.detail { Text(detail).font(ElchiFont.caption).foregroundStyle(c.muted) }
                     }
                     .padding(.bottom, 14)

@@ -13,14 +13,19 @@ struct BoardingCodeSection: View {
     var body: some View {
         if let code = model.code {
             VStack(alignment: .leading, spacing: 10) {
-                ElchiCard(padding: EdgeInsets(top: 14, leading: 16, bottom: 16, trailing: 16), tint: .blue) {
-                    Text(strings.t("proofCode.boarding_code")).font(ElchiFont.label).foregroundStyle(c.muted)
-                    Text(CodeReissue.spaced(code.code)).font(.system(size: 34, weight: .bold, design: .monospaced)).foregroundStyle(c.text)
-                        .kerning(2).padding(.vertical, 6)
+                // The design's dark code card: "Chiqish kodi", the six digits spaced wide, the hint under them.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(strings.t("proofCode.boarding_code")).font(ElchiFont.caption).foregroundStyle(Color(hex: 0x9FB6D6))
+                    Text(CodeReissue.spaced(code.code)).font(.system(size: 30, weight: .semibold, design: .monospaced)).foregroundStyle(.white)
+                        .kerning(9).padding(.vertical, 2)
                         .accessibilityLabel(code.code.map(String.init).joined(separator: " "))
                         .accessibilityIdentifier("elchi.booking.code")
-                    Text(strings.t("proofHint.boarding")).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
+                    Text(strings.t("proofHint.boarding")).font(ElchiFont.caption).foregroundStyle(Color(hex: 0xC9D6E8))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(c.isDark ? Color(hex: 0x1B3563) : Color(hex: 0x0E2350), in: RoundedRectangle(cornerRadius: 22))
                 let waitText = model.wait.flatMap { strings.reissueWaitText($0, now: now) }
                 ElchiButton(strings.t("reissue.button"), variant: .neutral, icon: .refresh, loading: model.reissuing) {
                     Task { await model.reissue() }
@@ -63,12 +68,81 @@ struct CashRecordSection: View {
     @State private var note = ""
     @State private var contesting = false
     @State private var comment = ""
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
 
     private var driver: Bool { model.side == "driver" }
 
     var body: some View {
         let state = CashState.of(cashStatus: booking.cashStatus, receipt: booking.cashReceipt, side: model.side)
         SectionTitle(strings.t("app.cash.title"), description: strings.t("app.cash.explainer"))
+        if case .reportedByOther(let receipt) = state, !contesting {
+            decideCard(receipt)
+        } else {
+            amountCard(state)
+        }
+        switch state {
+        case .unpaid:
+            reportForm
+        case .reportedByOther(let receipt):
+            if contesting { contestForm(receipt) }
+        case .acknowledged:
+            Note(strings.t("app.cash.bothConfirmed"), tone: .ok)
+        case .contested:
+            Note(strings.t("app.cash.contested"), tone: .err)
+        case .reportedByMe:
+            EmptyView()
+        }
+        if let error = model.error, model.running == nil { Note(strings.cashErrorText(error), tone: .err) }
+        // The two answers have their toast and the state's own note; only the record's notice stays inline.
+        if let notice = model.notice, model.error == nil, state != .acknowledged, state != .contested { Note(strings.t(notice), tone: .ok) }
+    }
+
+    /// The design's "Naqd to'lovni tasdiqlang" card: the amount the other side recorded, "Rozi emasman" / "Tasdiqlayman".
+    private func decideCard(_ receipt: CashReceiptDTO) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(strings.t("client.booking.cashConfirmTitle")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                Spacer(minLength: 8)
+                Text(strings.money(receipt.amountMinor)).font(ElchiFont.poppins(15, .semibold)).foregroundStyle(c.text)
+            }
+            .accessibilityElement(children: .combine)
+            Text(strings.t("app.cash.reportedByOther", ("amount", strings.money(receipt.amountMinor)), ("date", when(receipt))))
+                .font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                pill(strings.t("app.cash.contest"), bg: c.tone(.err).bg, fg: c.tone(.err).fg, loading: false) {
+                    model.clear()
+                    contesting = true
+                }
+                .accessibilityIdentifier("elchi.cash.contest")
+                pill(strings.t("app.cash.acknowledge"), bg: c.brand, fg: c.onBrand, loading: model.running == .acknowledge) {
+                    Task {
+                        if await model.acknowledge(receipt), !driver { banners?.ok("client.booking.cashConfirmed") }
+                    }
+                }
+                .accessibilityIdentifier("elchi.cash.acknowledge")
+            }
+            .disabled(model.running != nil)
+        }
+        .padding(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 12))
+        .background(c.card, in: RoundedRectangle(cornerRadius: 20))
+        .shadow(color: c.shadow.opacity(0.7), radius: 12, y: 6)
+    }
+
+    private func pill(_ title: String, bg: Color, fg: Color, loading: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if loading { ProgressView().tint(fg) } else { Text(title).font(ElchiFont.poppins(13, .semibold)).lineLimit(1) }
+            }
+            .foregroundStyle(fg)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(bg, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressFade())
+    }
+
+    @ViewBuilder
+    private func amountCard(_ state: CashState) -> some View {
         ElchiCard {
             CardRow(strings.t(booking.promo != nil ? "app.cash.dueLabel" : "app.cash.agreedLabel"), strings.money(dueMinor), first: true, strong: true)
             switch state {
@@ -82,20 +156,6 @@ struct CashRecordSection: View {
             }
         }
         .accessibilityIdentifier("elchi.cash.card")
-        switch state {
-        case .unpaid:
-            reportForm
-        case .reportedByOther(let receipt):
-            answer(receipt)
-        case .acknowledged:
-            Note(strings.t("app.cash.bothConfirmed"), tone: .ok)
-        case .contested:
-            Note(strings.t("app.cash.contested"), tone: .err)
-        case .reportedByMe:
-            EmptyView()
-        }
-        if let error = model.error, model.running == nil { Note(strings.cashErrorText(error), tone: .err) }
-        if let notice = model.notice, model.error == nil { Note(strings.t(notice), tone: .ok) }
     }
 
     /// One sentence row under the amount ("Ikkinchi tomon qayd qildi: 300 000 so'm · 27.09, 14:20").
@@ -137,31 +197,23 @@ struct CashRecordSection: View {
         .accessibilityIdentifier("elchi.cash.report")
     }
 
+    /// "Rozi emasman" needs a comment (Q78: the operator reads it) - the design's one-tap contest is not followed.
     @ViewBuilder
-    private func answer(_ receipt: CashReceiptDTO) -> some View {
-        if contesting {
-            ElchiField(text: $comment, label: strings.t("listingOwner.commentLabel"),
-                       hint: strings.t("app.cash.commentRequired"), multiline: true)
-            HStack(spacing: 8) {
-                ElchiButton(strings.t("app.cash.contest"), variant: .danger, size: .pair, loading: model.running == .contest) {
-                    Task { if await model.contest(receipt, comment: comment) { contesting = false } }
+    private func contestForm(_ receipt: CashReceiptDTO) -> some View {
+        ElchiField(text: $comment, label: strings.t("listingOwner.commentLabel"),
+                   hint: strings.t("app.cash.commentRequired"), multiline: true)
+        HStack(spacing: 8) {
+            ElchiButton(strings.t("app.cash.contest"), variant: .danger, size: .pair, loading: model.running == .contest) {
+                Task {
+                    if await model.contest(receipt, comment: comment) {
+                        contesting = false
+                        if !driver { banners?.ok("client.booking.cashContestSent") }
+                    }
                 }
-                .disabled(comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                ElchiButton(strings.t("common.cancel"), variant: .neutral, size: .pair) { contesting = false }
             }
-        } else {
-            HStack(spacing: 8) {
-                ElchiButton(strings.t("app.cash.acknowledge"), size: .pair, loading: model.running == .acknowledge) {
-                    Task { _ = await model.acknowledge(receipt) }
-                }
-                .accessibilityIdentifier("elchi.cash.acknowledge")
-                ElchiButton(strings.t("app.cash.contest"), variant: .dangerSoft, size: .pair) {
-                    model.clear()
-                    contesting = true
-                }
-                .accessibilityIdentifier("elchi.cash.contest")
-            }
-            .disabled(model.running != nil)
+            .disabled(comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("elchi.cash.contestSend")
+            ElchiButton(strings.t("common.cancel"), variant: .neutral, size: .pair) { contesting = false }
         }
     }
 }

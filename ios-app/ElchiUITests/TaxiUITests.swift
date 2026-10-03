@@ -285,9 +285,10 @@ final class TaxiUITests: ClientUITestCase {
         waitFor("Safar yakunlandi", timeout: 25)
         scrollTop()
         snap("t6-05-completed")
-        scrollTap("Haydovchini baholash")
+        // BOSQICH 04: the star card - a star opens the rating screen with it chosen.
+        scrollTap("5 yulduz")
         waitFor("Bahoni yuborish", timeout: 15)
-        app.buttons["5 yulduz"].firstMatch.tap()
+        waitFor("A'lo")
         snap("t6-06-rating")
         tap("Bahoni yuborish")
         waitFor("Baho", timeout: 20)

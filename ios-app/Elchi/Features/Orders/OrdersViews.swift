@@ -67,7 +67,7 @@ struct OrdersView: View {
         if let items = model.bookings.value, !items.isEmpty {
             SectionTitle(strings.t("client.orders.bookings"))
             ForEach(items) { booking in
-                let status = strings.status(.booking(booking.serviceType, booking.serviceStatus))
+                let status = strings.status(.clientBooking(booking.serviceType, booking.serviceStatus))
                 // "29 sen, 10:00–12:00": the agreed pickup window.
                 let meta = strings.dayWindow(booking.pickup.windowStart, booking.pickup.windowEnd)
                     ?? ServerTime.parse(booking.createdAt).map(strings.dayMonth)

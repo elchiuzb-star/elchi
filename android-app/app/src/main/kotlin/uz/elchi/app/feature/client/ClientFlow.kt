@@ -480,7 +480,10 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 onChat = { nav.navigate(BookingChat(route.id)) },
                 onTracking = { nav.navigate(BookingTracking(route.id)) },
                 onAmend = { nav.navigate(BookingAmendment(route.id)) },
-                onRate = { nav.navigate(BookingRating(route.id)) },
+                onRate = { stars ->
+                    vm.startRating(stars)
+                    nav.navigate(BookingRating(route.id))
+                },
                 onSupport = { nav.navigate(BookingSupport(route.id)) },
                 onSafety = { nav.navigate(BookingSafety(route.id)) },
             )
@@ -642,6 +645,8 @@ internal fun StepScaffold(
     scrollState: ScrollState? = null,
     /** Round icon buttons at the right of the title bar (share, edit, refresh). */
     actions: (@Composable () -> Unit)? = null,
+    /** The footer floats on the page colour without the white strip (the booking detail's driver bar). */
+    footerOnPage: Boolean = false,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Elchi.colors
@@ -666,10 +671,10 @@ internal fun StepScaffold(
             scroll(Modifier.weight(1f))
         }
         if (footer != null) {
-            Column(Modifier.fillMaxWidth().background(c.card)) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+            Column(Modifier.fillMaxWidth().background(if (footerOnPage) c.page else c.card)) {
+                if (!footerOnPage) Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
                 Column(
-                    Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                    Modifier.navigationBarsPadding().padding(start = if (footerOnPage) 12.dp else 16.dp, end = if (footerOnPage) 12.dp else 16.dp, top = if (footerOnPage) 8.dp else 12.dp, bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     content = footer,
                 )

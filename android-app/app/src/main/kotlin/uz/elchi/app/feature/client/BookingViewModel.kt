@@ -52,7 +52,9 @@ import java.util.UUID
 enum class BookingNotice {
     DRIVER_CHOSEN, CANCELLED, AMENDMENT_SENT, AMENDMENT_ACCEPTED, AMENDMENT_REJECTED, AMENDMENT_WITHDRAWN, RATED, ARRIVED,
     // Taksi (passenger)
-    COMPLETED, STATUS_UPDATED, NO_SHOW_SENT, CASH_RECORDED, CASH_ANSWERED,
+    COMPLETED, STATUS_UPDATED, NO_SHOW_SENT, CASH_RECORDED,
+    /** "Tasdiqlayman" / "Rozi emasman" on the other side's cash record (design 04 toasts). */
+    CASH_ACKNOWLEDGED, CASH_CONTESTED,
 }
 
 /** Whose booking screen this is: the client's (Stage 04) or the assigned driver's (Stage 09, the same screens reused). */
@@ -97,6 +99,10 @@ class BookingViewModel(
         val grant: TrackingGrantDTO? = null,
         val grantUrl: String? = null,
         val grantRevoked: Boolean = false,
+        /** The bar's share icon: a link to hand to the phone's share sheet once (then cleared). */
+        val shareNow: String? = null,
+        /** Why the bar's share failed (a toast). */
+        val shareError: Throwable? = null,
         // rating
         val stars: Int = 0,
         val ratingComment: String = "",
@@ -106,6 +112,12 @@ class BookingViewModel(
         /** The server's word on why rating is not possible (RATING_NOT_ALLOWED / RATING_ALREADY_EXISTS). */
         val ratingRefusal: Throwable? = null,
         val ratingError: Throwable? = null,
+        /** The stars sent from this phone (design 04 "Baho berildi: ★★★★ (4 / 5)"); 0 = not known (reloaded). */
+        val ratedStars: Int = 0,
+        // chat (design 04 driver bar): `message_count` of the booking chat, for the local unread count
+        val chatCount: Long? = null,
+        /** The price an accepted amendment brought (the toast "Yangi shart qabul qilindi: {price}"). */
+        val noticePrice: Long? = null,
         // amendments
         val amendments: Load<List<AmendmentDTO>> = Load.Loading,
         val amendDigits: String = "",
@@ -114,8 +126,13 @@ class BookingViewModel(
         val amendBusy: String? = null,
         val amendError: Throwable? = null,
         val amendErrorFor: String? = null,
+        /** "Taklif yuborish" was tapped with this problem (red border + toast, design `sendAmend`). */
+        val amendFormError: AmendFormError? = null,
+        /** Bumped on each refused tap, so the same toast can say it again. */
+        val amendFormNonce: Int = 0,
         // safety
-        val reportReason: ReportReasonCode? = null,
+        /** Design 04 radio list: the first reason is chosen from the start. */
+        val reportReason: ReportReasonCode? = REPORT_REASONS.first(),
         val reportDetails: String = "",
         val reporting: Boolean = false,
         val reportError: Throwable? = null,
@@ -176,7 +193,10 @@ class BookingViewModel(
 
     fun show(notice: BookingNotice) = _state.update { it.copy(notice = notice) }
 
-    fun consumeNotice() = _state.update { it.copy(notice = null, warnings = emptyList()) }
+    /** The toast said it; the server's warnings (a banner) keep their own time. */
+    fun consumeNoticeOnly() = _state.update { it.copy(notice = null, noticePrice = null) }
+
+    fun consumeNotice() = _state.update { it.copy(notice = null, warnings = emptyList(), noticePrice = null) }
 
     /** The cancel reasons of this side (`BookingCancel.reason_code`). */
     val cancelReasons: List<String> get() = if (side == BookingSide.DRIVER) DRIVER_CANCEL_REASONS else BookingRules.CLIENT_CANCEL_REASONS
@@ -227,7 +247,11 @@ class BookingViewModel(
             }
         }
         if (side == BookingSide.DRIVER) loadArrival(booking)
-        if (side == BookingSide.CLIENT) loadCodes(booking)
+        if (side == BookingSide.CLIENT) {
+            loadCodes(booking)
+            loadChatCount()
+            booking.driver?.id?.let(::loadBlocked)
+        }
         prefillCash(booking)
         // The receiver is the client's own entry on its request (the booking shows it only to the driver).
         booking.listingIds?.request?.takeIf { it != receiverFor && side == BookingSide.CLIENT }?.let { listingId ->
@@ -237,6 +261,28 @@ class BookingViewModel(
                     .onSuccess { receiver -> _state.update { it.copy(receiver = receiver) } }
                     .onFailure { if (it is CancellationException) throw it else receiverFor = null }
             }
+        }
+    }
+
+    /** The booking chat's `message_count` (design 04's unread badge is counted against the last visit). */
+    private fun loadChatCount() {
+        viewModelScope.launch {
+            runCatching { api.getBookingChatState(bookingId).data.messageCount }
+                .onSuccess { count -> _state.update { it.copy(chatCount = count) } }
+                .onFailure { if (it is CancellationException) throw it }
+        }
+    }
+
+    /** "Haydovchi bloklangan." on the detail: `GET /blocks` says whether this driver is on the client's list. */
+    private var blocksFor: String? = null
+
+    private fun loadBlocked(driverId: String) {
+        if (blocksFor == driverId) return
+        blocksFor = driverId
+        viewModelScope.launch {
+            runCatching { api.listBlocks().data.any { it.userId == driverId } }
+                .onSuccess { blocked -> if (blocked) _state.update { it.copy(blocked = true) } }
+                .onFailure { if (it is CancellationException) throw it else blocksFor = null }
         }
     }
 
@@ -301,7 +347,7 @@ class BookingViewModel(
 
     fun setCancelReason(code: String) = _state.update { it.copy(cancelReason = code, cancelError = null) }
 
-    fun setCancelComment(text: String) = _state.update { it.copy(cancelComment = text.take(COMMENT_MAX)) }
+    fun setCancelComment(text: String) = _state.update { it.copy(cancelComment = text.take(BookingRules.CANCEL_COMMENT_MAX)) }
 
     fun consumeCancelDone() = _state.update { it.copy(cancelDone = false) }
 
@@ -350,6 +396,35 @@ class BookingViewModel(
         }
     }
 
+    /**
+     * The bar's share icon (design 04 `shareTrack`): the link made on this screen is reused; otherwise one is made
+     * with the default hour and handed to the share sheet ([State.shareNow]). The server returns the URL once.
+     */
+    fun shareTracking() {
+        val s = _state.value
+        s.grantUrl?.let { url ->
+            _state.update { it.copy(shareNow = url, shareError = null) }
+            return
+        }
+        if (s.granting) return
+        _state.update { it.copy(granting = true, shareError = null, grantRevoked = false) }
+        viewModelScope.launch {
+            try {
+                val grant = keyed("grant:${BookingRules.GRANT_TTL_DEFAULT}") { key ->
+                    api.createTrackingGrant(bookingId, TrackingGrantCreate(scope = TrackingGrantScope.RECIPIENT_LINK, ttlMinutes = BookingRules.GRANT_TTL_DEFAULT.toLong()), key).data
+                }
+                val url = grant.url?.let { BookingRules.absoluteUrl(apiBase, it) }
+                _state.update { it.copy(granting = false, grant = grant, grantUrl = url, shareNow = url) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(granting = false, shareError = e) }
+            }
+        }
+    }
+
+    fun consumeShare() = _state.update { it.copy(shareNow = null, shareError = null) }
+
     /** The link on screen stops working (`DELETE .../tracking-grants/{id}`). */
     fun revokeGrant() {
         val grant = _state.value.grant ?: return
@@ -371,7 +446,10 @@ class BookingViewModel(
 
     fun setStars(stars: Int) = _state.update { it.copy(stars = stars.coerceIn(1, 5), ratingError = null) }
 
-    fun setRatingComment(text: String) = _state.update { it.copy(ratingComment = text.take(COMMENT_MAX)) }
+    fun setRatingComment(text: String) = _state.update { it.copy(ratingComment = text.take(BookingRules.RATING_COMMENT_MAX)) }
+
+    /** The detail's star card opens the rating screen with the tapped stars already chosen. */
+    fun startRating(stars: Int) = _state.update { it.copy(stars = stars.coerceIn(1, 5), ratingError = null) }
 
     /**
      * S1: the client rates the driver (`subject_side = driver`). "Already rated" and "not allowed" are answers, not
@@ -387,7 +465,7 @@ class BookingViewModel(
                 keyed("rate:${s.stars}:${comment.orEmpty()}") { key ->
                     api.createRating(bookingId, RatingCreate(comment = comment, stars = s.stars.toLong(), subjectSide = if (side == BookingSide.DRIVER) CLIENT else DRIVER), key)
                 }
-                _state.update { it.copy(rating = false, rated = true, notice = BookingNotice.RATED) }
+                _state.update { it.copy(rating = false, rated = true, ratedStars = s.stars, notice = BookingNotice.RATED) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -424,9 +502,9 @@ class BookingViewModel(
         loadAmendments()
     }
 
-    fun setAmendDigits(text: String) = _state.update { it.copy(amendDigits = text.filter(Char::isDigit).trimStart('0').take(10), amendError = null) }
+    fun setAmendDigits(text: String) = _state.update { it.copy(amendDigits = text.filter(Char::isDigit).trimStart('0').take(BookingRules.AMEND_DIGITS_MAX), amendError = null, amendFormError = null) }
 
-    fun setAmendReason(text: String) = _state.update { it.copy(amendReason = text.take(REASON_MAX), amendError = null) }
+    fun setAmendReason(text: String) = _state.update { it.copy(amendReason = text.take(BookingRules.AMEND_REASON_MAX), amendError = null, amendFormError = null) }
 
     fun amendPrice(): Long? = _state.value.value?.let { BookingRules.amendmentPrice(_state.value.amendDigits, it.unitPriceMinor) }
 
@@ -434,6 +512,10 @@ class BookingViewModel(
     fun sendAmendment() {
         val s = _state.value
         val booking = s.value ?: return
+        BookingRules.amendmentFormError(s.amendDigits, s.amendReason, booking.unitPriceMinor)?.let { problem ->
+            _state.update { it.copy(amendFormError = problem, amendFormNonce = it.amendFormNonce + 1) }
+            return
+        }
         val price = amendPrice() ?: return
         val reason = s.amendReason.trim().takeIf { it.isNotEmpty() } ?: return
         amendCommand(NEW_AMENDMENT, "amend:${booking.id}:${booking.version}:$price:$reason") { key ->
@@ -454,7 +536,7 @@ class BookingViewModel(
             ?.let { PromoDriverAckInput(cashToCollectMinor = it.cashToCollectMinor, commissionChargedMinor = it.commissionChargedMinor) }
         val result = api.acceptAmendment(amendment.id, AmendmentAccept(expectedVersion = amendment.version, promoConsent = consent, promoDriverAck = ack), key)
         setBooking(result.data)
-        _state.update { it.copy(notice = BookingNotice.AMENDMENT_ACCEPTED, warnings = result.warnings) }
+        _state.update { it.copy(notice = BookingNotice.AMENDMENT_ACCEPTED, noticePrice = amendment.newTotalMinor, warnings = result.warnings) }
     }
 
     fun rejectAmendment(amendment: AmendmentDTO) = amendCommand(amendment.id, "amend-reject:${amendment.id}:${amendment.version}") { key ->
@@ -495,9 +577,9 @@ class BookingViewModel(
 
     fun setReportReason(reason: ReportReasonCode) = _state.update { it.copy(reportReason = reason, reportError = null) }
 
-    fun setReportDetails(text: String) = _state.update { it.copy(reportDetails = text.take(REPORT_MAX), reportError = null) }
+    fun setReportDetails(text: String) = _state.update { it.copy(reportDetails = text.take(BookingRules.REPORT_DETAILS_MAX), reportError = null) }
 
-    fun newReport() = _state.update { it.copy(reported = false, reportReason = null, reportDetails = "", reportError = null) }
+    fun newReport() = _state.update { it.copy(reported = false, reportReason = REPORT_REASONS.first(), reportDetails = "", reportError = null) }
 
     /** A report about this booking (`subject_type = booking`): the operator reviews it; it punishes no one by itself. */
     fun report() {
@@ -641,7 +723,7 @@ class BookingViewModel(
     /** "Tasdiqlayman": the other side's record is right. */
     fun acknowledgeCash() {
         val receipt = currentReceipt() ?: return
-        cashCommand("cash-ack:${receipt.id}:${receipt.version}", BookingNotice.CASH_ANSWERED) { key ->
+        cashCommand("cash-ack:${receipt.id}:${receipt.version}", BookingNotice.CASH_ACKNOWLEDGED) { key ->
             api.acknowledgeCashReceipt(bookingId, receipt.id, TaxiRules.acknowledgeBody(receipt), key)
         }
     }
@@ -650,7 +732,7 @@ class BookingViewModel(
     fun contestCash() {
         val receipt = currentReceipt() ?: return
         val body = TaxiRules.contestBody(receipt, _state.value.contestComment) ?: return
-        cashCommand("cash-contest:${receipt.id}:${receipt.version}:${body.comment}", BookingNotice.CASH_ANSWERED) { key ->
+        cashCommand("cash-contest:${receipt.id}:${receipt.version}:${body.comment}", BookingNotice.CASH_CONTESTED) { key ->
             api.contestCashReceipt(bookingId, receipt.id, body, key)
         }
     }
@@ -790,12 +872,13 @@ class BookingViewModel(
         /** The driver's own cancel reasons (`bookingCancel.reason.<code>`); `other` last. */
         val DRIVER_CANCEL_REASONS = listOf("trip_changed", "vehicle_problem", "client_unreachable", "other")
 
+        /** The 8 server report codes, in the server's order (design 04 radio list; `other` last). */
+        val REPORT_REASONS: List<ReportReasonCode> = ReportReasonCode.entries.filter { it != ReportReasonCode.UNKNOWN }
+
         /** Before the service starts (server `PRE_SERVICE_STATUSES`): "Keldim" is possible. */
         val ARRIVE_STATUSES = setOf("confirmed", "awaiting_pickup")
         private const val PHOTO_MAX_PX = 1200
-        private const val COMMENT_MAX = 1000
         private const val REASON_MAX = 500
-        private const val REPORT_MAX = 2000
         private const val AMENDMENTS_LIMIT = 20L
         private const val IN_PROGRESS = "IDEMPOTENCY_IN_PROGRESS"
         const val RATING_ALREADY_EXISTS = "RATING_ALREADY_EXISTS"

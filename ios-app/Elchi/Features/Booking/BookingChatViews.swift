@@ -17,6 +17,10 @@ struct BookingChatView: View {
     var quickReplies: [QuickReplyCode] = ChatTimeline.clientQuickReplies
     /// Who writes on the other side ("Haydovchi" for the client, "Mijoz" for the driver).
     var peerLabelKey = "safety.driverTitle"
+    /// The bar's second line (BOSQICH 04: "Jasur · Chevrolet Cobalt").
+    var subtitle: String?
+    /// The booking was cancelled: a closed chat says why in those words (else "Safar yakunlangani uchun ...").
+    var cancelled = false
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @Environment(\.scenePhase) private var scenePhase
@@ -29,7 +33,7 @@ struct BookingChatView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScreenScaffold(title: strings.t("bookingChat.title"), backLabel: strings.t("common.back"), onBack: onBack) {
+            ScreenScaffold(title: strings.t("bookingChat.title"), backLabel: strings.t("common.back"), onBack: onBack, subtitle: subtitle) {
                 if model.olderCursor != nil {
                     Button { Task { await model.loadOlder() } } label: {
                         HStack(spacing: 6) {
@@ -56,18 +60,25 @@ struct BookingChatView: View {
                     bubble(message).id(message.id)
                 }
                 ForEach(model.pending) { pending(message: $0) }
-                ForEach(model.warnings, id: \.code) { Note(strings.warningText($0), tone: .warn) }
+                // "Aloqa ma'lumotlari yashirildi." (design's short line) for the masking warning; others as the server says.
+                ForEach(model.warnings, id: \.code) { warning in
+                    Note(warning.code == "CONTACT_INFO_MASKED" ? strings.t("client.chat.masked") : strings.warningText(warning), tone: .warn)
+                }
                 if let seconds = model.rateLimitLeft(now: now) {
                     Note(strings.t("client.chat.rateLimited", ("seconds", seconds)), tone: .warn)
                 }
-                if let state = model.state.value, !state.writable {
-                    closedNote(state)
+                if let state = model.state.value, !state.writable, let until = ServerTime.parse(state.writableUntil) {
+                    ChatBubble(.system, text: strings.t("client.chat.openUntil", ("time", DepartureWindow.shortText(until))))
                 }
                 Color.clear.frame(height: 1).id(Self.bottomID)
                     .onAppear { atBottom = true; unseen = false }
                     .onDisappear { atBottom = false }
             } footer: {
-                if model.writable { composer(proxy) }
+                if model.writable {
+                    composer(proxy)
+                } else if let state = model.state.value, !state.writable {
+                    closedNote
+                }
             }
             .overlay(alignment: .bottom) {
                 if unseen {
@@ -118,6 +129,8 @@ struct BookingChatView: View {
             .onChange(of: model.messages.count + model.pending.count) { _, _ in
                 if atBottom { withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
             }
+            // What the chat holds now is seen: the detail's red count starts from here.
+            .onDisappear { model.markSeen() }
         }
     }
 
@@ -151,12 +164,23 @@ struct BookingChatView: View {
         return strings.errorText(error)
     }
 
-    @ViewBuilder
-    private func closedNote(_ state: ChatThreadDTO) -> some View {
-        if let until = ServerTime.parse(state.writableUntil) {
-            ChatBubble(.system, text: "\(strings.t("chat.closesSoon")) \(DepartureWindow.shortText(until))")
+    /// The design's closed card in place of the composer (lock, "Suhbat yopildi", why): the server's `writable`
+    /// decides (open 24 h after the end, Q100), the booking's status only picks the sentence.
+    private var closedNote: some View {
+        HStack(alignment: .top, spacing: 10) {
+            ElchiIcon.lock.image(size: 18).foregroundStyle(c.muted).padding(.top, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(strings.t("chat.closedTitle")).font(ElchiFont.poppins(13, .semibold))
+                Text(strings.t(cancelled ? "client.chat.closedCancelled" : "chat.closedBody")).font(ElchiFont.poppins(13)).lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(c.tone(.gray).noteText)
+            Spacer(minLength: 0)
         }
-        Note(strings.t("chat.closedBody"), tone: .gray, title: strings.t("chat.closedTitle"))
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(c.field, in: RoundedRectangle(cornerRadius: ElchiShape.note))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("elchi.chat.closed")
     }
 
     private func composer(_ proxy: ScrollViewProxy) -> some View {
@@ -216,11 +240,12 @@ struct BookingChatView: View {
 struct SupportChatView: View {
     let model: SupportChatModel
     let onBack: () -> Void
-    /// "Operator bilan yozishma" when opened from "Murojaatlarim"; the booking's own button says "Yordam / shikoyat".
+    /// The bar's title; "Operator bilan yozishma" by default (BOSQICH 04, also from the booking's "Yordam / shikoyat").
     var title: String?
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
     @State private var draft = ""
     @State private var startingNew = false
 
@@ -230,8 +255,14 @@ struct SupportChatView: View {
         let thread = model.current
         let closed = SupportStatus.isClosed(thread)
         ScrollViewReader { proxy in
-            ScreenScaffold(title: title ?? strings.t("support.complain"), backLabel: strings.t("common.back"), onBack: onBack,
-                           showsFooter: !closed || startingNew) {
+            ScreenScaffold(title: title ?? strings.t("support.threadTitle"), backLabel: strings.t("common.back"), onBack: onBack,
+                           showsFooter: !closed || startingNew,
+                           actions: [BarAction(id: "refresh", icon: .refresh, label: strings.t("support.refresh")) {
+                               Task {
+                                   await model.load()
+                                   banners?.show(.key("client.booking.refreshed"), tone: .info, hideAfter: .seconds(2))
+                               }
+                           }]) {
                 switch model.thread {
                 case .loading:
                     SkeletonCards(count: 2)
@@ -254,10 +285,17 @@ struct SupportChatView: View {
                             ElchiButton(strings.t("client.support.newThread"), variant: .soft, icon: .plus) { startingNew = true }
                         }
                     } else {
+                        // Before the first message: "Holat · Yangi murojaat" (design), then the intro (no phone, Q87).
+                        ElchiCard {
+                            CardRow(strings.t("support.statusLabel"), strings.t("client.support.newThread"), first: true)
+                        }
                         Note(strings.t("support.noPromise"), tone: .gray)
                         EmptyState(icon: .head, title: strings.t("support.threadTitle"), description: strings.t("support.emptyThread"))
                     }
-                    ForEach(model.warnings, id: \.code) { Note(strings.warningText($0), tone: .warn) }
+                    // "Aloqa ma'lumotlari yashirildi." (design's short line) for the masking warning; others as the server says.
+                ForEach(model.warnings, id: \.code) { warning in
+                    Note(warning.code == "CONTACT_INFO_MASKED" ? strings.t("client.chat.masked") : strings.warningText(warning), tone: .warn)
+                }
                     if let error = model.sendError, !model.sending { Note(strings.errorText(error), tone: .err) }
                 }
                 Color.clear.frame(height: 1).id(Self.bottomID)

@@ -1707,5 +1707,209 @@
   "client.offers.badgeFastest": {
     "uz": "Eng tez",
     "ru": "Самый ранний"
+  },
+  "client.booking.createdAt": {
+    "uz": "Yaratilgan, {date}",
+    "ru": "Создано, {date}"
+  },
+  "client.booking.plannedArrival": {
+    "uz": "Taxminan, {date}",
+    "ru": "Примерно, {date}"
+  },
+  "client.booking.finalPrice": {
+    "uz": "Yakuniy narx",
+    "ru": "Итоговая цена"
+  },
+  "client.booking.weight": {
+    "uz": "Og'irlik",
+    "ru": "Вес"
+  },
+  "client.booking.weightUpTo": {
+    "uz": "{weight} kg gacha",
+    "ru": "до {weight} кг"
+  },
+  "client.booking.noticeOnTheWay": {
+    "uz": "Haydovchi yo'lda.",
+    "ru": "Водитель в пути."
+  },
+  "client.booking.noticeDelivered": {
+    "uz": "Posilka yetkazildi.",
+    "ru": "Посылка доставлена."
+  },
+  "client.booking.noticeArrived": {
+    "uz": "Yetib keldingiz.",
+    "ru": "Вы прибыли."
+  },
+  "client.booking.driverBlocked": {
+    "uz": "Haydovchi bloklangan.",
+    "ru": "Водитель заблокирован."
+  },
+  "client.booking.phoneClosed": {
+    "uz": "Yopilgan",
+    "ru": "Скрыт"
+  },
+  "client.booking.callLockedTaxi": {
+    "uz": "Telefon mashinaga chiqqaningizda ochiladi",
+    "ru": "Телефон откроется, когда вы сядете в машину"
+  },
+  "client.booking.callLockedParcel": {
+    "uz": "Telefon safar jo'naganda ochiladi",
+    "ru": "Телефон откроется, когда поездка начнётся"
+  },
+  "client.booking.callClosed": {
+    "uz": "Telefon yopilgan",
+    "ru": "Телефон скрыт"
+  },
+  "client.booking.openTracking": {
+    "uz": "Kuzatuvni ochish",
+    "ru": "Открыть отслеживание"
+  },
+  "client.booking.shareTracking": {
+    "uz": "Kuzatuv havolasini ulashish",
+    "ru": "Поделиться ссылкой на отслеживание"
+  },
+  "client.booking.shareSheetTitle": {
+    "uz": "Elchi kuzatuv",
+    "ru": "Отслеживание Elchi"
+  },
+  "client.booking.trackingLinkCopied": {
+    "uz": "Kuzatuv havolasi nusxalandi",
+    "ru": "Ссылка на отслеживание скопирована"
+  },
+  "client.booking.cancelledToast": {
+    "uz": "Bron bekor qilindi · ikkinchi tomonga xabar yuborildi",
+    "ru": "Бронь отменена · другая сторона уведомлена"
+  },
+  "client.booking.refreshed": {
+    "uz": "Yangilandi",
+    "ru": "Обновлено"
+  },
+  "client.booking.ratedStars": {
+    "uz": "Baho berildi: {stars}. Izoh nashr etilishidan oldin tekshiriladi.",
+    "ru": "Оценка отправлена: {stars}. Комментарий проверяется перед публикацией."
+  },
+  "client.booking.cashConfirmTitle": {
+    "uz": "Naqd to'lovni tasdiqlang",
+    "ru": "Подтвердите оплату наличными"
+  },
+  "client.booking.cashConfirmed": {
+    "uz": "Naqd to'lov tasdiqlandi",
+    "ru": "Оплата наличными подтверждена"
+  },
+  "client.booking.cashContestSent": {
+    "uz": "Kelishmovchilik operatorga yuborildi",
+    "ru": "Разногласие передано оператору"
+  },
+  "client.booking.amendReasonPlaceholder": {
+    "uz": "Masalan: yuk og'irroq bo'lib chiqdi",
+    "ru": "Например: груз оказался тяжелее"
+  },
+  "client.booking.amendReasonRequired": {
+    "uz": "Sababni yozing",
+    "ru": "Укажите причину"
+  },
+  "client.booking.amendStatusAccepted": {
+    "uz": "Qabul qilindi",
+    "ru": "Принято"
+  },
+  "client.booking.amendWithdraw": {
+    "uz": "Qaytarib olish",
+    "ru": "Отозвать"
+  },
+  "client.booking.amendAcceptedPrice": {
+    "uz": "Yangi shart qabul qilindi: {price}",
+    "ru": "Новое условие принято: {price}"
+  },
+  "client.booking.rateTapStar": {
+    "uz": "Yulduzni bosing",
+    "ru": "Нажмите на звезду"
+  },
+  "client.booking.rateLabel1": {
+    "uz": "Yomon",
+    "ru": "Плохо"
+  },
+  "client.booking.rateLabel2": {
+    "uz": "O'rtacha emas",
+    "ru": "Ниже среднего"
+  },
+  "client.booking.rateLabel3": {
+    "uz": "O'rtacha",
+    "ru": "Средне"
+  },
+  "client.booking.rateLabel4": {
+    "uz": "Yaxshi",
+    "ru": "Хорошо"
+  },
+  "client.booking.rateLabel5": {
+    "uz": "A'lo",
+    "ru": "Отлично"
+  },
+  "client.booking.rateCommentOptional": {
+    "uz": "Izoh qoldiring (ixtiyoriy)",
+    "ru": "Оставьте комментарий (необязательно)"
+  },
+  "client.booking.rateCommentPlaceholder": {
+    "uz": "Masalan: vaqtida yetkazdi, xushmuomala",
+    "ru": "Например: вовремя, вежливый"
+  },
+  "client.booking.ratePickStars": {
+    "uz": "Avval 1 dan 5 gacha yulduz tanlang",
+    "ru": "Сначала выберите от 1 до 5 звёзд"
+  },
+  "client.booking.rateThanks": {
+    "uz": "Rahmat! Bahoingiz yuborildi",
+    "ru": "Спасибо! Ваша оценка отправлена"
+  },
+  "client.booking.reportSentShort": {
+    "uz": "Operator ko'rib chiqadi.",
+    "ru": "Оператор рассмотрит."
+  },
+  "client.booking.blockConfirmName": {
+    "uz": "{name} bloklansinmi?",
+    "ru": "Заблокировать: {name}?"
+  },
+  "client.booking.blockKeepsBooking": {
+    "uz": "Bu bron davom etadi.",
+    "ru": "Эта бронь продолжится."
+  },
+  "client.booking.blockedName": {
+    "uz": "{name} bloklandi",
+    "ru": "{name}: заблокирован"
+  },
+  "client.chat.masked": {
+    "uz": "Aloqa ma'lumotlari yashirildi.",
+    "ru": "Контактные данные скрыты."
+  },
+  "client.chat.openUntil": {
+    "uz": "Suhbat shu vaqtgacha ochiq edi: {time}",
+    "ru": "Чат был открыт до: {time}"
+  },
+  "client.chat.closedCancelled": {
+    "uz": "Bron bekor qilingani uchun yangi xabar yuborib bo'lmaydi. Yozishmalar o'qish uchun ochiq qoladi.",
+    "ru": "Бронь отменена, поэтому новые сообщения отправить нельзя. Переписка остаётся доступной для чтения."
+  },
+  "client.tracking.notStarted": {
+    "uz": "Hali boshlanmagan",
+    "ru": "Ещё не началось"
+  },
+  "client.tracking.liveClosed": {
+    "uz": "Jonli joylashuv yopildi",
+    "ru": "Геопозиция в реальном времени закрыта"
+  },
+  "client.tracking.bookingCancelled": {
+    "uz": "Bron bekor qilingan",
+    "ru": "Бронь отменена"
+  },
+  "client.tracking.delayedNote": {
+    "uz": "Joylashuv kechikmoqda — oxirgi nuqta {time} oldin.",
+    "ru": "Геопозиция запаздывает — последняя точка {time} назад."
+  },
+  "client.tracking.lostNote": {
+    "uz": "Haydovchi telefoni bilan aloqa uzilgan — 2 daqiqadan ko'p yangilanmagan.",
+    "ru": "Связь с телефоном водителя потеряна — нет обновлений больше 2 минут."
+  },
+  "client.booking.quantityPieces": {
+    "uz": "{count} ta",
+    "ru": "{count} шт."
   }
 }

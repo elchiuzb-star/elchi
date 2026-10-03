@@ -4761,6 +4761,737 @@
         }
       }
     },
+    "client.booking.amendAcceptedPrice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новое условие принято: {price}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yangi shart qabul qilindi: {price}"
+          }
+        }
+      }
+    },
+    "client.booking.amendReasonPlaceholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Например: груз оказался тяжелее"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masalan: yuk og'irroq bo'lib chiqdi"
+          }
+        }
+      }
+    },
+    "client.booking.amendReasonRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите причину"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sababni yozing"
+          }
+        }
+      }
+    },
+    "client.booking.amendStatusAccepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принято"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qabul qilindi"
+          }
+        }
+      }
+    },
+    "client.booking.amendWithdraw": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отозвать"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qaytarib olish"
+          }
+        }
+      }
+    },
+    "client.booking.blockConfirmName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заблокировать: {name}?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name} bloklansinmi?"
+          }
+        }
+      }
+    },
+    "client.booking.blockKeepsBooking": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Эта бронь продолжится."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu bron davom etadi."
+          }
+        }
+      }
+    },
+    "client.booking.blockedName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name}: заблокирован"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name} bloklandi"
+          }
+        }
+      }
+    },
+    "client.booking.callClosed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон скрыт"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon yopilgan"
+          }
+        }
+      }
+    },
+    "client.booking.callLockedParcel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон откроется, когда поездка начнётся"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon safar jo'naganda ochiladi"
+          }
+        }
+      }
+    },
+    "client.booking.callLockedTaxi": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон откроется, когда вы сядете в машину"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon mashinaga chiqqaningizda ochiladi"
+          }
+        }
+      }
+    },
+    "client.booking.cancelledToast": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бронь отменена · другая сторона уведомлена"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bron bekor qilindi · ikkinchi tomonga xabar yuborildi"
+          }
+        }
+      }
+    },
+    "client.booking.cashConfirmTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подтвердите оплату наличными"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naqd to'lovni tasdiqlang"
+          }
+        }
+      }
+    },
+    "client.booking.cashConfirmed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оплата наличными подтверждена"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naqd to'lov tasdiqlandi"
+          }
+        }
+      }
+    },
+    "client.booking.cashContestSent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разногласие передано оператору"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kelishmovchilik operatorga yuborildi"
+          }
+        }
+      }
+    },
+    "client.booking.createdAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создано, {date}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yaratilgan, {date}"
+          }
+        }
+      }
+    },
+    "client.booking.driverBlocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Водитель заблокирован."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi bloklangan."
+          }
+        }
+      }
+    },
+    "client.booking.finalPrice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Итоговая цена"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yakuniy narx"
+          }
+        }
+      }
+    },
+    "client.booking.noticeArrived": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы прибыли."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yetib keldingiz."
+          }
+        }
+      }
+    },
+    "client.booking.noticeDelivered": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Посылка доставлена."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posilka yetkazildi."
+          }
+        }
+      }
+    },
+    "client.booking.noticeOnTheWay": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Водитель в пути."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi yo'lda."
+          }
+        }
+      }
+    },
+    "client.booking.openTracking": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть отслеживание"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kuzatuvni ochish"
+          }
+        }
+      }
+    },
+    "client.booking.phoneClosed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрыт"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yopilgan"
+          }
+        }
+      }
+    },
+    "client.booking.plannedArrival": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Примерно, {date}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taxminan, {date}"
+          }
+        }
+      }
+    },
+    "client.booking.quantityPieces": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} шт."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta"
+          }
+        }
+      }
+    },
+    "client.booking.rateCommentOptional": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оставьте комментарий (необязательно)"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Izoh qoldiring (ixtiyoriy)"
+          }
+        }
+      }
+    },
+    "client.booking.rateCommentPlaceholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Например: вовремя, вежливый"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masalan: vaqtida yetkazdi, xushmuomala"
+          }
+        }
+      }
+    },
+    "client.booking.rateLabel1": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Плохо"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yomon"
+          }
+        }
+      }
+    },
+    "client.booking.rateLabel2": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ниже среднего"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O'rtacha emas"
+          }
+        }
+      }
+    },
+    "client.booking.rateLabel3": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Средне"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O'rtacha"
+          }
+        }
+      }
+    },
+    "client.booking.rateLabel4": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хорошо"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yaxshi"
+          }
+        }
+      }
+    },
+    "client.booking.rateLabel5": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отлично"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A'lo"
+          }
+        }
+      }
+    },
+    "client.booking.ratePickStars": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала выберите от 1 до 5 звёзд"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avval 1 dan 5 gacha yulduz tanlang"
+          }
+        }
+      }
+    },
+    "client.booking.rateTapStar": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите на звезду"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yulduzni bosing"
+          }
+        }
+      }
+    },
+    "client.booking.rateThanks": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Спасибо! Ваша оценка отправлена"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rahmat! Bahoingiz yuborildi"
+          }
+        }
+      }
+    },
+    "client.booking.ratedStars": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оценка отправлена: {stars}. Комментарий проверяется перед публикацией."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baho berildi: {stars}. Izoh nashr etilishidan oldin tekshiriladi."
+          }
+        }
+      }
+    },
+    "client.booking.refreshed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновлено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yangilandi"
+          }
+        }
+      }
+    },
+    "client.booking.reportSentShort": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оператор рассмотрит."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operator ko'rib chiqadi."
+          }
+        }
+      }
+    },
+    "client.booking.shareSheetTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отслеживание Elchi"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elchi kuzatuv"
+          }
+        }
+      }
+    },
+    "client.booking.shareTracking": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поделиться ссылкой на отслеживание"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kuzatuv havolasini ulashish"
+          }
+        }
+      }
+    },
+    "client.booking.trackingLinkCopied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ссылка на отслеживание скопирована"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kuzatuv havolasi nusxalandi"
+          }
+        }
+      }
+    },
+    "client.booking.weight": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вес"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Og'irlik"
+          }
+        }
+      }
+    },
+    "client.booking.weightUpTo": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "до {weight} кг"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{weight} kg gacha"
+          }
+        }
+      }
+    },
     "client.bookingCancel.tooLate": {
       "extractionState": "manual",
       "localizations": {
@@ -4982,6 +5713,23 @@
         }
       }
     },
+    "client.chat.closedCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бронь отменена, поэтому новые сообщения отправить нельзя. Переписка остаётся доступной для чтения."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bron bekor qilingani uchun yangi xabar yuborib bo'lmaydi. Yozishmalar o'qish uchun ochiq qoladi."
+          }
+        }
+      }
+    },
     "client.chat.discard": {
       "extractionState": "manual",
       "localizations": {
@@ -4995,6 +5743,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Olib tashlash"
+          }
+        }
+      }
+    },
+    "client.chat.masked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Контактные данные скрыты."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aloqa ma'lumotlari yashirildi."
+          }
+        }
+      }
+    },
+    "client.chat.openUntil": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чат был открыт до: {time}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suhbat shu vaqtgacha ochiq edi: {time}"
           }
         }
       }
@@ -8892,6 +9674,23 @@
         }
       }
     },
+    "client.tracking.bookingCancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бронь отменена"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bron bekor qilingan"
+          }
+        }
+      }
+    },
     "client.tracking.coordinates": {
       "extractionState": "manual",
       "localizations": {
@@ -8905,6 +9704,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Oxirgi nuqta koordinatalari"
+          }
+        }
+      }
+    },
+    "client.tracking.delayedNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Геопозиция запаздывает — последняя точка {time} назад."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joylashuv kechikmoqda — oxirgi nuqta {time} oldin."
           }
         }
       }
@@ -8956,6 +9772,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "Yangi nuqtalar ochiq aloqa orqali keladi."
+          }
+        }
+      }
+    },
+    "client.tracking.liveClosed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Геопозиция в реальном времени закрыта"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jonli joylashuv yopildi"
+          }
+        }
+      }
+    },
+    "client.tracking.lostNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Связь с телефоном водителя потеряна — нет обновлений больше 2 минут."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi telefoni bilan aloqa uzilgan — 2 daqiqadan ko'p yangilanmagan."
+          }
+        }
+      }
+    },
+    "client.tracking.notStarted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ещё не началось"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hali boshlanmagan"
           }
         }
       }

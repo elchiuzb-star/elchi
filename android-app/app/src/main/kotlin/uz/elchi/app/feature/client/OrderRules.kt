@@ -492,16 +492,31 @@ object OrderRules {
             "in_transit", "picked_up" -> "parcel.status.driverDeparted"
             "delivered" -> "parcel.progress.deliveredByOperator"
             "return_required", "returned", "delivery_failed" -> "tripDetail.service.$status"
+            // Design 04: "Yakunlandi" (the rung's word), not the adjective "Yakunlangan".
+            "completed" -> "app.progress.completed"
             else -> "status.$status"
         }
     } else {
         when (status) {
-            "awaiting_pickup" -> "app.progress.driverAtStop"
+            // Design 04: "Olib ketish kutilmoqda" - the driver's "Keldim" is a separate signal, not this status.
+            "awaiting_pickup" -> "status.awaiting_pickup"
+            "completed" -> "app.progress.completed"
             // Taksi: "Mashinada" / "Yetib keldi" rather than the raw codes.
             "onboard" -> "status.onboard"
             "arrived" -> "status.arrived"
             else -> "status.$status"
         }
+    }
+
+    /**
+     * The client's booking badge (design 04 `TONES`): agreed and waiting amber, under way blue, delivered / arrived /
+     * completed green, cancelled and no-show red. The driver's screens keep [bookingTone].
+     */
+    fun clientBookingTone(serviceType: ServiceType, status: String): Tone = when (status) {
+        "confirmed", "awaiting_pickup" -> Tone.WARN
+        "in_transit", "picked_up", "onboard" -> Tone.BLUE
+        "delivered", "arrived", "completed" -> Tone.OK
+        else -> bookingTone(serviceType, status)
     }
 
     /** A parcel "picked up" by the retired driver ladder sits on the "departed" step (and colour), no further. */

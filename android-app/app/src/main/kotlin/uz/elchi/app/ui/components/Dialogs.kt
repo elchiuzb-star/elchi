@@ -36,6 +36,8 @@ fun ElchiDialog(
     confirmVariant: ButtonVariant = ButtonVariant.PRIMARY,
     dismiss: String? = null,
     dismissible: Boolean = true,
+    /** The two buttons one under the other at full width (design 04's block overlay: long labels never cut). */
+    stacked: Boolean = false,
 ) {
     val c = Elchi.colors
     Dialog(onDismissRequest = { if (dismissible) onDismiss() }, properties = DialogProperties(dismissOnBackPress = dismissible, dismissOnClickOutside = dismissible)) {
@@ -47,7 +49,12 @@ fun ElchiDialog(
                 Text(title, Modifier.semantics { heading() }, style = Elchi.type.title.copy(fontSize = 19.sp, lineHeight = 23.sp), color = c.text)
                 Text(text, style = Elchi.type.secondary, color = c.muted)
             }
-            if (dismiss != null) {
+            if (dismiss != null && stacked) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ElchiButton(confirm, onConfirm, Modifier.fillMaxWidth().height(52.dp), confirmVariant, ButtonSize.MEDIUM)
+                    ElchiButton(dismiss, onDismiss, Modifier.fillMaxWidth().height(46.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM)
+                }
+            } else if (dismiss != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ElchiButton(confirm, onConfirm, Modifier.weight(1f).height(48.dp), confirmVariant, ButtonSize.MEDIUM, horizontalPadding = 10.dp)
                     ElchiButton(dismiss, onDismiss, Modifier.weight(1f).height(48.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, horizontalPadding = 10.dp)
