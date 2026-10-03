@@ -38,7 +38,8 @@ public enum PassengerGate {
 // MARK: - The seat picker
 
 /// A passenger seat in a normal sedan, in reading order. The *count* is what the request carries (`seat_count`): there
-/// is no seat map in the contract, so the picture never reserves a seat (`seatPicker.seatNotReserved`).
+/// is no seat map in the contract. Since the BOSQICH 02 design the request picks only the count (`TaxiSeats`: 1 / 2 /
+/// 3 / Butun salon); these helpers remain for turning a count back into seats.
 public enum CabinSeat: String, CaseIterable, Hashable, Sendable {
     case front, rearLeft, rearMiddle, rearRight
 
@@ -118,19 +119,17 @@ public struct PassengerRequestDraft: Sendable {
             currency: .uzs,
             departureWindowEnd: DepartureWindow.iso(windowEnd),
             departureWindowStart: DepartureWindow.iso(windowStart),
-            destinationPoint: Self.point(dropoff),
+            destinationPoint: dropoff.pointInput,
+            destinationStopId: dropoff.stopId,
             kind: .request,
-            originPoint: Self.point(pickup),
+            originPoint: pickup.pointInput,
+            originStopId: pickup.stopId,
             passenger: PassengerDetails(adults: seats, seatCount: seats),
             paymentMethod: .cash,
             priceBasis: .perSeat,
             serviceType: .passenger,
             timezone: DepartureWindow.timeZone.identifier,
             unitPriceMinor: unitPriceMinor)
-    }
-
-    private static func point(_ end: PlaceEnd) -> PointEndInput {
-        PointEndInput(address: end.address, districtId: end.district.id, lat: end.point.lat, lng: end.point.lng)
     }
 }
 

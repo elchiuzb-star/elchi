@@ -39,10 +39,26 @@ enum PhotoState {
     }
 }
 
-/// What the success screen shows: one note per server warning (e.g. `CONTACT_INFO_MASKED`).
+/// What the success screen shows: the summary card (route, window, total) and one note per server warning (e.g.
+/// `CONTACT_INFO_MASKED`).
 struct PublishedRequest {
     let listing: ListingDTO
     let warnings: [ApiWarning]
+    var fromRegion: RegionDTO?
+    var toRegion: RegionDTO?
+    var windowStart: Date?
+    var windowEnd: Date?
+    var totalMinor: Int = 0
+}
+
+/// What the home's locate button did with "Qayerdan".
+enum LocateOutcome: Equatable {
+    /// "Qayerdan" now holds the current location.
+    case set
+    /// A place was already chosen: the map only centred.
+    case kept
+    /// Outside Uzbekistan or far from every district centre (or the catalogue could not be read).
+    case outside
 }
 
 /// Stage 02: the client's parcel request from the home screen to "published" (same behaviour as Android's
@@ -70,8 +86,8 @@ final class ParcelRequestModel {
     /// Pochta or Taksi. Taksi only while passenger is enabled somewhere the person can see (else back to parcel).
     var mode: ServiceType = .parcel
 
-    // Taksi: which seats the person marked (the request carries only their count).
-    var seats: [CabinSeat] = SeatPicker.defaultSeats
+    // Taksi: how many people (1, 2, 3 or the whole cabin = 4); nothing until the person picks.
+    var seatCount: Int?
 
     // Step 1: route summary.
     var windowStart: Date?
@@ -131,6 +147,44 @@ final class ParcelRequestModel {
 
     func districtList(_ region: RegionDTO) -> [DistrictDTO] { districts[region.id]?.value ?? [] }
 
+    /// Every district (the locate button's nearest-centre search), read once.
+    private var allDistricts: [DistrictDTO]?
+    /// Verified stops of the public corridors, read once (there is no stops-by-district endpoint).
+    private var corridorStops: [StopDTO]?
+
+    /// Active verified stops in these districts (the point step's chips), only when a district says it has some.
+    func stops(inDistricts ids: Set<String>) async -> [StopDTO] {
+        if corridorStops == nil {
+            guard let corridors = try? await api.listCorridors(serviceType: mode).data else { return [] }
+            var all: [StopDTO] = []
+            for corridor in corridors where corridor.stopsCount > 0 {
+                if let stops = try? await api.listCorridorStops(corridorId: corridor.id).data { all += stops }
+            }
+            corridorStops = all
+        }
+        var seen = Set<String>()
+        return (corridorStops ?? []).filter { $0.isActive && ids.contains($0.district.id) && seen.insert($0.id).inserted }
+    }
+
+    /// The locate button: with "Qayerdan" still empty, the person's position becomes it - the nearest district centre
+    /// (v2 ids) and the reverse-geocoded street - and the direction check runs as for any picked place.
+    func fillPickup(from point: GeoPoint) async -> LocateOutcome {
+        guard pickup == nil else { return .kept }
+        if allDistricts == nil { allDistricts = try? await api.listDistricts(limit: 500).data }
+        guard let district = LocateRules.district(near: point, in: allDistricts ?? []) else { return .outside }
+        await loadRegions()
+        let region = LocateRules.region(of: district, in: regions.value ?? [])
+        let geocoded = try? await geo.reverseGeocode(point, language: language)
+        let address = geocoded.flatMap { $0.isLocal ? nil : $0.formattedAddress }.flatMap { $0.isEmpty ? nil : PointPickerModel.withoutCountry($0) }
+        // Chosen by hand while the lookups ran: that choice stands.
+        guard pickup == nil else { return .kept }
+        setEnd(.pickup, PlaceEnd(region: region, district: district, point: point, address: address, currentLocation: true))
+        return .set
+    }
+
+    /// The language the geocoder answers in (the app's).
+    var language: AppLocale = .uz
+
     // MARK: Direction
 
     func end(_ side: EndSide) -> PlaceEnd? { side == .pickup ? pickup : dropoff }
@@ -138,6 +192,12 @@ final class ParcelRequestModel {
     /// A place was chosen; as soon as both ends are set the server is asked whether a confirmed route serves them.
     func setEnd(_ side: EndSide, _ end: PlaceEnd) {
         if side == .pickup { pickup = end } else { dropoff = end }
+        checkDirection()
+    }
+
+    /// The home card's swap button: "Qayerdan" and "Qayerga" change places, and the direction is checked again.
+    func swapEnds() {
+        (pickup, dropoff) = (dropoff, pickup)
         checkDirection()
     }
 
@@ -238,6 +298,16 @@ final class ParcelRequestModel {
         RouteBlocker.check(directionReady: directionReady, start: windowStart, end: windowEnd, priceMinor: priceMinor)
     }
 
+    /// The taxi block on the home sheet (window, people, price per person).
+    var taxiHomeBlockers: [RouteBlocker] {
+        RouteBlocker.taxiHome(start: windowStart, end: windowEnd, priceMinor: priceMinor, seatCount: seatCount)
+    }
+
+    /// The contact step (people, what is sent, the photo).
+    var contactBlockers: [ContactBlocker] {
+        ContactBlocker.check(contacts: contacts, parcelType: parcelType, hasCategory: selectedCategory != nil, photoUploaded: photoFileId != nil)
+    }
+
     // MARK: Step 2
 
     private func prefillSender() {
@@ -272,6 +342,14 @@ final class ParcelRequestModel {
 
     /// Shows the photo at once and uploads a JPEG no larger than 1600 px on the long side.
     func setPhoto(_ image: UIImage) async {
+        let task = Task { await upload(image) }
+        photoTask = task
+        await task.value
+    }
+
+    @ObservationIgnored private var photoTask: Task<Void, Never>?
+
+    private func upload(_ image: UIImage) async {
         photo = .uploading(image)
         let jpeg = await Task.detached(priority: .userInitiated) { PhotoCompressor.jpeg(image) }.value
         guard let jpeg else {
@@ -280,10 +358,18 @@ final class ParcelRequestModel {
         }
         do {
             let uploaded = try await files.uploadCargoPhoto(jpeg: jpeg)
+            if Task.isCancelled { return }
             photo = .uploaded(image, fileId: uploaded.fileUrl)
         } catch {
+            if Task.isCancelled { return }
             photo = .failed(image, error)
         }
+    }
+
+    /// The photo tile's delete: the request goes back to "no photo" (the uploaded file is simply not used).
+    func removePhoto() {
+        photoTask?.cancel()
+        photo = .none
     }
 
     func retryPhoto() async {
@@ -308,8 +394,8 @@ final class ParcelRequestModel {
     /// Taksi: both places, the window, the people and the price per person (no contacts, parcel or photo steps).
     var passengerDraft: PassengerRequestDraft? {
         guard mode == .passenger, let pickup, let dropoff, directionReady, let windowStart, let windowEnd, routeBlockers.isEmpty,
-              !seats.isEmpty else { return nil }
-        return PassengerRequestDraft(pickup: pickup, dropoff: dropoff, windowStart: windowStart, windowEnd: windowEnd, seats: seats.count,
+              let seatCount else { return nil }
+        return PassengerRequestDraft(pickup: pickup, dropoff: dropoff, windowStart: windowStart, windowEnd: windowEnd, seats: seatCount,
                                      unitPriceMinor: priceMinor)
     }
 
@@ -319,7 +405,10 @@ final class ParcelRequestModel {
     }
 
     /// Taksi: what the people pay together (`n × per person`).
-    var passengerTotalMinor: Int { PassengerMoney.total(seats: seats.count, unitMinor: priceMinor) }
+    var passengerTotalMinor: Int { PassengerMoney.total(seats: seatCount ?? 1, unitMinor: priceMinor) }
+
+    /// What the request costs in all: the people's total for Taksi, the price for Pochta.
+    var totalMinor: Int { mode == .passenger ? passengerTotalMinor : priceMinor }
 
     /// Create the draft, then publish it. If the draft was created but publishing failed, a retry publishes that
     /// same draft (never a second one) unless the person changed something in between.
@@ -345,7 +434,9 @@ final class ParcelRequestModel {
             publishAttempt = (publishKey, created.id, created.version)
             let result = try await api.publishListing(listingId: created.id, body: ListingCommand(expectedVersion: created.version),
                                                       idempotencyKey: publishKey)
-            published = PublishedRequest(listing: result.data, warnings: Self.unique(created.warnings + result.warnings))
+            published = PublishedRequest(listing: result.data, warnings: Self.unique(created.warnings + result.warnings),
+                                         fromRegion: pickup?.region, toRegion: dropoff?.region, windowStart: windowStart,
+                                         windowEnd: windowEnd, totalMinor: totalMinor)
             resetDraft()
             return true
         } catch {
@@ -371,11 +462,12 @@ final class ParcelRequestModel {
         windowStart = nil
         windowEnd = nil
         priceDigits = ""
-        seats = SeatPicker.defaultSeats
+        seatCount = nil
         contacts = ContactsForm()
         prefillSender()
         parcelType = nil
         categoryId = nil
+        photoTask?.cancel()
         photo = .none
         publishError = nil
         createAttempt = nil

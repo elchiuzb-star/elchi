@@ -202,6 +202,8 @@ public final class MyLocationModel: NSObject, CLLocationManagerDelegate {
     public private(set) var camera: MapCameraRequest?
     @ObservationIgnored var onDenied: (() -> Void)?
     @ObservationIgnored var onUnavailable: (() -> Void)?
+    /// A tap ended on the person (not the automatic first centring): the client home fills an empty "Qayerdan" from it.
+    @ObservationIgnored var onCentred: ((UserLocationFix) -> Void)?
     /// Made on the first appearance, not in `init`: SwiftUI may build (and drop) this model with every redraw.
     @ObservationIgnored private var manager: CLLocationManager?
     @ObservationIgnored private var running = false
@@ -257,6 +259,7 @@ public final class MyLocationModel: NSObject, CLLocationManagerDelegate {
                 }
             case .centre(let fix):
                 camera = MapCameraRequest(id: (camera?.id ?? 0) + 1, point: fix.point, zoom: MyLocationLogic.zoom(accuracy: fix.accuracy))
+                onCentred?(fix)
             case .autoCentre(let fix):
                 camera = MapCameraRequest(id: (camera?.id ?? 0) + 1, point: fix.point, zoom: MyLocationLogic.autoCentreZoom)
             case .showDenied:

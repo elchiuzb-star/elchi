@@ -129,6 +129,78 @@ class ParcelRulesTest {
         assertFalse(ParcelRules.readyToPublish(complete().copy(photoFileUrl = null), true, now))
     }
 
+    @Test
+    fun `the contact step lists its issues in the design's order, names need two letters`() {
+        assertEquals(emptyList<ContactIssue>(), ParcelRules.contactIssues(complete()))
+        assertEquals(ContactIssue.entries.toList(), ParcelRules.contactIssues(ParcelDraft()))
+        assertEquals(listOf(ContactIssue.SENDER_NAME), ParcelRules.contactIssues(complete().copy(senderName = " A ")))
+        assertEquals(listOf(ContactIssue.RECEIVER_PHONE), ParcelRules.contactIssues(complete().copy(receiverDigits = "91555")))
+        assertEquals(listOf(ContactIssue.PHOTO), ParcelRules.contactIssues(complete().copy(photoFileUrl = null)))
+        assertFalse(ParcelRules.contactsComplete(complete().copy(receiverName = "D")))
+    }
+
+    @Test
+    fun `a phone from the contacts keeps its 9 local digits`() {
+        assertEquals("901234567", ParcelRules.contactDigits("+998 90 123-45-67"))
+        assertEquals("901234567", ParcelRules.contactDigits("90 123 45 67"))
+        assertEquals("901234567", ParcelRules.contactDigits("8 (998) 90 123 45 67"))
+        assertEquals("12345", ParcelRules.contactDigits("123-45"))
+    }
+
+    @Test
+    fun `the price stepper moves by 5 000, never below nothing, at most 8 digits`() {
+        assertEquals("5000", ParcelRules.stepPrice("", +1))
+        assertEquals("125000", ParcelRules.stepPrice("120000", +1))
+        assertEquals("115000", ParcelRules.stepPrice("120000", -1))
+        assertEquals("", ParcelRules.stepPrice("5000", -1))
+        assertEquals("", ParcelRules.stepPrice("3000", -1))
+        assertEquals("", ParcelRules.stepPrice("", -1))
+        assertEquals("99999999", ParcelRules.stepPrice("99999000", +1))
+        assertEquals("12345678", ParcelRules.cleanPrice("0012 345 6789"))
+        assertEquals("", ParcelRules.cleanPrice("000"))
+    }
+
+    @Test
+    fun `a phone or link in the comment is warned about and masked in the preview`() {
+        assertFalse(ParcelRules.noteHasContact("Ertalab 10 gacha qo'ng'iroq qilmang"))
+        assertTrue(ParcelRules.noteHasContact("Tel 90 123 45 67"))
+        assertTrue(ParcelRules.noteHasContact("t.me/aziza"))
+        assertTrue(ParcelRules.noteHasContact("yozing @aziza"))
+        assertEquals("Tel •••, yoki •••", ParcelRules.maskNote("Tel 901234567, yoki https://t.me/x"))
+        assertEquals("Ertalab 10 da", ParcelRules.maskNote("Ertalab 10 da"))
+    }
+
+    @Test
+    fun `the window length is known only for a valid window`() {
+        assertEquals(540L, ParcelRules.windowMinutes(complete()))
+        assertNull(ParcelRules.windowMinutes(complete().copy(windowEnd = "2026-09-30T09:00")))
+        assertNull(ParcelRules.windowMinutes(complete().copy(windowStart = null)))
+    }
+
+    @Test
+    fun `the current place is the nearest active district centre within 50 km`() {
+        fun district(id: String, lat: Double?, lng: Double?, active: Boolean = true) = uz.elchi.app.api.generated.DistrictDTO(
+            centerLat = lat, centerLng = lng, id = id, isActive = active, nameUz = id,
+            region = uz.elchi.app.api.generated.RegionRefDTO(code = "R", id = "reg", nameUz = "Region"), stopsCount = 0,
+        )
+        val chilonzor = district("chilonzor", 41.2756, 69.2034)
+        val yunusobod = district("yunusobod", 41.3650, 69.2850)
+        val closed = district("closed", 41.2800, 69.2040, active = false)
+        val noCentre = district("none", null, null)
+        val list = listOf(yunusobod, closed, noCentre, chilonzor)
+        assertEquals("chilonzor", ParcelRules.nearestDistrict(41.2856, 69.2044, list)?.id)
+        // Abroad (Almaty): nothing within reach.
+        assertNull(ParcelRules.nearestDistrict(43.2389, 76.8897, list))
+        assertEquals(0.0, ParcelRules.distanceKm(41.0, 69.0, 41.0, 69.0), 1e-9)
+        assertEquals(111.2, ParcelRules.distanceKm(41.0, 69.0, 42.0, 69.0), 0.2)
+    }
+
+    @Test
+    fun `the place subtitle is district then region, one name when they are the same`() {
+        assertEquals("Samarqand, Samarqand viloyati", samarkand.areaLine(ru = false))
+        assertEquals("Toshkent shahri", tashkent.areaLine(ru = false))
+    }
+
     // -- request body -------------------------------------------------------------------------------------------
 
     @Test

@@ -121,7 +121,7 @@ final class TaxiUITests: ClientUITestCase {
         }
     }
 
-    /// Home in Taksi mode -> both places -> the route step with the seat picker (2 people, 150 000 per person).
+    /// Home in Taksi mode -> both places -> the home's Taksi block (BOSQICH 02): 2 people, 150 000 per person.
     private func taxiRouteStep(prefix: String, locale: String = "uz") {
         let ru = locale == "ru"
         let taxi = app.buttons[ru ? "Такси" : "Taksi"].firstMatch
@@ -137,12 +137,11 @@ final class TaxiUITests: ClientUITestCase {
         }
         waitFor(ru ? "Примерное время в пути" : "Taxminiy yo'l vaqti", timeout: 25)
         snap("\(prefix)-02-home-direction")
-        tap(ru ? "Посмотреть направление" : "Yo'nalishni ko'rish")
         waitFor(ru ? "Сколько человек" : "Necha kishi")
-        tapId("elchi.seat.front")
-        waitFor(ru ? "Человек: 2" : "2 kishi")
+        tapId("elchi.seats.2")
+        waitFor(ru ? "2 чел." : "2 kishi")
         type("150000", into: ru ? "Цена за одного человека (сум)" : "Bir kishi uchun narx (so'm)")
-        let total = byId("elchi.route.total")
+        let total = byId("elchi.taxi.total")
         scrollTo(total)
         snap("\(prefix)-03-seat-picker")
     }
@@ -167,9 +166,10 @@ final class TaxiUITests: ClientUITestCase {
         launch(theme: "light", reset: true, extra: ["-uiTestWindowFromNow", "5"])
         signInAsClient(phone: env("CLIENT"))
         taxiRouteStep(prefix: "t1")
-        tap("Saqlash")
+        byId("elchi.keyboard.done").tap()
+        tap("Davom etish")
         waitFor("Buyurtmani tekshiring")
-        waitFor("Yo'lovchilar")
+        waitFor("O'rinlar")
         snap("t1-04-review")
         tap("Buyurtmani e'lon qilish")
         waitFor("Haydovchilardan takliflar kutilmoqda", timeout: 25)
@@ -350,7 +350,7 @@ final class TaxiUITests: ClientUITestCase {
         launch(locale: locale, theme: theme, reset: true, extra: ["-uiTestWindowFromNow", "5"])
         if locale == "ru" {
             signInAsClient(phone: env("CLIENT"), start: "Начать", next: "Далее", client: "Я клиент", getCode: "Получить код",
-                           home: "Посмотреть направление")
+                           home: "Перейти к оформлению")
         } else {
             signInAsClient(phone: env("CLIENT"))
         }
@@ -372,7 +372,7 @@ final class TaxiUITests: ClientUITestCase {
         launch(locale: locale, theme: "light", reset: true, extra: ["-uiTestWindowFromNow", "5"])
         if ru {
             signInAsClient(phone: env("CLIENT"), start: "Начать", next: "Далее", client: "Я клиент", getCode: "Получить код",
-                           home: "Посмотреть направление")
+                           home: "Перейти к оформлению")
         } else {
             signInAsClient(phone: env("CLIENT"))
         }
@@ -385,7 +385,7 @@ final class TaxiUITests: ClientUITestCase {
         let price = field(ru ? "Цена за одного человека (сум)" : "Bir kishi uchun narx (so'm)")
         price.tap()
         Thread.sleep(forTimeInterval: 1.5)
-        let total = byId("elchi.route.total")
+        let total = byId("elchi.taxi.total")
         XCTAssertTrue(app.keyboards.firstMatch.exists, "no keyboard")
         XCTAssertLessThanOrEqual(total.frame.maxY, app.keyboards.firstMatch.frame.minY, "total under the keyboard")
         XCTAssertTrue(byId("elchi.keyboard.done").exists)

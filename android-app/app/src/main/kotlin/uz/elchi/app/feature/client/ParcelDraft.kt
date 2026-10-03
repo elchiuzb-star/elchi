@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import uz.elchi.app.api.generated.ContactDetails
 import uz.elchi.app.api.generated.Currency
 import uz.elchi.app.api.generated.DirectionPreviewDTO
+import uz.elchi.app.api.generated.DistrictDTO
 import uz.elchi.app.api.generated.ListingCreate
 import uz.elchi.app.api.generated.ListingKind
 import uz.elchi.app.api.generated.ParcelDetails
@@ -13,12 +14,17 @@ import uz.elchi.app.api.generated.PaymentMethod
 import uz.elchi.app.api.generated.PointEndInput
 import uz.elchi.app.api.generated.PriceBasis
 import uz.elchi.app.api.generated.ServiceType
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.asin
+import kotlin.math.cos
 import kotlin.math.roundToLong
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /** Which end of the direction a picker is filling. */
 @Serializable
@@ -43,6 +49,8 @@ data class Place(
     val stopId: String? = null,
     val stopUz: String? = null,
     val stopRu: String? = null,
+    /** Set from the phone's position by the home's locate button (design `locate`): titled "Joriy joylashuv". */
+    val current: Boolean = false,
 ) {
     fun region(ru: Boolean) = if (ru) regionRu ?: regionUz else regionUz
     fun district(ru: Boolean) = if (ru) districtRu ?: districtUz else districtUz
@@ -53,6 +61,9 @@ data class Place(
 
     /** "Samarqand viloyati / Samarqand"; one name when the district is the region (Toshkent shahri). */
     fun area(ru: Boolean): String = if (region(ru) == district(ru)) region(ru) else "${region(ru)} / ${district(ru)}"
+
+    /** The design's subtitle: "Chilonzor, Toshkent shahri"; one name when the district is the region. */
+    fun areaLine(ru: Boolean): String = listOf(district(ru), region(ru)).distinct().joinToString(", ")
 }
 
 /**
@@ -93,8 +104,11 @@ data class ParcelDraft(
     val endTime: LocalDateTime? get() = windowEnd?.let(ParcelRules::parseLocal)
 }
 
-/** What still stops the route step (1) from being saved, in the order the screen lists it. */
-enum class RouteIssue { POINTS, WINDOW_START, WINDOW_END, WINDOW_PAST, WINDOW_ORDER, PRICE }
+/** What still stops the route step (1) - or the Taksi home - from going on, in the order the screen lists it. */
+enum class RouteIssue { POINTS, WINDOW_START, WINDOW_END, WINDOW_PAST, WINDOW_ORDER, SEATS, PRICE }
+
+/** What still stops the contact step (2, design `errsFor('contact')`), in the order the screen lists it. */
+enum class ContactIssue { SENDER_NAME, SENDER_PHONE, RECEIVER_NAME, RECEIVER_PHONE, TYPE, SIZE, PHOTO }
 
 /** Pure rules of the parcel request: no Android, no network - unit-tested. */
 object ParcelRules {
@@ -167,15 +181,92 @@ object ParcelRules {
 
     fun phoneValid(digits: String): Boolean = digits.length == 9 && digits.all(Char::isDigit)
 
+    /** The design's name rule: at least two letters once trimmed. */
+    const val NAME_MIN = 2
+
+    fun nameValid(name: String): Boolean = name.trim().length >= NAME_MIN
+
     fun contactsComplete(draft: ParcelDraft): Boolean =
-        draft.senderName.isNotBlank() && phoneValid(draft.senderDigits) &&
-            draft.receiverName.isNotBlank() && phoneValid(draft.receiverDigits)
+        nameValid(draft.senderName) && phoneValid(draft.senderDigits) &&
+            nameValid(draft.receiverName) && phoneValid(draft.receiverDigits)
 
     fun parcelComplete(draft: ParcelDraft): Boolean = draft.parcelType != null && draft.categoryId != null
 
+    /** The contact step's issues (sender, receiver, type, size, photo), in the design's order. */
+    fun contactIssues(draft: ParcelDraft): List<ContactIssue> = buildList {
+        if (!nameValid(draft.senderName)) add(ContactIssue.SENDER_NAME)
+        if (!phoneValid(draft.senderDigits)) add(ContactIssue.SENDER_PHONE)
+        if (!nameValid(draft.receiverName)) add(ContactIssue.RECEIVER_NAME)
+        if (!phoneValid(draft.receiverDigits)) add(ContactIssue.RECEIVER_PHONE)
+        if (draft.parcelType == null) add(ContactIssue.TYPE)
+        if (draft.categoryId == null) add(ContactIssue.SIZE)
+        if (draft.photoFileUrl == null) add(ContactIssue.PHOTO)
+    }
+
     /** Everything the review screen needs before "publish" can be pressed. */
     fun readyToPublish(draft: ParcelDraft, directionReady: Boolean, now: Instant): Boolean =
-        routeIssues(draft, directionReady, now).isEmpty() && contactsComplete(draft) && parcelComplete(draft) && draft.photoFileUrl != null
+        routeIssues(draft, directionReady, now).isEmpty() && contactIssues(draft).isEmpty()
+
+    // -- the price stepper (design: -/+ 5 000 so'm, at most 8 digits) ---------------------------------------------
+
+    const val PRICE_STEP = 5_000L
+    const val PRICE_MAX_DIGITS = 8
+    private const val PRICE_MAX = 99_999_999L
+
+    /** Typed text -> the digits kept in the draft: no leading zeros, at most [PRICE_MAX_DIGITS]. */
+    fun cleanPrice(text: String): String = text.filter(Char::isDigit).trimStart('0').take(PRICE_MAX_DIGITS)
+
+    /** One tap on - (direction -1) or + (+1); down to nothing (the "0" placeholder), never below. */
+    fun stepPrice(digits: String, direction: Int): String {
+        val current = digits.toLongOrNull() ?: 0L
+        val next = (current + direction * PRICE_STEP).coerceIn(0L, PRICE_MAX)
+        return if (next == 0L) "" else next.toString()
+    }
+
+    // -- the comment (design: 300 characters; contacts in it are masked by the server, Q43) ------------------------
+
+    const val NOTE_MAX = 300
+
+    private val NOTE_PHONE = Regex("""\d{7,}|\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}""")
+    private val NOTE_LINK = Regex("""https?://\S+|www\.\S+|t\.me/\S+|@\w+""")
+    private val NOTE_CONTACT = Regex("""\d{7,}|\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}|https?:|www\.|t\.me|@\w""")
+
+    /** The comment holds something that looks like a phone number or a link: the screen warns it will be hidden. */
+    fun noteHasContact(text: String): Boolean = NOTE_CONTACT.containsMatchIn(text)
+
+    /** The review's preview of what the server will publish: numbers and links as `•••` (the server decides). */
+    fun maskNote(text: String): String = text.replace(NOTE_PHONE, "•••").replace(NOTE_LINK, "•••")
+
+    /** The window's length in minutes, or null while it is not a valid window. */
+    fun windowMinutes(draft: ParcelDraft): Long? {
+        val start = draft.start ?: return null
+        val end = draft.endTime ?: return null
+        return if (end.isAfter(start)) Duration.between(start, end).toMinutes() else null
+    }
+
+    // -- "Qayerdan" from the phone's position (no v2 ids come back from reverse-geocode) -----------------------------
+
+    /** Further than this from every district centre: not a place ELCHI can name (abroad, or no fix worth using). */
+    const val LOCATE_MAX_KM = 50.0
+
+    /** Great-circle distance in km (the server's `distance_km`). */
+    fun distanceKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val r = 6371.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLng = Math.toRadians(lng2 - lng1)
+        val h = sin(dLat / 2).let { it * it } +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).let { it * it }
+        return 2 * r * asin(sqrt(h))
+    }
+
+    /** The server's `nearest_district`: the active district whose centre is closest, within [LOCATE_MAX_KM]. */
+    fun nearestDistrict(lat: Double, lng: Double, districts: List<DistrictDTO>): DistrictDTO? =
+        districts
+            .filter { it.isActive != false && it.centerLat != null && it.centerLng != null }
+            .map { it to distanceKm(lat, lng, it.centerLat!!, it.centerLng!!) }
+            .filter { it.second <= LOCATE_MAX_KM }
+            .minByOrNull { it.second }
+            ?.first
 
     /** `+998901234567` for the API; the screens keep the 9 local digits. */
     fun uzPhone(digits: String): String = "+998$digits"
@@ -188,6 +279,15 @@ object ParcelRules {
             digits.length == 9 -> digits
             else -> ""
         }
+    }
+
+    /**
+     * A number from the phone's contacts as the 9 local digits: `+998 90 123-45-67`, `998901234567`, `90 1234567`;
+     * anything longer keeps its last nine (design `slice(-9)`); shorter stays as it is (and fails [phoneValid]).
+     */
+    fun contactDigits(phone: String): String {
+        val digits = phone.filter(Char::isDigit)
+        return localDigits(phone).ifEmpty { if (digits.length > 9) digits.takeLast(9) else digits }
     }
 
     /** `90 123 45 67` */

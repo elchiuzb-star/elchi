@@ -6,7 +6,8 @@ enum ClientRoute: Hashable {
     case regions(EndSide)
     case districts(EndSide, RegionDTO)
     case point(EndSide, RegionDTO, DistrictDTO?)
-    case routeSummary, contacts, parcel, photo, review, success
+    // BOSQICH 02 design: Pochta = route (1/3) -> contacts (2/3) -> review (3/3); Taksi = home -> review.
+    case routeSummary, contacts, review, success
     // Stage 03: a listing of the client's, its offers, all negotiations.
     case listing(String)
     case listingEdit(String)
@@ -61,7 +62,8 @@ final class SupportChatModels {
     }
 }
 
-/// Signed in as a client. Stage 02: home (map + sheet) -> place pickers -> the five request steps -> published.
+/// Signed in as a client. Stage 02 (BOSQICH 02 design): home (map + sheet) -> place pickers -> Pochta's three steps or
+/// Taksi's review -> published.
 /// Stage 03: Buyurtmalar (from the drawer or after publishing) -> a listing -> its offers / edit, and Takliflarim.
 /// Stage 04: a booking (from the list, or straight after accept) -> chat, tracking, amendments, rating, support,
 /// safety. Stage 05: notifications, profile, bonus, safety centre, support, settings, account deletion, sign-out
@@ -85,6 +87,10 @@ struct ClientFlow: View {
     @State private var supportChats: SupportChatModels
     @State private var accountDelete: AccountDeleteModel
     @State private var confirmLogout = false
+    /// A step opened from the review's pencil: it saves with "Saqlash va qaytish" and returns to the review.
+    @State private var editing = false
+    /// The kept referral code's row was closed for this session (the code itself stays).
+    @State private var promoHidden = false
     @Environment(LocaleStore.self) private var strings
 
     init(container: AppContainer, session: Session) {
@@ -119,9 +125,11 @@ struct ClientFlow: View {
             Group {
                 switch section {
                 case .home:
-                    ClientHomeView(model: model, inbox: inbox, banners: container.banners, referralCode: container.links.referralCode,
-                                   onMenu: openDrawer,
-                                   onPick: startPick, onViewRoute: { path.append(.routeSummary) }, onReferral: { path.append(.bonus) })
+                    ClientHomeView(model: model, inbox: inbox, banners: container.banners,
+                                   referralCode: promoHidden ? nil : container.links.referralCode, editing: editing,
+                                   onMenu: openDrawer, onSupport: { path.append(.support) },
+                                   onPick: startPick, onGo: homeGo, onReferral: { path.append(.bonus) }, onPromoClose: { promoHidden = true },
+                                   toast: toast)
                         // The map has no top bar to draw the banner under: it floats below the menu row (a link that
                         // cannot be opened says so here).
                         .overlay { BannerHost(center: container.banners, floating: true) }
@@ -215,25 +223,26 @@ struct ClientFlow: View {
             PointPickerView(model: model, side: side, region: region, district: district, locale: strings.locale, onBack: back) { end in
                 model.setEnd(side, end)
                 path = pickReturn
+                toast(strings.t(side == .pickup ? "client.order.pointChosenPickup" : "client.order.pointChosenDropoff",
+                                 ("place", strings.place(end))))
             }
         case .routeSummary:
-            // Taksi has no contacts, parcel or photo step: straight to the review.
-            RouteSummaryView(model: model, onBack: back, onChange: startPick) { path.append(model.mode == .passenger ? .review : .contacts) }
+            RouteSummaryView(model: model, editing: editing, onBack: leaveStep, onChange: startPick) { stepDone(next: .contacts) }
         case .contacts:
-            ContactsView(model: model, onBack: back) { path.append(.parcel) }
-        case .parcel:
-            ParcelView(model: model, onBack: back) { path.append(.photo) }
-        case .photo:
-            PhotoView(model: model, onBack: back) { path.append(.review) }
+            ContactsView(model: model, editing: editing, onBack: leaveStep, onContinue: { stepDone(next: .review) }, toast: toast)
         case .review:
-            ReviewView(model: model, onBack: back, onEdit: { path = [.routeSummary] }) { path = [.success] }
+            ReviewView(model: model, onBack: back, onEdit: editFromReview) { path = [.success] }
         case .success:
-            // "Buyurtmalarimga o'tish": the orders list, with the new request at the top.
-            SuccessView(model: model) {
+            // "Buyurtmalarimga o'tish": the orders list, with the new request at the top; "Yangi buyurtma": an empty home.
+            SuccessView(model: model, onOrders: {
                 model.clearPublished()
                 section = .orders
                 path = []
-            }
+            }, onNewOrder: {
+                model.clearPublished()
+                section = .home
+                path = []
+            })
         case .listing(let id):
             ListingDetailView(model: orders.listing(id), onBack: back, onEdit: { path.append(.listingEdit(id)) },
                               onBids: { path.append(.listingBids(id)) })
@@ -414,6 +423,49 @@ struct ClientFlow: View {
         path.append(.regions(side))
     }
 
+    /// The home's primary button once it may go on: Pochta to the route step, Taksi (its block valid) to the review -
+    /// or, when the review sent the person here to edit, back to it.
+    private func homeGo() {
+        if model.mode == .passenger {
+            editing = false
+            path = [.review]
+        } else {
+            editing = false
+            path = [.routeSummary]
+        }
+    }
+
+    /// A step's primary button with nothing missing: on to `next`, or back to the review when editing.
+    private func stepDone(next: ClientRoute) {
+        if editing {
+            editing = false
+            if !path.isEmpty { path.removeLast() }
+        } else {
+            path.append(next)
+        }
+    }
+
+    /// Back out of a step: an edit started from the review is over.
+    private func leaveStep() {
+        editing = false
+        if !path.isEmpty { path.removeLast() }
+    }
+
+    /// A pencil (or "Tahrirlash") on the review: the step opens in edit mode. Taksi's route lives on the home itself.
+    private func editFromReview(_ step: OrderStep) {
+        editing = true
+        if model.mode == .passenger {
+            path = []
+        } else {
+            path.append(step == .contact ? .contacts : .routeSummary)
+        }
+    }
+
+    /// The design's short confirmations ("Qabul qiluvchi: …", "Olib ketish joyi tanlandi: …").
+    private func toast(_ text: String) {
+        container.banners.show(.text(text), tone: .info, hideAfter: .seconds(3))
+    }
+
     /// After "Chiqish" in the confirm: v1 `/auth/logout`, then the session goes (the root shows sign-in).
     private func logout() {
         confirmLogout = false
@@ -423,31 +475,44 @@ struct ClientFlow: View {
 
 // MARK: - Home
 
-/// Full-screen map with the request sheet: Pochta heading (Taksi/Pochta only where passenger is on, K7/Q89), the route
-/// card, what the server said about the direction, and "Yo'nalishni ko'rish".
+/// Full-screen map with the request sheet (BOSQICH 02): the referral row, Taksi / Pochta (only where passenger is on,
+/// K7/Q89), the heading, the route card with its swap, what the server said about the direction, the Taksi block
+/// (window, people, price, total) and the primary button - grey but tappable until the direction is ready, where a tap
+/// says what to do first.
 private struct ClientHomeView: View {
-    let model: ParcelRequestModel
+    @Bindable var model: ParcelRequestModel
     let inbox: InboxModel
     /// The my-location button's denied / not-found sentences go to the app's banner.
     let banners: BannerCenter
     /// The code kept from an `elchigo.uz/r/<code>` link (web `home.referralCodeSaved`); gone once it is forgotten.
     let referralCode: String?
+    /// The review sent the person here to change the Taksi answers: the button says "Saqlash va qaytish".
+    let editing: Bool
     let onMenu: () -> Void
+    let onSupport: () -> Void
     let onPick: (EndSide) -> Void
-    let onViewRoute: () -> Void
+    let onGo: () -> Void
     /// "Bonuslar va taklif kodi", where the kept code fills the field.
     let onReferral: () -> Void
+    let onPromoClose: () -> Void
+    let toast: (String) -> Void
     @Environment(LocaleStore.self) private var strings
-    @Environment(ThemeStore.self) private var theme
     @Environment(\.elchi) private var c
     @State private var sheetHeight: CGFloat = 0
+    /// The sheet content's natural height (the scroll area never grows past it).
+    @State private var contentHeight: CGFloat = 400
     /// The map runs under the home indicator and so does the sheet's background, so both count as covered map.
     @State private var bottomSafeArea: CGFloat = 0
     /// "You are here": CoreLocation runs only while this home is on screen (and the app in front).
     @State private var myLocation = MyLocationModel()
     @State private var onScreen = false
+    @State private var windowEdge: WindowEdge?
+    /// A tap on "Davom etish" with something missing in the Taksi block: the red list shows (and stays live).
+    @State private var showErrors = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+
+    private var taxi: Bool { model.mode == .passenger }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -458,15 +523,45 @@ private struct ClientHomeView: View {
                      placeholder: strings.t("client.map.unavailable"),
                      placeholderInset: sheetHeight + bottomSafeArea)
                 .ignoresSafeArea()
-            sheet.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = $0 }
+            VStack(spacing: 0) {
+                // The floating top controls' room (menu row + service pill): the sheet never grows over them.
+                Color.clear.frame(height: 128).allowsHitTesting(false)
+                Spacer(minLength: 0)
+                sheet.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = $0 }
+            }
         }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomSafeArea = $0 }
         .overlay(alignment: .top) {
-            HStack {
-                RoundIconButton(.menu, label: strings.t("nav.menu"), dot: inbox.unread > 0,
-                                dotLabel: strings.t("notifications.title"), action: onMenu)
-                Spacer()
-                ThemeSwitch(mode: theme.mode, lightLabel: strings.t("theme.light"), darkLabel: strings.t("theme.dark")) { theme.set($0) }
+            VStack(spacing: 12) {
+                HStack {
+                    RoundIconButton(.menu, label: strings.t("nav.menu"), dot: inbox.unread > 0,
+                                    dotLabel: strings.t("notifications.title"), action: onMenu)
+                    Spacer()
+                    Button(action: onSupport) {
+                        HStack(spacing: 8) {
+                            ElchiIcon.head.image(size: 20)
+                            Text(strings.t("support.title")).font(ElchiFont.poppins(14, .medium))
+                        }
+                        .foregroundStyle(c.text)
+                        .padding(.leading, 12).padding(.trailing, 16)
+                        .frame(height: 44)
+                        .background(c.card, in: Capsule())
+                        .shadow(color: c.shadow, radius: 12, y: 6)
+                    }
+                    .buttonStyle(PressFade())
+                    .accessibilityIdentifier("elchi.home.support")
+                }
+                // The chosen service, floating over the map (design 1.2).
+                HStack(spacing: 10) {
+                    Text(strings.t(taxi ? "home.modeTaxi" : "orderForm.review.parcel")).font(ElchiFont.poppins(15, .medium)).foregroundStyle(c.text)
+                    (taxi ? ElchiIcon.car : ElchiIcon.pkg).image(size: 18).foregroundStyle(c.text)
+                        .frame(width: 34, height: 34).background(c.field, in: Circle())
+                }
+                .padding(.leading, 18).padding(.trailing, 8)
+                .frame(height: 48)
+                .background(c.card, in: Capsule())
+                .shadow(color: c.shadow, radius: 12, y: 6)
+                .accessibilityElement(children: .combine)
             }
             .padding(.horizontal, 16).padding(.top, 8)
         }
@@ -476,6 +571,7 @@ private struct ClientHomeView: View {
         // The camera moves on its own once at most: the first fix on an empty home, inside Uzbekistan, before the
         // person touched the map (MyLocationLogic). With a place chosen it stays on the route until the button.
         .onChange(of: markers.isEmpty) { _, empty in myLocation.homeEmpty(empty) }
+        .onChange(of: model.mode) { _, _ in showErrors = false }
         .onAppear {
             myLocation.onDenied = { [banners, openURL] in
                 banners.show(.key("client.map.locationDenied"), tone: .warn) {
@@ -485,6 +581,18 @@ private struct ClientHomeView: View {
             }
             myLocation.onUnavailable = { [banners] in
                 banners.show(.key("client.map.locationUnavailable"), tone: .warn, hideAfter: .seconds(6))
+            }
+            // The design's locate: the map centres on the person and an empty "Qayerdan" becomes the current location.
+            myLocation.onCentred = { [model, banners, strings, toast] fix in
+                guard model.pickup == nil else { return }
+                model.language = strings.locale
+                Task {
+                    switch await model.fillPickup(from: fix.point) {
+                    case .set: toast(strings.t("client.order.locateSet"))
+                    case .outside: banners.show(.text(strings.t("client.order.locateOutside")), tone: .warn, hideAfter: .seconds(6))
+                    case .kept: break
+                    }
+                }
             }
             // Before `appear`: a first fix must know whether a place is chosen.
             myLocation.homeEmpty(markers.isEmpty)
@@ -499,51 +607,169 @@ private struct ClientHomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { myLocation.disappear() } else if onScreen { myLocation.appear() }
         }
+        .sheet(item: $windowEdge) { edge in
+            DepartureWindowSheet(edge: edge, start: model.windowStart, end: model.windowEnd) { start, end in
+                model.windowStart = start
+                model.windowEnd = end
+                windowEdge = nil
+            }
+        }
     }
 
     private var markers: [MapMarker] {
         [model.pickup.map { MapMarker($0.point, .origin) }, model.dropoff.map { MapMarker($0.point, .destination) }].compactMap { $0 }
     }
 
+    /// The sheet as tall as its content; where that does not fit under the top controls (the Taksi block, a small
+    /// phone, the keyboard) it scrolls.
     private var sheet: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let referralCode {
-                ElchiList {
-                    ListRow(icon: .tag, title: strings.t("home.referralCodeSaved", ("code", referralCode)), highlighted: true,
-                            first: true, action: onReferral)
-                }
-                .accessibilityIdentifier("elchi.home.referralCode")
-            }
-            // K7/Q89: the Taksi / Pochta choice exists only where passenger is enabled (else the plain heading).
-            if model.taxiVisible {
-                Segmented([(ServiceType.passenger, strings.t("home.modeTaxi")), (.parcel, strings.t("home.modeParcel"))],
-                          selected: model.mode) { model.mode = $0 }
-                    .accessibilityIdentifier("elchi.home.mode")
-            } else {
-                Text(strings.t("home.modeParcel")).font(ElchiFont.poppins(22, .medium, relativeTo: .title)).foregroundStyle(c.text)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            RouteCard(from: end(.pickup), to: end(.dropoff))
-            directionState
-            ElchiButton(strings.t("home.viewRoute"), action: onViewRoute).disabled(!model.canViewRoute)
-            if let closed = model.closedKey {
-                Text(strings.t(closed)).font(ElchiFont.poppins(13)).foregroundStyle(c.tone(.err).fg)
-                    .frame(maxWidth: .infinity).multilineTextAlignment(.center)
-            }
+        ScrollView {
+            sheetContent.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
-        .padding(EdgeInsets(top: 24, leading: 16, bottom: 26, trailing: 16))
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
+        // As tall as the content, at most the room the layout leaves under the top controls.
+        .frame(maxHeight: contentHeight)
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: ElchiShape.sheet, topTrailingRadius: ElchiShape.sheet))
         .background {
             UnevenRoundedRectangle(topLeadingRadius: ElchiShape.sheet, topTrailingRadius: ElchiShape.sheet)
                 .fill(c.card)
                 .shadow(color: c.shadow, radius: 12, y: -6)
                 .ignoresSafeArea(edges: .bottom)
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(strings.t("client.keyboard.done")) {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+                .font(ElchiFont.poppins(15, .semibold))
+                .accessibilityIdentifier("elchi.keyboard.done")
+            }
+        }
+    }
+
+    private var sheetContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let referralCode { promo(referralCode) }
+            // K7/Q89: the Taksi / Pochta choice exists only where passenger is enabled.
+            if model.taxiVisible {
+                Segmented([(ServiceType.passenger, strings.t("home.modeTaxi")), (.parcel, strings.t("home.modeParcel"))],
+                          selected: model.mode) { model.mode = $0 }
+                    .accessibilityIdentifier("elchi.home.mode")
+            }
+            Text(strings.t(taxi ? "client.taxi.homeTitle" : "client.order.homeTitle"))
+                .font(ElchiFont.poppins(20, .medium, relativeTo: .title)).foregroundStyle(c.text)
+                .accessibilityAddTraits(.isHeader)
+            RouteCard(from: end(.pickup), to: end(.dropoff), swapLabel: strings.t("client.order.swap"),
+                      onSwap: model.pickup == nil && model.dropoff == nil ? nil : { model.swapEnds() })
+            directionState
+            if taxi && model.directionReady { taxiBlock }
+            ElchiButton(buttonTitle, dimmed: !canGo, action: go)
+                .disabled(model.directionReady && model.closedKey != nil)
+                .accessibilityIdentifier("elchi.home.go")
+            if let closed = model.closedKey {
+                Text(strings.t(closed)).font(ElchiFont.poppins(13)).foregroundStyle(c.tone(.err).fg)
+                    .frame(maxWidth: .infinity).multilineTextAlignment(.center)
+            }
+        }
+        .padding(EdgeInsets(top: 22, leading: 16, bottom: 26, trailing: 16))
+    }
+
+    private func promo(_ code: String) -> some View {
+        HStack(spacing: 10) {
+            Button(action: onReferral) {
+                HStack(spacing: 10) {
+                    ElchiIcon.tag.image(size: 18).foregroundStyle(c.accentText)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(strings.t("client.order.promoSaved", ("code", code))).font(ElchiFont.poppins(13, .semibold))
+                            .foregroundStyle(c.isDark ? c.tone(.blue).noteText : Color(hex: 0x0B3E73)).lineLimit(1)
+                        Text(strings.t("client.order.promoTap")).font(ElchiFont.caption).foregroundStyle(c.accentText)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressFade())
+            .accessibilityIdentifier("elchi.home.referralCode")
+            Button(action: onPromoClose) {
+                ElchiIcon.x.image(size: 14).foregroundStyle(c.text)
+                    .frame(width: 30, height: 30).background(c.card, in: Circle())
+                    .frame(width: 44, height: 44).contentShape(Circle())
+            }
+            .buttonStyle(PressFade())
+            .accessibilityLabel(strings.t("common.close"))
+        }
+        .padding(.leading, 14).padding(.trailing, 3).padding(.vertical, 3)
+        .background(c.isDark ? Color(hex: 0x0E2A45) : Color(hex: 0xEAF5FF), in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    // MARK: Taksi block
+
+    @ViewBuilder
+    private var taxiBlock: some View {
+        let shown = showErrors ? model.taxiHomeBlockers : []
+        VStack(alignment: .leading, spacing: 6) {
+            BlockLabel(text: strings.t("client.taxi.departure"))
+            WindowTiles(start: model.windowStart, end: model.windowEnd, errorStart: shown.contains(where: \.marksStart),
+                        errorEnd: shown.contains(where: \.marksEnd)) { windowEdge = $0 }
+        }
+        .onAppear { model.suggestWindowIfEmpty() }
+        VStack(alignment: .leading, spacing: 6) {
+            BlockLabel(text: strings.t("seatPicker.howMany"), trailing: strings.seatValue(model.seatCount))
+            SeatCountPicker(count: $model.seatCount, error: shown.contains(.seats))
+        }
+        VStack(alignment: .leading, spacing: 6) {
+            BlockLabel(text: Self.withoutUnit(strings.t("routeSummary.pricePerPerson")))
+            PriceStepper(digits: $model.priceDigits, label: strings.t("routeSummary.pricePerPerson"), error: shown.contains(.price))
+            Text(strings.t("client.order.priceStepHint")).font(ElchiFont.caption).foregroundStyle(c.muted)
+        }
+        TotalBar(who: TaxiSeats.isWholeCabin(model.seatCount) ? strings.t("client.taxi.wholeCabinLower")
+                    : strings.t("orderForm.review.peopleCount", ("count", model.seatCount ?? 1)),
+                 total: model.priceMinor > 0 ? strings.money(model.passengerTotalMinor) : "—")
+        if !shown.isEmpty { ErrorList(lines: shown.map { strings.t($0.key) }, compact: true) }
+    }
+
+    /// "Bir kishi uchun narx (so'm)" -> "Bir kishi uchun narx": the stepper already says so'm.
+    static func withoutUnit(_ label: String) -> String {
+        label.replacingOccurrences(of: #"\s*\([^)]*\)\s*$"#, with: "", options: .regularExpression)
+    }
+
+    // MARK: The button
+
+    private var buttonTitle: String {
+        if taxi {
+            guard model.directionReady else { return strings.t("home.viewRoute") }
+            return strings.t(editing ? "client.order.saveAndReturn" : "common.continue")
+        }
+        return strings.t("client.order.toForm")
+    }
+
+    /// Bright only when the direction is ready and the chosen service is open there.
+    private var canGo: Bool { model.canViewRoute }
+
+    private func go() {
+        guard model.directionReady else {
+            if case .mismatch = model.direction {
+                toast(strings.t("client.order.moveCloserFirst"))
+            } else {
+                toast(strings.t("driverFeed.emptyPickFirst"))
+            }
+            return
+        }
+        guard model.canViewRoute else { return }
+        if taxi && !model.taxiHomeBlockers.isEmpty {
+            showErrors = true
+            return
+        }
+        showErrors = false
+        onGo()
     }
 
     private func end(_ side: EndSide) -> RouteCard.End {
         let label = strings.t(side == .pickup ? "direction.from" : "direction.to")
         if let end = model.end(side) {
-            return RouteCard.End(title: strings.title(end), detail: end.address ?? end.point.text, isSet: true, label: label) { onPick(side) }
+            return RouteCard.End(title: strings.place(end), detail: strings.area(end), isSet: true, label: label) { onPick(side) }
         }
         return RouteCard.End(title: label, detail: nil, isSet: false, label: label) { onPick(side) }
     }
@@ -609,11 +835,11 @@ private struct ClientDrawer: View {
                     ElchiList {
                         item(.home, .home, "nav.home", "nav.homeHint", first: true)
                         item(.orders, .pkg, "nav.orders", "nav.ordersHint")
-                        item(.notifications, .bell, "notifications.title", "clientProfile.notificationsHint",
+                        item(.notifications, .bell, "app.nav.messages", "notifications.title",
                              trailing: unread > 0 ? (unreadMore ? "\(unread)+" : "\(unread)") : nil)
                         item(.profile, .user, "nav.profile", "nav.profileHint")
                         item(.support, .head, "support.title", "clientProfile.helpHint")
-                        item(.settings, .settings, "settingsScreen.title", "clientProfile.settingsHint")
+                        item(.settings, .settings, "settingsScreen.title", "driver.profile.settingsHint")
                     }
                     ElchiList {
                         ListRow(icon: .logout, title: strings.t("nav.logout"), danger: true, first: true, action: onLogout)

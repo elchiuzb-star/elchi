@@ -20,14 +20,18 @@ import kotlinx.serialization.json.longOrNull
 import uz.elchi.app.api.ApiException
 import uz.elchi.app.api.ElchiJson
 import uz.elchi.app.api.FilesApi
+import uz.elchi.app.api.GeoApi
 import uz.elchi.app.api.generated.ApiWarning
 import uz.elchi.app.api.generated.DirectionPreviewDTO
+import uz.elchi.app.api.generated.DistrictDTO
 import uz.elchi.app.api.generated.EffectiveFlagValuesDTO
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.api.generated.ListingCommand
 import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.ParcelCategoryCatalogDTO
 import uz.elchi.app.api.generated.ParcelPolicyDTO
+import uz.elchi.app.api.generated.RegionDTO
+import uz.elchi.app.ui.map.GeoPoint
 import java.time.Instant
 import java.util.UUID
 
@@ -68,14 +72,18 @@ data class PublishProgress(
 
 data class Published(val listing: ListingDTO, val warnings: List<ApiWarning>)
 
+/** The locate button's attempt to fill "Qayerdan" from the phone's position. */
+enum class LocateOutcome { SET, OUTSIDE }
+
 /**
- * Stage 02, one instance for the signed-in client's flow: the parcel request draft (home -> route -> contacts ->
- * parcel -> photo -> review), the direction preview, the effective flags of the matched corridor, the size catalog
- * and prohibited-items policy, the photo upload and the create + publish command.
+ * Stage 02, one instance for the signed-in client's flow: the request draft (Pochta: home -> route -> contact ->
+ * review; Taksi: home -> review), the direction preview, the effective flags of the matched corridor, the size
+ * catalog and prohibited-items policy, the photo upload and the create + publish command.
  */
 class ParcelRequestViewModel(
     private val api: ElchiApi,
     private val files: FilesApi,
+    private val geo: GeoApi,
     private val photos: PhotoCompressor,
     private val saved: SavedStateHandle,
     private val now: () -> Instant = Instant::now,
@@ -98,6 +106,10 @@ class ParcelRequestViewModel(
         val publishing: Boolean = false,
         val publishError: Throwable? = null,
         val published: Published? = null,
+        /** Taksi: the review sent the person back to the home to change the route/window/seats/price. */
+        val editingHome: Boolean = false,
+        /** The locate button is turning the phone's position into "Qayerdan". */
+        val locating: Boolean = false,
     ) {
         val preview: DirectionPreviewDTO? get() = (direction as? Direction.Ready)?.preview
         val directionReady: Boolean get() = preview != null
@@ -180,8 +192,76 @@ class ParcelRequestViewModel(
 
     fun setMode(mode: ServiceMode) = edit { it.copy(taxi = mode == ServiceMode.TAXI) }
 
-    /** A seat tapped on the cabin picture (never down to zero). */
-    fun toggleSeat(id: String) = edit { it.copy(seats = TaxiRules.toggleSeat(it.seats, id)) }
+    /** 1 / 2 / 3 / Butun salon on the Taksi home. */
+    fun setSeatCount(count: Int) = edit { it.copy(seats = TaxiRules.seatsFor(count)) }
+
+    /** "Almashtirish": the two ends trade places; the direction is checked again. */
+    fun swapEnds() {
+        edit { it.copy(origin = it.destination, destination = it.origin) }
+        refreshDirection()
+    }
+
+    /** The review's edit of a Taksi request goes back to the home; its button then says "Saqlash va qaytish". */
+    fun setEditingHome(editing: Boolean) = _state.update { it.copy(editingHome = editing) }
+
+    // -- "Qayerdan" from the phone (design `locate`) ---------------------------------------------------------------
+
+    private var allDistricts: List<DistrictDTO>? = null
+    private var allRegions: List<RegionDTO>? = null
+
+    /**
+     * Reverse-geocode gives v1 ids only, so the place is built from v2 data: the nearest active district centre
+     * (the server's `nearest_district`, within [ParcelRules.LOCATE_MAX_KM]) and its region, the address from
+     * reverse-geocode. Then the preview checks it like any picked point. Only while "Qayerdan" is still empty.
+     */
+    fun locateOrigin(point: GeoPoint, language: String, onDone: (LocateOutcome) -> Unit) {
+        if (_state.value.draft.origin != null || _state.value.locating) return
+        _state.update { it.copy(locating = true) }
+        viewModelScope.launch {
+            val place = try {
+                val districts = allDistricts ?: api.listDistricts(limit = 500).data.also { allDistricts = it }
+                val district = ParcelRules.nearestDistrict(point.lat, point.lng, districts)
+                if (district == null) {
+                    null
+                } else {
+                    val regions = allRegions ?: runCatching { api.listRegions().data }.getOrNull()?.also { allRegions = it }
+                    val region = regions?.firstOrNull { it.id == district.region.id }
+                    val address = try {
+                        geo.reverseGeocode(point.lat, point.lng, language).takeIf { it.hasRealAddress }?.formattedAddress?.let(ParcelRules::withoutCountry)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                    Place(
+                        regionId = district.region.id,
+                        regionUz = region?.nameUz ?: district.region.nameUz,
+                        regionRu = region?.nameRu,
+                        districtId = district.id,
+                        districtUz = district.nameUz,
+                        districtRu = district.nameRu,
+                        lat = point.lat,
+                        lng = point.lng,
+                        address = address,
+                        current = true,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "current location not turned into a place", e)
+                null
+            }
+            _state.update { it.copy(locating = false) }
+            // A place picked by hand meanwhile wins.
+            if (place != null && _state.value.draft.origin == null) {
+                setEnd(End.ORIGIN, place)
+                onDone(LocateOutcome.SET)
+            } else if (place == null) {
+                onDone(LocateOutcome.OUTSIDE)
+            }
+        }
+    }
 
     // -- direction + flags ---------------------------------------------------------------------------------------
 
@@ -293,6 +373,13 @@ class ParcelRequestViewModel(
         }
     }
 
+    /** "O'chirish" on the photo card: the reference is dropped (the upload stays orphaned on the server). */
+    fun removePhoto() {
+        _state.value.draft.photoLocalPath?.let { runCatching { java.io.File(it).delete() } }
+        edit { it.copy(photoFileUrl = null, photoLocalPath = null) }
+        _state.update { it.copy(photoError = null) }
+    }
+
     // -- create + publish ----------------------------------------------------------------------------------------
 
     fun canPublish(): Boolean = readyToPublish(_state.value.draft, _state.value.directionReady, now())
@@ -353,7 +440,7 @@ class ParcelRequestViewModel(
         }
     }
 
-    /** After the success screen: a clean draft for the next request (contacts are prefilled again by the screen). */
+    /** After the success screen ("Yangi buyurtma" or the orders): a clean draft (contacts are prefilled again by the screen). */
     fun startOver() {
         _state.value.draft.photoLocalPath?.let { runCatching { java.io.File(it).delete() } }
         // The next request starts in the same service (Taksi stays Taksi).
@@ -361,7 +448,7 @@ class ParcelRequestViewModel(
         saved[KEY_DRAFT] = ElchiJson.encodeToString(ParcelDraft.serializer(), fresh)
         saveProgress(PublishProgress())
         directionJob?.cancel()
-        _state.update { it.copy(draft = fresh, direction = Direction.Incomplete, published = null, publishError = null, photoError = null) }
+        _state.update { it.copy(draft = fresh, direction = Direction.Incomplete, published = null, publishError = null, photoError = null, editingHome = false) }
         loadFlags(corridorId = null)
     }
 

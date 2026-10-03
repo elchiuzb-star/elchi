@@ -17,10 +17,15 @@ class ClientUITestCase: XCTestCase {
     }
 
     func snap(_ name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        // `TEST_RUNNER_SHOTS` = a folder: the PNG is written there too (no xcresult export needed).
+        if let folder = ProcessInfo.processInfo.environment["SHOTS"], !folder.isEmpty {
+            try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(name).png"))
+        }
     }
 
     /// Lets the map finish drawing before a screenshot: its loading spinner goes once the tiles are in (the picker's
@@ -95,7 +100,7 @@ class ClientUITestCase: XCTestCase {
 
     /// Splash -> onboarding -> client -> phone -> dev OTP.
     func signInAsClient(phone: String, start: String = "Boshlash", next: String = "Keyingisi", client: String = "Men mijozman",
-                        getCode: String = "Kod olish", home: String = "Yo'nalishni ko'rish") {
+                        getCode: String = "Kod olish", home: String = "Buyurtma shakliga o'tish") {
         tap(start)
         tap(next)
         tap(next)
@@ -112,8 +117,10 @@ class ClientUITestCase: XCTestCase {
         XCTAssertTrue(app.buttons[home].firstMatch.waitForExistence(timeout: 20) || app.staticTexts[home].firstMatch.waitForExistence(timeout: 5))
     }
 
-    /// Region -> (district) -> point, accepting the district centre (or the map centre when a map is shown).
-    func pickPlace(_ question: String, region: String, district: String?, shots: String? = nil) {
+    /// Region -> (district) -> point, accepting the district centre (or the map centre when a map is shown). `nudge`
+    /// drags the map a little first, so the point is new (the server refuses a second open request between the very
+    /// same two points with an overlapping window).
+    func pickPlace(_ question: String, region: String, district: String?, shots: String? = nil, nudge: Bool = false) {
         tap(question)
         waitFor("Avval hududni tanlang")
         if shots == "pickup" { snap("11-location-regions") }
@@ -126,6 +133,7 @@ class ClientUITestCase: XCTestCase {
         waitFor("Tanlangan joy")
         let choose = button("Shu joyni tanlash")
         waitEnabled(choose, "Shu joyni tanlash")
+        if nudge { nudgeMap() }
         if let shots {
             waitMapDrawn()
             snap("13-point-picker-\(shots)")
@@ -133,29 +141,55 @@ class ClientUITestCase: XCTestCase {
         choose.tap()
     }
 
-    /// Home -> both places -> the five steps -> published (Tashkent city -> Samarqand, tomorrow 09:00-18:00).
+    /// A short drag on the point picker's map (a few hundred metres at street zoom): a new point inside the district.
+    func nudgeMap() {
+        let dx = Double.random(in: -0.06...0.06), dy = Double.random(in: -0.04...0.04)
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42))
+        from.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5 + dx, dy: 0.42 + dy)))
+        Thread.sleep(forTimeInterval: 1.5)
+        waitEnabled(button("Shu joyni tanlash"), "Shu joyni tanlash")
+    }
+
+    func element(_ id: String, timeout: TimeInterval = 15) -> XCUIElement {
+        let element = app.descendants(matching: .any)[id].firstMatch
+        XCTAssertTrue(element.waitForExistence(timeout: timeout), "no element '\(id)'")
+        return element
+    }
+
+    /// The contact step's sheet: "+ Yangi raqam", a name and 9 digits, "Tanlash".
+    func pickManualContact(card: String, name: String, phone: String) {
+        element(card).tap()
+        tap("+ Yangi raqam")
+        type(name, into: "Ism familiya")
+        type(phone, into: "Qabul qiluvchi telefon raqami")
+        element("elchi.contact.manualPick").tap()
+        waitGone("+ Yangi raqam")
+    }
+
+    /// Home -> both places -> route (1/3) -> contact (2/3) -> review (3/3) -> published (Tashkent city -> Samarqand,
+    /// tomorrow 09:00-18:00).
     func postParcelRequest(price: String) {
-        pickPlace("Qayerdan?", region: "Toshkent shahri", district: nil)
-        pickPlace("Qayerga?", region: "Samarqand viloyati", district: "Samarqand")
+        pickPlace("Qayerdan?", region: "Toshkent shahri", district: nil, nudge: true)
+        pickPlace("Qayerga?", region: "Samarqand viloyati", district: "Samarqand", nudge: true)
         waitFor("Taxminiy yo'l vaqti", timeout: 20)
-        tap("Yo'nalishni ko'rish")
-        waitFor("Jo'nash oynasi boshlanishi")
-        type(price, into: "Narx (so'm)")
+        tap("Buyurtma shakliga o'tish")
+        waitFor("Jo'nash oynasi")
+        type(price, into: "Narx")
         tap("Saqlash")
-        waitFor("Telefon raqamlar taklif qabul qilinmaguncha")
-        type("Aziza Karimova", into: "Yuboruvchi ismi")
-        type("Dilnoza Rahimova", into: "Qabul qiluvchi ismi")
-        type("915552211", into: "Qabul qiluvchi telefon raqami")
-        type("Mo'rt narsa", into: "Izoh")
-        tap("Davom etish")
-        waitFor("Posilka turi")
+        waitFor("Jo'natma ma'lumotlari")
+        if app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Kontaktdan tanlang")).count > 1 {
+            pickManualContact(card: "elchi.contact.sender", name: "Aziza Karimova", phone: "901234567")
+        }
+        pickManualContact(card: "elchi.contact.receiver", name: "Dilnoza Rahimova", phone: "915552211")
+        element("elchi.parcel.type").tap()
         tap("Quti")
+        element("elchi.parcel.size").tap()
         tap("Kichik quti")
-        tap("Davom etish")
-        tap("Rasm yuklash")
+        element("elchi.photo.add").tap()
         tap("Galereyadan tanlash")
         waitFor("Rasm tayyor", timeout: 20)
-        tap("Buyurtmani ko'rib chiqish")
+        type("Mo'rt narsa", into: "Izoh (ixtiyoriy)")
+        tap("Davom etish")
         waitFor("Buyurtmani tekshiring")
         tap("Buyurtmani e'lon qilish")
         waitFor("Haydovchilardan takliflar kutilmoqda", timeout: 25)

@@ -5,17 +5,23 @@ extension LocaleStore {
     func name(_ region: RegionDTO) -> String { locale == .ru ? region.nameRu ?? region.nameUz : region.nameUz }
     func name(_ district: DistrictDTO) -> String { locale == .ru ? district.nameRu ?? district.nameUz : district.nameUz }
 
-    /// The place's name on the route card: the district, or the region itself where it has no districts.
-    func title(_ end: PlaceEnd) -> String {
-        end.region.requiresDistrict == false ? name(end.region) : name(end.district)
+    /// The place itself (the design's card title): "Joriy joylashuv" for the locate button's fill, the verified stop,
+    /// the street address, else the coordinates.
+    func place(_ end: PlaceEnd) -> String {
+        if end.currentLocation { return t("home.currentLocation") }
+        if let stop = end.stop { return locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz }
+        return end.address ?? end.point.text
     }
 
-    /// Street address, or "Xaritadagi joy" when the geocoder had none.
-    func address(_ end: PlaceEnd) -> String { end.address ?? t("app.endLabel.mapPlace") }
-
-    /// `Samarqand viloyati / Samarqand` (region / district), or just the region where it has no districts.
+    /// `Samarqand, Samarqand viloyati` (district, region); one name where the region has no districts or both match.
     func area(_ end: PlaceEnd) -> String {
-        end.region.requiresDistrict == false ? name(end.region) : "\(name(end.region)) / \(name(end.district))"
+        let region = name(end.region), district = name(end.district)
+        return end.region.requiresDistrict == false || district == region ? region : "\(district), \(region)"
+    }
+
+    /// The review's detail for an end: "Tasdiqlangan bekat · District, Region" for a stop.
+    func areaDetail(_ end: PlaceEnd) -> String {
+        end.stop == nil ? area(end) : t("orderForm.review.verifiedStop", ("where", area(end)))
     }
 
     /// `308 km · 4 soat 35 daqiqa`.
@@ -73,5 +79,77 @@ enum SearchText {
     static func matches(_ name: String, _ query: String) -> Bool {
         let q = normalized(query.trimmingCharacters(in: .whitespaces))
         return q.isEmpty || normalized(name).contains(q)
+    }
+}
+
+// MARK: - Departure window (BOSQICH 02 design)
+
+extension LocaleStore {
+    private func list(_ key: String) -> [String] { t(key).components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } }
+
+    /// `Ya` / `Du` ... (Sunday first, as `Calendar.weekday`).
+    func weekdayShort(_ date: Date) -> String {
+        let names = list("client.order.picker.weekdays")
+        let index = DepartureWindow.calendar.component(.weekday, from: date) - 1
+        return names.indices.contains(index) ? names[index] : ""
+    }
+
+    func monthShort(_ date: Date) -> String {
+        let names = list("client.order.picker.months")
+        let index = DepartureWindow.calendar.component(.month, from: date) - 1
+        return names.indices.contains(index) ? names[index] : ""
+    }
+
+    /// `Sentabr 2026` over the day strip.
+    func monthTitle(_ date: Date) -> String {
+        let names = list("client.order.picker.monthsFull")
+        let c = DepartureWindow.calendar.dateComponents([.month, .year], from: date)
+        let index = (c.month ?? 1) - 1
+        return "\(names.indices.contains(index) ? names[index] : "") \(c.year ?? 0)"
+    }
+
+    /// `28 sen` (the design's month abbreviations).
+    func shortDay(_ date: Date) -> String {
+        "\(DepartureWindow.calendar.component(.day, from: date)) \(monthShort(date))"
+    }
+
+    /// The strip's top line: "Bugun", "Ertaga" or the weekday.
+    func dayName(_ date: Date, now: Date = Date()) -> String {
+        let calendar = DepartureWindow.calendar
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 99
+        return days == 0 ? t("driver.feed.dateToday") : days == 1 ? t("driver.feed.dateTomorrow") : weekdayShort(date)
+    }
+
+    /// A window tile's small line: `28 sen` today, `Ertaga, 28 sen`, `Pa, 2 okt`.
+    func tileDate(_ date: Date, now: Date = Date()) -> String {
+        let calendar = DepartureWindow.calendar
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 99
+        return days == 0 ? shortDay(date) : "\(dayName(date, now: now)), \(shortDay(date))"
+    }
+
+    /// `9 soat 30 daqiqa`.
+    func duration(minutes: Int) -> String {
+        let (hours, rest) = (minutes / 60, minutes % 60)
+        return hours == 0 ? t("app.duration.minutes", ("minutes", rest))
+            : rest == 0 ? t("app.duration.hours", ("hours", hours))
+            : t("app.duration.hoursMinutes", ("hours", hours), ("minutes", rest))
+    }
+
+    /// "Oyna: 9 soat · Haydovchilar shu oraliqda jo'nashni taklif qiladi." (without the length while the order is wrong).
+    func windowHint(start: Date?, end: Date?) -> String {
+        let hint = t("routeSummary.windowHint")
+        guard let start, let end, end > start else { return hint }
+        return "\(t("client.order.windowLength", ("length", duration(minutes: WindowPicker.lengthMinutes(start: start, end: end))))) · \(hint)"
+    }
+
+    /// `27.09, 09:00 – 27.09, 18:00`.
+    func windowLine(start: Date, end: Date) -> String {
+        "\(DepartureWindow.shortText(start)) – \(DepartureWindow.shortText(end))"
+    }
+
+    /// "2 kishi" / "Butun salon" (the home's value next to "Necha kishi"), or "Tanlang".
+    func seatValue(_ count: Int?) -> String {
+        guard let count else { return t("client.order.choose") }
+        return TaxiSeats.isWholeCabin(count) ? t("client.taxi.wholeCabin") : t("orderForm.review.peopleCount", ("count", count))
     }
 }

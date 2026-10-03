@@ -44,29 +44,32 @@ private func buttonColors(_ variant: ButtonVariant, _ c: ElchiColors) -> ButtonC
 }
 
 /// Pill button. Disabled is the prototype's `x` variant (grey, not faded brand) so it still reads in sunlight;
-/// loading keeps the size and shows a spinner instead of the label.
+/// loading keeps the size and shows a spinner instead of the label. `dimmed` draws the same grey but keeps the button
+/// tappable (BOSQICH 02: a tap on an incomplete step says what is missing).
 public struct ElchiButton: View {
     let title: String
     let variant: ButtonVariant
     let size: ButtonSize
     let icon: ElchiIcon?
     let loading: Bool
+    let dimmed: Bool
     let action: () -> Void
     @Environment(\.elchi) private var c
     @Environment(\.isEnabled) private var enabled
 
     public init(_ title: String, variant: ButtonVariant = .primary, size: ButtonSize = .large, icon: ElchiIcon? = nil,
-                loading: Bool = false, action: @escaping () -> Void) {
+                loading: Bool = false, dimmed: Bool = false, action: @escaping () -> Void) {
         self.title = title
         self.variant = variant
         self.size = size
         self.icon = icon
         self.loading = loading
+        self.dimmed = dimmed
         self.action = action
     }
 
     public var body: some View {
-        let colors = enabled
+        let colors = enabled && !dimmed
             ? buttonColors(variant, c)
             : ButtonColors(bg: c.isDark ? Color(hex: 0x24272E) : Color(hex: 0xE4E9EF), fg: c.isDark ? Color(hex: 0x6B7482) : Color(hex: 0x8A96A6), border: nil)
         Button(action: action) {
@@ -90,7 +93,7 @@ public struct ElchiButton: View {
     }
 }
 
-private struct PressFade: ButtonStyle {
+struct PressFade: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.opacity(configuration.isPressed ? 0.85 : 1)
     }
@@ -700,6 +703,10 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
     let banner: (text: String, tone: Tone)?
     let keepVisible: AnyHashable?
     let keyboardDone: String?
+    /// `(n, total)`: the "n / total" pill at the right and the thin progress bar under the bar (the order steps).
+    let step: (Int, Int)?
+    /// Each change scrolls the body back to its top (where a tap-to-validate error list appears).
+    let scrollTop: Int
     let content: Content
     let footer: Footer
     @Environment(\.elchi) private var c
@@ -710,8 +717,10 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
 
     public init(title: String, right: String? = nil, rightIcon: ElchiIcon? = nil, onRight: (() -> Void)? = nil, leading: ElchiIcon = .back,
                 backLabel: String, onBack: (() -> Void)?, showsFooter: Bool = true, banner: (text: String, tone: Tone)? = nil,
-                keepVisible: AnyHashable? = nil, keyboardDone: String? = nil,
+                keepVisible: AnyHashable? = nil, keyboardDone: String? = nil, step: (Int, Int)? = nil, scrollTop: Int = 0,
                 @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.step = step
+        self.scrollTop = scrollTop
         self.keepVisible = keepVisible
         self.keyboardDone = keyboardDone
         self.title = title
@@ -750,18 +759,35 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
                 } else if let right {
                     Text(right).font(ElchiFont.poppins(12, .semibold)).foregroundStyle(c.accentText).lineLimit(1)
                 }
+                if let step {
+                    Text("\(step.0) / \(step.1)").font(ElchiFont.poppins(12, .semibold)).foregroundStyle(c.softText)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(c.soft, in: Capsule())
+                        .accessibilityIdentifier("elchi.step")
+                }
             }
             .frame(height: 64)
             .padding(.horizontal, 16)
+            if let step {
+                GeometryReader { geo in
+                    Capsule().fill(c.brand).frame(width: geo.size.width * CGFloat(step.0) / CGFloat(max(step.1, 1)))
+                }
+                .frame(height: 4)
+                .background(c.line, in: Capsule())
+                .padding(.horizontal, 16).padding(.bottom, 6)
+                .accessibilityHidden(true)
+            }
             if let accessory { accessory }
             if let banners { BannerHost(center: banners) }
             if let banner { Banner(banner.text, tone: banner.tone).id(banner.text) }
             ScrollViewReader { proxy in
                 ScrollView {
+                    Color.clear.frame(height: 0).id(Self.topID)
                     VStack(alignment: .leading, spacing: 12) { content }
                         .padding(EdgeInsets(top: 6, leading: 16, bottom: 18, trailing: 16))
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .onChange(of: scrollTop) { _, _ in withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.topID, anchor: .top) } }
                 // `keepVisible`: the view (by id) that must stay above the keyboard while a field is being typed in -
                 // once now, and again when the keyboard has finished rising and the scroll area has shrunk.
                 .onChange(of: keepVisible) { _, id in reveal(id, proxy) }
@@ -794,6 +820,8 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
         }
     }
 
+    private static var topID: String { "elchi.scaffold.top" }
+
     private func reveal(_ id: AnyHashable?, _ proxy: ScrollViewProxy) {
         guard let id else { return }
         withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .bottom) }
@@ -815,11 +843,16 @@ public struct RouteCard: View {
     }
 
     let from: End, to: End
+    /// The design's swap button (BOSQICH 02 home): drawn at the right instead of the chevrons.
+    let swapLabel: String?
+    let onSwap: (() -> Void)?
     @Environment(\.elchi) private var c
 
-    public init(from: End, to: End) {
+    public init(from: End, to: End, swapLabel: String? = nil, onSwap: (() -> Void)? = nil) {
         self.from = from
         self.to = to
+        self.swapLabel = swapLabel
+        self.onSwap = onSwap
     }
 
     public var body: some View {
@@ -838,6 +871,22 @@ public struct RouteCard: View {
                 .padding(.vertical, 38)
                 .offset(x: 22)
                 .accessibilityHidden(true)
+        }
+        .overlay(alignment: .trailing) {
+            if let onSwap {
+                Button(action: onSwap) {
+                    Image(systemName: "arrow.up.arrow.down").font(.system(size: 14, weight: .semibold)).foregroundStyle(c.text)
+                        .frame(width: 36, height: 36)
+                        .background(c.card, in: Circle())
+                        .overlay { Circle().strokeBorder(c.line, lineWidth: 1) }
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(PressFade())
+                .padding(.trailing, 8)
+                .accessibilityLabel(swapLabel ?? "")
+                .accessibilityIdentifier("elchi.route.swap")
+            }
         }
         .shadow(color: c.shadow.opacity(0.8), radius: 12, y: 6)
     }
@@ -863,7 +912,11 @@ public struct RouteCard: View {
                     }
                 }
                 Spacer(minLength: 0)
-                ElchiIcon.chevR.image(size: 18).foregroundStyle(c.placeholder)
+                if onSwap == nil {
+                    ElchiIcon.chevR.image(size: 18).foregroundStyle(c.placeholder)
+                } else {
+                    Color.clear.frame(width: 36, height: 1)
+                }
             }
             .padding(.vertical, 12)
             .frame(minHeight: 44)

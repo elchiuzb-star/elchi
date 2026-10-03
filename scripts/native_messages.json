@@ -1231,5 +1231,325 @@
   "client.keyboard.done": {
     "uz": "Tayyor",
     "ru": "Готово"
+  },
+  "client.order.homeTitle": {
+    "uz": "Qayerga yuboramiz?",
+    "ru": "Куда отправим?"
+  },
+  "client.taxi.homeTitle": {
+    "uz": "Qayerga boramiz?",
+    "ru": "Куда поедем?"
+  },
+  "client.order.toForm": {
+    "uz": "Buyurtma shakliga o'tish",
+    "ru": "Перейти к оформлению"
+  },
+  "client.order.saveAndReturn": {
+    "uz": "Saqlash va qaytish",
+    "ru": "Сохранить и вернуться"
+  },
+  "client.order.moveCloserFirst": {
+    "uz": "Avval nuqtalardan birini ELCHI yo'nalishiga yaqinroq joyga ko'chiring",
+    "ru": "Сначала переместите одну из точек ближе к маршруту ELCHI"
+  },
+  "client.order.swap": {
+    "uz": "Almashtirish",
+    "ru": "Поменять местами"
+  },
+  "client.order.locateSet": {
+    "uz": "Joriy joylashuvingiz “Qayerdan” sifatida belgilandi",
+    "ru": "Ваше местоположение указано как «Откуда»"
+  },
+  "client.order.promoSaved": {
+    "uz": "Taklif kodi saqlandi: {code}",
+    "ru": "Код приглашения сохранён: {code}"
+  },
+  "client.order.promoTap": {
+    "uz": "Tasdiqlash uchun bosing",
+    "ru": "Нажмите, чтобы подтвердить"
+  },
+  "client.taxi.departure": {
+    "uz": "Jo'nash vaqti",
+    "ru": "Время отправления"
+  },
+  "client.order.windowLength": {
+    "uz": "Oyna: {length}",
+    "ru": "Окно: {length}"
+  },
+  "client.order.picker.next": {
+    "uz": "Keyingi: tugash vaqti",
+    "ru": "Далее: время окончания"
+  },
+  "client.order.picker.swipe": {
+    "uz": "Suring →",
+    "ru": "Листайте →"
+  },
+  "client.order.picker.past": {
+    "uz": "O'tgan vaqtni tanlab bo'lmaydi.",
+    "ru": "Нельзя выбрать прошедшее время."
+  },
+  "client.order.picker.plusHours": {
+    "uz": "+{hours} soat",
+    "ru": "+{hours} ч"
+  },
+  "client.order.picker.endOfDay": {
+    "uz": "Kun oxirigacha",
+    "ru": "До конца дня"
+  },
+  "client.order.err.windowEnd": {
+    "uz": "Jo'nash oynasi tugashini kiriting.",
+    "ru": "Укажите конец окна отправления."
+  },
+  "client.order.err.endAfterStart": {
+    "uz": "Tugash vaqti boshlanishdan keyin bo'lishi kerak.",
+    "ru": "Конец должен быть позже начала."
+  },
+  "client.taxi.err.seats": {
+    "uz": "Necha kishi ekanini tanlang.",
+    "ru": "Выберите, сколько человек."
+  },
+  "client.order.choose": {
+    "uz": "Tanlang",
+    "ru": "Выберите"
+  },
+  "client.taxi.wholeCabin": {
+    "uz": "Butun salon",
+    "ru": "Весь салон"
+  },
+  "client.taxi.wholeCabinLower": {
+    "uz": "butun salon",
+    "ru": "весь салон"
+  },
+  "client.taxi.wholeCabinSeats": {
+    "uz": "Butun salon (4 o'rin)",
+    "ru": "Весь салон (4 места)"
+  },
+  "client.taxi.seats": {
+    "uz": "O'rinlar",
+    "ru": "Места"
+  },
+  "client.order.totalFor": {
+    "uz": "Jami · {who}",
+    "ru": "Итого · {who}"
+  },
+  "client.order.priceStepHint": {
+    "uz": "Har bosishda ±5 000 so'm",
+    "ru": "Шаг ±5 000 сум"
+  },
+  "client.order.contactTitle": {
+    "uz": "Jo'natma ma'lumotlari",
+    "ru": "Данные отправления"
+  },
+  "client.order.contactEmpty": {
+    "uz": "Kontaktdan tanlang",
+    "ru": "Выберите из контактов"
+  },
+  "client.order.contactEmptyHint": {
+    "uz": "Ism va telefon raqami",
+    "ru": "Имя и номер телефона"
+  },
+  "client.order.choosePick": {
+    "uz": "Tanlash",
+    "ru": "Выбрать"
+  },
+  "client.order.contactSearch": {
+    "uz": "Ism yoki raqam",
+    "ru": "Имя или номер"
+  },
+  "client.order.deviceContacts": {
+    "uz": "Telefon kontaktlari",
+    "ru": "Контакты телефона"
+  },
+  "client.order.newNumber": {
+    "uz": "+ Yangi raqam",
+    "ru": "+ Новый номер"
+  },
+  "client.order.me": {
+    "uz": "{name} (Men)",
+    "ru": "{name} (Я)"
+  },
+  "client.order.contactNone": {
+    "uz": "Kontakt topilmadi — “+ Yangi raqam” orqali kiriting.",
+    "ru": "Контакт не найден — добавьте через «+ Новый номер»."
+  },
+  "client.order.manualInvalid": {
+    "uz": "Ism va 9 xonali raqamni kiriting",
+    "ru": "Введите имя и 9-значный номер"
+  },
+  "client.order.err.senderName": {
+    "uz": "Yuboruvchi ismini kiriting.",
+    "ru": "Введите имя отправителя."
+  },
+  "client.order.err.phone9": {
+    "uz": "Telefon raqami 9 ta raqamdan iborat bo'lishi kerak.",
+    "ru": "Номер телефона должен состоять из 9 цифр."
+  },
+  "client.order.err.receiverName": {
+    "uz": "Qabul qiluvchi ismini kiriting.",
+    "ru": "Введите имя получателя."
+  },
+  "client.order.err.receiverPhone": {
+    "uz": "Qabul qiluvchi telefon raqamini to'liq kiriting.",
+    "ru": "Введите номер получателя полностью."
+  },
+  "client.order.err.type": {
+    "uz": "Posilka turini tanlang.",
+    "ru": "Выберите тип посылки."
+  },
+  "client.order.err.size": {
+    "uz": "Jo'natma o'lchamini tanlang.",
+    "ru": "Выберите размер отправления."
+  },
+  "client.order.parcelSection": {
+    "uz": "Jo'natma",
+    "ru": "Отправление"
+  },
+  "client.order.photoDriverSees": {
+    "uz": "Haydovchi posilkani ko'radi",
+    "ru": "Водитель увидит посылку"
+  },
+  "client.order.photoReplaceShort": {
+    "uz": "Almashtirish",
+    "ru": "Заменить"
+  },
+  "client.order.banLink": {
+    "uz": "Taqiqlangan jo'natmalar ro'yxati",
+    "ru": "Список запрещённых отправлений"
+  },
+  "client.order.banOk": {
+    "uz": "Tushunarli",
+    "ru": "Понятно"
+  },
+  "client.order.banSince": {
+    "uz": "{label} · {date} dan",
+    "ru": "{label} · с {date}"
+  },
+  "client.order.noteLabel": {
+    "uz": "Izoh (ixtiyoriy)",
+    "ru": "Комментарий (необязательно)"
+  },
+  "client.order.notePlaceholder": {
+    "uz": "Masalan: ertalab 10 gacha qo'ng'iroq qilmang",
+    "ru": "Например: не звонить до 10 утра"
+  },
+  "client.order.noteMasked": {
+    "uz": "Izohdagi telefon raqam yoki havola e'londa yashiriladi.",
+    "ru": "Телефон или ссылка из комментария будут скрыты в объявлении."
+  },
+  "client.order.publishing": {
+    "uz": "E'lon qilinmoqda...",
+    "ru": "Публикуется..."
+  },
+  "client.order.newOrder": {
+    "uz": "Yangi buyurtma",
+    "ru": "Новый заказ"
+  },
+  "client.taxi.dropoffPlace": {
+    "uz": "Tushish joyi",
+    "ru": "Место высадки"
+  },
+  "client.taxi.passenger": {
+    "uz": "Yo'lovchi",
+    "ru": "Пассажир"
+  },
+  "client.taxi.accountData": {
+    "uz": "{phone} · akkaunt ma'lumotlari",
+    "ru": "{phone} · данные аккаунта"
+  },
+  "client.order.photoNotUploaded": {
+    "uz": "Yuklanmagan",
+    "ru": "Не загружено"
+  },
+  "client.order.listEmpty": {
+    "uz": "Hech narsa topilmadi",
+    "ru": "Ничего не найдено"
+  },
+  "client.order.windowStartShort": {
+    "uz": "Boshlanishi",
+    "ru": "Начало"
+  },
+  "client.order.windowEndShort": {
+    "uz": "Tugashi",
+    "ru": "Конец"
+  },
+  "client.order.windowStartEmpty": {
+    "uz": "boshlanish",
+    "ru": "начало"
+  },
+  "client.order.windowEndEmpty": {
+    "uz": "tugash",
+    "ru": "конец"
+  },
+  "client.order.priceDec": {
+    "uz": "Kamaytirish",
+    "ru": "Уменьшить"
+  },
+  "client.order.priceInc": {
+    "uz": "Oshirish",
+    "ru": "Увеличить"
+  },
+  "client.order.groupYou": {
+    "uz": "SIZ",
+    "ru": "ВЫ"
+  },
+  "client.order.pickSender": {
+    "uz": "Yuboruvchini tanlang",
+    "ru": "Выберите отправителя"
+  },
+  "client.order.pickReceiver": {
+    "uz": "Qabul qiluvchini tanlang",
+    "ru": "Выберите получателя"
+  },
+  "client.order.pickedSender": {
+    "uz": "Yuboruvchi: {name}",
+    "ru": "Отправитель: {name}"
+  },
+  "client.order.pickedReceiver": {
+    "uz": "Qabul qiluvchi: {name}",
+    "ru": "Получатель: {name}"
+  },
+  "client.order.typeRow": {
+    "uz": "Turi",
+    "ru": "Тип"
+  },
+  "client.order.sizeRow": {
+    "uz": "O'lcham",
+    "ru": "Размер"
+  },
+  "client.order.pointChosenPickup": {
+    "uz": "Olib ketish joyi tanlandi: {place}",
+    "ru": "Место забора выбрано: {place}"
+  },
+  "client.order.pointChosenDropoff": {
+    "uz": "Yetkazish joyi tanlandi: {place}",
+    "ru": "Место доставки выбрано: {place}"
+  },
+  "client.order.pointTitleFrom": {
+    "uz": "Qayerdan: {area}",
+    "ru": "Откуда: {area}"
+  },
+  "client.order.pointTitleTo": {
+    "uz": "Qayerga: {area}",
+    "ru": "Куда: {area}"
+  },
+  "client.order.locateOutside": {
+    "uz": "Joylashuvingizdan joy aniqlanmadi — ro'yxatdan tanlang.",
+    "ru": "Не удалось определить место — выберите из списка."
+  },
+  "client.order.manualName": {
+    "uz": "Ism familiya",
+    "ru": "Имя и фамилия"
+  },
+  "client.order.picker.weekdays": {
+    "uz": "Ya,Du,Se,Ch,Pa,Ju,Sh",
+    "ru": "Вс,Пн,Вт,Ср,Чт,Пт,Сб"
+  },
+  "client.order.picker.months": {
+    "uz": "yan,fev,mar,apr,may,iyn,iyl,avg,sen,okt,noy,dek",
+    "ru": "янв,фев,мар,апр,мая,июн,июл,авг,сен,окт,ноя,дек"
+  },
+  "client.order.picker.monthsFull": {
+    "uz": "Yanvar,Fevral,Mart,Aprel,May,Iyun,Iyul,Avgust,Sentabr,Oktabr,Noyabr,Dekabr",
+    "ru": "Январь,Февраль,Март,Апрель,Май,Июнь,Июль,Август,Сентябрь,Октябрь,Ноябрь,Декабрь"
   }
 }

@@ -38,6 +38,7 @@
 		2F334E68CE593793D8169447 /* PointPickerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */; };
 		3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */; };
 		354FF9D10BA0F9E29B09A7B6 /* TaxiViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 783733336FB122507D85F109 /* TaxiViews.swift */; };
+		363174F9C92A4C5654243323 /* OrderFlowLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11F9AE5F3325BBB21576CC0 /* OrderFlowLogicTests.swift */; };
 		38E28AADEA9D73BC78B9C945 /* ElchiMapEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */; };
 		3B003CCFF041EA026C746E73 /* Icons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A3694A601D0778DB17F9198C /* Icons.xcassets */; };
 		3B5ACADCADEA3B0376AD4C3C /* DriverAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D96E5FDD2494A0AC2D3230D /* DriverAPI.swift */; };
@@ -53,6 +54,7 @@
 		4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */; };
 		50B2F99841F6F5B65F94E8D2 /* ElchiIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AA28EAF962F62889B19611 /* ElchiIcon.swift */; };
 		5144AC33E12070F58FCD9810 /* ElchiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF39A6A56E7964BDFFD5A2FB /* ElchiTheme.swift */; };
+		53DD0E506972D8E9914D84CC /* OrderPieces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02226CC628A14106B90387D5 /* OrderPieces.swift */; };
 		576267B94BCD44FF6630D0FE /* DeepLinkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */; };
 		596C13432CE68FC5BFE372A3 /* MarketAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F129D51A637BCF9404EF251D /* MarketAPI.swift */; };
 		5A0D0A4C44224BB5BADBAEDE /* GpsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB254F9C42D41CE8DDC8E3B1 /* GpsTests.swift */; };
@@ -85,6 +87,7 @@
 		934C7D227EC8EB85B2E7ACB7 /* ProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3C7743DF12041A749F814C /* ProfileModels.swift */; };
 		9901C3611318BA4FBE452A53 /* DeepLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1572CEFF41B9C7099E5FA2D /* DeepLinks.swift */; };
 		9AA42AE7BD3617FAA3BBB493 /* BookingMoreViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39B2ABA7C58DF674FEA29553 /* BookingMoreViews.swift */; };
+		9E0B75BF206ED89E08B0EA38 /* OrderFlowLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = A373F464132DD73128A90D60 /* OrderFlowLogic.swift */; };
 		A06862743976E57BB2A54C4B /* OrdersModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5187A5C380B98BE157A1B9B7 /* OrdersModel.swift */; };
 		A1C1F6F8B8F3DEECE48FCEC4 /* LocationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCEDCEFD444CC97A5325ED0F /* LocationViews.swift */; };
 		A37637F2D903F19C2D385DED /* ProfileAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E573D36C73DF08EB376290B /* ProfileAPI.swift */; };
@@ -155,6 +158,7 @@
 
 /* Begin PBXFileReference section */
 		014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientUITestCase.swift; sourceTree = "<group>"; };
+		02226CC628A14106B90387D5 /* OrderPieces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderPieces.swift; sourceTree = "<group>"; };
 		0466319AC1B19AAED64787DD /* DriverModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverModels.swift; sourceTree = "<group>"; };
 		064E4F383CFE9E482273D83E /* ClientOrderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientOrderUITests.swift; sourceTree = "<group>"; };
 		077C2D6194C60CE1DB103563 /* EntryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryViews.swift; sourceTree = "<group>"; };
@@ -233,6 +237,7 @@
 		A14CCE13A35C7D26BBC2736D /* DriverStage09Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverStage09Tests.swift; sourceTree = "<group>"; };
 		A1572CEFF41B9C7099E5FA2D /* DeepLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinks.swift; sourceTree = "<group>"; };
 		A3694A601D0778DB17F9198C /* Icons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Icons.xcassets; sourceTree = "<group>"; };
+		A373F464132DD73128A90D60 /* OrderFlowLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderFlowLogic.swift; sourceTree = "<group>"; };
 		A4E956232ED814D3E4F19F3F /* BookingChatViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingChatViews.swift; sourceTree = "<group>"; };
 		A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointPickerModel.swift; sourceTree = "<group>"; };
 		AA31EFFA4B516438A1829CD7 /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
@@ -267,6 +272,7 @@
 		DB27E951E104397C9F951A02 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		DEE319893889166112F6E6BC /* SessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionState.swift; sourceTree = "<group>"; };
 		DF39A6A56E7964BDFFD5A2FB /* ElchiTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiTheme.swift; sourceTree = "<group>"; };
+		E11F9AE5F3325BBB21576CC0 /* OrderFlowLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderFlowLogicTests.swift; sourceTree = "<group>"; };
 		E294ED9B0B7B264B55416A48 /* SessionEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEvents.swift; sourceTree = "<group>"; };
 		E2E875F1F437C5D3AC64126D /* ElchiUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ElchiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E566FCB6E874711B2522C06E /* LegacyLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyLogic.swift; sourceTree = "<group>"; };
@@ -346,8 +352,10 @@
 		15BDD8ED2B5D3BC08BBF3187 /* Order */ = {
 			isa = PBXGroup;
 			children = (
+				A373F464132DD73128A90D60 /* OrderFlowLogic.swift */,
 				4A5119DDBF60496FF3D30DAE /* OrderFormatting.swift */,
 				411F2B904B1638EB593ADE46 /* OrderLogic.swift */,
+				02226CC628A14106B90387D5 /* OrderPieces.swift */,
 				4EFBC4032949B66CF63BE6E6 /* OrderViews.swift */,
 				3C1D5A6E626D2A9700765B4F /* ParcelRequestModel.swift */,
 			);
@@ -612,6 +620,7 @@
 				EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */,
 				5D3AD394E58D0D62AE2987D8 /* MarketLogicTests.swift */,
 				C261C4C90D818622BF524E8A /* MyLocationTests.swift */,
+				E11F9AE5F3325BBB21576CC0 /* OrderFlowLogicTests.swift */,
 				CD460B56DD8B050579E5B85D /* OrderLogicTests.swift */,
 				9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */,
 				C159F55943ABF3EB2132ACB9 /* ProfileLogicTests.swift */,
@@ -848,8 +857,10 @@
 				485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */,
 				280414156FB9F22E8BE45C7E /* Models.swift in Sources */,
 				4B5647F4AABE57D928028C3D /* MyLocation.swift in Sources */,
+				9E0B75BF206ED89E08B0EA38 /* OrderFlowLogic.swift in Sources */,
 				C2EFDE0345EA57A52A6000A9 /* OrderFormatting.swift in Sources */,
 				5D6CAE8A56A9DA4BF1023B9C /* OrderLogic.swift in Sources */,
+				53DD0E506972D8E9914D84CC /* OrderPieces.swift in Sources */,
 				F7C9B4C700F4147BA713C7B8 /* OrderViews.swift in Sources */,
 				48962C87ADECC021F90F4C4B /* OrdersAPI.swift in Sources */,
 				16DC1C1D61AFA615D370DBDC /* OrdersFormatting.swift in Sources */,
@@ -897,6 +908,7 @@
 				620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */,
 				E9D1358CC55A3F74366E4CF3 /* MarketLogicTests.swift in Sources */,
 				6A476D8B2D0697F39A6721CE /* MyLocationTests.swift in Sources */,
+				363174F9C92A4C5654243323 /* OrderFlowLogicTests.swift in Sources */,
 				D33151EC3B28CCF376021F4A /* OrderLogicTests.swift in Sources */,
 				6679748F2B6674DBEF88D56F /* ParcelRequestModelTests.swift in Sources */,
 				1C0544993AC69F232702A4C2 /* ProfileLogicTests.swift in Sources */,

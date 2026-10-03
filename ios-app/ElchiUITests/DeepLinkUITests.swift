@@ -67,12 +67,12 @@ final class DeepLinkUITests: ClientUITestCase {
         sleep(2)
         snap("11-after-sign-in-support-thread")
         tap("Orqaga")
-        XCTAssertTrue(app.buttons["Yo'nalishni ko'rish"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Buyurtma shakliga o'tish"].firstMatch.waitForExistence(timeout: 15))
     }
 
     func test2_ClientReferral() {
         launch(reset: false)
-        XCTAssertTrue(app.buttons["Yo'nalishni ko'rish"].firstMatch.waitForExistence(timeout: 25))
+        XCTAssertTrue(app.buttons["Buyurtma shakliga o'tish"].firstMatch.waitForExistence(timeout: 25))
         open("elchi://r/ab2cd3ef", banner: "Taklif kodi saqlandi: AB2CD3EF")
         waitFor("Bonuslar va taklif kodi")
         snap("20-client-referral-saved-bonus")
@@ -128,7 +128,7 @@ final class DeepLinkUITests: ClientUITestCase {
         if driver {
             XCTAssertTrue(app.buttons["elchi.tab.home"].waitForExistence(timeout: 25), "no driver tabs")
         } else {
-            XCTAssertTrue(app.buttons["Yo'nalishni ko'rish"].firstMatch.waitForExistence(timeout: 25), "no client home")
+            XCTAssertTrue(app.buttons["Buyurtma shakliga o'tish"].firstMatch.waitForExistence(timeout: 25), "no client home")
         }
         let dir = env["ELCHI_CMD_DIR"] ?? "/tmp"
         FileManager.default.createFile(atPath: dir + "/ready", contents: Data())

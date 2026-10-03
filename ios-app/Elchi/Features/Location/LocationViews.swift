@@ -26,7 +26,8 @@ struct RegionPickerView: View {
             case .loaded(let regions):
                 let shown = regions.filter { SearchText.matches(strings.name($0), query) || SearchText.matches($0.nameUz, query) }
                 if shown.isEmpty {
-                    Text(strings.t("location.regionNotFound")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                    Text(strings.t("client.order.listEmpty")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                        .frame(maxWidth: .infinity).padding(.vertical, 24)
                 } else {
                     ElchiList {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { index, region in
@@ -71,11 +72,12 @@ struct DistrictPickerView: View {
             case .loaded(let districts):
                 let shown = districts.filter { $0.isActive != false && (SearchText.matches(strings.name($0), query) || SearchText.matches($0.nameUz, query)) }
                 if shown.isEmpty {
-                    Text(strings.t("location.districtNotFound")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                    Text(strings.t("client.order.listEmpty")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                        .frame(maxWidth: .infinity).padding(.vertical, 24)
                 } else {
                     ElchiList {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { index, district in
-                            ListRow(title: strings.name(district), first: index == 0) { onPick(district) }
+                            ListRow(icon: .pin, title: strings.name(district), description: strings.name(region), first: index == 0) { onPick(district) }
                         }
                     }
                 }
@@ -120,9 +122,14 @@ struct PointPickerView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 RoundIconButton(.back, label: strings.t("common.back"), action: onBack)
-                Text(strings.t(side == .pickup ? "direction.from" : "direction.to")).font(ElchiFont.poppins(18, .medium, relativeTo: .headline))
-                    .foregroundStyle(c.text).accessibilityAddTraits(.isHeader)
-                Spacer()
+                // Design: "Qayerdan: Samarqand, Samarqand viloyati" in a pill next to the back button.
+                Text(strings.t(side == .pickup ? "client.order.pointTitleFrom" : "client.order.pointTitleTo", ("area", area)))
+                    .font(ElchiFont.poppins(15, .medium, relativeTo: .headline)).foregroundStyle(c.text).lineLimit(1)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .background(c.card, in: Capsule())
+                    .shadow(color: c.shadow, radius: 12, y: 6)
+                    .accessibilityAddTraits(.isHeader)
             }
             .frame(height: 64)
             .padding(.horizontal, 16)
@@ -134,7 +141,23 @@ struct PointPickerView: View {
         }
         .background(c.page.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .task { if district == nil { await model.loadDistricts(region: region) } }
+        .task {
+            if district == nil { await model.loadDistricts(region: region) }
+            await loadStops()
+        }
+    }
+
+    private var area: String {
+        district.map { "\(strings.name($0)), \(strings.name(region))" } ?? strings.name(region)
+    }
+
+    /// Verified stops of this district (or of the region's districts where it has none to choose), as chips. Only
+    /// districts whose `stops_count` says there is something are looked up.
+    private func loadStops() async {
+        let candidates = district.map { [$0] } ?? model.districtList(region)
+        let ids = Set(candidates.filter { $0.stopsCount > 0 }.map(\.id))
+        guard !ids.isEmpty else { return }
+        picker.setStops(await model.stops(inDistricts: ids))
     }
 
     private var search: some View {
@@ -179,8 +202,19 @@ struct PointPickerView: View {
 
     private var sheet: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(district.map { "\(strings.name($0)), \(strings.name(region))" } ?? strings.name(region))
-                .font(ElchiFont.poppins(14, .semibold)).foregroundStyle(c.text)
+            Text(area).font(ElchiFont.poppins(14, .semibold)).foregroundStyle(c.text)
+            if !picker.stops.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(picker.stops, id: \.id) { stop in
+                            Chip(strings.locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz, selected: picker.chosenStop?.id == stop.id,
+                                 icon: .pin, filled: true) { picker.pickStop(stop) }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .accessibilityIdentifier("elchi.point.stops")
+            }
             ElchiCard {
                 CardRow(strings.t("location.chosenPlace"), placeValue, first: true, detail: picker.centre.text, placeholder: picker.address == .resolving)
             }

@@ -1,11 +1,13 @@
 package uz.elchi.app.feature.client
 
 import android.widget.Toast
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,15 +16,24 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,10 +66,9 @@ import uz.elchi.app.ui.theme.Elchi
 @Serializable private data class PickRegion(val end: String)
 @Serializable private data class PickDistrict(val end: String, val regionId: String)
 @Serializable private data class PickPoint(val end: String, val regionId: String, val districtId: String)
-@Serializable private data object RouteSummary
-@Serializable private data object OrderAddress
-@Serializable private data object OrderParcel
-@Serializable private data object OrderPhoto
+/** [editing]: opened from the review's pencil - the button saves and goes back to the review. */
+@Serializable private data class RouteSummary(val editing: Boolean = false)
+@Serializable private data class OrderContact(val editing: Boolean = false)
 @Serializable private data object OrderReview
 @Serializable private data object OrderSuccess
 @Serializable private data object Orders
@@ -88,8 +98,9 @@ import uz.elchi.app.ui.theme.Elchi
 @Serializable private data class LegacyDispute(val id: Long)
 
 /**
- * Signed in as a client. Stage 02: home (map + sheet) -> place picker (region -> district -> point) -> the five
- * steps of a parcel request -> success. The draft lives in [ParcelRequestViewModel], one per signed-in person,
+ * Signed in as a client. Stage 02 (design "Buyurtma yaratish"): home (map + sheet) -> place picker (region ->
+ * district -> point); Pochta: route (1/3) -> contact (2/3) -> review (3/3); Taksi: the whole request on the home
+ * sheet -> review (1/1); then success. A review row's pencil opens its step in edit mode ("Saqlash va qaytish"). The draft lives in [ParcelRequestViewModel], one per signed-in person,
  * so it survives moving between the steps and a process restart. Stage 03: orders (drawer, success screen) ->
  * a listing's detail -> edit / driver offers -> accept, and "Takliflarim"; one [ListingViewModel] per opened
  * listing, scoped to its detail screen and shared with the screens opened from it. Stage 04: a booking's detail
@@ -111,7 +122,7 @@ fun ClientFlow(container: AppContainer, session: Session) {
     val request: ParcelRequestViewModel = viewModel(
         key = "parcel-request-${session.user.id}",
         factory = viewModelFactory {
-            initializer { ParcelRequestViewModel(container.api, container.files, PhotoCompressor(appContext), createSavedStateHandle()) }
+            initializer { ParcelRequestViewModel(container.api, container.files, container.geo, PhotoCompressor(appContext), createSavedStateHandle()) }
         },
     )
     val places: PlacePickerViewModel = viewModel(
@@ -241,11 +252,20 @@ fun ClientFlow(container: AppContainer, session: Session) {
         }
     }
     val pendingReferral by container.referral.pending.collectAsStateWithLifecycle()
+    // The home's referral row was closed (design: hidden for the session; the code itself stays kept).
+    var referralHidden by rememberSaveable { mutableStateOf(false) }
+    val toast = remember { FlowToast() }
+    val account = session.user.fullName.orEmpty().trim() to ParcelRules.localDigits(session.user.phone)
+    val pickedPickup = t(R.string.client_order_pointChosenPickup)
+    val pickedDropoff = t(R.string.client_order_pointChosenDropoff)
+    val currentLocation = t(R.string.home_currentLocation)
     // A push arrived (the notification is already shown, also in the foreground): the unread dot, and the open list.
     LaunchedEffect(inbox) {
         container.push.received.collect { if (inbox.state.value.loaded) inbox.refresh() else inbox.refreshUnread() }
     }
 
+    CompositionLocalProvider(LocalFlowToast provides toast) {
+    Box(Modifier.fillMaxSize()) {
     NavHost(nav, startDestination = Home) {
         composable<Home> {
             AskNotificationsOnce(container.push)
@@ -253,13 +273,14 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 vm = request,
                 session = session,
                 ru = ru,
-                themeMode = container.theme.state.collectAsStateWithLifecycle().value,
-                onTheme = container.theme::set,
+                language = locale.tag,
                 onPick = { end -> nav.navigate(PickRegion(end.name)) },
-                onViewRoute = { nav.navigate(RouteSummary) },
+                onParcelForm = { nav.navigate(RouteSummary()) },
+                onTaxiReview = { nav.navigate(OrderReview) { launchSingleTop = true } },
                 drawer = drawer,
-                referralCode = pendingReferral,
+                referralCode = pendingReferral?.takeUnless { referralHidden },
                 onReferral = { nav.navigate(Bonus) { launchSingleTop = true } },
+                onReferralHide = { referralHidden = true },
             )
         }
         composable<PickRegion> { entry ->
@@ -305,46 +326,69 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 onConfirm = { place ->
                     request.setEnd(end, place)
                     places.closePoint()
+                    val name = if (place.current) currentLocation else place.label(ru)
+                    toast.show((if (end == End.ORIGIN) pickedPickup else pickedDropoff).replace("{place}", name))
                     // Back to wherever the picker was opened from (home, or the route step's "O'zgartirish").
                     nav.popBackStack<PickRegion>(inclusive = true)
                 },
             )
         }
-        composable<RouteSummary> {
+        composable<RouteSummary> { entry ->
+            val editing = entry.toRoute<RouteSummary>().editing
             RouteSummaryScreen(
                 vm = request,
                 ru = ru,
+                editing = editing,
                 onBack = { nav.popBackStack() },
                 onChange = { end -> nav.navigate(PickRegion(end.name)) },
-                // Taksi has no contacts, parcel or photo steps: the route step leads straight to the review.
-                onSave = { nav.navigate(if (request.state.value.draft.taxi) OrderReview else OrderAddress) },
+                onSave = { if (editing) nav.popBackStack() else nav.navigate(OrderContact()) },
             )
         }
-        composable<OrderAddress> {
-            OrderAddressScreen(vm = request, ru = ru, onBack = { nav.popBackStack() }, onNext = { nav.navigate(OrderParcel) })
-        }
-        composable<OrderParcel> {
-            OrderParcelScreen(vm = request, ru = ru, onBack = { nav.popBackStack() }, onNext = { nav.navigate(OrderPhoto) })
-        }
-        composable<OrderPhoto> {
-            OrderPhotoScreen(vm = request, onBack = { nav.popBackStack() }, onNext = { nav.navigate(OrderReview) })
+        composable<OrderContact> { entry ->
+            val editing = entry.toRoute<OrderContact>().editing
+            OrderContactScreen(
+                vm = request,
+                ru = ru,
+                editing = editing,
+                account = account,
+                onBack = { nav.popBackStack() },
+                onNext = { if (editing) nav.popBackStack() else nav.navigate(OrderReview) },
+            )
         }
         composable<OrderReview> {
             OrderReviewScreen(
                 vm = request,
                 ru = ru,
+                account = account,
                 onBack = { nav.popBackStack() },
-                onEdit = { nav.popBackStack<RouteSummary>(inclusive = false) },
+                onEdit = { target ->
+                    when {
+                        // Taksi: everything is on the home sheet; it comes back here with "Saqlash va qaytish".
+                        request.state.value.draft.taxi -> {
+                            request.setEditingHome(true)
+                            nav.popBackStack<Home>(inclusive = false)
+                        }
+                        target == EditTarget.CONTACT -> nav.navigate(OrderContact(editing = true))
+                        else -> nav.navigate(RouteSummary(editing = true))
+                    }
+                },
                 onPublished = { nav.navigate(OrderSuccess) { popUpTo<Home> { inclusive = false } } },
             )
         }
         composable<OrderSuccess> {
             OrderSuccessScreen(
                 vm = request,
+                ru = ru,
                 onDone = {
                     request.startOver()
                     request.prefillSender(session.user.fullName, session.user.phone)
                     toOrders()
+                },
+                // A clean draft in the same service, back on the home.
+                onNewOrder = {
+                    request.startOver()
+                    request.prefillSender(session.user.fullName, session.user.phone)
+                    nav.popBackStack<Home>(inclusive = false)
                 },
             )
         }
@@ -535,6 +579,9 @@ fun ClientFlow(container: AppContainer, session: Session) {
             BookingTrackingScreen(vm = vm, onBack = { nav.popBackStack() })
         }
     }
+    FlowToastHost(toast, Modifier.statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp))
+    }
+    }
 }
 
 private const val SHOWN = "accepted-shown"
@@ -585,17 +632,24 @@ internal fun StepScaffold(
     /** Set = pull to refresh on the body ([refreshing] shows the indicator). */
     onRefresh: (() -> Unit)? = null,
     refreshing: Boolean = false,
+    /** The order form's "n / total" pill on the right of the title, and the progress bar under it. */
+    step: Pair<Int, Int>? = null,
+    /** The body's scroll, when the screen moves it (back to the top to show its error list). */
+    scrollState: ScrollState? = null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Elchi.colors
     SystemBarIcons(dark = !c.isDark)
     Column(Modifier.fillMaxSize().background(c.page).imePadding()) {
-        Column(Modifier.statusBarsPadding()) { TitleBar(onBack, t(R.string.common_back), title, right = right, onRight = onRight)
+        Column(Modifier.statusBarsPadding()) {
+            TitleBar(onBack, t(R.string.common_back), title, right = right, onRight = onRight, trailing = step?.let { (n, total) -> { StepPill(n, total) } })
+            if (step != null) StepProgress(step.first, step.second)
             banner?.invoke(this)
         }
+        val bodyScroll = scrollState ?: rememberScrollState()
         val scroll: @Composable (Modifier) -> Unit = { modifier ->
             Column(
-                modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 18.dp),
+                modifier.verticalScroll(bodyScroll).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 content = body,
             )
@@ -617,5 +671,27 @@ internal fun StepScaffold(
         } else {
             Box(Modifier.navigationBarsPadding())
         }
+    }
+}
+
+/** "1 / 3" on the title bar (design `stepT`). */
+@Composable
+private fun StepPill(n: Int, total: Int) {
+    val c = Elchi.colors
+    Text(
+        "$n / $total",
+        Modifier.clip(CircleShape).background(c.soft).padding(horizontal = 12.dp, vertical = 6.dp),
+        style = Elchi.type.caption.copy(fontWeight = FontWeight.SemiBold),
+        color = c.softText,
+        maxLines = 1,
+    )
+}
+
+/** The thin bar under the title: how far through the order form (design `stepPct`). */
+@Composable
+private fun StepProgress(n: Int, total: Int) {
+    val c = Elchi.colors
+    Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp).fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(c.line)) {
+        Box(Modifier.fillMaxWidth(n.toFloat() / total.coerceAtLeast(1)).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(c.brand))
     }
 }

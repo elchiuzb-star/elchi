@@ -1,20 +1,13 @@
 package uz.elchi.app.feature.client
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
@@ -22,29 +15,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import uz.elchi.app.R
 import uz.elchi.app.api.generated.CashReceiptDTO
 import uz.elchi.app.i18n.errorText
 import uz.elchi.app.i18n.t
-import uz.elchi.app.i18n.tOrNull
 import uz.elchi.app.ui.components.ButtonSize
 import uz.elchi.app.ui.components.ButtonVariant
 import uz.elchi.app.ui.components.CardRow
@@ -67,109 +50,6 @@ internal fun seatsLine(count: Long, unitMinor: Long): String =
 /** `2 × 150 000 so'm` */
 @Composable
 internal fun seatsPrice(count: Long, unitMinor: Long): String = t(R.string.client_taxi_seatsTotal, "count" to count, "price" to soum(unitMinor))
-
-/**
- * The design's `seat-picker`: the cabin drawn as three by two cells - the driver's seat (drawn, never offered), the
- * front seat, the three rear seats. A tap marks or unmarks a seat (never the last one); the number on a marked seat is
- * the order it was picked in. Below, once: the booking is the count, the exact seat is agreed with the driver.
- */
-@Composable
-internal fun SeatPicker(selected: List<String>, onToggle: (String) -> Unit) {
-    val c = Elchi.colors
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(t(R.string.seatPicker_howMany), Modifier.weight(1f), style = Elchi.type.label, color = c.muted)
-            Text(t(R.string.seatPicker_peopleCount, "count" to selected.size), style = Elchi.type.label.copy(fontWeight = FontWeight.SemiBold), color = c.text)
-        }
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.field).padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DriverSeat()
-                Spacer(Modifier.weight(1f))
-                SeatCell(Seat.FRONT, selected, onToggle)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SeatCell(Seat.REAR_LEFT, selected, onToggle)
-                SeatCell(Seat.REAR_MIDDLE, selected, onToggle)
-                SeatCell(Seat.REAR_RIGHT, selected, onToggle)
-            }
-        }
-        Text(
-            buildAnnotatedString {
-                append(t(R.string.seatPicker_bookedIs))
-                append(" ")
-                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = c.text)) { append(t(R.string.seatPicker_seatCount)) }
-                append(t(R.string.seatPicker_seatNotReserved))
-            },
-            style = Elchi.type.caption,
-            color = c.muted,
-        )
-    }
-}
-
-@Composable
-private fun RowScope.DriverSeat() {
-    val c = Elchi.colors
-    val dash = c.outline
-    Column(
-        Modifier
-            .weight(1f)
-            .height(SEAT_HEIGHT)
-            .clip(RoundedCornerShape(14.dp))
-            .background(c.card.copy(alpha = 0.5f))
-            .drawBehind {
-                drawRoundRect(
-                    dash,
-                    cornerRadius = CornerRadius(14.dp.toPx()),
-                    style = Stroke(width = 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))),
-                )
-            },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Box(Modifier.size(18.dp).border(2.dp, c.placeholder, CircleShape))
-        Text(t(R.string.seatPicker_driver), Modifier.padding(top = 4.dp), style = Elchi.type.badge.copy(fontSize = 10.sp), color = c.placeholder)
-    }
-}
-
-@Composable
-private fun RowScope.SeatCell(seat: Seat, selected: List<String>, onToggle: (String) -> Unit) {
-    val c = Elchi.colors
-    val order = TaxiRules.seatOrder(selected, seat.id)
-    val on = order != null
-    val label = tOrNull(seat.key) ?: seat.id
-    val shape = RoundedCornerShape(14.dp)
-    Box(
-        Modifier
-            .weight(1f)
-            .height(SEAT_HEIGHT)
-            .clip(shape)
-            .background(if (on) c.highlight else c.card)
-            .border(if (on) 2.dp else 1.5.dp, if (on) c.brand else c.outline, shape)
-            .toggleable(value = on, role = Role.Checkbox, onValueChange = { onToggle(seat.id) })
-            .semantics { contentDescription = label },
-    ) {
-        Column(Modifier.align(Alignment.Center).padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            // A seat, drawn: a back and a cushion read as a seat at this size.
-            val seatColor = if (on) c.brand else c.placeholder
-            Box(Modifier.width(22.dp).height(12.dp).clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)).border(2.dp, seatColor, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)))
-            Box(Modifier.width(28.dp).height(7.dp).clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp)).background(seatColor.copy(alpha = 0.35f)))
-            Text(label, Modifier.padding(top = 4.dp), style = Elchi.type.badge.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium), color = if (on) c.text else c.muted, textAlign = TextAlign.Center, maxLines = 2)
-        }
-        if (order != null) {
-            Box(
-                Modifier.align(Alignment.TopEnd).padding(5.dp).size(18.dp).clip(CircleShape).background(c.brand),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(order.toString(), style = Elchi.type.badge, color = c.onBrand)
-            }
-        }
-    }
-}
-
-private val SEAT_HEIGHT = 72.dp
 
 // -- boarding code (client) ---------------------------------------------------------------------------------------
 

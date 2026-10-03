@@ -23,10 +23,9 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 
 /**
- * The passenger seats of a normal sedan, in the order a person reads them (web `SeatPicker.tsx`). What is booked is
- * the COUNT: there is no seat map in the contract and nothing obliges a driver to seat anyone in a given place, so
- * the picture only helps a person count ("three of us, two in the back"); the screen says the exact seat is agreed
- * with the driver.
+ * The passenger seats of a normal sedan. What is booked is the COUNT (design: 1 / 2 / 3 / Butun salon): there is no
+ * seat map in the contract and nothing obliges a driver to seat anyone in a given place, so the draft keeps the
+ * first n ids only to carry the count across process death.
  */
 enum class Seat(val id: String, val key: String) {
     FRONT("front", "seatPicker.front"),
@@ -72,9 +71,6 @@ object TaxiRules {
     const val MIN_SEATS = 1
     const val MAX_SEATS = 8
 
-    /** The design's start: one seat, rear right (`client-route-summary` `B.seats(['s3'])`). */
-    val DEFAULT_SEATS: List<String> = listOf(Seat.REAR_RIGHT.id)
-
     // -- flags (K7/Q5/Q89) --------------------------------------------------------------------------------------
 
     /** The Taksi/Pochta segment: only when the country-scope flag says passenger is on (a failed read = off). */
@@ -88,7 +84,7 @@ object TaxiRules {
         else -> flags.parcelEnabled
     }
 
-    /** "Yo'nalishni ko'rish": both places on a confirmed route and the chosen service open on that corridor. */
+    /** The home's primary button: both places on a confirmed route and the chosen service open on that corridor. */
     fun homeBlock(taxi: Boolean, directionReady: Boolean, open: Boolean?): HomeBlock = when {
         open == false -> if (taxi) HomeBlock.PASSENGER_CLOSED else HomeBlock.PARCEL_CLOSED
         !directionReady || open == null -> HomeBlock.NOT_READY
@@ -97,32 +93,40 @@ object TaxiRules {
 
     // -- seats ----------------------------------------------------------------------------------------------------
 
-    /** Tap on a seat: on/off in the order picked; never down to zero (a request for nobody is not a request). */
-    fun toggleSeat(selected: List<String>, id: String): List<String> {
-        if (Seat.entries.none { it.id == id }) return selected
-        val next = if (id in selected) selected - id else selected + id
-        return next.ifEmpty { selected }
-    }
+    /** The design's start (`seats: []`): nobody chosen yet - "Necha kishi ekanini tanlang" until a count is tapped. */
+    val DEFAULT_SEATS: List<String> = emptyList()
 
-    /** The seat's place in the picking order (1-based) for its badge; null when not picked. */
-    fun seatOrder(selected: List<String>, id: String): Int? = selected.indexOf(id).takeIf { it >= 0 }?.plus(1)
+    /** "Butun salon": all four passenger seats. */
+    const val WHOLE_CABIN = 4
+
+    /** The home's 1 / 2 / 3 / Butun salon buttons. */
+    val COUNT_CHOICES: List<Int> = listOf(1, 2, 3, WHOLE_CABIN)
+
+    /** A tapped count as the draft keeps it: the first [count] seat ids (only the count is ever sent). */
+    fun seatsFor(count: Int): List<String> = Seat.entries.take(count.coerceIn(0, PICKER_SEATS)).map { it.id }
 
     fun seatCount(draft: ParcelDraft): Int = draft.seats.count { id -> Seat.entries.any { it.id == id } }
+
+    /** What the price is multiplied by on the "Jami" bar: the chosen count, one while none is chosen (design). */
+    fun billedSeats(draft: ParcelDraft): Long = seatCount(draft).coerceAtLeast(1).toLong()
 
     /** `count × unit`, the price basis `per_seat` (never float). */
     fun totalMinor(unitMinor: Long, count: Long): Long = unitMinor * count
 
     // -- the request ----------------------------------------------------------------------------------------------
 
-    /** The route step's issues for a passenger request: the parcel's, plus a seat count inside the cabin. */
+    /** The route issues of a passenger request: the parcel's, plus a seat count inside the cabin. */
     fun routeIssues(draft: ParcelDraft, directionReady: Boolean, now: Instant): List<RouteIssue> =
-        ParcelRules.routeIssues(draft, directionReady, now)
+        (ParcelRules.routeIssues(draft, directionReady, now) + listOfNotNull(RouteIssue.SEATS.takeUnless { seatsValid(draft) })).sortedBy { it.ordinal }
+
+    /** The Taksi home's block (shown once the direction is ready): window, seats, price - design `errsFor('home')`. */
+    fun homeIssues(draft: ParcelDraft, now: Instant): List<RouteIssue> = routeIssues(draft, directionReady = true, now = now)
 
     fun seatsValid(draft: ParcelDraft): Boolean = seatCount(draft) in MIN_SEATS..PICKER_SEATS
 
     /** A passenger request has no contacts, parcel or photo steps: route + window + price + seats. */
     fun readyToPublish(draft: ParcelDraft, directionReady: Boolean, now: Instant): Boolean =
-        routeIssues(draft, directionReady, now).isEmpty() && seatsValid(draft)
+        routeIssues(draft, directionReady, now).isEmpty()
 
     /**
      * `POST /listings` for a passenger request: the ends as for a parcel, `price_basis = per_seat`, the unit price per

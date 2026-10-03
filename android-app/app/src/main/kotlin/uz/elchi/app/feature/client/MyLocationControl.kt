@@ -132,14 +132,24 @@ fun rememberMyLocation(): MyLocationController {
 
 /** The round crosshair button: a spinner while the first fix is awaited, brand-tinted while the map is on the user. */
 @Composable
-fun MyLocationButton(controller: MyLocationController, modifier: Modifier = Modifier) {
+fun MyLocationButton(
+    controller: MyLocationController,
+    modifier: Modifier = Modifier,
+    /** Runs before the tap is handled (the home marks that the fix should also fill "Qayerdan"). */
+    onTap: () -> Unit = {},
+    /** Something else waits on the fix (the place being built from it): the spinner stays. */
+    loading: Boolean = false,
+) {
     val phase = controller.state.phase
-    val locating = phase == MyLocationPhase.LOCATING
+    val locating = phase == MyLocationPhase.LOCATING || loading
     val label = if (locating) "${t(R.string.client_map_myLocation)}, ${t(R.string.client_map_locating)}" else t(R.string.client_map_myLocation)
     RoundIconButton(
         ElchiIcon.LOCATE,
         label,
-        controller::tap,
+        {
+            onTap()
+            controller.tap()
+        },
         modifier,
         tint = if (phase == MyLocationPhase.CENTRED) Elchi.colors.brand else null,
         loading = locating,

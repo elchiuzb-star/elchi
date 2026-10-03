@@ -115,9 +115,13 @@ fun ElchiButton(
     horizontalPadding: Dp = 18.dp,
     /** 2 lets a paired button's long label wrap ("Muammo haqida xabar berish") instead of being cut. */
     maxLines: Int = 1,
+    /**
+     * Drawn as disabled but still tappable: the design's "grey until valid" buttons, whose tap says what is missing.
+     */
+    dimmed: Boolean = false,
 ) {
     val c = Elchi.colors
-    val colors = if (enabled) buttonColors(variant) else ButtonColors(if (c.isDark) Color(0xFF24272E) else Color(0xFFE4E9EF), if (c.isDark) Color(0xFF6B7482) else Color(0xFF8A96A6), null)
+    val colors = if (enabled && !dimmed) buttonColors(variant) else if (variant == ButtonVariant.GHOST) ButtonColors(Color.Transparent, c.placeholder, null) else ButtonColors(if (c.isDark) Color(0xFF24272E) else Color(0xFFE4E9EF), if (c.isDark) Color(0xFF6B7482) else Color(0xFF8A96A6), null)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val shape = CircleShape
@@ -718,6 +722,8 @@ fun TitleBar(
     onRight: (() -> Unit)? = null,
     leadingIcon: ElchiIcon = ElchiIcon.BACK,
     leadingDot: Boolean = false,
+    /** Anything else at the right edge (a step pill "1 / 3"). */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp),
@@ -741,6 +747,7 @@ fun TitleBar(
                 Text(right, style = Elchi.type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = Elchi.colors.accentText, maxLines = 1)
             }
         }
+        trailing?.invoke()
     }
 }
 
@@ -799,9 +806,13 @@ fun RouteCard(
     onFrom: () -> Unit,
     onTo: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Set = the design's round "Almashtirish" button at the right edge (the rows then drop their chevrons). */
+    onSwap: (() -> Unit)? = null,
+    swapLabel: String = "",
 ) {
     val c = Elchi.colors
     val dash = c.outline
+    val chevrons = onSwap == null
     ElchiCard(modifier, padding = PaddingValues(0.dp)) {
         Box {
             // Dashed connector between the two glyphs (decorative).
@@ -815,11 +826,11 @@ fun RouteCard(
                 )
             }
             Column {
-                RouteRow(from, fromDetail, fromPlaceholder, onFrom) {
+                RouteRow(from, fromDetail, fromPlaceholder, onFrom, chevrons) {
                     Box(Modifier.size(14.dp).clip(CircleShape).background(c.card).border(3.dp, c.brand, CircleShape))
                 }
-                Spacer(Modifier.padding(start = 44.dp).fillMaxWidth().height(1.dp).background(c.field))
-                RouteRow(to, toDetail, toPlaceholder, onTo) {
+                Spacer(Modifier.padding(start = 44.dp, end = if (chevrons) 0.dp else 56.dp).fillMaxWidth().height(1.dp).background(c.field))
+                RouteRow(to, toDetail, toPlaceholder, onTo, chevrons) {
                     Box(
                         Modifier
                             .padding(start = 1.dp)
@@ -830,19 +841,35 @@ fun RouteCard(
                     )
                 }
             }
+            if (onSwap != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 4.dp)
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button, onClick = onSwap)
+                        .semantics { contentDescription = swapLabel },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(36.dp).clip(CircleShape).background(c.card).border(1.dp, c.line, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(uz.elchi.app.ui.icons.StrokeIcons.Swap, null, Modifier.size(16.dp), tint = c.text)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun RouteRow(value: String?, detail: String?, placeholder: String, onClick: () -> Unit, glyph: @Composable () -> Unit) {
+private fun RouteRow(value: String?, detail: String?, placeholder: String, onClick: () -> Unit, chevron: Boolean, glyph: @Composable () -> Unit) {
     val c = Elchi.colors
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(start = 16.dp, end = if (chevron) 16.dp else 56.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -851,7 +878,7 @@ private fun RouteRow(value: String?, detail: String?, placeholder: String, onCli
             Text(value ?: placeholder, style = Elchi.type.bodyStrong, color = if (value == null) c.placeholder else c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (value != null && detail != null) Text(detail, style = Elchi.type.caption, color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        ElchiIconView(ElchiIcon.CHEV_R, c.placeholder, size = 18.dp)
+        if (chevron) ElchiIconView(ElchiIcon.CHEV_R, c.placeholder, size = 18.dp)
     }
 }
 

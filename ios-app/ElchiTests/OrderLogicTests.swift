@@ -125,9 +125,13 @@ struct RequestBodyTests {
     @Test func contactsNeedNamesAndFullPhones() {
         var contacts = ContactsForm()
         #expect(!contacts.isComplete)
+        // BOSQICH 02: a name is at least two letters.
         contacts.senderName = "A"
-        contacts.receiverName = "B"
+        contacts.receiverName = "Bo"
         contacts.senderPhone = "901234567"
+        contacts.receiverPhone = "915552211"
+        #expect(!contacts.isComplete)
+        contacts.senderName = "Al"
         contacts.receiverPhone = "91555221"
         #expect(!contacts.isComplete)
         contacts.receiverPhone = "915552211"

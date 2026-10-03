@@ -1,26 +1,35 @@
 package uz.elchi.app.feature.client
 
 import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.provider.ContactsContract
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -28,39 +37,51 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TimePickerDefaults
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -74,25 +95,17 @@ import uz.elchi.app.feature.entry.UzPhoneTransformation
 import uz.elchi.app.i18n.errorText
 import uz.elchi.app.i18n.t
 import uz.elchi.app.i18n.tOrNull
-import uz.elchi.app.ui.components.Banner
 import uz.elchi.app.ui.components.ButtonSize
 import uz.elchi.app.ui.components.ButtonVariant
-import uz.elchi.app.ui.components.CardHeader
 import uz.elchi.app.ui.components.CardRow
-import uz.elchi.app.ui.components.Chip
-import uz.elchi.app.ui.components.ChoiceGrid
 import uz.elchi.app.ui.components.ElchiButton
 import uz.elchi.app.ui.components.ElchiCard
 import uz.elchi.app.ui.components.ElchiField
-import uz.elchi.app.ui.components.EmptyState
+import uz.elchi.app.ui.components.ElchiIconView
 import uz.elchi.app.ui.components.ListCard
 import uz.elchi.app.ui.components.ListRow
 import uz.elchi.app.ui.components.Note
-import uz.elchi.app.ui.components.PickerField
-import uz.elchi.app.ui.components.RadioCard
-import uz.elchi.app.ui.components.SectionTitle
 import uz.elchi.app.ui.components.SystemBarIcons
-import uz.elchi.app.ui.components.UploadBox
 import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.map.ElchiMap
 import uz.elchi.app.ui.map.GeoPoint
@@ -103,6 +116,7 @@ import uz.elchi.app.ui.map.decodePolyline
 import uz.elchi.app.ui.map.legPath
 import uz.elchi.app.ui.theme.Elchi
 import uz.elchi.app.ui.theme.Tone
+import uz.elchi.app.ui.theme.tone
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
@@ -110,107 +124,102 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
 
-// -- client-route-summary (step 1) -------------------------------------------------------------------------------
+// -- client-route-summary (Pochta step 1 / 3) ---------------------------------------------------------------------
 
-private enum class WindowEdge { START, END }
-
+/**
+ * "Yo'nalish": the two ends (with "O'zgartirish"), the road estimate, the departure window tiles (the shared window
+ * sheet), the price stepper and the total. The button is grey until the step is complete but still answers: a tap
+ * lists what is missing at the top and outlines the fields. [editing]: opened from the review, so the button saves
+ * and goes back there.
+ */
 @Composable
-fun RouteSummaryScreen(vm: ParcelRequestViewModel, ru: Boolean, onBack: () -> Unit, onChange: (End) -> Unit, onSave: () -> Unit) {
+fun RouteSummaryScreen(vm: ParcelRequestViewModel, ru: Boolean, editing: Boolean, onBack: () -> Unit, onChange: (End) -> Unit, onSave: () -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Elchi.colors
     val draft = s.draft
     val issues = ParcelRules.routeIssues(draft, s.directionReady, Instant.now())
+    var showErrors by rememberSaveable { mutableStateOf(false) }
+    if (issues.isEmpty()) showErrors = false
+    val shown = if (showErrors) issues else emptyList()
     var picking by rememberSaveable { mutableStateOf<WindowEdge?>(null) }
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
     StepScaffold(
         title = t(R.string.routeSummary_direction),
         onBack = onBack,
+        step = 1 to 3,
+        scrollState = scroll,
         footer = {
-            ElchiButton(t(R.string.common_save), onSave, Modifier.fillMaxWidth(), enabled = issues.isEmpty())
-            if (issues.isNotEmpty()) Note(issues.map { issueText(it) }.joinToString(" · "), tone = Tone.ERR)
+            ElchiButton(
+                if (editing) t(R.string.client_order_saveAndReturn) else t(R.string.common_save),
+                {
+                    if (issues.isEmpty()) onSave() else {
+                        showErrors = true
+                        scope.launch { scroll.animateScrollTo(0) }
+                    }
+                },
+                Modifier.fillMaxWidth(),
+                dimmed = issues.isNotEmpty(),
+            )
         },
     ) {
-        ElchiCard(bordered = true) {
+        ErrorList(shown.map { issueText(it) })
+        ElchiCard {
             EndRow(t(R.string.routeSummary_pickup), draft.origin, ru, first = true) { onChange(End.ORIGIN) }
             EndRow(t(R.string.routeSummary_dropoff), draft.destination, ru, first = false) { onChange(End.DESTINATION) }
         }
         when (val d = s.direction) {
             is Direction.Ready -> {
                 val p = d.preview
-                ElchiCard(bordered = true) {
-                    CardRow(
-                        t(R.string.routeSummary_estimatedRoute),
-                        roadText(p.legDistanceM, p.legDurationS),
-                        first = true,
-                        detail = "${t(R.string.routeSummary_driverProposesTimeLine1)} ${t(R.string.routeSummary_driverProposesTimeLine2)}",
-                    )
+                ElchiCard(background = c.highlight, padding = PaddingValues(horizontal = 16.dp, vertical = 2.dp)) {
+                    CardRow(t(R.string.routeSummary_estimatedRoute), roadText(p.legDistanceM, p.legDurationS), first = true, strong = true)
                 }
                 ParcelRules.offRouteMeters(p)?.let { Note(t(R.string.app_location_offRoute, "km" to ParcelRules.km(it)), tone = Tone.WARN) }
                 RouteMiniMap(s, draft)
-                if (!p.districtsOnRoute.isNullOrEmpty()) {
-                    ElchiCard(bordered = true) {
-                        CardRow(t(R.string.routeSummary_districtsTitle), p.districtsOnRoute.joinToString(" - "), first = true, detail = t(R.string.routeSummary_districtsHint))
-                    }
-                }
             }
             Direction.Checking -> LoadingLine(t(R.string.home_checkingRoute))
             Direction.Mismatch -> Note(t(R.string.home_movePointHint), tone = Tone.ERR, title = t(R.string.app_location_previewMismatch))
             is Direction.Failed -> LoadFailed(t(R.string.routeSummary_estimatedRoute), d.error, vm::refreshDirection)
             Direction.Incomplete -> Unit
         }
-        val placeholder = t(R.string.client_routeSummary_windowPlaceholder)
-        PickerField(
-            t(R.string.listingOwner_windowStart),
-            draft.start?.let(ParcelRules::display),
-            placeholder,
-            onClick = { picking = WindowEdge.START },
-            error = RouteIssue.WINDOW_START in issues || RouteIssue.WINDOW_PAST in issues,
-        )
-        PickerField(
-            t(R.string.listingOwner_windowEnd),
-            draft.endTime?.let(ParcelRules::display),
-            placeholder,
-            onClick = { picking = WindowEdge.END },
-            hint = t(R.string.routeSummary_windowHint),
-            error = RouteIssue.WINDOW_END in issues || RouteIssue.WINDOW_ORDER in issues,
-        )
-        // Taksi (design `seat-picker`): how many people, then the price for one person.
-        if (draft.taxi) SeatPicker(draft.seats, vm::toggleSeat)
-        ElchiField(
-            draft.priceDigits,
-            { text -> vm.edit { it.copy(priceDigits = text.filter(Char::isDigit).trimStart('0').take(10)) } },
-            label = t(if (draft.taxi) R.string.routeSummary_pricePerPerson else R.string.listingOwner_priceLabel),
-            placeholder = if (draft.taxi) "150${ParcelRules.NBSP}000" else "200${ParcelRules.NBSP}000",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-            visualTransformation = ThousandsTransformation,
-        )
-        val minor = ParcelRules.soumToMinor(draft.priceDigits)
-        val seats = TaxiRules.seatCount(draft).toLong()
-        ElchiCard(background = c.highlight) {
-            CardRow(
-                t(R.string.common_total),
-                minor?.let { soum(if (draft.taxi) TaxiRules.totalMinor(it, seats) else it) } ?: t(R.string.common_dash),
-                first = true,
-                // "2 × 150 000 so'm · Haydovchilar o'z taklifini yuboradi."
-                detail = if (draft.taxi && minor != null) "${seatsPrice(seats, minor)} · ${t(R.string.routeSummary_driversSendOffers)}" else t(R.string.routeSummary_driversSendOffers),
-                strong = true,
+        FormLabel(t(R.string.orderForm_review_window)) {
+            WindowTiles(
+                draft.start,
+                draft.endTime,
+                onEdge = { picking = it },
+                startError = RouteIssue.WINDOW_START in shown || RouteIssue.WINDOW_PAST in shown,
+                endError = RouteIssue.WINDOW_END in shown || RouteIssue.WINDOW_ORDER in shown,
+                onSheet = false,
             )
+            Text(windowHint(draft), style = Elchi.type.caption, color = c.muted)
+        }
+        FormLabel(t(R.string.common_price)) {
+            PriceStepper(draft.priceDigits, { digits -> vm.edit { it.copy(priceDigits = digits) } }, error = RouteIssue.PRICE in shown, onSheet = false)
+            Text(t(R.string.client_order_priceStepHint), style = Elchi.type.caption, color = c.muted)
+        }
+        val minor = ParcelRules.soumToMinor(draft.priceDigits)
+        ElchiCard(background = c.highlight, padding = PaddingValues(horizontal = 16.dp, vertical = 2.dp)) {
+            CardRow(t(R.string.common_total), minor?.let { soum(it) } ?: t(R.string.common_dash), first = true, detail = t(R.string.routeSummary_driversSendOffers), strong = true)
         }
     }
     picking?.let { edge ->
-        val current = if (edge == WindowEdge.START) draft.start else draft.endTime
-        val fallback = (if (edge == WindowEdge.START) null else draft.start) ?: ParcelRules.defaultWindow(Instant.now()).let { if (edge == WindowEdge.START) it.first else it.second }
-        DateTimeDialog(
-            title = t(if (edge == WindowEdge.START) R.string.listingOwner_windowStart else R.string.listingOwner_windowEnd),
-            initial = current ?: fallback,
+        WindowSheet(
+            edge = edge,
+            start = draft.start,
+            end = draft.endTime,
+            onStart = { value -> vm.edit { it.copy(windowStart = ParcelRules.formatLocal(value)) } },
+            onEnd = { value -> vm.edit { it.copy(windowEnd = ParcelRules.formatLocal(value)) } },
             onDismiss = { picking = null },
-            onPicked = { value ->
-                picking = null
-                vm.edit { d ->
-                    val text = ParcelRules.formatLocal(value)
-                    if (edge == WindowEdge.START) d.copy(windowStart = text) else d.copy(windowEnd = text)
-                }
-            },
         )
+    }
+}
+
+/** A labelled block of the form (13sp label above its control, design `Jo'nash oynasi`, `Narx`). */
+@Composable
+internal fun FormLabel(label: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, style = Elchi.type.label, color = Elchi.colors.text)
+        content()
     }
 }
 
@@ -218,13 +227,653 @@ fun RouteSummaryScreen(vm: ParcelRequestViewModel, ru: Boolean, onBack: () -> Un
 private fun EndRow(key: String, place: Place?, ru: Boolean, first: Boolean, onChange: () -> Unit) {
     CardRow(
         key,
-        place?.label(ru) ?: t(R.string.app_route_noAddress),
+        place?.let { placeTitle(it, ru) } ?: t(R.string.app_route_noAddress),
         first = first,
-        detail = place?.area(ru),
+        detail = place?.areaLine(ru),
         trailing = t(R.string.app_route_change),
         onTrailing = onChange,
         muted = place == null,
+        strong = place != null,
     )
+}
+
+/** The place as a title: "Joriy joylashuv" for the phone's position, else the stop, address or coordinates. */
+@Composable
+internal fun placeTitle(place: Place, ru: Boolean): String = if (place.current) t(R.string.home_currentLocation) else place.label(ru)
+
+@Composable
+internal fun issueText(issue: RouteIssue): String = t(
+    when (issue) {
+        RouteIssue.POINTS -> R.string.app_validation_bothPoints
+        RouteIssue.WINDOW_START -> R.string.app_validation_windowStart
+        RouteIssue.WINDOW_END -> R.string.client_order_err_windowEnd
+        RouteIssue.WINDOW_PAST -> R.string.app_validation_windowPast
+        RouteIssue.WINDOW_ORDER -> R.string.client_order_err_endAfterStart
+        RouteIssue.SEATS -> R.string.client_taxi_err_seats
+        RouteIssue.PRICE -> R.string.listingOwner_invalid_price
+    },
+)
+
+// -- client-order-contact (Pochta step 2 / 3) ---------------------------------------------------------------------
+
+private enum class ContactSide { SENDER, RECEIVER }
+
+private enum class ContactSheet { SENDER, RECEIVER, TYPE, SIZE, BAN, PHOTO }
+
+@Composable
+private fun contactIssueText(issue: ContactIssue): String = when (issue) {
+    ContactIssue.SENDER_NAME -> t(R.string.client_order_err_senderName)
+    ContactIssue.SENDER_PHONE -> t(R.string.client_order_err_phone9)
+    ContactIssue.RECEIVER_NAME -> t(R.string.client_order_err_receiverName)
+    ContactIssue.RECEIVER_PHONE -> t(R.string.client_order_err_receiverPhone)
+    ContactIssue.TYPE -> t(R.string.client_order_err_type)
+    ContactIssue.SIZE -> t(R.string.client_order_err_size)
+    ContactIssue.PHOTO -> "${t(R.string.orderForm_photoRequired).trimEnd('.')}."
+}
+
+/**
+ * "Jo'natma ma'lumotlari": sender and receiver as contact cards (the phone's contacts, a new number or the account),
+ * the parcel's type and size (sheets), its photo (inline, replace / delete), the prohibited-items list (a sheet) and
+ * the optional comment. Tap-to-validate like the route step; an unconfirmed catalog keeps the button off.
+ */
+@Composable
+fun OrderContactScreen(vm: ParcelRequestViewModel, ru: Boolean, editing: Boolean, account: Pair<String, String>, onBack: () -> Unit, onNext: () -> Unit) {
+    val s by vm.state.collectAsStateWithLifecycle()
+    val c = Elchi.colors
+    val d = s.draft
+    val catalog = s.catalogValue
+    val issues = ParcelRules.contactIssues(d)
+    var showErrors by rememberSaveable { mutableStateOf(false) }
+    if (issues.isEmpty()) showErrors = false
+    val shown = if (showErrors) issues else emptyList()
+    var sheet by rememberSaveable { mutableStateOf<ContactSheet?>(null) }
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val catalogBlocked = catalog?.confirmed != true
+    // The pickers live on the screen, not in the chooser sheet: the sheet closes when one opens, and a launcher that
+    // left the composition would lose its result.
+    val context = LocalContext.current
+    var captureUri by rememberSaveable { mutableStateOf<String?>(null) }
+    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::uploadPhoto) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val uri = captureUri
+        if (saved && uri != null) vm.uploadPhoto(uri.toUri())
+    }
+    StepScaffold(
+        title = t(R.string.client_order_contactTitle),
+        onBack = onBack,
+        step = 2 to 3,
+        scrollState = scroll,
+        footer = {
+            ElchiButton(
+                if (editing) t(R.string.client_order_saveAndReturn) else t(R.string.common_continue),
+                {
+                    if (issues.isEmpty()) onNext() else {
+                        showErrors = true
+                        scope.launch { scroll.animateScrollTo(0) }
+                    }
+                },
+                Modifier.fillMaxWidth(),
+                // The size catalog unconfirmed (Q140): nothing can be sent, so the button stays off.
+                enabled = !catalogBlocked || s.catalog is Load.Loading,
+                dimmed = issues.isNotEmpty() || s.photoUploading,
+            )
+        },
+    ) {
+        ErrorList(shown.map { contactIssueText(it) })
+        ContactCard(
+            t(R.string.orderForm_review_sender),
+            d.senderName,
+            d.senderDigits,
+            error = ContactIssue.SENDER_NAME in shown || ContactIssue.SENDER_PHONE in shown,
+        ) { sheet = ContactSheet.SENDER }
+        ContactCard(
+            t(R.string.orderForm_review_receiver),
+            d.receiverName,
+            d.receiverDigits,
+            error = ContactIssue.RECEIVER_NAME in shown || ContactIssue.RECEIVER_PHONE in shown,
+        ) { sheet = ContactSheet.RECEIVER }
+
+        FormLabel(t(R.string.client_order_parcelSection)) {
+            val type = ParcelType.entries.firstOrNull { it.value == d.parcelType && it != ParcelType.UNKNOWN }
+            val category = catalog?.items?.firstOrNull { it.id == d.categoryId }
+            ElchiCard(padding = PaddingValues(0.dp)) {
+                SelectRow(t(R.string.client_order_typeRow), type?.let { parcelTypeLabel(it) }, null, first = true, error = ContactIssue.TYPE in shown) { sheet = ContactSheet.TYPE }
+                SelectRow(t(R.string.client_order_sizeRow), category?.let { categoryName(it, ru) }, category?.let { categoryLimits(it) }, first = false, error = ContactIssue.SIZE in shown) { sheet = ContactSheet.SIZE }
+            }
+            when (val cat = s.catalog) {
+                is Load.Failed -> LoadFailed(t(R.string.parcelCategory_loadFailed), cat.error, vm::loadCatalog)
+                is Load.Ready -> if (!cat.value.confirmed) Note(t(R.string.parcelCategory_unconfirmed), tone = Tone.WARN)
+                Load.Loading -> Unit
+            }
+        }
+
+        FormLabel(t(R.string.orderForm_photoTitle)) {
+            PhotoBlock(s, error = ContactIssue.PHOTO in shown, onPick = { sheet = ContactSheet.PHOTO }, onRemove = vm::removePhoto)
+        }
+
+        Row(
+            Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { sheet = ContactSheet.BAN }.heightIn(min = 44.dp).padding(end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            ElchiIconView(ElchiIcon.ALERT, c.accentText, size = 16.dp)
+            Text(t(R.string.client_order_banLink), style = Elchi.type.label.copy(fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold), color = c.accentText)
+        }
+
+        FormLabel(t(R.string.client_order_noteLabel)) {
+            NoteField(d.comment) { v -> vm.edit { it.copy(comment = v.take(ParcelRules.NOTE_MAX)) } }
+            if (ParcelRules.noteHasContact(d.comment)) {
+                Text(t(R.string.client_order_noteMasked), style = Elchi.type.caption, color = c.tone(Tone.WARN).fg)
+            }
+        }
+        Note(t(R.string.orderForm_phonesHidden))
+    }
+
+    when (sheet) {
+        ContactSheet.SENDER, ContactSheet.RECEIVER -> {
+            val side = if (sheet == ContactSheet.SENDER) ContactSide.SENDER else ContactSide.RECEIVER
+            ContactPickerSheet(side, if (side == ContactSide.SENDER) d.senderDigits else d.receiverDigits, account, onDismiss = { sheet = null }) { name, digits ->
+                vm.edit { if (side == ContactSide.SENDER) it.copy(senderName = name, senderDigits = digits) else it.copy(receiverName = name, receiverDigits = digits) }
+                sheet = null
+            }
+        }
+        ContactSheet.TYPE -> FormSheet(t(R.string.orderForm_parcelType), onDismiss = { sheet = null }) {
+            ParcelType.entries.filter { it != ParcelType.UNKNOWN }.forEach { type ->
+                SheetOption(parcelTypeLabel(type), d.parcelType == type.value, {
+                    vm.edit { it.copy(parcelType = type.value) }
+                    sheet = null
+                })
+            }
+        }
+        ContactSheet.SIZE -> FormSheet(t(R.string.parcelCategory_label), onDismiss = { sheet = null }) {
+            when (val cat = s.catalog) {
+                Load.Loading -> LoadingLine(t(R.string.parcelCategory_loading))
+                is Load.Failed -> LoadFailed(t(R.string.parcelCategory_loadFailed), cat.error, vm::loadCatalog)
+                is Load.Ready -> if (!cat.value.confirmed) {
+                    Note(t(R.string.parcelCategory_unconfirmed), tone = Tone.WARN)
+                } else {
+                    cat.value.items.orEmpty().forEach { item ->
+                        SheetOption(categoryName(item, ru), d.categoryId == item.id, {
+                            vm.edit { it.copy(categoryId = item.id) }
+                            sheet = null
+                        }, detail = categoryLimits(item), icon = categoryIcon(item.iconKey))
+                    }
+                    if (cat.value.synthetic == true) Text(t(R.string.parcelCategory_synthetic), style = Elchi.type.caption, color = c.tone(Tone.WARN).fg)
+                }
+            }
+        }
+        ContactSheet.BAN -> {
+            val p = (s.policy as? Load.Ready)?.value
+            val badge = p?.takeIf { it.approved }?.let { policy ->
+                listOfNotNull(policy.label, policy.effectiveFrom?.let { shortDate(it) }).takeIf { it.size == 2 }?.let { t(R.string.client_order_banSince, "label" to it[0], "date" to it[1]) }
+                    ?: policy.label
+            }
+            FormSheet(t(R.string.parcelPolicy_title), onDismiss = { sheet = null }, badge = badge) {
+                PolicyRows(s.policy, vm::loadPolicy)
+                ElchiButton(t(R.string.client_order_banOk), { sheet = null }, Modifier.fillMaxWidth().padding(top = 4.dp).height(52.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM)
+            }
+        }
+        ContactSheet.PHOTO -> PhotoChooser(
+            onCamera = {
+                val file = PhotoCompressor(context).newCaptureFile()
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+                captureUri = uri.toString()
+                try {
+                    camera.launch(uri)
+                } catch (e: ActivityNotFoundException) {
+                    gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+            },
+            onGallery = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            onDismiss = { sheet = null },
+        )
+        null -> Unit
+    }
+}
+
+/** "Turi  Quti  ⌄" - a row of the parcel card that opens its sheet; a 3dp red edge marks a missing value. */
+@Composable
+private fun SelectRow(key: String, value: String?, detail: String?, first: Boolean, error: Boolean, onClick: () -> Unit) {
+    val c = Elchi.colors
+    Column {
+        if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(c.field))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 54.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .then(if (error) Modifier.drawBehind { drawRect(Color(0xFFE58A8A), size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height)) } else Modifier)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(key, Modifier.width(62.dp), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = c.muted)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    value ?: t(R.string.client_order_choose),
+                    style = Elchi.type.body.copy(fontWeight = if (value == null) FontWeight.Normal else FontWeight.SemiBold),
+                    color = if (value == null) c.placeholder else c.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (detail != null) Text(detail, style = Elchi.type.caption, color = c.muted)
+            }
+            ElchiIconView(ElchiIcon.CHEV_D, c.placeholder, size = 16.dp)
+        }
+    }
+}
+
+/** The comment box (white card, two lines at least, design placeholder). */
+@Composable
+private fun NoteField(value: String, onValue: (String) -> Unit) {
+    val c = Elchi.colors
+    val shape = RoundedCornerShape(18.dp)
+    val label = t(R.string.client_order_noteLabel)
+    val placeholder = t(R.string.client_order_notePlaceholder)
+    BasicTextField(
+        value = value,
+        onValueChange = onValue,
+        textStyle = Elchi.type.body.copy(color = c.text, lineHeight = 22.sp),
+        cursorBrush = SolidColor(c.brand),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(10.dp, shape, ambientColor = c.shadow, spotColor = c.shadow)
+            .clip(shape)
+            .background(c.card)
+            .heightIn(min = 68.dp)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .semantics { contentDescription = label },
+        decorationBox = { inner ->
+            Box {
+                if (value.isEmpty()) Text(placeholder, style = Elchi.type.body, color = c.placeholder)
+                inner()
+            }
+        },
+    )
+}
+
+/** "Posilka rasmi": the upload tile, the spinner while it uploads, or the photo card with replace and delete. */
+@Composable
+private fun PhotoBlock(s: ParcelRequestViewModel.State, error: Boolean, onPick: () -> Unit, onRemove: () -> Unit) {
+    val c = Elchi.colors
+    val local = s.draft.photoLocalPath
+    val preview = remember(local) { local?.let { PhotoCompressor.previewBitmap(File(it), maxEdge = 300) } }
+    val hasPhoto = s.draft.photoFileUrl != null
+    val shape = RoundedCornerShape(18.dp)
+    when {
+        s.photoUploading -> LoadingLine(t(R.string.app_photo_loading))
+        hasPhoto -> Row(
+            Modifier.fillMaxWidth().shadow(10.dp, shape, ambientColor = c.shadow, spotColor = c.shadow).clip(shape).background(c.card).padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.size(64.dp).clip(RoundedCornerShape(14.dp)).background(c.field)) {
+                if (preview != null) Image(preview.asImageBitmap(), t(R.string.orderForm_photoAlt), Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ElchiIconView(ElchiIcon.CHECK_C, c.tone(Tone.OK).fg, size = 14.dp)
+                    Text(t(R.string.orderForm_photoReady), style = Elchi.type.label.copy(fontWeight = FontWeight.SemiBold), color = c.tone(Tone.OK).noteText)
+                }
+                Text(local?.let { File(it).name } ?: "", style = Elchi.type.caption, color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            CircleAction(ElchiIcon.REFRESH, t(R.string.client_order_photoReplaceShort), c.soft, c.softText, onPick)
+            CircleAction(ElchiIcon.TRASH, t(R.string.common_delete), c.tone(Tone.ERR).bg, c.tone(Tone.ERR).fg, onRemove)
+        }
+        else -> Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 62.dp)
+                .clip(shape)
+                .background(if (c.isDark) c.highlight else Color(0xFFF4FAFF))
+                .drawBehind {
+                    val stroke = 2.dp.toPx()
+                    drawRoundRect(
+                        color = if (error) Color(0xFFE58A8A) else Color(0xFF0096FF),
+                        topLeft = androidx.compose.ui.geometry.Offset(stroke / 2, stroke / 2),
+                        size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(18.dp.toPx()),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx()))),
+                    )
+                }
+                .clickable(role = Role.Button, onClick = onPick)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(c.soft), contentAlignment = Alignment.Center) { ElchiIconView(ElchiIcon.CAMERA, c.accentText, size = 20.dp) }
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(t(R.string.orderForm_uploadPhoto), style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+                Text(t(R.string.client_order_photoDriverSees), style = Elchi.type.caption, color = c.muted)
+            }
+        }
+    }
+    s.photoError?.let { e -> Note(if (e is ApiException) errorText(e) else t(R.string.client_photo_unreadable), tone = Tone.ERR) }
+}
+
+@Composable
+private fun CircleAction(icon: ElchiIcon, label: String, bg: Color, fg: Color, onClick: () -> Unit) {
+    Box(
+        Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(40.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) { ElchiIconView(icon, fg, size = 17.dp) }
+    }
+}
+
+/** Camera or gallery, then the compress + upload pipeline (`cargo_photo`). */
+@Composable
+private fun PhotoChooser(onCamera: () -> Unit, onGallery: () -> Unit, onDismiss: () -> Unit) {
+    FormSheet(t(R.string.orderForm_uploadPhoto), onDismiss = onDismiss) {
+        ListCard {
+            ListRow(t(R.string.client_photo_camera), icon = ElchiIcon.CAMERA, first = true, onClick = {
+                onDismiss()
+                onCamera()
+            })
+            ListRow(t(R.string.client_photo_gallery), icon = ElchiIcon.UPLOAD, onClick = {
+                onDismiss()
+                onGallery()
+            })
+        }
+    }
+}
+
+/**
+ * "Yuboruvchini tanlang" / "Qabul qiluvchini tanlang": search, the phone's own contact picker (no contacts
+ * permission - the system picker grants the one row), "+ Yangi raqam" (name + 9 digits) and the account ("SIZ").
+ * The prototype's in-app contact list and recent receivers have no data source (BLOCKED) and are left out.
+ */
+@Composable
+private fun ContactPickerSheet(side: ContactSide, currentDigits: String, account: Pair<String, String>, onDismiss: () -> Unit, onPick: (String, String) -> Unit) {
+    val c = Elchi.colors
+    val context = LocalContext.current
+    val toast = LocalFlowToast.current
+    var query by rememberSaveable { mutableStateOf("") }
+    var manual by rememberSaveable { mutableStateOf(false) }
+    var name by rememberSaveable { mutableStateOf("") }
+    var digits by rememberSaveable { mutableStateOf("") }
+    val pickedSender = t(R.string.client_order_pickedSender)
+    val pickedReceiver = t(R.string.client_order_pickedReceiver)
+    val invalid = t(R.string.client_order_manualInvalid)
+    val pick: (String, String) -> Unit = { n, p ->
+        onPick(n, p)
+        toast.show((if (side == ContactSide.SENDER) pickedSender else pickedReceiver).replace("{name}", n))
+    }
+    val device = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val uri = result.data?.data ?: return@rememberLauncherForActivityResult
+        val row = runCatching {
+            context.contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0).orEmpty() to cursor.getString(1).orEmpty() else null
+            }
+        }.getOrNull()
+        val (n, number) = row ?: return@rememberLauncherForActivityResult
+        val local = ParcelRules.contactDigits(number)
+        if (ParcelRules.nameValid(n) && ParcelRules.phoneValid(local)) {
+            pick(n.trim(), local)
+        } else {
+            // Not an Uzbek mobile number (or no name): the manual form opens with what was read.
+            manual = true
+            name = n.trim()
+            digits = local
+            toast.show(invalid)
+        }
+    }
+    FormSheet(if (side == ContactSide.SENDER) t(R.string.client_order_pickSender) else t(R.string.client_order_pickReceiver), onDismiss = onDismiss) {
+        ElchiField(query, { query = it }, placeholder = t(R.string.client_order_contactSearch), icon = ElchiIcon.SEARCH, minHeight = 48.dp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ElchiButton(t(R.string.client_order_deviceContacts), {
+                runCatching { device.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)) }
+            }, Modifier.weight(1f), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.PHONE, horizontalPadding = 10.dp)
+            ElchiButton(t(R.string.client_order_newNumber), { manual = !manual }, Modifier.weight(1f), if (manual) ButtonVariant.NAVY else ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, horizontalPadding = 10.dp)
+        }
+        if (manual) {
+            val ok = ParcelRules.nameValid(name) && ParcelRules.phoneValid(digits)
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(sheetWell()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ElchiField(name, { name = it.take(120) }, placeholder = t(R.string.client_order_manualName), minHeight = 46.dp, keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next))
+                ElchiField(
+                    digits,
+                    { digits = it.filter(Char::isDigit).take(9) },
+                    prefix = "+998",
+                    placeholder = "90 123 45 67",
+                    monospace = true,
+                    minHeight = 46.dp,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
+                    visualTransformation = UzPhoneTransformation,
+                )
+                ElchiButton(t(R.string.client_order_choosePick), { if (ok) pick(name.trim(), digits) else toast.show(invalid) }, Modifier.fillMaxWidth(), size = ButtonSize.MEDIUM, dimmed = !ok)
+            }
+        }
+        val me = account.takeIf { (n, p) -> ParcelRules.nameValid(n) && ParcelRules.phoneValid(p) }
+        val q = query.trim().lowercase().replace(" ", "")
+        val meShown = me?.takeIf { (n, p) -> q.isEmpty() || n.lowercase().replace(" ", "").contains(q) || p.contains(q) }
+        if (meShown != null) {
+            Text(t(R.string.client_order_groupYou), Modifier.padding(top = 4.dp), style = Elchi.type.caption.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.7.sp), color = c.muted)
+            val (n, p) = meShown
+            val on = currentDigits == p
+            val shape = RoundedCornerShape(18.dp)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .border(1.dp, c.line, shape)
+                    .background(if (on) c.highlight else c.card)
+                    .clickable(role = Role.Button) { pick(n.trim(), p) }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(Modifier.size(38.dp).clip(CircleShape).background(c.brand), contentAlignment = Alignment.Center) {
+                    Text(initials(n), style = Elchi.type.label.copy(fontWeight = FontWeight.SemiBold), color = c.onBrand)
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(t(R.string.client_order_me, "name" to n.trim()), style = Elchi.type.secondary.copy(fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold), color = c.text)
+                    Text("+998 ${ParcelRules.groupPhone(p)}", style = Elchi.type.caption.copy(fontSize = 12.5.sp, fontFamily = FontFamily.Monospace), color = c.muted)
+                }
+                if (on) ElchiIconView(ElchiIcon.CHECK_C, c.tone(Tone.OK).fg, size = 18.dp)
+            }
+        } else if (!manual) {
+            Text(t(R.string.client_order_contactNone), Modifier.fillMaxWidth().padding(vertical = 14.dp), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = c.muted, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+/** The prohibited-items rows (§5.2) inside their sheet, with the states; "not approved" never reads as "all allowed". */
+@Composable
+private fun PolicyRows(policy: Load<ParcelPolicyDTO>, retry: () -> Unit) {
+    val c = Elchi.colors
+    when (policy) {
+        Load.Loading -> LoadingLine(t(R.string.common_loading))
+        is Load.Failed -> {
+            Note(t(R.string.parcelPolicy_loadFailed), tone = Tone.ERR)
+            ElchiButton(t(R.string.common_retry), retry, Modifier.fillMaxWidth(), ButtonVariant.GHOST, ButtonSize.MEDIUM, icon = ElchiIcon.REFRESH)
+        }
+        is Load.Ready -> {
+            val p = policy.value
+            when {
+                !p.approved -> Note(t(R.string.parcelPolicy_unconfirmed), tone = Tone.WARN)
+                p.items.isNullOrEmpty() -> Note(t(R.string.parcelPolicy_empty), tone = Tone.GRAY)
+                else -> p.items.forEach { item ->
+                    val applies = item.appliesTo?.let { tOrNull("parcelPolicy.appliesTo.$it") }
+                    val source = item.sourceRef?.let { ref ->
+                        item.sourceCheckedOn?.let { t(R.string.parcelPolicy_sourceChecked, "source" to ref, "date" to shortDate(it)) } ?: t(R.string.parcelPolicy_source, "source" to ref)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(c.field))
+                        Text(tOrNull("parcelPolicy.category.${item.category}") ?: item.category, Modifier.padding(top = 10.dp), style = Elchi.type.caption, color = c.muted)
+                        Text(item.title, style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium), color = c.text)
+                        listOfNotNull(applies, source).joinToString(" · ").ifEmpty { null }?.let { Text(it, Modifier.padding(bottom = 2.dp), style = Elchi.type.caption, color = c.muted) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// -- client-order-review (Pochta 3 / 3, Taksi 1 / 1) --------------------------------------------------------------
+
+/** Where a review row's pencil leads. */
+enum class EditTarget { ROUTE, CONTACT }
+
+@Composable
+fun OrderReviewScreen(
+    vm: ParcelRequestViewModel,
+    ru: Boolean,
+    account: Pair<String, String>,
+    onBack: () -> Unit,
+    onEdit: (EditTarget) -> Unit,
+    onPublished: () -> Unit,
+) {
+    val s by vm.state.collectAsStateWithLifecycle()
+    val d = s.draft
+    val p = s.preview
+    LaunchedEffect(s.published) { if (s.published != null) onPublished() }
+    val ready = if (d.taxi) TaxiRules.readyToPublish(d, s.directionReady, Instant.now()) else ParcelRules.readyToPublish(d, s.directionReady, Instant.now())
+    val route = { onEdit(EditTarget.ROUTE) }
+    val contact = { onEdit(EditTarget.CONTACT) }
+    StepScaffold(
+        title = t(R.string.orderForm_review_title),
+        onBack = onBack,
+        step = if (d.taxi) 1 to 1 else 3 to 3,
+        footer = {
+            s.publishError?.let { PublishError(it) }
+            if (!ready && !s.publishing) Note(t(if (d.taxi) R.string.orderForm_review_incompletePassenger else R.string.orderForm_review_incompleteParcel), tone = Tone.WARN)
+            ElchiButton(
+                if (s.publishing) t(R.string.client_order_publishing) else t(R.string.orderForm_review_publish),
+                vm::publish,
+                Modifier.fillMaxWidth(),
+                enabled = ready || s.publishing,
+                dimmed = s.publishing,
+            )
+            ElchiButton(t(R.string.listingOwner_edit), route, Modifier.fillMaxWidth().height(40.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, enabled = !s.publishing)
+        },
+    ) {
+        val category = s.catalogValue?.items?.firstOrNull { it.id == d.categoryId }
+        val type = ParcelType.entries.firstOrNull { it.value == d.parcelType && it != ParcelType.UNKNOWN }
+        ElchiCard(padding = PaddingValues(horizontal = 16.dp, vertical = 2.dp)) {
+            ReviewRow(t(R.string.routeSummary_direction), regionLine(d, ru), detail = p?.corridorName, first = true, onEdit = route)
+            d.origin?.let { ReviewRow(t(R.string.orderForm_review_pickupPlace), placeTitle(it, ru), detail = placeDetail(it, ru), onEdit = route) }
+            d.destination?.let {
+                ReviewRow(t(if (d.taxi) R.string.client_taxi_dropoffPlace else R.string.orderForm_review_dropoffPlace), placeTitle(it, ru), detail = placeDetail(it, ru), onEdit = route)
+            }
+            p?.let { ReviewRow(t(R.string.routeSummary_estimatedRoute), roadText(it.legDistanceM, it.legDurationS)) }
+            ReviewRow(t(R.string.orderForm_review_window), windowLine(d), onEdit = route)
+            val minor = ParcelRules.soumToMinor(d.priceDigits)
+            if (d.taxi) {
+                val seats = TaxiRules.seatCount(d)
+                ReviewRow(
+                    t(R.string.client_taxi_seats),
+                    if (seats >= TaxiRules.WHOLE_CABIN) t(R.string.client_taxi_wholeCabinSeats) else t(R.string.orderForm_review_peopleCount, "count" to seats),
+                    onEdit = route,
+                )
+                ReviewRow(
+                    t(R.string.common_price),
+                    minor?.let { "${seats.coerceAtLeast(1)} × ${soum(it)} = ${soum(TaxiRules.totalMinor(it, TaxiRules.billedSeats(d)))}" } ?: "",
+                    detail = t(R.string.orderForm_review_driversSendOffers),
+                    onEdit = route,
+                )
+                ReviewRow(
+                    t(R.string.client_taxi_passenger),
+                    account.first,
+                    detail = t(R.string.client_taxi_accountData, "phone" to "+998 ${ParcelRules.groupPhone(account.second)}"),
+                )
+                if (d.comment.isNotBlank()) ReviewRow(t(R.string.listingOwner_commentLabel), ParcelRules.maskNote(d.comment.trim()))
+                return@ElchiCard
+            }
+            ReviewRow(t(R.string.common_price), minor?.let { soum(it) } ?: "", detail = t(R.string.orderForm_review_driversSendOffers), onEdit = route)
+            ReviewRow(
+                t(R.string.orderForm_review_parcel),
+                type?.let { parcelTypeLabel(it) } ?: "",
+                detail = category?.let { "${categoryName(it, ru)} · ${categoryLimits(it)}" },
+                onEdit = contact,
+            )
+            ReviewRow(t(R.string.orderForm_review_sender), d.senderName.trim(), detail = "+998 ${ParcelRules.groupPhone(d.senderDigits)}", onEdit = contact)
+            ReviewRow(t(R.string.orderForm_review_receiver), d.receiverName.trim(), detail = "+998 ${ParcelRules.groupPhone(d.receiverDigits)}", onEdit = contact)
+            ReviewRow(
+                t(R.string.orderForm_photoTitle),
+                t(if (d.photoFileUrl != null) R.string.orderForm_review_uploaded else R.string.client_order_photoNotUploaded),
+                muted = d.photoFileUrl == null,
+                onEdit = contact,
+            )
+            if (d.comment.isNotBlank()) ReviewRow(t(R.string.listingOwner_commentLabel), ParcelRules.maskNote(d.comment.trim()), onEdit = contact)
+        }
+    }
+}
+
+/** "Toshkent shahri → Samarqand viloyati" (design `routeLine`: the regions). */
+@Composable
+internal fun regionLine(d: ParcelDraft, ru: Boolean): String =
+    "${d.origin?.region(ru) ?: t(R.string.direction_from)} → ${d.destination?.region(ru) ?: t(R.string.direction_to)}"
+
+/** "28.09, 09:00 – 28.09, 18:00" */
+@Composable
+internal fun windowLine(d: ParcelDraft): String {
+    val start = d.start ?: return ""
+    val end = d.endTime ?: return ""
+    return "${ParcelRules.displayShort(start)} – ${ParcelRules.displayShort(end)}"
+}
+
+/** "Chilonzor, Toshkent shahri", or "Tasdiqlangan bekat · …" for a verified stop (Q88.4). */
+@Composable
+private fun placeDetail(place: Place, ru: Boolean): String {
+    val where = place.areaLine(ru)
+    return if (place.stopId != null) t(R.string.orderForm_review_verifiedStop, "where" to where) else where
+}
+
+// -- client-success -----------------------------------------------------------------------------------------------
+
+/**
+ * "Buyurtma e'lon qilindi": the summary card (route, window, total - the listing has no human-readable number, so
+ * none is shown), one note per server warning, "Buyurtmalarimga o'tish" and "Yangi buyurtma".
+ */
+@Composable
+fun OrderSuccessScreen(vm: ParcelRequestViewModel, ru: Boolean, onDone: () -> Unit, onNewOrder: () -> Unit) {
+    val s by vm.state.collectAsStateWithLifecycle()
+    val c = Elchi.colors
+    val d = s.draft
+    SystemBarIcons(dark = !c.isDark)
+    // Back from here is the same as the button: the published request is done, the next one starts clean.
+    BackHandler(onBack = onDone)
+    Column(Modifier.fillMaxSize().background(c.page)) {
+        Column(
+            Modifier.weight(1f).statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 10.dp, start = 8.dp, end = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(84.dp).clip(CircleShape).background(c.tone(Tone.OK).bg), contentAlignment = Alignment.Center) {
+                    ElchiIconView(ElchiIcon.CHECK_C, c.tone(Tone.OK).fg, size = 40.dp)
+                }
+                Text(t(R.string.orderForm_success_title), style = Elchi.type.title.copy(fontSize = 26.sp, lineHeight = 31.sp), color = c.text, textAlign = TextAlign.Center)
+                Text(
+                    "${t(R.string.orderForm_success_waiting)}. ${t(R.string.orderForm_success_notify)}.",
+                    Modifier.widthIn(max = 300.dp),
+                    style = Elchi.type.secondary,
+                    color = c.muted,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            if (d.origin != null && d.destination != null) {
+                val minor = ParcelRules.soumToMinor(d.priceDigits)
+                val total = minor?.let { soum(if (d.taxi) TaxiRules.totalMinor(it, TaxiRules.billedSeats(d)) else it) }
+                ElchiCard(padding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(regionLine(d, ru), style = Elchi.type.bodyStrong, color = c.text)
+                    Text(listOfNotNull(windowLine(d).ifEmpty { null }, total).joinToString(" · "), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = c.muted)
+                }
+            }
+            // One note per server warning, each in its own words (e.g. the comment's contacts were masked, Q43).
+            s.published?.warnings.orEmpty().forEach { warning ->
+                Note(tOrNull("warning.${warning.code}") ?: warning.message, tone = Tone.WARN)
+            }
+        }
+        Column(Modifier.fillMaxWidth().background(c.card)) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
+            Column(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ElchiButton(t(R.string.orderForm_success_toOrders), onDone, Modifier.fillMaxWidth())
+                ElchiButton(t(R.string.client_order_newOrder), onNewOrder, Modifier.fillMaxWidth().height(40.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM)
+            }
+        }
+    }
 }
 
 /** The confirmed road between the two places, on a small still map (hidden when the map is unavailable). */
@@ -253,18 +902,6 @@ private fun RouteMiniMap(s: ParcelRequestViewModel.State, draft: ParcelDraft) {
         )
     }
 }
-
-@Composable
-private fun issueText(issue: RouteIssue): String = t(
-    when (issue) {
-        RouteIssue.POINTS -> R.string.app_validation_bothPoints
-        RouteIssue.WINDOW_START -> R.string.app_validation_windowStart
-        RouteIssue.WINDOW_END -> R.string.app_validation_windowEnd
-        RouteIssue.WINDOW_PAST -> R.string.app_validation_windowPast
-        RouteIssue.WINDOW_ORDER -> R.string.app_validation_endAfterStart
-        RouteIssue.PRICE -> R.string.listingOwner_invalid_price
-    },
-)
 
 /** `120000` shown as `120 000` while typing; the cursor maps back onto the raw digits. */
 internal object ThousandsTransformation : VisualTransformation {
@@ -366,57 +1003,7 @@ internal fun DateTimeDialog(title: String, initial: LocalDateTime, onDismiss: ()
     }
 }
 
-// -- client-order-address (step 2) -------------------------------------------------------------------------------
-
-@Composable
-fun OrderAddressScreen(vm: ParcelRequestViewModel, ru: Boolean, onBack: () -> Unit, onNext: () -> Unit) {
-    val s by vm.state.collectAsStateWithLifecycle()
-    val d = s.draft
-    StepScaffold(
-        title = t(R.string.orderForm_contactTitle),
-        onBack = onBack,
-        footer = { ElchiButton(t(R.string.common_continue), onNext, Modifier.fillMaxWidth(), enabled = ParcelRules.contactsComplete(d)) },
-    ) {
-        ElchiCard(background = Elchi.colors.field) {
-            CardRow(t(R.string.routeSummary_direction), routeLine(d, ru), first = true)
-        }
-        val words = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next)
-        val phone = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next)
-        ElchiField(d.senderName, { v -> vm.edit { it.copy(senderName = v.take(120)) } }, label = t(R.string.orderForm_senderName), keyboardOptions = words)
-        PhoneField(t(R.string.orderForm_senderPhone), d.senderDigits, phone) { v -> vm.edit { it.copy(senderDigits = v) } }
-        ElchiField(d.receiverName, { v -> vm.edit { it.copy(receiverName = v.take(120)) } }, label = t(R.string.orderForm_receiverName), keyboardOptions = words)
-        PhoneField(t(R.string.orderForm_receiverPhone), d.receiverDigits, phone) { v -> vm.edit { it.copy(receiverDigits = v) } }
-        ElchiField(
-            d.comment,
-            { v -> vm.edit { it.copy(comment = v.take(1000)) } },
-            label = t(R.string.listingOwner_commentLabel),
-            singleLine = false,
-            minHeight = 96.dp,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-        )
-        Note(t(R.string.orderForm_phonesHidden))
-    }
-}
-
-@Composable
-private fun PhoneField(label: String, digits: String, options: KeyboardOptions, onDigits: (String) -> Unit) {
-    ElchiField(
-        digits,
-        { onDigits(it.filter(Char::isDigit).take(9)) },
-        label = label,
-        prefix = "+998",
-        placeholder = "90 123 45 67",
-        monospace = true,
-        keyboardOptions = options,
-        visualTransformation = UzPhoneTransformation,
-    )
-}
-
-@Composable
-private fun routeLine(d: ParcelDraft, ru: Boolean): String =
-    "${d.origin?.district(ru) ?: t(R.string.direction_from)} → ${d.destination?.district(ru) ?: t(R.string.direction_to)}"
-
-// -- client-order-parcel (step 3) --------------------------------------------------------------------------------
+// -- parcel type and size ------------------------------------------------------------------------------------
 
 @Composable
 internal fun parcelTypeLabel(type: ParcelType): String = t(
@@ -430,7 +1017,7 @@ internal fun parcelTypeLabel(type: ParcelType): String = t(
     },
 )
 
-private fun categoryIcon(iconKey: String): ElchiIcon = when {
+internal fun categoryIcon(iconKey: String): ElchiIcon = when {
     iconKey.startsWith("env") -> ElchiIcon.ENV
     iconKey == "bag" -> ElchiIcon.BAG
     iconKey.endsWith("large") -> ElchiIcon.ARCHIVE
@@ -446,231 +1033,11 @@ internal fun categoryLimits(item: ParcelCategoryDTO): String = t(
     "length" to item.maxLengthCm, "width" to item.maxWidthCm, "height" to item.maxHeightCm, "weight" to ParcelRules.kg(item.maxWeightG),
 )
 
-@Composable
-fun OrderParcelScreen(vm: ParcelRequestViewModel, ru: Boolean, onBack: () -> Unit, onNext: () -> Unit) {
-    val s by vm.state.collectAsStateWithLifecycle()
-    val d = s.draft
-    val catalog = s.catalogValue
-    val types = ParcelType.entries.filter { it != ParcelType.UNKNOWN }
-    StepScaffold(
-        title = t(R.string.orderForm_parcelTitle),
-        onBack = onBack,
-        footer = {
-            ElchiButton(t(R.string.common_continue), onNext, Modifier.fillMaxWidth(), enabled = ParcelRules.parcelComplete(d) && catalog?.confirmed == true)
-        },
-    ) {
-        SectionTitle(t(R.string.orderForm_parcelType))
-        ChoiceGrid(types.map { it.value to parcelTypeLabel(it) }, d.parcelType, { v -> vm.edit { it.copy(parcelType = v) } })
-        SectionTitle(t(R.string.parcelCategory_label), description = t(R.string.parcelCategory_hint))
-        when (val cat = s.catalog) {
-            Load.Loading -> LoadingLine(t(R.string.parcelCategory_loading))
-            is Load.Failed -> LoadFailed(t(R.string.parcelCategory_loadFailed), cat.error, vm::loadCatalog)
-            is Load.Ready -> if (!cat.value.confirmed) {
-                Note(t(R.string.parcelCategory_unconfirmed), tone = Tone.WARN)
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    cat.value.items.orEmpty().forEach { item ->
-                        RadioCard(categoryIcon(item.iconKey), categoryName(item, ru), categoryLimits(item), d.categoryId == item.id, { vm.edit { it.copy(categoryId = item.id) } })
-                    }
-                }
-                if (cat.value.synthetic == true) Note(t(R.string.parcelCategory_synthetic), tone = Tone.WARN)
-            }
-        }
-        PolicyBlock(s.policy, vm::loadPolicy)
-    }
-}
-
-/** Prohibited items (§5.2): shown before sending, with its source; "not approved" never reads as "all allowed". */
-@Composable
-private fun PolicyBlock(policy: Load<ParcelPolicyDTO>, retry: () -> Unit) {
-    when (policy) {
-        Load.Loading -> LoadingLine(t(R.string.common_loading))
-        is Load.Failed -> {
-            SectionTitle(t(R.string.parcelPolicy_title))
-            Note(t(R.string.parcelPolicy_loadFailed), tone = Tone.ERR)
-            ElchiButton(t(R.string.common_retry), retry, Modifier.fillMaxWidth(), ButtonVariant.GHOST, ButtonSize.MEDIUM, icon = ElchiIcon.REFRESH)
-        }
-        is Load.Ready -> {
-            val p = policy.value
-            when {
-                !p.approved -> {
-                    SectionTitle(t(R.string.parcelPolicy_title))
-                    Note(t(R.string.parcelPolicy_unconfirmed), tone = Tone.WARN)
-                }
-                p.items.isNullOrEmpty() -> {
-                    SectionTitle(t(R.string.parcelPolicy_title))
-                    Note(t(R.string.parcelPolicy_empty), tone = Tone.GRAY)
-                }
-                else -> {
-                    val badge = listOfNotNull(p.label, p.effectiveFrom?.let { t(R.string.parcelPolicy_effectiveFrom, "date" to shortDate(it)) }).joinToString(" · ").ifEmpty { null }
-                    ElchiCard(bordered = true) {
-                        CardHeader(t(R.string.parcelPolicy_title), badge)
-                        p.items.forEachIndexed { i, item ->
-                            val applies = item.appliesTo?.let { tOrNull("parcelPolicy.appliesTo.$it") }
-                            val source = item.sourceRef?.let { ref ->
-                                item.sourceCheckedOn?.let { t(R.string.parcelPolicy_sourceChecked, "source" to ref, "date" to shortDate(it)) } ?: t(R.string.parcelPolicy_source, "source" to ref)
-                            }
-                            CardRow(
-                                tOrNull("parcelPolicy.category.${item.category}") ?: item.category,
-                                item.title,
-                                first = false,
-                                detail = listOfNotNull(applies, source).joinToString(" · ").ifEmpty { null },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 /** `2026-09-01` / an ISO instant -> `01.09.2026`. */
 private fun shortDate(value: String): String = runCatching {
     val date = if (value.length == 10) LocalDate.parse(value) else Instant.parse(value).atZone(ParcelRules.TASHKENT).toLocalDate()
     "%02d.%02d.%d".format(date.dayOfMonth, date.monthValue, date.year)
 }.getOrDefault(value)
-
-// -- client-order-photo (step 4) ---------------------------------------------------------------------------------
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun OrderPhotoScreen(vm: ParcelRequestViewModel, onBack: () -> Unit, onNext: () -> Unit) {
-    val s by vm.state.collectAsStateWithLifecycle()
-    val c = Elchi.colors
-    val context = LocalContext.current
-    var chooser by remember { mutableStateOf(false) }
-    var captureUri by rememberSaveable { mutableStateOf<String?>(null) }
-    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::uploadPhoto) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
-        val uri = captureUri
-        if (saved && uri != null) vm.uploadPhoto(uri.toUri())
-    }
-    val preview = remember(s.draft.photoLocalPath) { s.draft.photoLocalPath?.let { PhotoCompressor.previewBitmap(File(it)) } }
-    val hasPhoto = s.draft.photoFileUrl != null
-
-    StepScaffold(
-        title = t(R.string.orderForm_photoTitle),
-        onBack = onBack,
-        footer = { ElchiButton(t(R.string.orderForm_reviewOrder), onNext, Modifier.fillMaxWidth(), enabled = hasPhoto && !s.photoUploading) },
-    ) {
-        if (!hasPhoto && !s.photoUploading) {
-            UploadBox(t(R.string.orderForm_uploadPhoto), t(R.string.orderForm_uploadPhotoHint), { chooser = true })
-        }
-        if (preview != null && (hasPhoto || s.photoUploading)) {
-            Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(18.dp)).background(c.field), contentAlignment = Alignment.Center) {
-                Image(preview.asImageBitmap(), t(R.string.orderForm_photoAlt), Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            }
-        }
-        if (s.photoUploading) LoadingLine(t(R.string.app_photo_loading))
-        if (hasPhoto && !s.photoUploading) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip(t(R.string.orderForm_photoReady), selected = true, onClick = {}, icon = ElchiIcon.CHECK_C)
-                Spacer(Modifier.weight(1f))
-                ElchiButton(t(R.string.client_photo_replace), { chooser = true }, variant = ButtonVariant.GHOST, size = ButtonSize.MEDIUM, icon = ElchiIcon.REFRESH)
-            }
-        }
-        s.photoError?.let { e ->
-            Note(if (e is ApiException) errorText(e) else t(R.string.client_photo_unreadable), tone = Tone.ERR)
-        }
-    }
-
-    if (chooser) {
-        // The sheet is its own window with the phone's language: labels are resolved here, in the app's.
-        val sheetTitle = t(R.string.orderForm_uploadPhoto)
-        val cameraLabel = t(R.string.client_photo_camera)
-        val galleryLabel = t(R.string.client_photo_gallery)
-        ModalBottomSheet(onDismissRequest = { chooser = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.page) {
-            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(sheetTitle, style = Elchi.type.section, color = c.text)
-                ListCard {
-                    ListRow(cameraLabel, icon = ElchiIcon.CAMERA, first = true, onClick = {
-                        chooser = false
-                        val file = PhotoCompressor(context).newCaptureFile()
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
-                        captureUri = uri.toString()
-                        try {
-                            camera.launch(uri)
-                        } catch (e: ActivityNotFoundException) {
-                            gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        }
-                    })
-                    ListRow(galleryLabel, icon = ElchiIcon.UPLOAD, onClick = {
-                        chooser = false
-                        gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    })
-                }
-            }
-        }
-    }
-}
-
-// -- client-order-review (step 5) --------------------------------------------------------------------------------
-
-@Composable
-fun OrderReviewScreen(vm: ParcelRequestViewModel, ru: Boolean, onBack: () -> Unit, onEdit: () -> Unit, onPublished: () -> Unit) {
-    val s by vm.state.collectAsStateWithLifecycle()
-    val d = s.draft
-    val p = s.preview
-    LaunchedEffect(s.published) { if (s.published != null) onPublished() }
-    val ready = if (d.taxi) TaxiRules.readyToPublish(d, s.directionReady, Instant.now()) else ParcelRules.readyToPublish(d, s.directionReady, Instant.now())
-    StepScaffold(
-        title = t(R.string.orderForm_review_title),
-        onBack = onBack,
-        footer = {
-            s.publishError?.let { PublishError(it) }
-            if (!ready && !s.publishing) Note(t(if (d.taxi) R.string.orderForm_review_incompletePassenger else R.string.orderForm_review_incompleteParcel), tone = Tone.WARN)
-            ElchiButton(t(R.string.orderForm_review_publish), vm::publish, Modifier.fillMaxWidth(), enabled = ready, loading = s.publishing)
-            ElchiButton(t(R.string.listingOwner_edit), onEdit, Modifier.fillMaxWidth().height(40.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, enabled = !s.publishing)
-        },
-    ) {
-        val category = s.catalogValue?.items?.firstOrNull { it.id == d.categoryId }
-        val type = ParcelType.entries.firstOrNull { it.value == d.parcelType }
-        ElchiCard(bordered = true) {
-            CardRow(t(R.string.routeSummary_direction), routeLine(d, ru), first = true, detail = p?.corridorName)
-            d.origin?.let { CardRow(t(R.string.orderForm_review_pickupPlace), it.label(ru), detail = placeDetail(it, ru)) }
-            d.destination?.let { CardRow(t(R.string.orderForm_review_dropoffPlace), it.label(ru), detail = placeDetail(it, ru)) }
-            p?.let { CardRow(t(R.string.routeSummary_estimatedRoute), roadText(it.legDistanceM, it.legDurationS)) }
-            p?.districtsOnRoute?.takeIf { it.isNotEmpty() }?.let {
-                CardRow(t(R.string.home_routeDistricts), it.joinToString(" - "), detail = t(R.string.orderForm_review_districtsDetail))
-            }
-            if (d.start != null && d.endTime != null) {
-                CardRow(t(R.string.orderForm_review_window), "${ParcelRules.displayShort(d.start!!)} - ${ParcelRules.displayShort(d.endTime!!)}")
-            }
-            if (d.taxi) {
-                // Taksi: the people (the count is booked, the seat is agreed with the driver) and the price per person.
-                val seats = TaxiRules.seatCount(d).toLong()
-                CardRow(t(R.string.orderForm_review_passengers), t(R.string.orderForm_review_peopleCount, "count" to seats), detail = t(R.string.orderForm_review_seatNegotiated))
-                ParcelRules.soumToMinor(d.priceDigits)?.let {
-                    CardRow(
-                        t(R.string.common_price),
-                        soum(TaxiRules.totalMinor(it, seats)),
-                        detail = "${t(R.string.orderForm_review_perPersonDetail, "count" to seats, "price" to soum(it))} · ${t(R.string.orderForm_review_driversSendOffers)}",
-                        strong = true,
-                    )
-                }
-                if (d.comment.isNotBlank()) CardRow(t(R.string.listingOwner_commentLabel), d.comment.trim())
-                return@ElchiCard
-            }
-            ParcelRules.soumToMinor(d.priceDigits)?.let {
-                CardRow(t(R.string.common_price), ParcelRules.formatSoum(it, t(R.string.common_soum)), detail = t(R.string.orderForm_review_driversSendOffers), strong = true)
-            }
-            if (type != null) {
-                CardRow(t(R.string.orderForm_review_parcel), parcelTypeLabel(type), detail = category?.let { "${categoryName(it, ru)} · ${categoryLimits(it)}" })
-            }
-            CardRow(t(R.string.orderForm_review_sender), d.senderName, detail = "+998 ${ParcelRules.groupPhone(d.senderDigits)}")
-            CardRow(t(R.string.orderForm_review_receiver), d.receiverName, detail = "+998 ${ParcelRules.groupPhone(d.receiverDigits)}")
-            CardRow(t(R.string.orderForm_photoTitle), t(if (d.photoFileUrl != null) R.string.orderForm_review_uploaded else R.string.app_photo_none), muted = d.photoFileUrl == null)
-            if (d.comment.isNotBlank()) CardRow(t(R.string.listingOwner_commentLabel), d.comment.trim())
-        }
-    }
-}
-
-/** "Chilonzor, Toshkent shahri", or "Tasdiqlangan bekat · …" for a verified stop (Q88.4). */
-@Composable
-private fun placeDetail(place: Place, ru: Boolean): String {
-    val where = listOf(place.district(ru), place.region(ru)).distinct().joinToString(", ")
-    return if (place.stopId != null) t(R.string.orderForm_review_verifiedStop, "where" to where) else where
-}
 
 /**
  * The server's refusal in the dictionary's words. LISTING_INCOMPLETE / VALIDATION_ERROR also name the fields
@@ -707,36 +1074,3 @@ private fun fieldLabel(field: String): Int? {
     }
 }
 
-// -- client-success ----------------------------------------------------------------------------------------------
-
-@Composable
-fun OrderSuccessScreen(vm: ParcelRequestViewModel, onDone: () -> Unit) {
-    val s by vm.state.collectAsStateWithLifecycle()
-    val c = Elchi.colors
-    SystemBarIcons(dark = !c.isDark)
-    // Back from here is the same as the button: the published request is done, the next one starts clean.
-    BackHandler(onBack = onDone)
-    Column(Modifier.fillMaxSize().background(c.page)) {
-        Column(Modifier.statusBarsPadding()) { Banner(t(R.string.orderForm_success_title), Tone.OK) }
-        Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 40.dp, bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            EmptyState(
-                ElchiIcon.CHECK_C,
-                t(R.string.orderForm_success_title),
-                description = "${t(R.string.orderForm_success_waiting)}. ${t(R.string.orderForm_success_notify)}.",
-            )
-            // One note per server warning, each in its own words (e.g. the comment's contacts were masked, Q43).
-            s.published?.warnings.orEmpty().forEach { warning ->
-                Note(tOrNull("warning.${warning.code}") ?: warning.message, tone = Tone.WARN)
-            }
-        }
-        Column(Modifier.fillMaxWidth().background(c.card)) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
-            Column(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)) {
-                ElchiButton(t(R.string.orderForm_success_toOrders), onDone, Modifier.fillMaxWidth())
-            }
-        }
-    }
-}

@@ -74,17 +74,37 @@ class TaxiRulesTest {
     // -- seats --------------------------------------------------------------------------------------------------
 
     @Test
-    fun `seats toggle in picking order and never down to zero`() {
-        var seats = listOf("rear-right")
-        seats = TaxiRules.toggleSeat(seats, "front")
-        assertEquals(listOf("rear-right", "front"), seats)
-        assertEquals(2, TaxiRules.seatOrder(seats, "front"))
-        assertNull(TaxiRules.seatOrder(seats, "rear-left"))
-        seats = TaxiRules.toggleSeat(seats, "rear-right")
-        assertEquals(listOf("front"), seats)
-        assertEquals(listOf("front"), TaxiRules.toggleSeat(seats, "front"))
-        assertEquals(listOf("front"), TaxiRules.toggleSeat(seats, "driver"))
-        assertEquals(4, TaxiRules.seatCount(draft(seats = listOf("front", "rear-left", "rear-middle", "rear-right"))))
+    fun `the seat count comes from the 1 2 3 Butun salon buttons and starts empty`() {
+        assertEquals(emptyList<String>(), ParcelDraft().seats)
+        assertEquals(0, TaxiRules.seatCount(ParcelDraft(taxi = true)))
+        assertEquals(listOf(1, 2, 3, 4), TaxiRules.COUNT_CHOICES)
+        TaxiRules.COUNT_CHOICES.forEach { n -> assertEquals(n, TaxiRules.seatCount(draft(seats = TaxiRules.seatsFor(n)))) }
+        // "Butun salon" is all four passenger seats; nothing above the cabin, nothing below zero.
+        assertEquals(4, TaxiRules.seatsFor(TaxiRules.WHOLE_CABIN).size)
+        assertEquals(4, TaxiRules.seatsFor(9).size)
+        assertEquals(0, TaxiRules.seatsFor(-1).size)
+        // Unknown ids (an old draft) are not counted.
+        assertEquals(1, TaxiRules.seatCount(draft(seats = listOf("front", "driver"))))
+    }
+
+    @Test
+    fun `the total bar bills one person until a count is chosen`() {
+        assertEquals(1L, TaxiRules.billedSeats(draft(seats = emptyList())))
+        assertEquals(3L, TaxiRules.billedSeats(draft(seats = TaxiRules.seatsFor(3))))
+    }
+
+    @Test
+    fun `the Taksi home lists window, seats and price in the design's order`() {
+        assertEquals(emptyList<RouteIssue>(), TaxiRules.homeIssues(draft(), now))
+        val empty = draft(seats = emptyList()).copy(windowStart = null, windowEnd = null, priceDigits = "")
+        assertEquals(
+            listOf(RouteIssue.WINDOW_START, RouteIssue.WINDOW_END, RouteIssue.SEATS, RouteIssue.PRICE),
+            TaxiRules.homeIssues(empty, now),
+        )
+        val backwards = draft().copy(windowEnd = "2026-09-30T08:00")
+        assertEquals(listOf(RouteIssue.WINDOW_ORDER), TaxiRules.homeIssues(backwards, now))
+        // The parcel's route step never asks for seats.
+        assertFalse(RouteIssue.SEATS in ParcelRules.routeIssues(empty.copy(taxi = false), directionReady = true, now = now))
     }
 
     @Test
