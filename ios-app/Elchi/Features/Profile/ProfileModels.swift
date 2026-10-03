@@ -95,7 +95,15 @@ final class ProfileModel {
 
     /// nil inside `.failed` means "—" on every figure (never zeros).
     private(set) var stats: Loadable<ProfileStats> = .loading
-    var name: String
+    var name: String {
+        didSet {
+            let typed = NameRule.typed(name)
+            if typed != name { name = typed }
+            if name != oldValue { nameTooShort = false }
+        }
+    }
+    /// "Kamida 2 ta harf kiriting." under the field after a Save with fewer than two letters (no request is sent).
+    private(set) var nameTooShort = false
     private(set) var saving = false
     /// `clientProfile.updated`, or the failure sentence.
     private(set) var saveResult: Result<Void, Error>?
@@ -132,6 +140,11 @@ final class ProfileModel {
     func save() async {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !saving else { return }
+        guard NameRule.isValid(trimmed) else {
+            nameTooShort = true
+            saveResult = nil
+            return
+        }
         saving = true
         saveResult = nil
         defer { saving = false }
@@ -175,6 +188,8 @@ final class BonusModel {
     private(set) var entering = false
     private(set) var enterError: Error?
     private(set) var accepted = false
+    /// The code the server just accepted ("Kod qabul qilindi: {code}").
+    private(set) var acceptedCode: String?
 
     /// The code kept from an `elchigo.uz/r/<code>` link: it fills the field and goes after a final server answer.
     private let links: DeepLinkCenter?
@@ -239,8 +254,14 @@ final class BonusModel {
 
     var normalized: String? { ReferralCode.normalize(entered) }
 
+    /// The field's own error key (wrong alphabet at full length, or the client's own code).
+    var entryErrorKey: String? { ReferralCode.entryErrorKey(entered, own: code?.code) }
+
+    /// "Kodni tasdiqlash" is live for a well-formed code that is not the client's own.
+    var canSubmitCode: Bool { normalized != nil && entryErrorKey == nil && !entering }
+
     func submitCode() async {
-        guard let code = normalized, !entering else { return }
+        guard let code = normalized, entryErrorKey == nil, !entering else { return }
         let action = "attribute:\(audience):\(code)"
         entering = true
         enterError = nil
@@ -249,6 +270,7 @@ final class BonusModel {
             _ = try await api.attribute(body: AttributionRequest(audience: audience, code: code), idempotencyKey: keys.key(action))
             keys.settle(action)
             accepted = true
+            acceptedCode = code
             entered = ""
             links?.forgetReferral()
             await loadReferrals()
@@ -264,8 +286,7 @@ final class BonusModel {
 // MARK: - Safety centre
 
 /// "Bloklanganlar va shikoyatlarim": the people the client blocked and the reports it sent. Unblocking is honest:
-/// the backend's DELETE currently refuses every call (`IDEMPOTENCY_KEY_REQUIRED` although a key is sent), so a failure
-/// keeps the row and says why - never a faked success.
+/// the row goes only once `DELETE /blocks/{id}` succeeded; a failure keeps the row and says why.
 @MainActor @Observable
 final class SafetyCenterModel {
     private let api: ElchiAPI
@@ -318,8 +339,10 @@ final class SafetyCenterModel {
         reportsCursor = page.meta?.nextCursor
     }
 
-    func unblock(_ block: BlockDTO) async {
-        guard unblocking == nil else { return }
+    /// True when the row went (the screen then says "Blokdan chiqarildi").
+    @discardableResult
+    func unblock(_ block: BlockDTO) async -> Bool {
+        guard unblocking == nil else { return false }
         let action = "unblock:\(block.userId)"
         unblocking = block.userId
         unblockErrors[block.userId] = nil
@@ -328,9 +351,11 @@ final class SafetyCenterModel {
             _ = try await api.deleteBlock(blockedUserId: block.userId, idempotencyKey: keys.key(action))
             keys.settle(action)
             if case .loaded(let list) = blocks { blocks = .loaded(list.filter { $0.userId != block.userId }) }
+            return true
         } catch {
             keys.settle(action, after: error)
             unblockErrors[block.userId] = error
+            return false
         }
     }
 }
@@ -346,7 +371,13 @@ final class SupportModel {
 
     private(set) var contacts: SupportContactsDTO?
     private(set) var tickets: Loadable<[SupportTicketDTO]> = .loading
-    var draft = "" { didSet { if draft != oldValue { sendError = nil; sent = false } } }
+    var draft = "" {
+        didSet {
+            let typed = SupportText.typed(draft)
+            if typed != draft { draft = typed }
+            if draft != oldValue { sendError = nil; sent = false }
+        }
+    }
     private(set) var sending = false
     private(set) var sendError: Error?
     private(set) var sent = false
@@ -408,6 +439,8 @@ final class SupportModel {
 final class SupportThreadsModel {
     private let api: ElchiAPI
     private(set) var threads: Loadable<[SupportThreadDTO]> = .loading
+    /// The last load failed (the bar's refresh then says nothing).
+    private(set) var failedLast = false
 
     init(api: ElchiAPI) { self.api = api }
 
@@ -415,7 +448,9 @@ final class SupportThreadsModel {
         do {
             let list = try await api.listMySupportThreads(limit: 50).data
             threads = .loaded(list.sorted { (ServerTime.parse($0.createdAt) ?? .distantPast) > (ServerTime.parse($1.createdAt) ?? .distantPast) })
+            failedLast = false
         } catch {
+            failedLast = true
             if threads.value == nil { threads = .failed(error) }
         }
     }

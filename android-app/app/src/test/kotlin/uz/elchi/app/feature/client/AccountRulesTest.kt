@@ -205,6 +205,22 @@ class AccountRulesTest {
         assertNull(ProfileRules.nameToSave("Demo ", "Demo"))
     }
 
+    @Test
+    fun `design 05 - a name needs two letters, the latest order is tinted by how far it got`() {
+        assertTrue(ProfileRules.nameTooShort("A"))
+        assertTrue(ProfileRules.nameTooShort(" 1. "))
+        assertFalse(ProfileRules.nameTooShort("Ali"))
+        assertFalse(ProfileRules.nameTooShort("Юн"))
+        val going = ProfileRules.stats(emptyList(), listOf(booking("bkg_1", "in_transit", "2026-09-28T09:00:00Z")), emptyMap(), now)
+        assertEquals(Tone.BLUE, going.latestTone)
+        val done = ProfileRules.stats(emptyList(), listOf(booking("bkg_1", "completed", "2026-09-28T09:00:00Z")), emptyMap(), now)
+        assertEquals(Tone.OK, done.latestTone)
+        val cancelled = ProfileRules.stats(emptyList(), listOf(booking("bkg_1", "cancelled", "2026-09-28T09:00:00Z")), emptyMap(), now)
+        assertNull(cancelled.latestTone)
+        assertEquals(Tone.BLUE, ProfileRules.stats(listOf(listing("lst_1", "published", "2026-09-30T08:00:00Z")), emptyList(), emptyMap(), now).latestTone)
+        assertNull(ProfileRules.stats(emptyList(), emptyList(), emptyMap(), now).latestTone)
+    }
+
     // -- promo --------------------------------------------------------------------------------------------------
 
     private fun bucket(instrument: String = "passenger_bonus"): PromoBucketDTO = ElchiJson.decodeFromString(
@@ -336,5 +352,32 @@ class AccountRulesTest {
         assertEquals(RefreshFailure.KEEP_SESSION, SessionRules.refreshFailure(0, ApiException.NETWORK))
         assertEquals(RefreshFailure.KEEP_SESSION, SessionRules.refreshFailure(503, "SERVICE_UNAVAILABLE"))
         assertEquals(RefreshFailure.KEEP_SESSION, SessionRules.refreshFailure(500, ApiException.SERVER))
+    }
+
+    @Test
+    fun `design 05 - the friend's code entry, the usable row, campaign tones`() {
+        assertNull(PromoRules.entryErrorKey("AB2C", "AB2CD3EF")) // not finished: no error, the button just waits
+        assertEquals("promoScreen.codeFormat", PromoRules.entryErrorKey("AB2CD3E1", null)) // 1 is not in the alphabet
+        assertEquals("client.bonus.ownCode", PromoRules.entryErrorKey("AB2CD3EF", "ab2cd3ef"))
+        assertNull(PromoRules.entryErrorKey("ZX2CD3EF", "AB2CD3EF"))
+        assertTrue(PromoRules.bucketRows(bucket()).first().usable)
+        assertEquals(1, PromoRules.bucketRows(bucket()).count { it.usable })
+        assertEquals(Tone.OK, PromoRules.enrollmentTone("qualified", "promised"))
+        assertEquals(Tone.WARN, PromoRules.enrollmentTone("review", "promised"))
+        assertEquals(Tone.BLUE, PromoRules.enrollmentTone(null, "promised"))
+        assertEquals(Tone.GRAY, PromoRules.enrollmentTone(null, "released"))
+    }
+
+    @Test
+    fun `design 05 - help hint while too short, the orders link only for open bookings or orders`() {
+        assertFalse(SafetyRules.ticketTooShort(""))
+        assertFalse(SafetyRules.ticketTooShort("   "))
+        assertTrue(SafetyRules.ticketTooShort(" abcd "))
+        assertFalse(SafetyRules.ticketTooShort("Salom!"))
+        assertEquals(1000, SafetyRules.TICKET_MAX)
+        assertTrue(DeletionRules.leadsToOrders(DeletionRules.blockers(buildJsonObject { put("active_bookings", 1) })))
+        assertTrue(DeletionRules.leadsToOrders(DeletionRules.blockers(buildJsonObject { put("active_orders", 2) })))
+        assertFalse(DeletionRules.leadsToOrders(DeletionRules.blockers(buildJsonObject { put("open_disputes", 1) })))
+        assertFalse(DeletionRules.leadsToOrders(null))
     }
 }

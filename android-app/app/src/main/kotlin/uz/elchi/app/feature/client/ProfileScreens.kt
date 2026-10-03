@@ -8,6 +8,7 @@ import androidx.core.net.toUri
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,17 +30,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,12 +56,16 @@ import uz.elchi.app.i18n.errorText
 import uz.elchi.app.i18n.t
 import uz.elchi.app.i18n.tOrNull
 import uz.elchi.app.session.Session
+import uz.elchi.app.ui.components.BannerCenter
+import uz.elchi.app.ui.components.BannerText
+import uz.elchi.app.ui.components.BannerTone
 import uz.elchi.app.ui.components.ButtonSize
 import uz.elchi.app.ui.components.ButtonVariant
 import uz.elchi.app.ui.components.CardRow
 import uz.elchi.app.ui.components.CheckRow
 import uz.elchi.app.ui.components.ElchiButton
 import uz.elchi.app.ui.components.ElchiCard
+import uz.elchi.app.ui.components.ElchiDialog
 import uz.elchi.app.ui.components.ElchiField
 import uz.elchi.app.ui.components.ElchiIconView
 import uz.elchi.app.ui.components.EmptyState
@@ -153,7 +161,7 @@ data class ProfileNav(
  * quick actions in the design's order. No dispute row (Q141: there are no dispute screens).
  */
 @Composable
-fun ProfileScreen(vm: ProfileViewModel, session: Session, onBack: () -> Unit, nav: ProfileNav) {
+fun ProfileScreen(vm: ProfileViewModel, session: Session, onBack: () -> Unit, nav: ProfileNav, notificationsDot: Boolean = false) {
     val s by vm.state.collectAsStateWithLifecycle()
     var confirmLogout by remember { mutableStateOf(false) }
     val dash = "—"
@@ -173,7 +181,10 @@ fun ProfileScreen(vm: ProfileViewModel, session: Session, onBack: () -> Unit, na
             ElchiCard {
                 Text(t(R.string.clientProfile_ordersTitle), Modifier.padding(top = 12.dp), style = Elchi.type.bodyStrong, color = Elchi.colors.text)
                 CardRow(t(R.string.client_profile_statCompleted), stats?.completed?.toString() ?: dash)
-                CardRow(t(R.string.clientProfile_latestOrder), stats?.latestKey?.let { tOrNull(it) } ?: dash)
+                CardRow(
+                    t(R.string.clientProfile_latestOrder), stats?.latestKey?.let { tOrNull(it) } ?: dash,
+                    valueColor = stats?.latestTone?.let { Elchi.colors.tone(it).fg },
+                )
             }
         }
 
@@ -184,11 +195,12 @@ fun ProfileScreen(vm: ProfileViewModel, session: Session, onBack: () -> Unit, na
             label = t(R.string.clientProfile_fullName),
             placeholder = t(R.string.clientProfile_fullNamePlaceholder),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+            error = if (s.nameTooShort) t(R.string.stopSearch_minChars) else null,
         )
         s.saveError?.let { Note(t(R.string.client_profile_nameSaveFailed, "error" to errorText(it)), tone = Tone.ERR) }
         if (s.saved != null) Note(t(R.string.clientProfile_updated), tone = Tone.OK)
         ElchiButton(
-            t(R.string.common_save), vm::saveName, Modifier.fillMaxWidth(), ButtonVariant.SOFT, ButtonSize.MEDIUM,
+            t(R.string.common_save), vm::saveName, Modifier.fillMaxWidth(), ButtonVariant.PRIMARY, ButtonSize.MEDIUM,
             enabled = ProfileRules.nameToSave(s.name, session.user.fullName) != null, loading = s.saving,
         )
 
@@ -197,11 +209,11 @@ fun ProfileScreen(vm: ProfileViewModel, session: Session, onBack: () -> Unit, na
             ListRow(t(R.string.clientProfile_myOrders), icon = ElchiIcon.PKG, description = t(R.string.clientProfile_myOrdersHint), first = true, onClick = nav.onOrders)
             ListRow(t(R.string.clientProfile_myProposals), icon = ElchiIcon.TAG, description = t(R.string.client_profile_myProposalsHint), onClick = nav.onProposals)
             ListRow(t(R.string.clientProfile_bonus), icon = ElchiIcon.GIFT, description = t(R.string.clientProfile_bonusHint), onClick = nav.onBonus)
-            ListRow(t(R.string.notifications_title), icon = ElchiIcon.BELL, description = t(R.string.clientProfile_notificationsHint), onClick = nav.onNotifications)
+            ListRow(t(R.string.notifications_title), icon = ElchiIcon.BELL, description = t(R.string.clientProfile_notificationsHint), iconDot = notificationsDot, onClick = nav.onNotifications)
             ListRow(t(R.string.support_myThreads), icon = ElchiIcon.FILE, description = t(R.string.support_myThreadsHint), onClick = nav.onThreads)
             ListRow(t(R.string.safety_centerTitle), icon = ElchiIcon.BLOCK, description = t(R.string.safety_centerDescription), onClick = nav.onSafety)
             ListRow(t(R.string.clientProfile_help), icon = ElchiIcon.HEAD, description = t(R.string.clientProfile_helpHint), onClick = nav.onHelp)
-            ListRow(t(R.string.clientProfile_settings), icon = ElchiIcon.SETTINGS, description = t(R.string.clientProfile_settingsHint), onClick = nav.onSettings)
+            ListRow(t(R.string.clientProfile_settings), icon = ElchiIcon.SETTINGS, description = t(R.string.driver_profile_settingsHint), onClick = nav.onSettings)
             ListRow(t(R.string.clientProfile_home), icon = ElchiIcon.HOME, description = t(R.string.clientProfile_homeHint), onClick = nav.onHome)
             ListRow(t(R.string.clientProfile_logout), icon = ElchiIcon.LOGOUT, description = t(R.string.clientProfile_logoutHint), style = ListRowStyle.DANGER, onClick = { confirmLogout = true })
         }
@@ -221,10 +233,15 @@ fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
     // Stage 09: the driver's "Kredit va taklif kodi" is the same screen with the driver's words and credit.
     val driver = vm.audience == BonusViewModel.DRIVER_AUDIENCE
     StepScaffold(title = t(if (driver) R.string.promoScreen_titleDriver else R.string.promoScreen_titleClient), onBack = onBack, onRefresh = vm::refresh, refreshing = false) {
+        val buckets = (s.balance as? Load.Ready)?.value?.let { if (driver) PromoRules.driverBuckets(it.buckets) else PromoRules.clientBuckets(it.buckets) }
+        // Design 05: the programme off and nothing to show = only the centred "not running yet" state.
+        if (!driver && s.programOff && s.balance is Load.Ready && buckets.isNullOrEmpty()) {
+            EmptyState(ElchiIcon.GIFT, t(R.string.promoScreen_programOff), Modifier.padding(top = 24.dp), description = t(R.string.client_bonus_programOffHint))
+            return@StepScaffold
+        }
         Note(t(if (driver) R.string.promoScreen_creditNotMoney else R.string.promoScreen_bonusNotMoney), tone = Tone.WARN)
 
         SectionTitle(t(if (driver) R.string.promoScreen_myCredit else R.string.promoScreen_myBonuses))
-        val buckets = (s.balance as? Load.Ready)?.value?.let { if (driver) PromoRules.driverBuckets(it.buckets) else PromoRules.clientBuckets(it.buckets) }
         when (val balance = s.balance) {
             Load.Loading -> SkeletonCard(t(R.string.common_loading))
             is Load.Failed -> LoadFailed(t(R.string.promoScreen_myBonuses), balance.error, vm::refresh)
@@ -244,16 +261,16 @@ fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
         SectionTitle(t(R.string.promoScreen_myCode))
         val code = s.code
         when {
-            code != null -> CodeCard(code, s.copied, vm::markCopied)
+            code != null -> CodeCard(code, vm::markCopied)
             s.codeLoading -> SkeletonCard(t(R.string.common_loading), lines = 2)
             else -> s.codeError?.let { LoadFailed(t(R.string.promoScreen_myCode), it, vm::loadCode) }
         }
         Text(t(R.string.promoScreen_rewardNote), style = Elchi.type.caption, color = Elchi.colors.muted)
 
-        if (s.accepted) Note(t(R.string.promoScreen_codeAccepted), tone = Tone.OK)
+        // Never an amount or a parcel reward here (Q131/Q147, Q103): the accepted code and "it is not replaced".
+        if (s.accepted) Note(t(R.string.promoScreen_codeOnce), tone = Tone.OK, title = t(R.string.client_bonus_codeAcceptedValue, "code" to s.acceptedCode.orEmpty()))
         if (!s.hasAttribution && !s.accepted) {
             SectionTitle(t(R.string.promoScreen_enterCode))
-            val invalid = s.entered.length == PromoRules.CODE_LENGTH && s.normalized == null
             ElchiField(
                 value = s.entered,
                 onValueChange = vm::setEntered,
@@ -261,7 +278,7 @@ fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
                 placeholder = t(R.string.promoScreen_codeExample),
                 hint = t(R.string.promoScreen_codeOnce),
                 error = when {
-                    invalid -> t(R.string.promoScreen_codeFormat)
+                    s.entryErrorKey != null -> tOrNull(s.entryErrorKey!!) ?: t(R.string.promoScreen_codeFormat)
                     s.enterError != null -> errorText(s.enterError!!)
                     else -> null
                 },
@@ -281,13 +298,16 @@ fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
                 referrals.value.enrollments.forEach { item ->
                     val role = t(if (item.side == "referee") R.string.promoScreen_youAreInvited else R.string.promoScreen_youInvited)
                     val status = PromoRules.enrollmentStatusKey(item.qualificationStatus, item.status)?.let { tOrNull(it) } ?: item.status
+                    // Design 05: status as a badge, the role line, then one "count · deadline" line (count: inviter only).
+                    val meta = listOfNotNull(
+                        t(R.string.promoScreen_invitedCount, "count" to invited).takeIf { item.side != "referee" },
+                        PromoRules.date(item.qualificationDeadline)?.let { t(R.string.promoScreen_deadline, "date" to it) },
+                    ).joinToString(" · ").takeIf { it.isNotEmpty() }
                     ItemCard(
                         title = item.campaignName,
-                        sub = "$role · $status",
-                        lines = listOfNotNull(
-                            ItemLine(t(R.string.promoScreen_invitedCount, "count" to invited)).takeIf { item.side != "referee" },
-                            PromoRules.date(item.qualificationDeadline)?.let { ItemLine(t(R.string.promoScreen_deadline, "date" to it)) },
-                        ),
+                        badge = status to PromoRules.enrollmentTone(item.qualificationStatus, item.status),
+                        sub = role,
+                        lines = listOfNotNull(meta?.let { ItemLine(it) }),
                     )
                 }
                 if (referrals.value.enrollments.isEmpty() && invited > 0) Text(t(R.string.promoScreen_invitedCount, "count" to invited), style = Elchi.type.caption, color = Elchi.colors.muted)
@@ -304,52 +324,58 @@ private fun BucketCard(bucket: PromoBucketDTO) {
         Text(title, Modifier.padding(top = 12.dp, bottom = 2.dp), style = Elchi.type.bodyStrong, color = c.text)
         PromoRules.bucketRows(bucket).forEachIndexed { i, row ->
             val hint = row.hintKey?.takeIf { row.minor > 0 }?.let { tOrNull(it) }
-            CardRow(tOrNull(row.labelKey) ?: row.labelKey, soum(row.minor), first = i == 0, detail = hint)
+            CardRow(
+                tOrNull(row.labelKey) ?: row.labelKey, soum(row.minor), first = i == 0, detail = hint,
+                strong = row.usable, valueColor = if (row.usable) c.tone(Tone.OK).fg else null,
+            )
         }
+        // Design 05: the nearest expiry is the card's sixth row, like iOS.
         PromoRules.date(bucket.nextExpiryAt)?.let { date ->
-            Text(t(R.string.promoScreen_nextExpiry, "date" to date), Modifier.padding(bottom = 12.dp), style = Elchi.type.caption, color = c.muted)
+            CardRow(t(R.string.client_bonus_nextExpiryLabel), date)
         }
     }
 }
 
-/** The own code in mono with copy and share; the link only when a host is configured, else the "not ready" note. */
+/**
+ * Design 05's navy code card: "Kod", the code in big mono, the link only when a host is configured (else the "not
+ * ready" line), "Kodni nusxalash" (the code only) and "Havolani ulashish" (the link, or the code without one).
+ */
 @Composable
-private fun CodeCard(code: ReferralCodeDTO, copied: Boolean, onCopied: () -> Unit) {
-    val c = Elchi.colors
+private fun CodeCard(code: ReferralCodeDTO, onCopied: (String) -> Unit) {
     val context = LocalContext.current
     val activity = LocalActivity.current
     val shareTitle = t(R.string.client_share_send)
     val url = PromoRules.shareUrl(code)
-    ElchiCard(padding = PaddingValues(16.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                code.code,
-                Modifier.fillMaxWidth(),
-                style = Elchi.type.title.copy(fontFamily = FontFamily.Monospace, letterSpacing = 4.sp),
-                color = c.text,
-                textAlign = TextAlign.Center,
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Elchi.colors.navy).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(t(R.string.client_bonus_codeLabel), style = Elchi.type.caption, color = Color(0xFF9FB6D6))
+        Text(
+            code.code,
+            style = Elchi.type.title.copy(fontFamily = FontFamily.Monospace, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 4.sp),
+            color = Color.White,
+        )
+        if (url != null) Text(url, style = Elchi.type.label.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal), color = Color(0xFFC9D6E8))
+        else Text(t(R.string.promoScreen_linkNotReady), style = Elchi.type.caption, color = Color(0xFFC9D6E8))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ElchiButton(
+                t(R.string.client_bonus_copyCode),
+                {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("ELCHI", code.code))
+                    onCopied(code.code)
+                },
+                Modifier.weight(1f).height(44.dp), ButtonVariant.PRIMARY, ButtonSize.MEDIUM, horizontalPadding = 10.dp, maxLines = 2,
             )
-            if (url != null) Text(url, Modifier.fillMaxWidth(), style = Elchi.type.label.copy(fontFamily = FontFamily.Monospace), color = c.accentText, textAlign = TextAlign.Center)
-            else Text(t(R.string.promoScreen_linkNotReady), style = Elchi.type.caption, color = c.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ElchiButton(
-                    t(if (copied) R.string.promoScreen_copied else R.string.promoScreen_copy),
-                    {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("ELCHI", PromoRules.shareText(code)))
-                        onCopied()
-                    },
-                    Modifier.weight(1f).height(48.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, icon = ElchiIcon.COPY, horizontalPadding = 10.dp,
-                )
-                ElchiButton(
-                    shareTitle,
-                    {
-                        val chooser = Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PromoRules.shareText(code)), shareTitle)
-                        activity?.startActivity(chooser) ?: context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    },
-                    Modifier.weight(1f).height(48.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.SHARE, horizontalPadding = 10.dp,
-                )
-            }
+            ElchiButton(
+                if (url != null) t(R.string.client_bonus_shareLink) else shareTitle,
+                {
+                    val chooser = Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PromoRules.shareText(code)), shareTitle)
+                    activity?.startActivity(chooser) ?: context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                },
+                Modifier.weight(1f).height(44.dp), ButtonVariant.NAVY_LIGHT, ButtonSize.MEDIUM, horizontalPadding = 10.dp, maxLines = 2,
+            )
         }
     }
 }
@@ -372,23 +398,32 @@ fun SettingsScreen(
     onHelp: () -> Unit,
     onDeleteAccount: () -> Unit,
     onSignOut: () -> Unit,
+    /** Where "Mavzu: Qorong'i" / "Til: Русский" show after a change (design 05 toasts); null = nowhere. */
+    banners: BannerCenter? = null,
 ) {
     val context = LocalContext.current
     val activity = LocalActivity.current
     var confirmLogout by remember { mutableStateOf(false) }
     StepScaffold(title = t(R.string.settingsScreen_title), onBack = onBack) {
         SectionTitle(t(R.string.settingsScreen_appearance))
-        StatTiles(
-            listOf(
-                Triple(ThemeMode.LIGHT, t(R.string.client_settings_themeLightHint), t(R.string.client_settings_themeLight)),
-                Triple(ThemeMode.DARK, t(R.string.client_settings_themeDarkHint), t(R.string.client_settings_themeDark)),
-                Triple(ThemeMode.SYSTEM, t(R.string.client_settings_themeSystemHint), t(R.string.client_settings_themeSystem)),
-            ),
-            selected = themeMode,
-            onSelect = onTheme,
-        )
+        ThemeTiles(themeMode) { mode ->
+            if (mode != themeMode) {
+                onTheme(mode)
+                val nameKey = when (mode) {
+                    ThemeMode.LIGHT -> "client.settings.themeLight"
+                    ThemeMode.DARK -> "client.settings.themeDark"
+                    ThemeMode.SYSTEM -> "client.settings.themeSystem"
+                }
+                banners?.show(BannerTone.OK, BannerText.Key("client.settings.themeChanged", keyParams = mapOf("name" to nameKey)))
+            }
+        }
         SectionTitle(t(R.string.settings_language), description = t(R.string.settings_languageHint))
-        Segmented(AppLocale.entries.map { it to it.label }, locale, onLocale)
+        Segmented(AppLocale.entries.map { it to it.label }, locale, onSelect = { next: AppLocale ->
+            if (next != locale) {
+                onLocale(next)
+                banners?.show(BannerTone.OK, BannerText.Key("client.settings.languageChanged", params = mapOf("name" to next.label)))
+            }
+        })
         Text(t(R.string.client_settings_mapLanguageNote), style = Elchi.type.caption, color = Elchi.colors.muted)
 
         SectionTitle(t(R.string.settingsScreen_account))
@@ -398,7 +433,7 @@ fun SettingsScreen(
                 val open = Intent(Intent.ACTION_VIEW, PRIVACY_URL.toUri())
                 runCatching { activity?.startActivity(open) ?: context.startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             })
-            ListRow(t(R.string.client_settings_deleteAccount), icon = ElchiIcon.TRASH, style = ListRowStyle.DANGER, onClick = onDeleteAccount)
+            ListRow(t(R.string.client_settings_deleteAccount), icon = ElchiIcon.TRASH, style = ListRowStyle.DANGER, dangerChevron = true, onClick = onDeleteAccount)
         }
         ListCard {
             ListRow(t(R.string.settingsScreen_logout), icon = ElchiIcon.LOGOUT, first = true, style = ListRowStyle.DANGER, onClick = { confirmLogout = true })
@@ -414,6 +449,42 @@ fun SettingsScreen(
     if (confirmLogout) LogoutConfirm(onConfirm = { confirmLogout = false; onSignOut() }, onDismiss = { confirmLogout = false })
 }
 
+/**
+ * Design 05's appearance tiles: an icon (sun / moon / monitor), the name, then the hint under it; the chosen tile
+ * outlined 2dp in brand (a radio for TalkBack).
+ */
+@Composable
+private fun ThemeTiles(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
+    val c = Elchi.colors
+    val items = listOf(
+        Triple(ThemeMode.LIGHT, ElchiIcon.SUN, t(R.string.client_settings_themeLight) to t(R.string.client_settings_themeLightHint)),
+        Triple(ThemeMode.DARK, ElchiIcon.MOON, t(R.string.client_settings_themeDark) to t(R.string.client_settings_themeDarkHint)),
+        Triple(ThemeMode.SYSTEM, ElchiIcon.MONITOR, t(R.string.client_settings_themeSystem) to t(R.string.client_settings_themeSystemHint)),
+    )
+    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { (mode, icon, words) ->
+            val active = mode == selected
+            val shape = RoundedCornerShape(18.dp)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .shadow(8.dp, shape, ambientColor = c.shadow, spotColor = c.shadow)
+                    .clip(shape)
+                    .background(c.card)
+                    .border(if (active) 2.dp else 1.dp, if (active) c.brand else c.line, shape)
+                    .selectable(active, role = Role.RadioButton) { onSelect(mode) }
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ElchiIconView(icon, if (active) c.accentText else c.text, size = 22.dp)
+                Text(words.first, style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text, maxLines = 1)
+                Text(words.second, style = Elchi.type.caption.copy(fontSize = 11.5.sp, lineHeight = 15.sp), color = c.muted)
+            }
+        }
+    }
+}
+
 // -- account-delete -----------------------------------------------------------------------------------------------
 
 /**
@@ -421,17 +492,18 @@ fun SettingsScreen(
  * anonymises immediately), a confirmation tick, then `DELETE /me`. A refusal lists what is still open.
  */
 @Composable
-fun AccountDeleteScreen(vm: AccountDeleteViewModel, onBack: () -> Unit, onDeleted: () -> Unit) {
+fun AccountDeleteScreen(vm: AccountDeleteViewModel, onBack: () -> Unit, onDeleted: () -> Unit, onOrders: (() -> Unit)? = null) {
     val s by vm.state.collectAsStateWithLifecycle()
+    var confirm by rememberSaveable { mutableStateOf(false) }
     StepScaffold(
         title = t(R.string.client_accountDelete_title),
         onBack = onBack,
         footer = {
             ElchiButton(
-                t(R.string.client_accountDelete_submit), { vm.submit(onDeleted) }, Modifier.fillMaxWidth(), ButtonVariant.DANGER,
+                t(R.string.client_accountDelete_submit), { confirm = true }, Modifier.fillMaxWidth(), ButtonVariant.DANGER,
                 enabled = s.confirmed, loading = s.submitting,
             )
-            ElchiButton(t(R.string.common_back), onBack, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, enabled = !s.submitting)
+            ElchiButton(t(R.string.confirmDialog_back), onBack, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, enabled = !s.submitting)
         },
     ) {
         Note(t(R.string.client_accountDelete_warn), tone = Tone.WARN)
@@ -454,6 +526,14 @@ fun AccountDeleteScreen(vm: AccountDeleteViewModel, onBack: () -> Unit, onDelete
                     val text = if (line.count != null) tOrNull(line.key, "count" to line.count) else tOrNull(line.key)
                     Text("• ${text ?: line.key}", Modifier.padding(start = 28.dp), style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = err.noteText)
                 }
+                if (onOrders != null && DeletionRules.leadsToOrders(lines)) {
+                    Text(
+                        t(R.string.client_settings_goToOrders),
+                        Modifier.padding(start = 28.dp).heightIn(min = 36.dp).clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onOrders).padding(vertical = 8.dp),
+                        style = Elchi.type.label.copy(fontWeight = FontWeight.SemiBold, textDecoration = TextDecoration.Underline),
+                        color = err.noteText,
+                    )
+                }
             }
         }
         s.error?.let { Note(errorText(it), tone = Tone.ERR) }
@@ -461,5 +541,20 @@ fun AccountDeleteScreen(vm: AccountDeleteViewModel, onBack: () -> Unit, onDelete
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(1.dp, border, RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
             CheckRow(t(R.string.client_accountDelete_confirm), s.confirmed, vm::setConfirmed)
         }
+    }
+    // Design 05's last question before `DELETE /me`; the text is the app's (deletion is immediate, no 30 days).
+    if (confirm) {
+        ElchiDialog(
+            title = t(R.string.client_settings_deleteConfirmTitle),
+            text = t(R.string.client_accountDelete_whenValue),
+            confirm = t(R.string.client_settings_deleteConfirmYes),
+            onConfirm = {
+                confirm = false
+                vm.submit(onDeleted)
+            },
+            onDismiss = { confirm = false },
+            confirmVariant = ButtonVariant.DANGER,
+            dismiss = t(R.string.confirmDialog_back),
+        )
     }
 }

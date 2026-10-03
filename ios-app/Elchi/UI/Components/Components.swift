@@ -272,11 +272,14 @@ public struct ElchiCard<Content: View>: View {
 /// turns the trailing pill into a button ("O'zgartirish"); `placeholder` greys the value ("Manzil kiritilmagan").
 public struct CardRow: View {
     let key: String, value: String, detail: String?, trailing: String?, first: Bool, strong: Bool, placeholder: Bool
+    /// The value in a tone's colour (BOSQICH 05: "So'nggi buyurtma" blue while under way, "Ishlatish mumkin" green).
+    let valueTone: Tone?
     let onTrailing: (() -> Void)?
     @Environment(\.elchi) private var c
 
     public init(_ key: String, _ value: String, first: Bool = false, detail: String? = nil, trailing: String? = nil,
-                strong: Bool = false, placeholder: Bool = false, onTrailing: (() -> Void)? = nil) {
+                strong: Bool = false, placeholder: Bool = false, valueTone: Tone? = nil, onTrailing: (() -> Void)? = nil) {
+        self.valueTone = valueTone
         self.key = key
         self.value = value
         self.first = first
@@ -293,7 +296,8 @@ public struct CardRow: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(key).font(ElchiFont.caption).foregroundStyle(c.muted)
-                    Text(value).font(ElchiFont.poppins(14, strong ? .semibold : .medium)).foregroundStyle(placeholder ? c.placeholder : c.text)
+                    Text(value).font(ElchiFont.poppins(14, strong ? .semibold : .medium))
+                        .foregroundStyle(placeholder ? c.placeholder : valueTone.map { c.tone($0).fg } ?? c.text)
                         .fixedSize(horizontal: false, vertical: true)
                     if let detail {
                         Text(detail).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
@@ -985,11 +989,18 @@ private struct VerticalLine: Shape {
 public struct ListRow: View {
     let icon: ElchiIcon?, title: String, description: String?, trailing: String?, highlighted: Bool, danger: Bool, chevron: Bool
     let first: Bool
+    /// A red dot on the icon (BOSQICH 05: the profile's "Bildirishnomalar" while something is unread).
+    let dot: Bool
+    /// A danger row that still leads somewhere keeps its chevron ("Akkauntni o'chirish"; "Chiqish" has none).
+    let dangerChevron: Bool
     let action: (() -> Void)?
     @Environment(\.elchi) private var c
 
     public init(icon: ElchiIcon? = nil, title: String, description: String? = nil, trailing: String? = nil, highlighted: Bool = false,
-                danger: Bool = false, chevron: Bool = true, first: Bool = false, action: (() -> Void)?) {
+                danger: Bool = false, chevron: Bool = true, first: Bool = false, dot: Bool = false, dangerChevron: Bool = false,
+                action: (() -> Void)?) {
+        self.dot = dot
+        self.dangerChevron = dangerChevron
         self.icon = icon
         self.title = title
         self.description = description
@@ -1009,6 +1020,14 @@ public struct ListRow: View {
                     .foregroundStyle(danger ? err.fg : highlighted ? c.onBrand : c.accentText)
                     .frame(width: 38, height: 38)
                     .background(danger ? err.bg : highlighted ? c.brand : (c.isDark ? Color(hex: 0x1D2A3A) : Color(hex: 0xEEF4FA)), in: Circle())
+                    .overlay(alignment: .topTrailing) {
+                        if dot {
+                            Circle().fill(Color(hex: 0xE0413A)).frame(width: 9, height: 9)
+                                .overlay { Circle().strokeBorder(c.card, lineWidth: 2) }
+                                .offset(x: -3, y: 3)
+                                .accessibilityHidden(true)
+                        }
+                    }
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(ElchiFont.poppins(14, .semibold)).foregroundStyle(danger ? err.fg : c.text)
@@ -1016,7 +1035,7 @@ public struct ListRow: View {
             }
             Spacer(minLength: 0)
             if let trailing { Text(trailing).font(ElchiFont.poppins(12, .semibold)).foregroundStyle(c.muted).lineLimit(1) }
-            if chevron && !danger && action != nil { ElchiIcon.chevR.image(size: 16).foregroundStyle(c.placeholder) }
+            if chevron && (!danger || dangerChevron) && action != nil { ElchiIcon.chevR.image(size: 16).foregroundStyle(c.placeholder) }
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .frame(minHeight: description == nil ? 52 : 64)

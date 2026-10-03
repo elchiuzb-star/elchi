@@ -174,9 +174,11 @@ struct ClientFlow: View {
         case .notifications:
             NotificationsView(model: inbox, leading: .menu, onLeading: openDrawer, readAll: true, onOpen: openTarget)
         case .profile:
-            ProfileView(model: profile, session: session, onMenu: openDrawer, onAction: profileAction)
+            ProfileView(model: profile, session: session, unread: inbox.unread, onMenu: openDrawer, onAction: profileAction)
+                .task { await inbox.refreshUnread() }
         case .support:
-            SupportView(model: support, leading: .menu, onLeading: openDrawer) { path.append(.supportThreads) }
+            SupportView(model: support, threads: threads, leading: .menu, onLeading: openDrawer,
+                        onThreads: { path.append(.supportThreads) }, onOpenThread: { path.append(.supportThread($0)) })
         case .settings:
             settingsView(leading: .menu, onLeading: openDrawer)
         }
@@ -297,7 +299,8 @@ struct ClientFlow: View {
         case .safetyCenter:
             SafetyCenterView(model: safety, onBack: back)
         case .support:
-            SupportView(model: support, leading: .back, onLeading: back) { path.append(.supportThreads) }
+            SupportView(model: support, threads: threads, leading: .back, onLeading: back,
+                        onThreads: { path.append(.supportThreads) }, onOpenThread: { path.append(.supportThread($0)) })
         case .supportThreads:
             SupportThreadsView(model: threads, onBack: back) { path.append(.supportThread($0)) }
         case .supportThread(let id):
@@ -318,7 +321,10 @@ struct ClientFlow: View {
         case .legacyDispute(let id):
             LegacyDisputeView(model: orders.legacyOrder(id), onBack: back)
         case .accountDelete:
-            AccountDeleteView(model: accountDelete, onBack: back) {
+            AccountDeleteView(model: accountDelete, onBack: back, onOrders: {
+                section = .orders
+                path = []
+            }) {
                 let notice = strings.t("client.accountDelete.done")
                 Task { await container.endDeletedSession(notice: notice) }
             }
@@ -488,6 +494,7 @@ struct ClientFlow: View {
     /// After "Chiqish" in the confirm: v1 `/auth/logout`, then the session goes (the root shows sign-in).
     private func logout() {
         confirmLogout = false
+        // No "Ma'lumotlaringiz saqlanib qoldi" banner (it reads as a drafts-kept claim): straight to sign-in.
         Task { await container.signOut() }
     }
 }

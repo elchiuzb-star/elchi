@@ -3,15 +3,19 @@ import SwiftUI
 // MARK: - Yordam
 
 /// "Yordam": the support card (a phone only when the server has a line - never in the pilot, Q87; no hours, no reply
-/// times), a ticket form, the client's tickets (they have no replies, so no thread screen), the operator chats row
-/// and the FAQ with the first answer open.
+/// times), a ticket form, the tickets sent ("Yuborilgan murojaatlar": they have no replies, so no thread screen),
+/// "Murojaatlarim" with "Hammasi (N)" and the newest operator chat (BOSQICH 05; the row when there is none yet) and
+/// the FAQ with the first answer open.
 struct SupportView: View {
     let model: SupportModel
+    /// The operator chats ("Murojaatlarim"): the newest one and the count.
+    let threads: SupportThreadsModel
     let leading: ElchiIcon
     let onLeading: () -> Void
     /// Whose questions the FAQ answers: `support.faq*` (client) or `driver.faq*` (the driver flow, Stage 07).
     var faqPrefix = "support.faq"
     let onThreads: () -> Void
+    let onOpenThread: (String) -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @Environment(\.openURL) private var openURL
@@ -31,30 +35,49 @@ struct SupportView: View {
                 Note(strings.t("support.noPhoneLine"), tone: .blue, title: strings.t("support.cardTitle"))
             }
             SectionTitle(strings.t("support.newTicket"))
-            ElchiField(text: $model.draft, placeholder: strings.t("support.messagePlaceholder"), multiline: true)
+            ElchiField(text: $model.draft, placeholder: strings.t("support.messagePlaceholder"),
+                       hint: SupportText.showsMinHint(model.draft) ? strings.t("client.help.minChars") : nil, multiline: true)
             if model.sent { Note(strings.t("support.ticketSent"), tone: .ok) }
             if let error = model.sendError { Note(strings.errorText(error), tone: .err) }
-            ElchiButton(strings.t("support.send"), variant: .primary, size: .medium, icon: .send, loading: model.sending) {
+            ElchiButton(strings.t("support.send"), variant: .primary, size: .medium, loading: model.sending) {
                 Task {
                     await model.send()
                     if model.sent { dismissKeyboard() }
                 }
             }
             .disabled(!model.canSend)
-            SectionTitle(strings.t("support.myTickets"))
+            SectionTitle(strings.t("client.help.ticketsTitle"))
             tickets
+            threadsSection
+            SectionTitle(strings.t("support.faqTitle"))
+            FaqList((1...4).map { (strings.t("\(faqPrefix)\($0)Question"), strings.t(SupportText.faqAnswerKey(prefix: faqPrefix, index: $0))) })
+        } footer: {
+            EmptyView()
+        }
+        .refreshable { await reload() }
+        .task { await reload() }
+    }
+
+    private func reload() async {
+        async let support: Void = model.load()
+        async let chats: Void = threads.load()
+        _ = await (support, chats)
+    }
+
+    /// "Murojaatlarim" + "Hammasi (N)" over the newest chat; with none (or not loaded) the row into the list.
+    @ViewBuilder
+    private var threadsSection: some View {
+        if let list = threads.threads.value, let newest = list.first {
+            SectionTitle(strings.t("support.myThreads"), action: strings.t("client.help.allThreads", ("count", list.count)), onAction: onThreads)
+                .accessibilityIdentifier("elchi.support.threads")
+            SupportThreadCard(thread: newest) { onOpenThread(newest.id) }
+        } else {
             ElchiList {
                 ListRow(icon: .chat, title: strings.t("support.myThreads"), description: strings.t("support.myThreadsHint"), first: true,
                         action: onThreads)
                     .accessibilityIdentifier("elchi.support.threads")
             }
-            SectionTitle(strings.t("support.faqTitle"))
-            FaqList((1...4).map { (strings.t("\(faqPrefix)\($0)Question"), strings.t("\(faqPrefix)\($0)Answer")) })
-        } footer: {
-            EmptyView()
         }
-        .refreshable { await model.load() }
-        .task { await model.load() }
     }
 
     @ViewBuilder
@@ -86,9 +109,16 @@ struct SupportThreadsView: View {
     let onBack: () -> Void
     let onOpen: (String) -> Void
     @Environment(LocaleStore.self) private var strings
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
 
     var body: some View {
-        ScreenScaffold(title: strings.t("support.myThreads"), backLabel: strings.t("common.back"), onBack: onBack) {
+        ScreenScaffold(title: strings.t("support.myThreads"), backLabel: strings.t("common.back"), onBack: onBack,
+                       actions: [BarAction(id: "refresh", icon: .refresh, label: strings.t("support.refresh")) {
+                           Task {
+                               await model.load()
+                               if !model.failedLast { banners?.show(.key("client.booking.refreshed"), tone: .info, hideAfter: .seconds(2)) }
+                           }
+                       }]) {
             switch model.threads {
             case .loading:
                 SkeletonCards(count: 3)
@@ -99,11 +129,10 @@ struct SupportThreadsView: View {
                 EmptyState(icon: .head, title: strings.t("support.noThreadsTitle"), description: strings.t("support.noThreadsHint"))
             case .loaded(let list):
                 ForEach(list, id: \.id) { thread in
-                    ItemCard(title: strings.t("support.threadTitle"),
-                             badge: (strings.t(SupportStatus.key(thread)), SupportText.threadTone(thread)),
-                             sub: strings.t("support.threadMeta", ("count", thread.messageCount), ("date", strings.dateOnly(thread.createdAt) ?? "")),
-                             action: { onOpen(thread.id) })
+                    SupportThreadCard(thread: thread) { onOpen(thread.id) }
                 }
+                // BOSQICH 05: where a booking's chat comes from, under the list too.
+                Note(strings.t("support.noThreadsHint"), tone: .gray)
             }
         } footer: {
             EmptyView()
@@ -113,14 +142,31 @@ struct SupportThreadsView: View {
     }
 }
 
+/// One operator chat as a card: "Operator bilan yozishma", its status badge, "N ta xabar · date".
+struct SupportThreadCard: View {
+    let thread: SupportThreadDTO
+    let action: () -> Void
+    @Environment(LocaleStore.self) private var strings
+
+    var body: some View {
+        ItemCard(title: strings.t("support.threadTitle"),
+                 badge: (strings.t(SupportStatus.key(thread)), SupportText.threadTone(thread)),
+                 sub: strings.t("support.threadMeta", ("count", thread.messageCount), ("date", strings.dateOnly(thread.createdAt) ?? "")),
+                 action: action)
+    }
+}
+
 // MARK: - Bloklanganlar va shikoyatlarim
 
 /// Web `BlockAndReportPanel`: who the client blocked (with an honest "Chiqarish") and the reports it sent.
 struct SafetyCenterView: View {
     let model: SafetyCenterModel
+    /// The client's confirm says what unblocking means for its listings; the driver's has no such line.
+    var clientCopy = true
     let onBack: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
     @State private var confirming: BlockDTO?
 
     var body: some View {
@@ -137,13 +183,17 @@ struct SafetyCenterView: View {
         .task { await model.load() }
         .overlay {
             if let block = confirming {
+                // BOSQICH 05: unblocking is not destructive - the primary button. No name (the block has only an id).
                 DialogOverlay(dismissLabel: strings.t("common.cancel")) { confirming = nil } content: {
-                    Heading(strings.t("blockReport.unblock"))
-                    Text(strings.t("blockReport.subject.user")).font(ElchiFont.secondary).foregroundStyle(c.muted)
+                    Heading(strings.t("client.profile.unblockTitle"), subtitle: clientCopy ? strings.t("client.profile.unblockText") : nil)
                     HStack(spacing: 10) {
-                        ElchiButton(strings.t("blockReport.unblockShort"), variant: .danger, size: .pair) {
+                        ElchiButton(strings.t("blockReport.unblock"), variant: .primary, size: .pair) {
                             confirming = nil
-                            Task { await model.unblock(block) }
+                            Task {
+                                if await model.unblock(block) {
+                                    banners?.show(.key("client.profile.unblocked"), tone: .ok, hideAfter: .seconds(3))
+                                }
+                            }
                         }
                         .accessibilityIdentifier("elchi.unblock.confirm")
                         ElchiButton(strings.t("confirmDialog.back"), variant: .neutral, size: .pair) { confirming = nil }

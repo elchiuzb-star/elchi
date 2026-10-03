@@ -160,7 +160,7 @@ private struct SessionExpiredDialog: View {
     var body: some View {
         DialogOverlay(dismissLabel: strings.t("client.session.expiredTitle"), onDismiss: {}) {
             Heading(strings.t("client.session.expiredTitle"), subtitle: strings.t("client.session.expiredText"))
-            ElchiButton(strings.t("client.session.relogin"), icon: .lock, action: onRelogin)
+            ElchiButton(strings.t("client.session.relogin"), action: onRelogin)
         }
     }
 }

@@ -68,6 +68,7 @@
 		6BBB2AFE7BCDB457D18104BD /* HTTPTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */; };
 		6BE0984C96A17E029AA7A4DC /* ProfileLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 283497BEDB21D5D8D01F7231 /* ProfileLogic.swift */; };
 		6C5B257C6AA57A6F42C3157A /* Wallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899EC15A716DEDF558E910DB /* Wallet.swift */; };
+		6D96AA504003D9DEC2FEB661 /* ClientDesign05UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77BC6C1EA4072D484C16CF07 /* ClientDesign05UITests.swift */; };
 		6DCEB26277DF8AEDB50119B8 /* Design03Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 325E8FEBC1D5E3466DFFE70F /* Design03Tests.swift */; };
 		700E8F51640E13EDD2C86638 /* DriverBookingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A39640B9AAE504BB4C3C507 /* DriverBookingViews.swift */; };
 		792F83771A1610C2CA21ABFE /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 435B25D2F7FEA8A1307C81B0 /* FlowLayout.swift */; };
@@ -117,6 +118,7 @@
 		C2EFDE0345EA57A52A6000A9 /* OrderFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A5119DDBF60496FF3D30DAE /* OrderFormatting.swift */; };
 		C32EF3A94272A6E3C1DB80E4 /* CoreLocationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C4259880ED85D6E6BF0BE5 /* CoreLocationSource.swift */; };
 		C36DA73C1757FB7E5CD14FA4 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 552D982C968E1E1E115906DF /* SessionStore.swift */; };
+		C4BA33D14FA7E39870BB8F60 /* Design05Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E8C396C9DAE29876250DB5 /* Design05Tests.swift */; };
 		C5079BC9D0D2916CFD112524 /* ListingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE91ED3A3B98D042C095381D /* ListingViews.swift */; };
 		C52BBC92759016BAA554FEC3 /* Poppins-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 31AC3EF77268DC310A40A626 /* Poppins-Medium.ttf */; };
 		C634812579808489491BC847 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA17164718156721D6DFFECE /* JSONValue.swift */; };
@@ -227,6 +229,7 @@
 		7466CF87C3D97F990ED95903 /* TaxiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiUITests.swift; sourceTree = "<group>"; };
 		765870A11E9B923B60641B1D /* BookingHosts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingHosts.swift; sourceTree = "<group>"; };
 		774BCD9CFE33E4643559CF3B /* LegacyViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyViews.swift; sourceTree = "<group>"; };
+		77BC6C1EA4072D484C16CF07 /* ClientDesign05UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientDesign05UITests.swift; sourceTree = "<group>"; };
 		783733336FB122507D85F109 /* TaxiViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiViews.swift; sourceTree = "<group>"; };
 		7A61A05C9B058156AB0D42B0 /* FeedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViews.swift; sourceTree = "<group>"; };
 		7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyOrderModel.swift; sourceTree = "<group>"; };
@@ -254,6 +257,7 @@
 		AEFC26087742FF883E6A6FA6 /* OrdersLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersLogic.swift; sourceTree = "<group>"; };
 		B20558F406539BB7C97D53D6 /* Banners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Banners.swift; sourceTree = "<group>"; };
 		B2160348ED04BD003F9E3DB5 /* DriverMarketUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverMarketUITests.swift; sourceTree = "<group>"; };
+		B2E8C396C9DAE29876250DB5 /* Design05Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design05Tests.swift; sourceTree = "<group>"; };
 		B330F4CF98061BE16535668F /* DriverFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverFlow.swift; sourceTree = "<group>"; };
 		B7384394017524FA15DF071D /* StringsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringsTests.swift; sourceTree = "<group>"; };
 		B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransportTests.swift; sourceTree = "<group>"; };
@@ -322,6 +326,7 @@
 				41A189282F9DE6787F410CC3 /* ClientBookingUITests.swift */,
 				D8331CA086DC262AEB215033 /* ClientDesign03UITests.swift */,
 				0491BF896CDFA0F2EBB510F5 /* ClientDesign04UITests.swift */,
+				77BC6C1EA4072D484C16CF07 /* ClientDesign05UITests.swift */,
 				63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */,
 				1F0D6DE1F2618F2B03471134 /* ClientMyLocationUITests.swift */,
 				1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */,
@@ -627,6 +632,7 @@
 				3A80FE97EF8890CC6CC4A553 /* DeepLinkTests.swift */,
 				325E8FEBC1D5E3466DFFE70F /* Design03Tests.swift */,
 				CEF5996AD4AED177C5F311FC /* Design04Tests.swift */,
+				B2E8C396C9DAE29876250DB5 /* Design05Tests.swift */,
 				39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */,
 				A14CCE13A35C7D26BBC2736D /* DriverStage09Tests.swift */,
 				FB254F9C42D41CE8DDC8E3B1 /* GpsTests.swift */,
@@ -918,6 +924,7 @@
 				86E0469A8C4B537C30B261F6 /* DeepLinkTests.swift in Sources */,
 				6DCEB26277DF8AEDB50119B8 /* Design03Tests.swift in Sources */,
 				EA47B5CF0002E97E9A16DE0B /* Design04Tests.swift in Sources */,
+				C4BA33D14FA7E39870BB8F60 /* Design05Tests.swift in Sources */,
 				8B153DC9951BE2E3408FB121 /* DriverLogicTests.swift in Sources */,
 				F1C4BB9EB0C0CE5D084FE5A4 /* DriverStage09Tests.swift in Sources */,
 				5A0D0A4C44224BB5BADBAEDE /* GpsTests.swift in Sources */,
@@ -942,6 +949,7 @@
 				B960A9D5AD351B96A2ECD1F7 /* ClientBookingUITests.swift in Sources */,
 				9A0BE328C03D9456C19D4F08 /* ClientDesign03UITests.swift in Sources */,
 				0B7E05AC2FD618CDDF238F9A /* ClientDesign04UITests.swift in Sources */,
+				6D96AA504003D9DEC2FEB661 /* ClientDesign05UITests.swift in Sources */,
 				45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */,
 				AC7EBB138BDC371D56B0B027 /* ClientMyLocationUITests.swift in Sources */,
 				8C754C7698344577FA059522 /* ClientOffersUITests.swift in Sources */,

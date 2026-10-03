@@ -273,13 +273,14 @@ struct DriverFlow: View {
             NotificationsView(model: inbox, leading: .back, onLeading: back, onOpen: openTarget)
         case .support:
             // The same screen with the driver's questions (`driver.faq*`) instead of the client's.
-            SupportView(model: support, leading: .back, onLeading: back, faqPrefix: "driver.faq") { path.append(.supportThreads) }
+            SupportView(model: support, threads: threads, leading: .back, onLeading: back, faqPrefix: "driver.faq",
+                        onThreads: { path.append(.supportThreads) }, onOpenThread: { path.append(.supportThread($0)) })
         case .supportThreads:
             SupportThreadsView(model: threads, onBack: back) { path.append(.supportThread($0)) }
         case .supportThread(let id):
             SupportChatView(model: supportChats.model(id), onBack: back, title: strings.t("support.threadTitle"))
         case .safetyCenter:
-            SafetyCenterView(model: safety, onBack: back)
+            SafetyCenterView(model: safety, clientCopy: false, onBack: back)
         case .settings:
             SettingsView(leading: .back, onLeading: back, onHelp: { path.append(.support) },
                          onDeleteAccount: {

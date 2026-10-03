@@ -130,8 +130,7 @@ final class ClientProfileUITests: ClientUITestCase {
         launch(theme: "light", reset: false)
         drawer("profile")
         scrollTap("Bonuslar va taklif kodi")
-        waitFor("Mening bonuslarim", timeout: 20)
-        // Dev: promotions off -> the one sentence, no code, no entry, no campaigns.
+        // Dev: promotions off and no balance -> only the centred sentence (BOSQICH 05).
         waitFor("Taklif dasturi hozircha ishlamayapti", timeout: 20)
         snap("20-bonus")
     }
@@ -144,11 +143,12 @@ final class ClientProfileUITests: ClientUITestCase {
         waitFor("Bloklangan:")
         snap("30-safety-center")
         tap("Chiqarish")
-        waitFor("Blokdan chiqarish")
+        waitFor("blokdan chiqarilsinmi?")
         snap("31-unblock-confirm")
         let confirm = app.buttons["elchi.unblock.confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
+        waitFor("Blokdan chiqarildi", timeout: 20)
         waitGone("Bloklangan:", timeout: 20)
         waitFor("Siz hech kimni bloklamagansiz.")
         snap("32-unblocked")
@@ -170,7 +170,8 @@ final class ClientProfileUITests: ClientUITestCase {
         snap("41-support-ticket-sent")
         app.swipeUp()
         snap("42-support-faq")
-        let threadsRow = app.buttons["elchi.support.threads"]
+        // BOSQICH 05: "Murojaatlarim" + "Hammasi (N)" over the newest chat.
+        let threadsRow = app.buttons.containing(NSPredicate(format: "label BEGINSWITH %@", "Hammasi (")).firstMatch
         var swipes = 0
         while !threadsRow.isHittable && swipes < 6 { app.swipeUp(); swipes += 1 }
         threadsRow.tap()
@@ -220,7 +221,7 @@ final class ClientProfileUITests: ClientUITestCase {
         waitGone("—", timeout: 20)
         snap("61-ru-dark-profile")
         scrollTap("Бонусы и код приглашения")
-        waitFor("Мои бонусы", timeout: 20)
+        waitFor("Программа приглашений пока не работает", timeout: 20)
         snap("62-ru-dark-bonus")
         tap("Назад")
         scrollTap("Блокировки и мои жалобы")
@@ -315,6 +316,7 @@ final class ClientProfileUITests: ClientUITestCase {
         waitEnabled(submit, "Akkauntni o'chirish")
         snap("A1-delete-ticked")
         submit.tap()
+        app.buttons["elchi.accountDelete.confirm"].tap()
         waitFor("Hozircha o'chirib bo'lmaydi", timeout: 20)
         waitFor("Faol bronlar")
         snap("A2-delete-blocked")
@@ -330,6 +332,7 @@ final class ClientProfileUITests: ClientUITestCase {
         let submit = app.buttons["elchi.accountDelete.submit"]
         waitEnabled(submit, "Akkauntni o'chirish")
         submit.tap()
+        app.buttons["elchi.accountDelete.confirm"].tap()
         waitFor("Akkaunt o'chirildi", timeout: 20)
         waitFor("Men mijozman")
         snap("B0-deleted-signed-out")

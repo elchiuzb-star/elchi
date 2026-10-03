@@ -78,7 +78,8 @@ fun ElchiIconView(icon: ElchiIcon, tint: Color, modifier: Modifier = Modifier, s
 // -- buttons ----------------------------------------------------------------------------------------------------
 
 /** The prototype's button variants (`BV` in elchi-mobile.js). */
-enum class ButtonVariant { PRIMARY, SOFT, NEUTRAL, DANGER_SOFT, OUTLINE, GHOST, DANGER, NAVY }
+/** [NAVY_LIGHT]: the lighter navy button on a navy card (design 05 code card "Havolani ulashish"). */
+enum class ButtonVariant { PRIMARY, SOFT, NEUTRAL, DANGER_SOFT, OUTLINE, GHOST, DANGER, NAVY, NAVY_LIGHT }
 
 enum class ButtonSize(val height: Dp) { LARGE(56.dp), MEDIUM(44.dp) }
 
@@ -96,6 +97,7 @@ private fun buttonColors(variant: ButtonVariant): ButtonColors {
         ButtonVariant.GHOST -> ButtonColors(Color.Transparent, c.accentText, null)
         ButtonVariant.DANGER -> ButtonColors(c.danger, Color.White, null)
         ButtonVariant.NAVY -> ButtonColors(if (c.isDark) Color(0xFF1B3563) else c.navy, Color.White, null)
+        ButtonVariant.NAVY_LIGHT -> ButtonColors(Color(0xFF1C3A70), Color.White, null)
     }
 }
 
@@ -333,6 +335,8 @@ fun CardRow(
     onTrailing: (() -> Unit)? = null,
     strong: Boolean = false,
     muted: Boolean = false,
+    /** The value's colour (the bonus card's green "Ishlatish mumkin", the profile's latest-order status); null = text. */
+    valueColor: Color? = null,
 ) {
     val c = Elchi.colors
     Column {
@@ -343,7 +347,7 @@ fun CardRow(
                 Text(
                     value,
                     style = Elchi.type.secondary.copy(fontWeight = if (strong) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium),
-                    color = if (muted) c.placeholder else c.text,
+                    color = valueColor ?: if (muted) c.placeholder else c.text,
                 )
                 if (detail != null) Text(detail, style = Elchi.type.caption, color = c.muted)
             }
@@ -952,6 +956,10 @@ fun ListRow(
     chevron: Boolean = true,
     /** A red count pill on the right (unread notifications); null or 0 = none. */
     count: String? = null,
+    /** A small red dot on the icon (the profile's "Bildirishnomalar" while something is unread). */
+    iconDot: Boolean = false,
+    /** A danger row that still leads somewhere ("Akkauntni o'chirish") keeps its chevron; "Chiqish" has none. */
+    dangerChevron: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val c = Elchi.colors
@@ -974,7 +982,10 @@ fun ListRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (icon != null) {
-                Box(Modifier.size(38.dp).clip(CircleShape).background(iconBg), contentAlignment = Alignment.Center) { ElchiIconView(icon, iconFg, size = 18.dp) }
+                Box(Modifier.size(38.dp)) {
+                    Box(Modifier.size(38.dp).clip(CircleShape).background(iconBg), contentAlignment = Alignment.Center) { ElchiIconView(icon, iconFg, size = 18.dp) }
+                    if (iconDot) Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(10.dp).clip(CircleShape).background(c.card).padding(2.dp).clip(CircleShape).background(err.fg))
+                }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
@@ -988,7 +999,7 @@ fun ListRow(
             // The count takes the chevron's place, so a long title ("Bildirishnomalar") keeps its one line.
             if (count != null) {
                 Text(count, Modifier.clip(CircleShape).background(err.fg).padding(horizontal = 7.dp, vertical = 2.dp), style = Elchi.type.badge, color = if (c.isDark) Color(0xFF17191E) else Color.White, maxLines = 1)
-            } else if (chevron && onClick != null && style != ListRowStyle.DANGER) {
+            } else if (chevron && onClick != null && (style != ListRowStyle.DANGER || dangerChevron)) {
                 ElchiIconView(ElchiIcon.CHEV_R, c.placeholder, size = 16.dp)
             }
         }

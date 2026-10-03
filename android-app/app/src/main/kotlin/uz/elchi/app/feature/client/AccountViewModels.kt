@@ -31,6 +31,9 @@ import uz.elchi.app.api.generated.SupportTicketKind
 import uz.elchi.app.deeplink.PendingReferral
 import uz.elchi.app.deeplink.ReferralRules
 import uz.elchi.app.session.SessionStore
+import uz.elchi.app.ui.components.BannerCenter
+import uz.elchi.app.ui.components.BannerText
+import uz.elchi.app.ui.components.BannerTone
 import java.time.Instant
 import java.util.UUID
 
@@ -172,6 +175,8 @@ class ProfileViewModel(
         val saving: Boolean = false,
         val saved: Saved? = null,
         val saveError: Throwable? = null,
+        /** "Saqlash" was tapped with fewer than 2 letters: red border and "Kamida 2 ta harf kiriting." until edited. */
+        val nameTooShort: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State(name = sessions.current()?.user?.fullName.orEmpty()))
@@ -201,12 +206,16 @@ class ProfileViewModel(
         }
     }
 
-    fun setName(value: String) = _state.update { it.copy(name = value.take(NAME_MAX), saved = null, saveError = null) }
+    fun setName(value: String) = _state.update { it.copy(name = value.take(NAME_MAX), saved = null, saveError = null, nameTooShort = false) }
 
     fun saveName() {
         val s = _state.value
         val name = ProfileRules.nameToSave(s.name, sessions.current()?.user?.fullName) ?: return
         if (s.saving) return
+        if (ProfileRules.nameTooShort(name)) {
+            _state.update { it.copy(nameTooShort = true, saved = null, saveError = null) }
+            return
+        }
         _state.update { it.copy(saving = true, saved = null, saveError = null) }
         viewModelScope.launch {
             attempt { account.updateClientName(name) }
@@ -239,6 +248,8 @@ class BonusViewModel(
     private val referral: PendingReferral? = null,
     /** `client` (Stage 05 "Bonuslar") or `driver` (Stage 09 "Kredit va taklif kodi"). */
     val audience: String = AUDIENCE,
+    /** Where "Kod nusxalandi: {code}" shows (design 05 toast); null = nowhere (tests). */
+    private val banners: BannerCenter? = null,
 ) : ViewModel() {
 
     data class State(
@@ -252,11 +263,17 @@ class BonusViewModel(
         val entering: Boolean = false,
         val enterError: Throwable? = null,
         val accepted: Boolean = false,
-        val copied: Boolean = false,
+        /** The code the server just accepted ("Kod qabul qilindi: {code}"). */
+        val acceptedCode: String? = null,
         val audience: String = AUDIENCE,
     ) {
         val hasAttribution: Boolean get() = (referrals as? Load.Ready)?.value?.attributions?.any { it.audience == audience } == true
-        val normalized: String? get() = PromoRules.normalizeCode(entered)
+
+        /** Why the typed code cannot go yet (format, or the caller's own code); null = fine or not finished. */
+        val entryErrorKey: String? get() = PromoRules.entryErrorKey(entered, code?.code)
+
+        /** The code to send: a valid code that is not the caller's own. */
+        val normalized: String? get() = PromoRules.normalizeCode(entered)?.takeIf { entryErrorKey == null }
     }
 
     // A code kept from a link (`elchi.../r/<code>`) is already in the field; the person still confirms it.
@@ -306,9 +323,12 @@ class BonusViewModel(
         }
     }
 
-    fun setEntered(value: String) = _state.update { it.copy(entered = PromoRules.typedCode(value), enterError = null, accepted = false) }
+    fun setEntered(value: String) = _state.update { it.copy(entered = PromoRules.typedCode(value), enterError = null, accepted = false, acceptedCode = null) }
 
-    fun markCopied() = _state.update { it.copy(copied = true) }
+    /** "Kodni nusxalash" put [code] on the clipboard: say so (design 05 "Kod nusxalandi: {code}"). */
+    fun markCopied(code: String) {
+        banners?.show(BannerTone.OK, BannerText.Key("client.bonus.codeCopied", params = mapOf("code" to code)))
+    }
 
     fun submitCode() {
         val s = _state.value
@@ -323,7 +343,7 @@ class BonusViewModel(
             referral?.let { if (ReferralRules.forgetAfter(result.exceptionOrNull(), code, it.pending.value)) it.forget() }
             result.fold(
                 {
-                    _state.update { it.copy(entering = false, accepted = true, entered = "") }
+                    _state.update { it.copy(entering = false, accepted = true, acceptedCode = code, entered = "") }
                     attempt { api.myReferrals().data }.onSuccess { r -> _state.update { it.copy(referrals = Load.Ready(r)) } }
                 },
                 { e -> _state.update { it.copy(entering = false, enterError = e.takeUnless(PromoRules::isProgramOff), programOff = it.programOff || PromoRules.isProgramOff(e)) } },
@@ -343,7 +363,11 @@ class BonusViewModel(
  * `DELETE /blocks/{user_id}` with an `Idempotency-Key`; a refusal keeps the row and says why - never a fake success
  * (the backend currently refuses it, `IDEMPOTENCY_KEY_REQUIRED`, see the report).
  */
-class SafetyCenterViewModel(private val api: ElchiApi) : ViewModel() {
+class SafetyCenterViewModel(
+    private val api: ElchiApi,
+    /** Where "Blokdan chiqarildi" shows once the server agreed (design 05 toast); null = nowhere (tests). */
+    private val banners: BannerCenter? = null,
+) : ViewModel() {
 
     data class State(
         val blocks: Load<List<BlockDTO>> = Load.Loading,
@@ -399,7 +423,10 @@ class SafetyCenterViewModel(private val api: ElchiApi) : ViewModel() {
             val result = attempt { api.deleteBlock(userId, keys.key(scope)) }
             keys.settle(scope, result.exceptionOrNull())
             result.fold(
-                { _state.update { s -> s.copy(unblocking = null, blocks = (s.blocks as? Load.Ready)?.let { Load.Ready(it.value.filterNot { b -> b.userId == userId }) } ?: s.blocks) } },
+                {
+                    _state.update { s -> s.copy(unblocking = null, blocks = (s.blocks as? Load.Ready)?.let { Load.Ready(it.value.filterNot { b -> b.userId == userId }) } ?: s.blocks) }
+                    banners?.show(BannerTone.OK, BannerText.Key("client.profile.unblocked"))
+                },
                 { e -> _state.update { it.copy(unblocking = null, unblockError = userId to e) } },
             )
         }
@@ -420,6 +447,8 @@ class HelpViewModel(private val api: ElchiApi) : ViewModel() {
     data class State(
         val contacts: SupportContactsDTO? = null,
         val tickets: Load<List<SupportTicketDTO>> = Load.Loading,
+        /** The operator conversations, newest first (design 05: "Murojaatlarim · Hammasi (n)" + the newest card). */
+        val threads: Load<List<SupportThreadDTO>> = Load.Loading,
         val draft: String = "",
         val sending: Boolean = false,
         val sent: Boolean = false,
@@ -440,12 +469,15 @@ class HelpViewModel(private val api: ElchiApi) : ViewModel() {
         viewModelScope.launch {
             val contacts = async { attempt { api.supportContacts().data }.getOrNull() }
             val tickets = async { attempt { api.listMyTickets(limit = PAGE).data } }
+            val threads = async { attempt { SupportThreadsViewModel.newestFirst(api.listMySupportThreads(limit = SupportThreadsViewModel.LIMIT).data) } }
             val c = contacts.await()
             val t = tickets.await()
+            val th = threads.await()
             _state.update { s ->
                 s.copy(
                     contacts = c ?: s.contacts,
                     tickets = t.fold({ Load.Ready(it) }, { e -> if (s.tickets is Load.Ready) s.tickets else Load.Failed(e) }),
+                    threads = th.fold({ Load.Ready(it) }, { e -> if (s.threads is Load.Ready) s.threads else Load.Failed(e) }),
                     refreshing = false,
                 )
             }
@@ -481,32 +513,37 @@ class HelpViewModel(private val api: ElchiApi) : ViewModel() {
 }
 
 /** `my-support-threads` "Murojaatlarim": every operator conversation of mine (each belongs to a booking). */
-class SupportThreadsViewModel(private val api: ElchiApi) : ViewModel() {
+class SupportThreadsViewModel(
+    private val api: ElchiApi,
+    /** Where the bar's refresh button says "Yangilandi" (design 05 toast); null = nowhere (tests). */
+    private val banners: BannerCenter? = null,
+) : ViewModel() {
 
     data class State(val threads: Load<List<SupportThreadDTO>> = Load.Loading, val refreshing: Boolean = false)
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
-    fun refresh() {
+    /** [announce]: the bar's refresh button was tapped - a success says "Yangilandi", a failure the reason. */
+    fun refresh(announce: Boolean = false) {
         _state.update { it.copy(refreshing = true) }
         viewModelScope.launch {
-            val result = attempt { api.listMySupportThreads(limit = LIMIT).data }
+            val result = attempt { newestFirst(api.listMySupportThreads(limit = LIMIT).data) }
             _state.update { s ->
                 s.copy(
-                    threads = result.fold(
-                        // Newest first: the conversation that moved last is the one to read.
-                        { list -> Load.Ready(list.sortedByDescending { OrderRules.parseInstant(it.createdAt) ?: Instant.MIN }) },
-                        { e -> if (s.threads is Load.Ready) s.threads else Load.Failed(e) },
-                    ),
+                    threads = result.fold({ Load.Ready(it) }, { e -> if (s.threads is Load.Ready) s.threads else Load.Failed(e) }),
                     refreshing = false,
                 )
             }
+            if (announce) result.fold({ banners?.show(BannerTone.OK, BannerText.Key("client.booking.refreshed")) }, { e -> banners?.error(e) })
         }
     }
 
-    private companion object {
+    companion object {
         const val LIMIT = 50L
+
+        /** Newest first: the conversation that moved last is the one to read. */
+        fun newestFirst(list: List<SupportThreadDTO>): List<SupportThreadDTO> = list.sortedByDescending { OrderRules.parseInstant(it.createdAt) ?: Instant.MIN }
     }
 }
 

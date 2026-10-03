@@ -1911,5 +1911,93 @@
   "client.booking.quantityPieces": {
     "uz": "{count} ta",
     "ru": "{count} шт."
+  },
+  "client.bonus.programOffHint": {
+    "uz": "Dastur ishga tushganda bonuslar va taklif kodingiz shu yerda ko'rinadi.",
+    "ru": "Когда программа заработает, здесь появятся ваши бонусы и код приглашения."
+  },
+  "client.bonus.codeLabel": {
+    "uz": "Kod",
+    "ru": "Код"
+  },
+  "client.bonus.copyCode": {
+    "uz": "Kodni nusxalash",
+    "ru": "Скопировать код"
+  },
+  "client.bonus.shareLink": {
+    "uz": "Havolani ulashish",
+    "ru": "Поделиться ссылкой"
+  },
+  "client.bonus.codeCopied": {
+    "uz": "Kod nusxalandi: {code}",
+    "ru": "Код скопирован: {code}"
+  },
+  "client.bonus.ownCode": {
+    "uz": "O'z kodingizni kiritib bo'lmaydi.",
+    "ru": "Нельзя ввести собственный код."
+  },
+  "client.bonus.codeAcceptedValue": {
+    "uz": "Kod qabul qilindi: {code}",
+    "ru": "Код принят: {code}"
+  },
+  "client.profile.unblockTitle": {
+    "uz": "Foydalanuvchi blokdan chiqarilsinmi?",
+    "ru": "Разблокировать пользователя?"
+  },
+  "client.profile.unblockText": {
+    "uz": "U yana e'lonlaringizga taklif yubora oladi.",
+    "ru": "Он снова сможет отправлять предложения на ваши объявления."
+  },
+  "client.profile.unblocked": {
+    "uz": "Blokdan chiqarildi",
+    "ru": "Пользователь разблокирован"
+  },
+  "client.help.minChars": {
+    "uz": "Kamida 5 ta belgi yozing",
+    "ru": "Напишите не менее 5 символов"
+  },
+  "client.help.allThreads": {
+    "uz": "Hammasi ({count})",
+    "ru": "Все ({count})"
+  },
+  "client.help.ticketsTitle": {
+    "uz": "Yuborilgan murojaatlar",
+    "ru": "Отправленные обращения"
+  },
+  "client.help.faq4Answer": {
+    "uz": "Xizmat boshlanganda: yo'lovchi uchun siz mashinaga chiqqanda, pochta uchun safar jo'naganda. Undan oldin aloqa ilova ichidagi chat orqali bo'ladi.",
+    "ru": "Когда начинается услуга: для пассажира, когда вы садитесь в машину, для посылки, когда рейс отправляется. До этого связь только через чат в приложении."
+  },
+  "client.settings.themeChanged": {
+    "uz": "Mavzu: {name}",
+    "ru": "Тема: {name}"
+  },
+  "client.settings.languageChanged": {
+    "uz": "Til: {name}",
+    "ru": "Язык: {name}"
+  },
+  "client.settings.deleteConfirmTitle": {
+    "uz": "Akkaunt o'chirilsinmi?",
+    "ru": "Удалить аккаунт?"
+  },
+  "client.settings.deleteConfirmYes": {
+    "uz": "Ha, o'chirish",
+    "ru": "Да, удалить"
+  },
+  "client.settings.goToOrders": {
+    "uz": "Buyurtmalarga o'tish",
+    "ru": "Перейти к заказам"
+  },
+  "client.settings.loggedOutTitle": {
+    "uz": "Siz tizimdan chiqdingiz",
+    "ru": "Вы вышли из аккаунта"
+  },
+  "client.settings.loggedOutText": {
+    "uz": "Ma'lumotlaringiz saqlanib qoldi. Telefon raqamingiz bilan qayta kiring.",
+    "ru": "Данные сохранены. Войдите снова по номеру телефона."
+  },
+  "client.bonus.nextExpiryLabel": {
+    "uz": "Eng yaqin muddat",
+    "ru": "Ближайший срок"
   }
 }

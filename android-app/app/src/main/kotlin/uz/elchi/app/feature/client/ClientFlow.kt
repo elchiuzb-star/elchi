@@ -536,22 +536,23 @@ fun ClientFlow(container: AppContainer, session: Session) {
                     onHome = { nav.popBackStack<Home>(inclusive = false) },
                     onSignOut = signOut,
                 ),
+                notificationsDot = drawer.unread > 0,
             )
         }
         composable<Bonus> {
-            val vm: BonusViewModel = viewModel(factory = viewModelFactory { initializer { BonusViewModel(container.api, container.referral) } })
+            val vm: BonusViewModel = viewModel(factory = viewModelFactory { initializer { BonusViewModel(container.api, container.referral, banners = container.banners) } })
             BonusScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<SafetyCenter> {
-            val vm: SafetyCenterViewModel = viewModel(factory = viewModelFactory { initializer { SafetyCenterViewModel(container.api) } })
+            val vm: SafetyCenterViewModel = viewModel(factory = viewModelFactory { initializer { SafetyCenterViewModel(container.api, container.banners) } })
             SafetyCenterScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<Help> {
             val vm: HelpViewModel = viewModel(factory = viewModelFactory { initializer { HelpViewModel(container.api) } })
-            HelpScreen(vm = vm, onBack = { nav.popBackStack() }, onThreads = { nav.navigate(SupportThreads) })
+            HelpScreen(vm = vm, onBack = { nav.popBackStack() }, onThreads = { nav.navigate(SupportThreads) }, onThread = { id -> nav.navigate(SupportThread(id)) })
         }
         composable<SupportThreads> {
-            val vm: SupportThreadsViewModel = viewModel(factory = viewModelFactory { initializer { SupportThreadsViewModel(container.api) } })
+            val vm: SupportThreadsViewModel = viewModel(factory = viewModelFactory { initializer { SupportThreadsViewModel(container.api, container.banners) } })
             SupportThreadsScreen(vm = vm, onBack = { nav.popBackStack() }, onThread = { id -> nav.navigate(SupportThread(id)) })
         }
         composable<SupportThread> { entry ->
@@ -569,11 +570,12 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 onHelp = { nav.navigate(Help) },
                 onDeleteAccount = { nav.navigate(AccountDelete) },
                 onSignOut = signOut,
+                banners = container.banners,
             )
         }
         composable<AccountDelete> {
             val vm: AccountDeleteViewModel = viewModel(factory = viewModelFactory { initializer { AccountDeleteViewModel(container.api, container.push::unregister) { container.appScope.launch { container.push.sync() } } } })
-            AccountDeleteScreen(vm = vm, onBack = { nav.popBackStack() }, onDeleted = accountDeleted)
+            AccountDeleteScreen(vm = vm, onBack = { nav.popBackStack() }, onDeleted = accountDeleted, onOrders = toOrdersTop)
         }
         composable<BookingTracking> { entry ->
             val id = entry.toRoute<BookingTracking>().id

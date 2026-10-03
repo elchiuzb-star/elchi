@@ -38,6 +38,7 @@ import uz.elchi.app.ui.components.ButtonVariant
 import uz.elchi.app.ui.components.ElchiButton
 import uz.elchi.app.ui.components.EmptyState
 import uz.elchi.app.ui.components.ItemCard
+import uz.elchi.app.ui.components.RoundIconButton
 import uz.elchi.app.ui.components.SkeletonCard
 import uz.elchi.app.ui.components.SystemBarIcons
 import uz.elchi.app.ui.components.TitleBar
@@ -57,13 +58,16 @@ fun NotificationsScreen(vm: InboxViewModel, drawer: DrawerNav?, languageTag: Str
     val c = Elchi.colors
     SystemBarIcons(dark = !c.isDark)
     LaunchedEffect(Unit) { vm.refresh() }
+    // Design 05: a refresh button in the bar besides pull to refresh.
+    val refreshing = vm.state.collectAsStateWithLifecycle().value.let { it.refreshing && it.loaded }
+    val refresh: @Composable () -> Unit = { RoundIconButton(ElchiIcon.REFRESH, t(R.string.support_refresh), vm::refresh, loading = refreshing) }
     if (drawer == null) {
-        InboxContent(vm, languageTag, onTarget) { TitleBar(onBack, t(R.string.common_back), t(R.string.notifications_title)) }
+        InboxContent(vm, languageTag, onTarget) { TitleBar(onBack, t(R.string.common_back), t(R.string.notifications_title), trailing = refresh) }
         return
     }
     ClientDrawerFrame(drawer, DrawerPlace.NOTIFICATIONS) { openDrawer ->
         InboxContent(vm, languageTag, onTarget) {
-            TitleBar(openDrawer, menuLabel(drawer.unreadText), t(R.string.notifications_title), leadingIcon = ElchiIcon.MENU, leadingDot = drawer.unreadText != null)
+            TitleBar(openDrawer, menuLabel(drawer.unreadText), t(R.string.notifications_title), leadingIcon = ElchiIcon.MENU, leadingDot = drawer.unreadText != null, trailing = refresh)
         }
     }
 }

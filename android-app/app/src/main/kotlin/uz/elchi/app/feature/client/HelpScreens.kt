@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.elchi.app.R
 import uz.elchi.app.api.generated.BlockDTO
+import uz.elchi.app.api.generated.SupportThreadDTO
 import uz.elchi.app.i18n.errorText
 import uz.elchi.app.i18n.t
 import uz.elchi.app.i18n.tOrNull
@@ -50,6 +51,7 @@ import uz.elchi.app.ui.components.ItemCard
 import uz.elchi.app.ui.components.ListCard
 import uz.elchi.app.ui.components.ListRow
 import uz.elchi.app.ui.components.Note
+import uz.elchi.app.ui.components.RoundIconButton
 import uz.elchi.app.ui.components.SectionTitle
 import uz.elchi.app.ui.components.SkeletonCard
 import uz.elchi.app.ui.icons.ElchiIcon
@@ -67,7 +69,7 @@ enum class FaqSet { CLIENT, DRIVER }
  * conversations, and the FAQ.
  */
 @Composable
-fun HelpScreen(vm: HelpViewModel, onBack: () -> Unit, onThreads: () -> Unit, faq: FaqSet = FaqSet.CLIENT) {
+fun HelpScreen(vm: HelpViewModel, onBack: () -> Unit, onThreads: () -> Unit, onThread: (String) -> Unit, faq: FaqSet = FaqSet.CLIENT) {
     val s by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = LocalActivity.current
@@ -95,26 +97,40 @@ fun HelpScreen(vm: HelpViewModel, onBack: () -> Unit, onThreads: () -> Unit, faq
             singleLine = false,
             minHeight = 110.dp,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            hint = t(R.string.bookingChat_autoMaskNote),
+            // Design 05: "Kamida 5 ta belgi yozing" while too little is typed; the masking note otherwise.
+            hint = t(if (SafetyRules.ticketTooShort(s.draft)) R.string.client_help_minChars else R.string.bookingChat_autoMaskNote),
         )
         if (s.sent) Note(t(R.string.support_ticketSent), tone = Tone.OK)
         s.sendError?.let { Note(errorText(it), tone = Tone.ERR) }
         ElchiButton(t(R.string.support_send), vm::send, Modifier.fillMaxWidth(), enabled = SafetyRules.ticketReady(s.draft), loading = s.sending)
 
-        SectionTitle(t(R.string.support_myTickets))
+        // Tickets get no replies (spec §5) - their own section, named apart from the operator conversations below.
+        SectionTitle(t(R.string.client_help_ticketsTitle))
         when (val tickets = s.tickets) {
             Load.Loading -> SkeletonCard(t(R.string.common_loading), lines = 2)
-            is Load.Failed -> LoadFailed(t(R.string.support_myTickets), tickets.error, vm::refresh)
-            is Load.Ready -> tickets.value.forEach { ticket ->
-                ItemCard(
-                    title = SafetyRules.ticketTitle(ticket.message) ?: t(R.string.support_cardTitle),
-                    badge = SafetyRules.ticketStatusKey(ticket.status)?.let { key -> tOrNull(key)?.let { it to SafetyRules.ticketTone(ticket.status) } },
-                    sub = PromoRules.date(ticket.createdAt),
-                )
+            is Load.Failed -> LoadFailed(t(R.string.client_help_ticketsTitle), tickets.error, vm::refresh)
+            is Load.Ready -> if (tickets.value.isEmpty()) {
+                Note(t(R.string.support_noThreadsTitle), tone = Tone.GRAY)
+            } else {
+                tickets.value.forEach { ticket ->
+                    ItemCard(
+                        title = SafetyRules.ticketTitle(ticket.message) ?: t(R.string.support_cardTitle),
+                        badge = SafetyRules.ticketStatusKey(ticket.status)?.let { key -> tOrNull(key)?.let { it to SafetyRules.ticketTone(ticket.status) } },
+                        sub = PromoRules.date(ticket.createdAt),
+                    )
+                }
             }
         }
-        ListCard {
-            ListRow(t(R.string.support_myThreads), icon = ElchiIcon.FILE, description = t(R.string.support_myThreadsHint), first = true, onClick = onThreads)
+
+        // Design 05: "Murojaatlarim" + "Hammasi (n)", then the newest conversation; the row only while there is none.
+        val threads = (s.threads as? Load.Ready)?.value.orEmpty()
+        if (threads.isNotEmpty()) {
+            SectionTitle(t(R.string.support_myThreads), action = t(R.string.client_help_allThreads, "count" to threads.size), onAction = onThreads)
+            SupportThreadCard(threads.first(), onClick = { onThread(threads.first().id) })
+        } else {
+            ListCard {
+                ListRow(t(R.string.support_myThreads), icon = ElchiIcon.FILE, description = t(R.string.support_myThreadsHint), first = true, onClick = onThreads)
+            }
         }
 
         SectionTitle(t(R.string.support_faqTitle))
@@ -124,7 +140,8 @@ fun HelpScreen(vm: HelpViewModel, onBack: () -> Unit, onThreads: () -> Unit, faq
                     t(R.string.support_faq1Question) to t(R.string.support_faq1Answer),
                     t(R.string.support_faq2Question) to t(R.string.support_faq2Answer),
                     t(R.string.support_faq3Question) to t(R.string.support_faq3Answer),
-                    t(R.string.support_faq4Question) to t(R.string.support_faq4Answer),
+                    // Q142: a parcel's phones open when the trip departs, not at pick-up.
+                    t(R.string.support_faq4Question) to t(R.string.client_help_faq4Answer),
                 )
                 FaqSet.DRIVER -> listOf(
                     t(R.string.driver_faq1Question) to t(R.string.driver_faq1Answer),
@@ -173,24 +190,36 @@ fun SupportThreadsScreen(vm: SupportThreadsViewModel, onBack: () -> Unit, onThre
     val s by vm.state.collectAsStateWithLifecycle()
     // Read again whenever the screen shows (after an answer was read or written in a thread).
     LaunchedEffect(Unit) { vm.refresh() }
-    StepScaffold(title = t(R.string.support_myThreads), onBack = onBack, onRefresh = vm::refresh, refreshing = s.refreshing && s.threads is Load.Ready) {
+    StepScaffold(
+        title = t(R.string.support_myThreads),
+        onBack = onBack,
+        onRefresh = { vm.refresh() },
+        refreshing = s.refreshing && s.threads is Load.Ready,
+        actions = { RoundIconButton(ElchiIcon.REFRESH, t(R.string.support_refresh), { vm.refresh(announce = true) }, loading = s.refreshing) },
+    ) {
         when (val threads = s.threads) {
             Load.Loading -> repeat(2) { SkeletonCard(t(R.string.common_loading), lines = 2) }
-            is Load.Failed -> LoadFailed(t(R.string.support_myThreads), threads.error, vm::refresh)
+            is Load.Failed -> LoadFailed(t(R.string.support_myThreads), threads.error, { vm.refresh() })
             is Load.Ready -> if (threads.value.isEmpty()) {
                 EmptyState(ElchiIcon.HEAD, t(R.string.support_noThreadsTitle), Modifier.padding(top = 24.dp), description = t(R.string.support_noThreadsHint))
             } else {
-                threads.value.forEach { thread ->
-                    ItemCard(
-                        title = t(R.string.support_threadTitle),
-                        badge = (tOrNull(BookingRules.supportStatusKey(thread.staffStatus)) ?: thread.staffStatus) to SafetyRules.threadTone(thread.staffStatus),
-                        sub = t(R.string.support_threadMeta, "count" to thread.messageCount, "date" to (PromoRules.date(thread.createdAt) ?: "")),
-                        onClick = { onThread(thread.id) },
-                    )
-                }
+                threads.value.forEach { thread -> SupportThreadCard(thread, onClick = { onThread(thread.id) }) }
+                // Design 05: the booking button's note stays under a list too, not only on the empty state.
+                Note(t(R.string.support_noThreadsHint), tone = Tone.GRAY)
             }
         }
     }
+}
+
+/** One operator conversation: title, the staff status badge, "n xabar · date". */
+@Composable
+private fun SupportThreadCard(thread: SupportThreadDTO, onClick: () -> Unit) {
+    ItemCard(
+        title = t(R.string.support_threadTitle),
+        badge = (tOrNull(BookingRules.supportStatusKey(thread.staffStatus)) ?: thread.staffStatus) to SafetyRules.threadTone(thread.staffStatus),
+        sub = t(R.string.support_threadMeta, "count" to thread.messageCount, "date" to (PromoRules.date(thread.createdAt) ?: "")),
+        onClick = onClick,
+    )
 }
 
 // -- safety-center ------------------------------------------------------------------------------------------------
@@ -241,18 +270,20 @@ fun SafetyCenterScreen(vm: SafetyCenterViewModel, onBack: () -> Unit) {
             }
         }
     }
+    // Design 05: unblocking is not destructive - a primary button. No name: the block DTO carries only the id.
     confirm?.let { userId ->
         ElchiDialog(
-            title = t(R.string.blockReport_unblock),
-            text = t(R.string.blockReport_subject_user),
-            confirm = t(R.string.blockReport_unblockShort),
+            title = t(R.string.client_profile_unblockTitle),
+            text = t(R.string.client_profile_unblockText),
+            confirm = t(R.string.blockReport_unblock),
             onConfirm = {
                 confirm = null
                 vm.unblock(userId)
             },
             onDismiss = { confirm = null },
-            confirmVariant = ButtonVariant.DANGER,
+            confirmVariant = ButtonVariant.PRIMARY,
             dismiss = t(R.string.confirmDialog_back),
+            stacked = true,
         )
     }
 }

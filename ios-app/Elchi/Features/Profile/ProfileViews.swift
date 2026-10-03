@@ -23,7 +23,8 @@ struct NotificationsView: View {
 
     var body: some View {
         ScreenScaffold(title: strings.t("notifications.title"), leading: leading, backLabel: strings.t(leading == .menu ? "nav.menu" : "common.back"),
-                       onBack: onLeading) {
+                       onBack: onLeading,
+                       actions: [BarAction(id: "refresh", icon: .refresh, label: strings.t("support.refresh")) { Task { await model.load() } }]) {
             switch model.items {
             case .loading:
                 SkeletonCards(count: 3)
@@ -72,6 +73,8 @@ struct NotificationsView: View {
 struct ProfileView: View {
     let model: ProfileModel
     let session: Session
+    /// Unread notifications: a red dot on the "Bildirishnomalar" row's bell.
+    var unread = 0
     let onMenu: () -> Void
     let onAction: (ProfileAction) -> Void
     @Environment(LocaleStore.self) private var strings
@@ -89,13 +92,13 @@ struct ProfileView: View {
             stats
             SectionTitle(strings.t("clientProfile.personalTitle"))
             ElchiField(text: $model.name, label: strings.t("clientProfile.fullName"), placeholder: strings.t("clientProfile.fullNamePlaceholder"),
-                       contentType: .name)
+                       error: model.nameTooShort ? strings.t("stopSearch.minChars") : nil, contentType: .name)
             switch model.saveResult {
             case .success?: Note(strings.t("clientProfile.updated"), tone: .ok)
             case .failure(let error)?: Note(strings.t("client.profile.nameSaveFailed", ("error", strings.errorText(error))), tone: .err)
             case nil: EmptyView()
             }
-            ElchiButton(strings.t("common.save"), variant: .soft, size: .medium, loading: model.saving) {
+            ElchiButton(strings.t("common.save"), variant: model.canSave ? .primary : .neutral, size: .medium, loading: model.saving) {
                 Task {
                     await model.save()
                     if case .success? = model.saveResult { dismissKeyboard() }
@@ -107,11 +110,13 @@ struct ProfileView: View {
                 row(.pkg, "clientProfile.myOrders", "clientProfile.myOrdersHint", .orders, first: true)
                 row(.tag, "clientProfile.myProposals", "client.profile.myProposalsHint", .proposals)
                 row(.gift, "clientProfile.bonus", "clientProfile.bonusHint", .bonus)
-                row(.bell, "notifications.title", "clientProfile.notificationsHint", .notifications)
+                ListRow(icon: .bell, title: strings.t("notifications.title"), description: strings.t("clientProfile.notificationsHint"),
+                        dot: unread > 0) { onAction(.notifications) }
+                    .accessibilityValue(unread > 0 ? strings.t("client.notifications.new") : "")
                 row(.file, "support.myThreads", "support.myThreadsHint", .threads)
                 row(.block, "safety.centerTitle", "safety.centerDescription", .safety)
                 row(.head, "clientProfile.help", "clientProfile.helpHint", .help)
-                row(.settings, "clientProfile.settings", "clientProfile.settingsHint", .settings)
+                row(.settings, "clientProfile.settings", "driver.profile.settingsHint", .settings)
                 row(.home, "clientProfile.home", "clientProfile.homeHint", .home)
                 ListRow(icon: .logout, title: strings.t("clientProfile.logout"), description: strings.t("clientProfile.logoutHint"),
                         danger: true) { onAction(.logout) }
@@ -143,7 +148,8 @@ struct ProfileView: View {
             CardTitle(strings.t("clientProfile.ordersTitle"))
             CardRow(strings.t("client.profile.statCompleted"), figures.map { "\($0.completed)" } ?? dash)
             CardRow(strings.t("clientProfile.latestOrder"),
-                    figures.map { $0.latest.map { strings.tOrNil($0.key) ?? $0.raw } ?? dash } ?? dash)
+                    figures.map { $0.latest.map { strings.tOrNil($0.key) ?? $0.raw } ?? dash } ?? dash,
+                    valueTone: figures?.latest.flatMap { ProfileStats.latestTone($0) })
         }
     }
 
@@ -156,55 +162,92 @@ struct ProfileView: View {
 // MARK: - Bonuslar va taklif kodi
 
 /// Mirrors the web `BonusScreen` for the client: the bonus is a discount right, never money (Q102/Q103); no
-/// commission, rates or formulas. With the programme off, one sentence and the balance only.
+/// commission, rates or formulas, no reward amounts (Q131/Q147). With the programme off and nothing on the balance the
+/// client sees one centred sentence (BOSQICH 05); off with a balance, the note and that balance. The driver flow
+/// (Stage 09: the driver credit, a QR of the link) keeps its own layout.
 struct BonusView: View {
     let model: BonusModel
     let onBack: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
     @State private var copied = false
 
+    private var driver: Bool { model.audience == "driver" }
+
     var body: some View {
-        @Bindable var model = model
-        let driver = model.audience == "driver"
         ScreenScaffold(title: strings.t(driver ? "promoScreen.titleDriver" : "promoScreen.titleClient"), backLabel: strings.t("common.back"),
                        onBack: onBack) {
-            Note(strings.t(driver ? "promoScreen.creditNotMoney" : "promoScreen.bonusNotMoney"), tone: .warn)
-            SectionTitle(strings.t(driver ? "promoScreen.myCredit" : "promoScreen.myBonuses"))
-            balance
-            if model.programOff {
-                Note(strings.t(PromoLogic.programOffKey(hasBuckets: !model.buckets.isEmpty)), tone: .gray)
-            } else {
-                SectionTitle(strings.t("promoScreen.myCode"))
-                codeCard
-                Text(strings.t("promoScreen.rewardNote")).font(ElchiFont.caption).foregroundStyle(c.muted)
-                if model.accepted { Note(strings.t("promoScreen.codeAccepted"), tone: .ok) }
-                if !model.hasAttribution && model.referrals.value != nil {
-                    SectionTitle(strings.t("promoScreen.enterCode"))
-                    ElchiField(text: $model.entered, label: strings.t("promoScreen.friendCode"), placeholder: strings.t("promoScreen.codeExample"),
-                               hint: strings.t("promoScreen.codeOnce"),
-                               error: !model.entered.isEmpty && model.entered.count == ReferralCode.length && model.normalized == nil
-                                   ? strings.t("promoScreen.codeFormat") : nil,
-                               keyboard: .asciiCapable, monospaced: true)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                    if model.entered.count < ReferralCode.length {
-                        Text(strings.t("promoScreen.codeFormat")).font(ElchiFont.caption).foregroundStyle(c.muted)
-                    }
-                    if let error = model.enterError { Note(strings.errorText(error), tone: .err) }
-                    ElchiButton(strings.t("promoScreen.confirmCode"), variant: .soft, size: .medium, loading: model.entering) {
-                        Task { await model.submitCode() }
-                    }
-                    .disabled(model.normalized == nil)
-                }
-                SectionTitle(strings.t("promoScreen.myCampaigns"))
-                campaigns
+            switch driver ? PromoLogic.ScreenState.on : state {
+            case .loading:
+                SkeletonCards(count: 2)
+            case .offOnly:
+                offState
+            case .offWithBalance, .on:
+                content
             }
         } footer: {
             EmptyView()
         }
         .refreshable { await model.load() }
         .task { await model.load() }
+    }
+
+    private var state: PromoLogic.ScreenState {
+        var settled = model.balance.value != nil
+        if case .failed(let error) = model.balance, PromoLogic.isProgramOff(error) { settled = true }
+        return PromoLogic.screenState(programOff: model.programOff, balanceLoaded: settled, hasBuckets: !model.buckets.isEmpty)
+    }
+
+    /// "Taklif dasturi hozircha ishlamayapti." alone, centred, with the grey gift.
+    private var offState: some View {
+        VStack(spacing: 10) {
+            ElchiIcon.gift.image(size: 28).foregroundStyle(c.muted)
+                .frame(width: 64, height: 64)
+                .background(c.isDark ? Color(hex: 0x243244) : Color(hex: 0xE4E9EF), in: Circle())
+            Text(strings.t("promoScreen.programOff")).font(ElchiFont.poppins(16, .semibold)).foregroundStyle(c.text)
+                .multilineTextAlignment(.center)
+            Text(strings.t("client.bonus.programOffHint")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                .multilineTextAlignment(.center).frame(maxWidth: 280)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 50).padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("elchi.bonus.off")
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        @Bindable var model = model
+        Note(strings.t(driver ? "promoScreen.creditNotMoney" : "promoScreen.bonusNotMoney"), tone: .warn)
+        SectionTitle(strings.t(driver ? "promoScreen.myCredit" : "promoScreen.myBonuses"))
+        balance
+        if model.programOff {
+            Note(strings.t(PromoLogic.programOffKey(hasBuckets: !model.buckets.isEmpty)), tone: .gray)
+        } else {
+            SectionTitle(strings.t("promoScreen.myCode"))
+            if driver { driverCodeCard } else { codeCard }
+            Text(strings.t("promoScreen.rewardNote")).font(ElchiFont.caption).foregroundStyle(c.muted)
+            if model.accepted {
+                Note(strings.t("promoScreen.codeOnce"), tone: .ok,
+                     title: model.acceptedCode.map { strings.t("client.bonus.codeAcceptedValue", ("code", $0)) })
+            }
+            if !model.hasAttribution && model.referrals.value != nil {
+                SectionTitle(strings.t("promoScreen.enterCode"))
+                ElchiField(text: $model.entered, label: strings.t("promoScreen.friendCode"), placeholder: strings.t("promoScreen.codeExample"),
+                           hint: strings.t("promoScreen.codeOnce"), error: model.entryErrorKey.map { strings.t($0) },
+                           keyboard: .asciiCapable, monospaced: true)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                if let error = model.enterError { Note(strings.errorText(error), tone: .err) }
+                ElchiButton(strings.t("promoScreen.confirmCode"), variant: .soft, size: .medium, loading: model.entering) {
+                    Task { await model.submitCode() }
+                }
+                .disabled(!model.canSubmitCode)
+            }
+            SectionTitle(strings.t("promoScreen.myCampaigns"))
+            campaigns
+        }
     }
 
     @ViewBuilder
@@ -217,18 +260,20 @@ struct BonusView: View {
             ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await model.load() } }
         case .loaded:
             if model.buckets.isEmpty {
-                EmptyState(icon: .gift, title: strings.t(model.audience == "driver" ? "driver.bonus.noCreditTitle" : "promoScreen.noBonusTitle"),
-                           description: strings.t(model.audience == "driver" ? "driver.bonus.noCreditSubtitle" : "promoScreen.noBonusSubtitle"))
+                EmptyState(icon: .gift, title: strings.t(driver ? "driver.bonus.noCreditTitle" : "promoScreen.noBonusTitle"),
+                           description: strings.t(driver ? "driver.bonus.noCreditSubtitle" : "promoScreen.noBonusSubtitle"))
             } else {
                 ForEach(model.buckets, id: \.self) { bucket in
                     ElchiCard {
                         CardTitle(strings.bucketTitle(bucket))
-                        ForEach(Array(PromoLogic.rows(bucket).enumerated()), id: \.offset) { _, row in
+                        ForEach(Array(PromoLogic.rows(bucket).enumerated()), id: \.offset) { index, row in
+                            // "Ishlatish mumkin" green and bold (BOSQICH 05).
                             CardRow(strings.t(row.key), strings.money(row.minor),
-                                    detail: row.minor > 0 ? row.hintKey.map { strings.t($0) } : nil)
+                                    detail: row.minor > 0 ? row.hintKey.map { strings.t($0) } : nil,
+                                    strong: index == 0, valueTone: index == 0 ? .ok : nil)
                         }
                         if let expiry = strings.dateOnly(bucket.nextExpiryAt) {
-                            CardRow(strings.t("promoScreen.nextExpiry", ("date", "")).trimmingCharacters(in: CharacterSet(charactersIn: ": ")), expiry)
+                            CardRow(strings.t("client.bonus.nextExpiryLabel"), expiry)
                         }
                     }
                 }
@@ -236,8 +281,56 @@ struct BonusView: View {
         }
     }
 
+    /// The client's code card (BOSQICH 05): dark navy, "Kod", the code large and spaced, the link when configured,
+    /// "Kodni nusxalash" (the code only) and "Havolani ulashish" (the link, else the code).
     @ViewBuilder
     private var codeCard: some View {
+        if let code = model.code {
+            let navy = c.isDark ? Color(hex: 0x132B57) : Color(hex: 0x0E2350)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(strings.t("client.bonus.codeLabel")).font(ElchiFont.poppins(12)).foregroundStyle(Color(hex: 0x9FB6D6))
+                Text(code.code).font(.system(size: 28, weight: .semibold, design: .monospaced)).tracking(4)
+                    .foregroundStyle(.white).textSelection(.enabled).lineLimit(1).minimumScaleFactor(0.7)
+                    .accessibilityLabel(code.code.map(String.init).joined(separator: " "))
+                if PromoLogic.showsLink(code), let url = code.shareUrl {
+                    Text(url).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(Color(hex: 0xC9D6E8))
+                } else {
+                    Text(strings.t("promoScreen.linkNotReady")).font(ElchiFont.caption).foregroundStyle(Color(hex: 0xC9D6E8))
+                }
+                HStack(spacing: 8) {
+                    Button {
+                        UIPasteboard.general.string = PromoLogic.copyText(code)
+                        banners?.show(.text(strings.t("client.bonus.codeCopied", ("code", code.code))), tone: .info, hideAfter: .seconds(3))
+                    } label: {
+                        Text(strings.t("client.bonus.copyCode")).font(ElchiFont.poppins(13.5, .medium)).lineLimit(1).minimumScaleFactor(0.8)
+                            .foregroundStyle(Color(hex: 0x0E2350))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(c.brand, in: Capsule())
+                    }
+                    .buttonStyle(PressFade())
+                    .accessibilityIdentifier("elchi.bonus.copy")
+                    ShareLink(item: PromoLogic.shareText(code)) {
+                        // "Havolani ulashish" only when there is a link; otherwise the code goes out under "Ulashish".
+                        Text(strings.t(PromoLogic.showsLink(code) ? "client.bonus.shareLink" : "client.share.send")).font(ElchiFont.poppins(13.5, .medium)).lineLimit(1).minimumScaleFactor(0.8)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(Color(hex: 0x1C3A70), in: Capsule())
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(navy, in: RoundedRectangle(cornerRadius: ElchiShape.card))
+        } else if let error = model.codeError {
+            Note(strings.errorText(error), tone: .err)
+        } else if !model.loadedCode {
+            SkeletonCards(count: 1)
+        }
+    }
+
+    /// The driver's card (Stage 09): the link as a QR for the person next to them.
+    @ViewBuilder
+    private var driverCodeCard: some View {
         if let code = model.code {
             ElchiCard(padding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
                 VStack(alignment: .center, spacing: 10) {
@@ -245,16 +338,13 @@ struct BonusView: View {
                         .foregroundStyle(c.text).textSelection(.enabled)
                         .accessibilityLabel(code.code.map(String.init).joined(separator: " "))
                     if PromoLogic.showsLink(code), let url = code.shareUrl {
-                        // The driver shows the link as a QR to the person next to them (web BonusScreen role=driver).
-                        if model.audience == "driver", let qr = QRCode.image(url) {
+                        if let qr = QRCode.image(url) {
                             Image(uiImage: qr).interpolation(.none).resizable().scaledToFit().frame(width: 180, height: 180)
                                 .padding(10).background(.white, in: RoundedRectangle(cornerRadius: 12))
                                 .accessibilityLabel(strings.t("promoScreen.qrAria"))
                         }
                         Text(url).font(ElchiFont.poppins(13)).foregroundStyle(c.accentText).multilineTextAlignment(.center)
-                        if model.audience == "driver" {
-                            Text(strings.t("promoScreen.qrNote")).font(ElchiFont.caption).foregroundStyle(c.muted).multilineTextAlignment(.center)
-                        }
+                        Text(strings.t("promoScreen.qrNote")).font(ElchiFont.caption).foregroundStyle(c.muted).multilineTextAlignment(.center)
                     } else {
                         Text(strings.t("promoScreen.linkNotReady")).font(ElchiFont.caption).foregroundStyle(c.muted)
                             .multilineTextAlignment(.center)
@@ -262,10 +352,10 @@ struct BonusView: View {
                     HStack(spacing: 8) {
                         ElchiButton(strings.t(copied ? "promoScreen.copied" : "promoScreen.copy"), variant: .soft, size: .pair,
                                     icon: copied ? .check : .copy) {
-                            UIPasteboard.general.string = PromoLogic.showsLink(code) ? (code.shareUrl ?? code.code) : code.code
+                            UIPasteboard.general.string = PromoLogic.shareText(code)
                             copied = true
                         }
-                        ShareLink(item: PromoLogic.showsLink(code) ? (code.shareUrl ?? code.code) : code.code) {
+                        ShareLink(item: PromoLogic.shareText(code)) {
                             HStack(spacing: 8) {
                                 ElchiIcon.share.image(size: 18)
                                 Text(strings.t("client.share.send")).font(ElchiFont.buttonSmall)
@@ -285,6 +375,8 @@ struct BonusView: View {
         }
     }
 
+    /// Each campaign: its name and status badge, whose side the person is on, and "Kodim orqali qo'shilganlar: N ta ·
+    /// Shart muddati: …" (the count only on the inviter's side).
     @ViewBuilder
     private var campaigns: some View {
         switch model.referrals {
@@ -296,15 +388,16 @@ struct BonusView: View {
             if referrals.enrollments.isEmpty {
                 Note(strings.t("promoScreen.noCampaigns"), tone: .gray)
             } else {
+                let invited = [referrals.invited.attributed, referrals.invited.qualifying, referrals.invited.qualified,
+                               referrals.invited.expired, referrals.invited.rejected].compactMap { $0 }.reduce(0, +)
                 ForEach(referrals.enrollments, id: \.id) { item in
-                    let role = strings.t(item.side == "referee" ? "promoScreen.youAreInvited" : "promoScreen.youInvited")
-                    ItemCard(title: item.campaignName, sub: "\(role) · \(strings.enrollmentStatus(item))",
-                             lines: [ItemLine(strings.t("promoScreen.deadline", ("date", strings.dateOnly(item.qualificationDeadline) ?? "")))])
+                    let referee = item.side == "referee"
+                    let deadline = strings.t("promoScreen.deadline", ("date", strings.dateOnly(item.qualificationDeadline) ?? ""))
+                    ItemCard(title: item.campaignName, badge: (strings.enrollmentStatus(item), PromoLogic.enrollmentTone(item)),
+                             sub: strings.t(referee ? "promoScreen.youAreInvited" : "promoScreen.youInvited"),
+                             meta: referee ? deadline : "\(strings.t("promoScreen.invitedCount", ("count", invited))) · \(deadline)")
                 }
             }
-            let invited = [referrals.invited.attributed, referrals.invited.qualifying, referrals.invited.qualified,
-                           referrals.invited.expired, referrals.invited.rejected].compactMap { $0 }.reduce(0, +)
-            Text(strings.t("promoScreen.invitedCount", ("count", invited))).font(ElchiFont.caption).foregroundStyle(c.muted)
         }
     }
 }

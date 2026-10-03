@@ -125,6 +125,26 @@ public struct ProfileStats: Equatable, Sendable {
     }
 }
 
+extension ProfileStats {
+    /// "So'nggi buyurtma" in colour (BOSQICH 05 `lastC`): blue while under way, green once done; other states plain.
+    public static func latestTone(_ label: StatusLabel) -> Tone? {
+        label.tone == .blue || label.tone == .ok ? label.tone : nil
+    }
+}
+
+/// "Ism familiya" (BOSQICH 05): at least two letters after trimming, cut at 120 characters while typing (the server
+/// takes 255; Android keeps 120). Blank never goes to the server.
+public enum NameRule {
+    public static let minLetters = 2
+    public static let maxLength = 120
+
+    public static func typed(_ raw: String) -> String { String(raw.prefix(maxLength)) }
+
+    public static func isValid(_ name: String) -> Bool {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).filter(\.isLetter).count >= minLetters
+    }
+}
+
 /// Two letters for the avatar: first letters of the first two words of the name, else nothing (the icon is shown).
 public enum Initials {
     public static func of(_ name: String?) -> String? {
@@ -178,6 +198,36 @@ public enum PromoLogic {
         hasBuckets ? "promoScreen.programOffWithBalance" : "promoScreen.programOff"
     }
 
+    /// What the client's bonus screen shows. With the programme off and nothing on the balance, only the centred
+    /// "Taklif dasturi hozircha ishlamayapti." state (BOSQICH 05); off with a balance, the note and that balance.
+    public enum ScreenState: Equatable, Sendable { case loading, offOnly, offWithBalance, on }
+
+    public static func screenState(programOff: Bool, balanceLoaded: Bool, hasBuckets: Bool) -> ScreenState {
+        guard programOff else { return .on }
+        if hasBuckets { return .offWithBalance }
+        return balanceLoaded ? .offOnly : .loading
+    }
+
+    /// What "Kodni nusxalash" puts on the clipboard: the code only.
+    public static func copyText(_ code: ReferralCodeDTO) -> String { code.code }
+
+    /// What "Havolani ulashish" shares: the link once configured, else the code itself.
+    public static func shareText(_ code: ReferralCodeDTO) -> String {
+        showsLink(code) ? (code.shareUrl ?? code.code) : code.code
+    }
+
+    /// A campaign card's badge tone: qualified / granted green, waiting for or under review amber, refused or released grey, the rest
+    /// (promised) blue.
+    public static func enrollmentTone(_ enrollment: EnrollmentDTO) -> Tone {
+        let status = enrollment.qualificationStatus ?? enrollment.status
+        switch status {
+        case "qualified", "granted": return .ok
+        case "review", "waiting": return .warn
+        case "rejected", "released": return .gray
+        default: return .blue
+        }
+    }
+
     /// The share link is shown only once the server says it is configured (it may still be unverified).
     public static func showsLink(_ code: ReferralCodeDTO) -> Bool {
         code.shareUrl != nil && code.linkStatus == "configured_unverified"
@@ -199,6 +249,17 @@ public enum ReferralCode {
         guard let raw else { return nil }
         let value = raw.uppercased().filter { !$0.isWhitespace && $0 != "-" }
         return value.count == length && value.allSatisfy(alphabet.contains) ? value : nil
+    }
+}
+
+extension ReferralCode {
+    /// The entry field's error key, or nil: a full-length value outside the alphabet is "Kod 8 ta harf va raqamdan
+    /// iborat"; the client's own code (BOSQICH 05) is "O'z kodingizni kiritib bo'lmaydi.".
+    public static func entryErrorKey(_ entered: String, own: String?) -> String? {
+        guard entered.count == length else { return nil }
+        guard let code = normalize(entered) else { return "promoScreen.codeFormat" }
+        if let own, code == own.uppercased() { return "client.bonus.ownCode" }
+        return nil
     }
 }
 
@@ -225,6 +286,21 @@ public enum SupportText {
     }
 
     public static let minTicketLength = 5
+    /// The design's textarea cap.
+    public static let maxTicketLength = 1000
+
+    public static func typed(_ raw: String) -> String { String(raw.prefix(maxTicketLength)) }
+
+    /// The FAQ answer key: the client's fourth answer is the corrected one (Q142: parcel phones open at departure).
+    public static func faqAnswerKey(prefix: String, index: Int) -> String {
+        prefix == "support.faq" && index == 4 ? "client.help.faq4Answer" : "\(prefix)\(index)Answer"
+    }
+
+    /// "Kamida 5 ta belgi yozing" under the field while something, but too little, is written.
+    public static func showsMinHint(_ draft: String) -> Bool {
+        let count = draft.trimmingCharacters(in: .whitespacesAndNewlines).count
+        return count > 0 && count < minTicketLength
+    }
 
     public static func canSend(_ draft: String) -> Bool {
         draft.trimmingCharacters(in: .whitespacesAndNewlines).count >= minTicketLength
@@ -278,6 +354,16 @@ public enum DeletionBlocker: Equatable, Sendable {
         }
         if counts.contains(where: { !named.contains($0.key) && !parts.contains($0.key) && $0.value > 0 }) { out.append(.other) }
         return out.isEmpty ? [.other] : out
+    }
+
+    /// "Buyurtmalarga o'tish" in the refusal: something open the client's orders list shows.
+    public static func leadsToOrders(_ lines: [DeletionBlocker]) -> Bool {
+        lines.contains {
+            if case .known(let key, let count) = $0 {
+                return count > 0 && (key.hasSuffix(".active_bookings") || key.hasSuffix(".active_orders"))
+            }
+            return false
+        }
     }
 }
 

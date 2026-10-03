@@ -4761,6 +4761,142 @@
         }
       }
     },
+    "client.bonus.codeAcceptedValue": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код принят: {code}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kod qabul qilindi: {code}"
+          }
+        }
+      }
+    },
+    "client.bonus.codeCopied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код скопирован: {code}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kod nusxalandi: {code}"
+          }
+        }
+      }
+    },
+    "client.bonus.codeLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kod"
+          }
+        }
+      }
+    },
+    "client.bonus.copyCode": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скопировать код"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kodni nusxalash"
+          }
+        }
+      }
+    },
+    "client.bonus.nextExpiryLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ближайший срок"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eng yaqin muddat"
+          }
+        }
+      }
+    },
+    "client.bonus.ownCode": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нельзя ввести собственный код."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O'z kodingizni kiritib bo'lmaydi."
+          }
+        }
+      }
+    },
+    "client.bonus.programOffHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Когда программа заработает, здесь появятся ваши бонусы и код приглашения."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dastur ishga tushganda bonuslar va taklif kodingiz shu yerda ko'rinadi."
+          }
+        }
+      }
+    },
+    "client.bonus.shareLink": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поделиться ссылкой"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Havolani ulashish"
+          }
+        }
+      }
+    },
     "client.booking.amendAcceptedPrice": {
       "extractionState": "manual",
       "localizations": {
@@ -5811,6 +5947,74 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keyingi bosqichda"
+          }
+        }
+      }
+    },
+    "client.help.allThreads": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все ({count})"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hammasi ({count})"
+          }
+        }
+      }
+    },
+    "client.help.faq4Answer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Когда начинается услуга: для пассажира, когда вы садитесь в машину, для посылки, когда рейс отправляется. До этого связь только через чат в приложении."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xizmat boshlanganda: yo'lovchi uchun siz mashinaga chiqqanda, pochta uchun safar jo'naganda. Undan oldin aloqa ilova ichidagi chat orqali bo'ladi."
+          }
+        }
+      }
+    },
+    "client.help.minChars": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напишите не менее 5 символов"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kamida 5 ta belgi yozing"
+          }
+        }
+      }
+    },
+    "client.help.ticketsTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправленные обращения"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yuborilgan murojaatlar"
           }
         }
       }
@@ -8824,6 +9028,57 @@
         }
       }
     },
+    "client.profile.unblockText": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Он снова сможет отправлять предложения на ваши объявления."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "U yana e'lonlaringizga taklif yubora oladi."
+          }
+        }
+      }
+    },
+    "client.profile.unblockTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разблокировать пользователя?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foydalanuvchi blokdan chiqarilsinmi?"
+          }
+        }
+      }
+    },
+    "client.profile.unblocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пользователь разблокирован"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blokdan chiqarildi"
+          }
+        }
+      }
+    },
     "client.proposals.emptyText": {
       "extractionState": "manual",
       "localizations": {
@@ -9062,6 +9317,108 @@
         }
       }
     },
+    "client.settings.deleteConfirmTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить аккаунт?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akkaunt o'chirilsinmi?"
+          }
+        }
+      }
+    },
+    "client.settings.deleteConfirmYes": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Да, удалить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ha, o'chirish"
+          }
+        }
+      }
+    },
+    "client.settings.goToOrders": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перейти к заказам"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buyurtmalarga o'tish"
+          }
+        }
+      }
+    },
+    "client.settings.languageChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Язык: {name}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Til: {name}"
+          }
+        }
+      }
+    },
+    "client.settings.loggedOutText": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данные сохранены. Войдите снова по номеру телефона."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ma'lumotlaringiz saqlanib qoldi. Telefon raqamingiz bilan qayta kiring."
+          }
+        }
+      }
+    },
+    "client.settings.loggedOutTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы вышли из аккаунта"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siz tizimdan chiqdingiz"
+          }
+        }
+      }
+    },
     "client.settings.mapLanguageNote": {
       "extractionState": "manual",
       "localizations": {
@@ -9075,6 +9432,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Xaritadagi yozuvlar tili ilova qayta ochilganda almashadi."
+          }
+        }
+      }
+    },
+    "client.settings.themeChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тема: {name}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mavzu: {name}"
           }
         }
       }

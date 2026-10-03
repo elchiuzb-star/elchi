@@ -164,7 +164,7 @@ private fun ClientDrawer(nav: DrawerNav, current: DrawerPlace, go: (DrawerPlace?
             ListRow(t(R.string.proposals_title), icon = ElchiIcon.TAG, description = t(R.string.client_offers_drawerHint), onClick = go(null, nav.onProposals))
             ListRow(t(R.string.nav_profile), icon = ElchiIcon.USER, description = t(R.string.nav_profileHint), onClick = go(null, nav.onProfile))
             ListRow(t(R.string.support_title), icon = ElchiIcon.HEAD, description = t(R.string.clientProfile_helpHint), onClick = go(null, nav.onHelp))
-            ListRow(t(R.string.settingsScreen_title), icon = ElchiIcon.SETTINGS, description = t(R.string.clientProfile_settingsHint), onClick = go(null, nav.onSettings))
+            ListRow(t(R.string.settingsScreen_title), icon = ElchiIcon.SETTINGS, description = t(R.string.driver_profile_settingsHint), onClick = go(null, nav.onSettings))
         }
         ListCard {
             ListRow(t(R.string.nav_logout), icon = ElchiIcon.LOGOUT, first = true, style = ListRowStyle.DANGER, onClick = onSignOut)

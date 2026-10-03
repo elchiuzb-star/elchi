@@ -131,6 +131,8 @@ data class ProfileStats(
     val completed: Int,
     /** Dictionary key of the newest booking's or listing's status. */
     val latestKey: String?,
+    /** How that status is tinted (design `lastC`): blue while it is still going, green once completed, else plain. */
+    val latestTone: Tone? = null,
 )
 
 object ProfileRules {
@@ -153,10 +155,19 @@ object ProfileRules {
         val newestListing = parcel.maxByOrNull { OrderRules.parseInstant(it.createdAt) ?: Instant.MIN }
         val bookingAt = newestBooking?.let { OrderRules.parseInstant(it.createdAt) }
         val listingAt = newestListing?.let { OrderRules.parseInstant(it.createdAt) }
+        val bookingIsLatest = newestBooking != null && (listingAt == null || (bookingAt != null && !bookingAt.isBefore(listingAt)))
         val latest = when {
-            newestBooking != null && (listingAt == null || (bookingAt != null && !bookingAt.isBefore(listingAt))) ->
-                OrderRules.bookingStatusKey(newestBooking.serviceType, newestBooking.serviceStatus)
+            bookingIsLatest -> OrderRules.bookingStatusKey(newestBooking!!.serviceType, newestBooking.serviceStatus)
             newestListing != null -> OrderRules.listingStatusKey(newestListing.status)
+            else -> null
+        }
+        val latestTone = when {
+            bookingIsLatest -> when {
+                newestBooking!!.serviceStatus == "completed" -> Tone.OK
+                !BookingRules.isTerminal(newestBooking.serviceStatus) -> Tone.BLUE
+                else -> null
+            }
+            newestListing != null -> if (OrderRules.isLive(newestListing.status)) Tone.BLUE else null
             else -> null
         }
         return ProfileStats(
@@ -165,6 +176,7 @@ object ProfileRules {
             offers = offers,
             completed = bookings.count { it.serviceStatus == "completed" },
             latestKey = latest,
+            latestTone = latestTone,
         )
     }
 
@@ -175,12 +187,21 @@ object ProfileRules {
         return words.take(2).joinToString("") { it.first().uppercase() }
     }
 
+    /** Design 05 ("Kamida 2 ta harf kiriting."): a name needs at least this many letters. */
+    const val NAME_MIN_LETTERS = 2
+
+    /** True when the typed name has fewer than [NAME_MIN_LETTERS] letters (spaces, dots and digits do not count). */
+    fun nameTooShort(typed: String): Boolean = typed.count { it.isLetter() } < NAME_MIN_LETTERS
+
     /** What is sent as the new name, or null when there is nothing to send (blank, or unchanged). */
     fun nameToSave(typed: String, current: String?): String? = typed.trim().replace(Regex("\\s+"), " ").takeIf { it.isNotEmpty() && it != current?.trim() }
 }
 
-/** One line of a bonus card: label key, amount, and the hint shown only while the amount is not zero. */
-data class BucketRow(val labelKey: String, val minor: Long, val hintKey: String? = null)
+/**
+ * One line of a bonus card: label key, amount, and the hint shown only while the amount is not zero. [usable] = the
+ * "Ishlatish mumkin" line, drawn green and semibold (design 05).
+ */
+data class BucketRow(val labelKey: String, val minor: Long, val hintKey: String? = null, val usable: Boolean = false)
 
 /** Bonus screen (`mobile-app/src/app/promo.ts`): Q101-Q104 - a bonus is a discount right, never money (Q16/Q103). */
 object PromoRules {
@@ -198,7 +219,7 @@ object PromoRules {
 
     /** The five states in reading order; "expired" includes reversed amounts (both are gone for good). */
     fun bucketRows(bucket: PromoBucketDTO): List<BucketRow> = listOf(
-        BucketRow("promo.bucket.available", bucket.availableMinor),
+        BucketRow("promo.bucket.available", bucket.availableMinor, usable = true),
         BucketRow("promo.bucket.reserved", bucket.reservedMinor, "promo.bucket.reservedHint"),
         BucketRow("docState.pending", bucket.underReviewMinor, "promo.bucket.underReviewHint"),
         BucketRow("promo.bucket.consumed", bucket.consumedMinor),
@@ -228,8 +249,26 @@ object PromoRules {
     /** The link is shown only when a host is configured (it may still not open: then the code is typed by hand). */
     fun shareUrl(code: ReferralCodeDTO): String? = code.shareUrl?.takeIf { code.linkStatus == LINK_CONFIGURED && it.isNotBlank() }
 
-    /** What "Nusxa olish" and "Ulashish" hand over: the working link when there is one, else the code. */
+    /** What "Havolani ulashish" hands over: the working link when there is one, else the code. "Kodni nusxalash" copies the code only. */
     fun shareText(code: ReferralCodeDTO): String = shareUrl(code) ?: code.code
+
+    /**
+     * Why the typed friend's code cannot be sent yet, as a dictionary key; null = fine (or not finished: the button
+     * stays disabled until 8 characters). [own] is the caller's own code: entering it is refused before the server.
+     */
+    fun entryErrorKey(entered: String, own: String?): String? = when {
+        entered.length < CODE_LENGTH -> null
+        normalizeCode(entered) == null -> "promoScreen.codeFormat"
+        own != null && normalizeCode(entered) == normalizeCode(own) -> "client.bonus.ownCode"
+        else -> null
+    }
+
+    /** The campaign badge's tone: done = ok, staff looking = warn, gone = grey, still running = info. */
+    fun enrollmentTone(qualification: String?, status: String): Tone = when (qualification) {
+        "qualified", "granted" -> Tone.OK
+        "review" -> Tone.WARN
+        else -> if (status == "released") Tone.GRAY else Tone.BLUE
+    }
 
     /** Enrolment status line: the qualification step when known, else the enrolment state. */
     fun enrollmentStatusKey(qualification: String?, status: String): String? = when (qualification) {
@@ -281,11 +320,14 @@ object SafetyRules {
     /** The ticket's title in the list: its first non-empty line. */
     fun ticketTitle(message: String?): String? = message?.lineSequence()?.map { it.trim() }?.firstOrNull { it.isNotEmpty() }
 
-    /** Help form: the server wants at least a few words. */
+    /** Help form: the server wants at least a few words; design 05 caps the text at 1000 characters. */
     const val TICKET_MIN = 5
-    const val TICKET_MAX = 4000
+    const val TICKET_MAX = 1000
 
     fun ticketReady(text: String): Boolean = text.trim().length >= TICKET_MIN
+
+    /** "Kamida 5 ta belgi yozing" shows while something, but too little, is typed (not on an empty field). */
+    fun ticketTooShort(text: String): Boolean = text.trim().length in 1 until TICKET_MIN
 }
 
 /** One line of "Hozircha o'chirib bo'lmaydi": a dictionary key and, when the line names one, its counter. */
@@ -302,6 +344,10 @@ object DeletionRules {
      * non-zero counter (wallet, custody, receipts, held commission...) adds one "something else is open" line, once.
      * Text values (`reason`) are not counters.
      */
+    /** "Buyurtmalarga o'tish" in the refusal card: only when an open booking or order is what holds it. */
+    fun leadsToOrders(blockers: List<DeletionBlocker>?): Boolean =
+        blockers.orEmpty().any { it.key == "client.accountDelete.blocked.active_bookings" || it.key == "client.accountDelete.blocked.active_orders" }
+
     fun blockers(details: JsonElement?): List<DeletionBlocker> {
         val obj = details as? JsonObject ?: return listOf(DeletionBlocker("client.accountDelete.blocked.other", null))
         val counts = obj.mapNotNull { (key, value) -> (value as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull?.let { key to it } }.toMap()

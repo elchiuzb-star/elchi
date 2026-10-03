@@ -261,10 +261,10 @@ fun DriverFlow(container: AppContainer, session: Session) {
         }
         composable<Help> {
             val vm: HelpViewModel = viewModel(factory = viewModelFactory { initializer { HelpViewModel(container.api) } })
-            HelpScreen(vm = vm, onBack = { nav.popBackStack() }, onThreads = { nav.navigate(SupportThreads) }, faq = FaqSet.DRIVER)
+            HelpScreen(vm = vm, onBack = { nav.popBackStack() }, onThreads = { nav.navigate(SupportThreads) }, onThread = { id -> nav.navigate(SupportThread(id)) }, faq = FaqSet.DRIVER)
         }
         composable<SupportThreads> {
-            val vm: SupportThreadsViewModel = viewModel(factory = viewModelFactory { initializer { SupportThreadsViewModel(container.api) } })
+            val vm: SupportThreadsViewModel = viewModel(factory = viewModelFactory { initializer { SupportThreadsViewModel(container.api, container.banners) } })
             SupportThreadsScreen(vm = vm, onBack = { nav.popBackStack() }, onThread = { id -> nav.navigate(SupportThread(id)) })
         }
         composable<SupportThread> { entry ->
@@ -273,7 +273,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
             SupportChatScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<SafetyCenter> {
-            val vm: SafetyCenterViewModel = viewModel(factory = viewModelFactory { initializer { SafetyCenterViewModel(container.api) } })
+            val vm: SafetyCenterViewModel = viewModel(factory = viewModelFactory { initializer { SafetyCenterViewModel(container.api, container.banners) } })
             SafetyCenterScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<Settings> {
@@ -286,6 +286,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
                 onHelp = { nav.navigate(Help) },
                 onDeleteAccount = { nav.navigate(AccountDelete) },
                 onSignOut = signOut,
+                banners = container.banners,
             )
         }
         composable<AddTrip> {
@@ -389,12 +390,15 @@ fun DriverFlow(container: AppContainer, session: Session) {
             WalletScreen(vm = vm, onBack = { nav.popBackStack() }, onHelp = { nav.navigate(Help) })
         }
         composable<DriverBonus> {
-            val vm: BonusViewModel = viewModel(factory = viewModelFactory { initializer { BonusViewModel(container.api, container.referral, BonusViewModel.DRIVER_AUDIENCE) } })
+            val vm: BonusViewModel = viewModel(factory = viewModelFactory { initializer { BonusViewModel(container.api, container.referral, BonusViewModel.DRIVER_AUDIENCE, container.banners) } })
             BonusScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable<AccountDelete> {
             val vm: AccountDeleteViewModel = viewModel(factory = viewModelFactory { initializer { AccountDeleteViewModel(container.api, container.push::unregister) { container.appScope.launch { container.push.sync() } } } })
-            AccountDeleteScreen(vm = vm, onBack = { nav.popBackStack() }, onDeleted = accountDeleted)
+            AccountDeleteScreen(vm = vm, onBack = { nav.popBackStack() }, onDeleted = accountDeleted, onOrders = {
+                nav.popBackStack<Tabs>(inclusive = false)
+                tab = DriverTab.ORDERS
+            })
         }
     }
 }
