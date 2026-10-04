@@ -447,6 +447,18 @@ class OpsQueueItemDTO(ContractModel):
     corridor: str | None = None
     age_minutes: StrictInt
     summary: str
+    #: Additive (admin panel): the service of a ``booking`` or ``listing`` item; null for every other item type.
+    service_type: ServiceType | None = None
+
+
+class OpsQueueCountDTO(ContractModel):
+    """O4 summary: how many items one queue holds. ``count`` is exact while ``capped`` is false; when ``capped`` is
+    true there are **at least** ``cap`` items (the panel shows "cap+"), so a long queue never costs a full scan."""
+
+    queue: OpsQueue
+    count: StrictInt
+    capped: StrictBool
+    cap: StrictInt
 
 
 class KpiValueDTO(ContractModel):

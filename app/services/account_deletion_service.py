@@ -165,7 +165,7 @@ def blocking_disputes(db: Session, user: User) -> int:
 
 def delete_own_account(db: Session, user: User) -> dict[str, Any] | JSONResponse:
     """Anonymise the account and purge everything that is exclusively theirs."""
-    if user.role in {"operator", "admin", "super_admin"}:
+    if user.role in {"operator", "admin", "super_admin", "finance"}:
         return error_response(
             status.HTTP_403_FORBIDDEN,
             "STAFF_DELETE_FORBIDDEN",

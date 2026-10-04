@@ -8,8 +8,11 @@ from sqlalchemy import and_, func, or_, select
 from app.api.deps import get_current_user, require_operator_or_admin, require_super_admin
 from app.db.session import get_db
 from app.models import User
+from app.contracts.ids import PublicIdPrefix, format_public_id
 from app.schemas.auth import (
     AdminUserCreate,
+    AdminUserCreated,
+    StaffCredentialsUpdate,
     AuthProfileUpdate,
     AuthRequestOtp,
     AuthUser,
@@ -27,12 +30,18 @@ from app.services.auth_service import (
     login_staff_with_password,
     logout_refresh_session,
     request_otp,
+    set_staff_credentials,
     verify_otp,
 )
 from app.utils.api_response import error_response
 
 router = APIRouter(prefix="/auth")
 admin_router = APIRouter(prefix="/admin/users")
+
+# Q17: finance is staff too. Readers of the staff list are unchanged (require_operator_or_admin); these sets only
+# decide which accounts the list shows and which accounts a super_admin can manage.
+STAFF_ACCOUNT_ROLES = ("operator", "admin", "super_admin", "finance")
+SUPER_ADMIN_MANAGED_ROLES = {"operator", "admin", "finance"}
 
 
 def client_ip(request: Request) -> str | None:
@@ -118,7 +127,7 @@ def update_me_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
-    if current_user.role not in {"operator", "admin", "super_admin"}:
+    if current_user.role not in STAFF_ACCOUNT_ROLES:
         return error_response(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Only staff users can update profile here")
     full_name = payload.full_name.strip() if payload.full_name else None
     current_user.full_name = full_name or None
@@ -128,20 +137,39 @@ def update_me_endpoint(
     return {"success": True, "data": current_user, "message": "Profile updated"}
 
 
-@admin_router.post("", response_model=AuthUser)
+@admin_router.post("", response_model=AdminUserCreated)
 def create_admin_user_endpoint(
     payload: AdminUserCreate,
     current_user: User = Depends(require_super_admin),
     db: Session = Depends(get_db),
-) -> User:
+) -> dict | JSONResponse:
     user = create_admin_user(db, current_user, payload)
     if hasattr(user, "status_code"):
         return user
-    return user
+    return {
+        "id": user.id,
+        "phone": user.phone,
+        "full_name": user.full_name,
+        "role": user.role,
+        "status": user.status,
+        "is_phone_verified": user.is_phone_verified,
+        **_login_facts(user),
+    }
+
+
+def _login_facts(user: User) -> dict:
+    """Additive staff-list fields: the v2 user id (MFA activate/reset take it), the login name and whether a
+    password is set - never the hash."""
+    return {
+        "public_id": format_public_id(PublicIdPrefix.USER, user.public_id) if user.public_id else None,
+        "username": user.username,
+        "has_password": bool(user.password_hash),
+    }
 
 
 def staff_user_to_dict(user: User) -> dict:
     return {
+        **_login_facts(user),
         "id": user.id,
         "phone": user.phone,
         "full_name": user.full_name,
@@ -167,10 +195,10 @@ def list_admin_users_endpoint(
     current_user: User = Depends(require_operator_or_admin),
     db: Session = Depends(get_db),
 ) -> dict:
-    stmt = select(User).where(User.role.in_(["operator", "admin", "super_admin"]))
+    stmt = select(User).where(User.role.in_(STAFF_ACCOUNT_ROLES))
     if search:
         q = f"%{search.strip()}%"
-        stmt = stmt.where(or_(User.phone.ilike(q), User.full_name.ilike(q)))
+        stmt = stmt.where(or_(User.phone.ilike(q), User.full_name.ilike(q), User.username.ilike(q)))
     if role:
         stmt = stmt.where(User.role == role)
     if status_filter:
@@ -208,7 +236,7 @@ def get_admin_user_endpoint(
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
     user = db.get(User, user_id)
-    if user is None or user.role not in {"operator", "admin", "super_admin"}:
+    if user is None or user.role not in STAFF_ACCOUNT_ROLES:
         return error_response(status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND", "Staff user not found")
     return {"success": True, "data": staff_user_to_dict(user), "message": "OK"}
 
@@ -221,13 +249,15 @@ def update_admin_user_endpoint(
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
     user = db.get(User, user_id)
-    if user is None or user.role not in {"operator", "admin", "super_admin"}:
+    if user is None or user.role not in STAFF_ACCOUNT_ROLES:
         return error_response(status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND", "Staff user not found")
     if user.role == "super_admin" and user.id != current_user.id:
         return error_response(status.HTTP_400_BAD_REQUEST, "ROLE_NOT_ALLOWED", "Super admin users cannot be edited here")
     if "role" in payload and payload["role"] is not None:
-        if payload["role"] not in {"operator", "admin"}:
-            return error_response(status.HTTP_400_BAD_REQUEST, "ROLE_NOT_ALLOWED", "Only admin or operator role is allowed")
+        if payload["role"] not in SUPER_ADMIN_MANAGED_ROLES:
+            return error_response(
+                status.HTTP_400_BAD_REQUEST, "ROLE_NOT_ALLOWED", "Only operator, admin or finance role is allowed"
+            )
         if user.role != "super_admin":
             user.role = payload["role"]
     if "status" in payload and payload["status"] is not None:
@@ -248,7 +278,7 @@ def block_admin_user_endpoint(
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
     user = db.get(User, user_id)
-    if user is None or user.role not in {"operator", "admin"}:
+    if user is None or user.role not in SUPER_ADMIN_MANAGED_ROLES:
         return error_response(status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND", "Staff user not found")
     user.status = "blocked"
     db.commit()
@@ -263,9 +293,23 @@ def unblock_admin_user_endpoint(
     db: Session = Depends(get_db),
 ) -> dict | JSONResponse:
     user = db.get(User, user_id)
-    if user is None or user.role not in {"operator", "admin"}:
+    if user is None or user.role not in SUPER_ADMIN_MANAGED_ROLES:
         return error_response(status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND", "Staff user not found")
     user.status = "active"
     db.commit()
     db.refresh(user)
     return {"success": True, "data": staff_user_to_dict(user), "message": "Staff user unblocked"}
+
+
+@admin_router.put("/{user_id}/credentials", response_model=None)
+def set_staff_credentials_endpoint(
+    user_id: int,
+    payload: StaffCredentialsUpdate,
+    current_user: User = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+) -> dict | JSONResponse:
+    """Set or reset a staff login (username and/or password). A new password ends the user's live sessions."""
+    user = set_staff_credentials(db, current_user, user_id, username=payload.username, password=payload.password)
+    if hasattr(user, "status_code"):
+        return user
+    return {"success": True, "data": staff_user_to_dict(user), "message": "Staff credentials updated"}

@@ -59,6 +59,8 @@ class TopupDTO(ContractModel):
 
 class UserRefDTO(ContractModel):
     id: str | None
+    #: Additive (admin panel): first name, filled only on staff-only DTOs (top-ups, adjustments); null elsewhere.
+    display_name: str | None = None
 
 
 class TopupEvidenceDTO(ContractModel):
@@ -244,3 +246,17 @@ class CommissionPolicyDTO(ContractModel):
     is_active_now: bool
     # Decision 28: False only for the migration seed until a super_admin confirms it (W19).
     is_confirmed: bool
+
+
+class AdminWalletLookupDTO(ContractModel):
+    """Staff wallet lookup row (``finance.reports``). Shows the driver's name and phone, so the read is audited
+    (``wallet_lookup_viewed``: wallet ids and field names only)."""
+
+    id: str
+    driver: UserRefDTO
+    driver_full_name: str | None = None
+    driver_phone: str
+    currency: Currency
+    posted_balance_minor: StrictInt
+    held_minor: StrictInt
+    available_minor: StrictInt

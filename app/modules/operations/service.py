@@ -41,6 +41,7 @@ from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.ids import PublicIdPrefix, format_public_id, new_public_uuid, parse_public_id
 from app.contracts.operations import (
     KPI_MAX_RANGE_DAYS,
+    OPS_QUEUE_SUMMARY_CAP,
     OFFER_TARGET,
     PROVIDER_CREDIT_COST,
     PROVIDER_DAILY_CREDIT_LIMIT,
@@ -313,6 +314,7 @@ class OpsQueueItem:
     corridor: str | None
     age_minutes: int
     summary: str
+    service_type: str | None = None  # bookings and listings only
 
 
 def _age_minutes(moment: datetime | None, now: datetime) -> int:
@@ -377,6 +379,81 @@ def ops_queue(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class OpsQueueCount:
+    queue: str
+    count: int
+    capped: bool
+    cap: int
+
+
+def ops_queue_summary(
+    session: Session,
+    *,
+    actor_user_id: int,
+    corridor_id: str | None = None,
+    cap: int = OPS_QUEUE_SUMMARY_CAP,
+    now: datetime | None = None,
+) -> list[OpsQueueCount]:
+    """O4 summary: one count per queue, read from the same owning-module queries as :func:`ops_queue`.
+
+    Each queue is read up to ``cap + 1`` rows, so the count is exact below the cap and "at least ``cap``" above it -
+    a busy queue never turns the dashboard into a full scan. Read-only; ``ops.view`` is required.
+    """
+    now = _now(now)
+    identity_service.require_capability(
+        identity_service.get_capabilities(session, actor_user_id, now=now), Capability.OPS_VIEW
+    )
+    probe = cap + 1
+    counts: list[OpsQueueCount] = []
+    for queue in OpsQueue:
+        total = _queue_size(session, actor_user_id=actor_user_id, queue=queue.value, corridor_id=corridor_id,
+                            probe=probe, now=now)
+        counts.append(OpsQueueCount(queue=queue.value, count=min(total, cap), capped=total > cap, cap=cap))
+    return counts
+
+
+def _queue_size(
+    session: Session, *, actor_user_id: int, queue: str, corridor_id: str | None, probe: int, now: datetime
+) -> int:
+    """Up to ``probe`` items of one queue, with exactly the filters the queue list applies."""
+    if queue in _BOOKING_QUEUES:
+        from app.modules.bookings import service as bookings_service
+
+        return len(
+            bookings_service.admin_queue(
+                session, actor_user_id=actor_user_id, queue=queue, corridor_id=_corridor_key(session, corridor_id),
+                after_id=None, limit=probe, now=now,
+            )
+        )
+    if queue in _OPERATIONAL_QUEUES:
+        return len(_operational_queue_items(session, queue=queue, corridor_id=corridor_id, limit=probe, now=now))
+
+    from app.modules.trust_support import service as trust_service
+
+    # The trust lists filter statuses after the read (see _trust_queue_items); here each status is asked for directly,
+    # so a page full of closed rows cannot hide open ones from the count.
+    if queue == OpsQueue.DISPUTE.value:
+        return sum(
+            len(trust_service.admin_list_disputes(session, actor_user_id=actor_user_id, status=status, dispute_type=None,
+                                                  escalated=None, after_id=None, limit=probe, now=now))
+            for status in ("open", "under_review")
+        )
+    if queue == OpsQueue.SUPPORT_TICKET.value:
+        return sum(
+            len(trust_service.admin_list_tickets(session, actor_user_id=actor_user_id, kind=None, status=status,
+                                                 after_id=None, limit=probe, now=now))
+            for status in ("open", "acknowledged")
+        )
+    if queue == OpsQueue.SUPPORT_THREAD.value:
+        from app.modules.trust_support import threads as support_threads
+
+        return len(support_threads.admin_list_threads(session, actor_user_id=actor_user_id, status="open", assigned=None,
+                                                      after_id=None, limit=probe, now=now))
+    return len(trust_service.admin_list_reviews(session, actor_user_id=actor_user_id, status="open", signal_type=None,
+                                                after_id=None, limit=probe, now=now))
+
+
 _BOOKING_QUEUES = frozenset(
     {
         OpsQueue.AWAITING_CONFIRMATION.value,
@@ -409,6 +486,7 @@ def _booking_queue_items(
                 corridor=_corridor_public_id(session, getattr(booking, "corridor_id", None)),
                 age_minutes=_age_minutes(booking.updated_at or booking.created_at, now),
                 summary=f"{booking.service_type} {booking.service_status} x{booking.quantity}",
+                service_type=booking.service_type,
             )
         )
     return items
@@ -453,6 +531,7 @@ def _operational_queue_items(
                 age_minutes=_age_minutes(row.published_at, now),
                 summary=f"{row.kind} {row.service_type} without an offer, departs in "
                         f"{max(0, int((ensure_aware_utc(row.departure_window_start) - now).total_seconds() // 60))} min",
+                service_type=row.service_type,
             )
             for row in rows
         ]

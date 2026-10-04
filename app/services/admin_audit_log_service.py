@@ -12,7 +12,7 @@ from app.services.audit_service import NOISY_AUDIT_ACTIONS, redact_sensitive_val
 from app.services.city_service import pagination
 from app.utils.api_response import error_response
 
-ALLOWED_ACTOR_ROLES = {"client", "driver", "operator", "admin", "super_admin", "system"}
+ALLOWED_ACTOR_ROLES = {"client", "driver", "operator", "admin", "super_admin", "finance", "system"}
 
 
 def parse_datetime_filter(value: str | None) -> datetime | JSONResponse | None:

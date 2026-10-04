@@ -23,6 +23,7 @@
 | I3 | `POST /me/roles` | Marketplace akkaunt | `RoleActivateRequest` | `CapabilitiesDTO` | Y | — | `ROLE_COMBINATION_FORBIDDEN` (staff akkaunt, Q3) | §16 |
 | I4 | `DELETE /me` (A12) | Auth | `AccountDeletionRequest` | `AccountDeletionDTO` | Y | — | `ACCOUNT_DELETION_BLOCKED` | §17.8 |
 | I5 | `POST /admin/drivers/{user_id}/eligibility` | `ops.driver_eligibility_manage` (admin+) | `DriverEligibilityCommand` | `DriverEligibilityDTO` | Y | Y | `VERSION_CONFLICT`, `NOT_FOUND` | AC41, D16 |
+| I5s | `GET /admin/users/search?q&role&limit` (04.10.2026, admin panel, additiv) | `ops.view` | `q` 3–64 belgi: ism, telefon raqamlari (≥3), username yoki to‘liq `usr_…` | `list[AdminUserSearchDTO]` {id, role, roles[], full_name, phone, status, created_at} | — | — | `VALIDATION_ERROR` | PII audit `staff_user_search_viewed` (id va maydon nomlari; so‘rov matni yo‘q) |
 
 DTO:
 - `MeDTO`: `id (usr_)`, `phone`, `full_name`, `primary_role`, `roles[]`, `status`, `created_at`.
@@ -104,6 +105,7 @@ DTO: `EffectiveFlagsDTO {corridor_id, flags {passenger_enabled, parcel_enabled, 
 | T2 | `GET /me/vehicles` | driver roli | — | `list[VehicleDTO]` | — | — | — | — |
 | T3 | `POST /admin/vehicles/{vehicle_id}/verify` | `ops.driver_eligibility_manage` | `VehicleVerifyRequest` | `VehicleDTO` | Y | Y | `VERSION_CONFLICT` | §17.1 |
 | T3a | `GET /admin/vehicles?status&cursor&limit` (24.09.2026) | `ops.driver_eligibility_manage` | — | `list[AdminVehicleDTO]` (egasi: user id, profil holati, yangi biznes huquqi va `eligibility_version`; telefon/ism yo'q) | — | — | `VALIDATION_ERROR`, `INVALID_CURSOR` | §17.1, Q61 |
+| T3s | `GET /admin/trips/search?q&limit` (04.10.2026, admin panel, additiv) | `ops.view` | `q`: `trp_…` yoki kod boshi (≥4 belgi, prefiks ixtiyoriy) yoki haydovchi `usr_…` | `list[AdminTripSearchDTO]` {id, status, driver_id, driver_display_name (ism), vehicle_id, planned_start_at, planned_end_at, seat_capacity} — telefon/raqam yo‘q | — | — | `VALIDATION_ERROR` | — |
 | T4 | `POST /trips` | `trip.create` | `TripCreate` | `TripDTO` | Y | — | `SCHEDULE_CONFLICT`, `VEHICLE_NOT_ELIGIBLE`, `DRIVER_NOT_ELIGIBLE`, `ROUTE_CHANGED` | AC13 |
 | T5 | `GET /trips/{trip_id}` | Driver egasi, O → `TripDTO`; bron ishtirokchisi → `TripPublicDTO` | — | union | — | — | — | §10.6 |
 | T6 | `GET /me/trips` | `trip.operate` | `?status&cursor` | `list[TripDTO]` | — | — | `INVALID_CURSOR` | — |
@@ -269,7 +271,9 @@ ko‘rinmaydi, hech kimga taklif yubormaydi. Barcha buyruqlar `Idempotency-Key` 
 | B11 | `POST /amendments/{amendment_id}/reject` \| `/withdraw` | Qarshi tomon \| muallif | `AmendmentDecision` | `AmendmentDTO` | Y | Y | `INVALID_STATE_TRANSITION` | — |
 | B9r | `GET /bookings/{booking_id}/amendments` | C yoki D (ishtirokchi) | — | `list[AmendmentDTO]` | — | — | `NOT_FOUND` (ishtirokchi bo‘lmasa) | §5.3(7) |
 | B12 | `GET /admin/bookings` | `ops.view` | `?queue=awaiting_confirmation|no_show_review|custody_case|hold_escalation&corridor_id&cursor` | `list[BookingDTO]` | — | — | — | §16 |
+| B12s | `GET /admin/bookings/search?q&limit` (04.10.2026, admin panel, additiv) | `ops.view` | `q`: `bkg_…` yoki kod boshi (≥4 belgi, prefiks ixtiyoriy, `ids.public_id_fragment_range`) | `list[BookingDTO]` (B12 bilan bir xil xodim ko‘rinishi) | — | — | `VALIDATION_ERROR` | audit `booking_contacts_viewed` surface `B12:search` |
 | B13 | `POST /admin/bookings/{booking_id}/commands/{command}` | `OPERATOR_COMMAND_CAPABILITY[command]` | `OperatorBookingCommandRequest` | `BookingDTO` | Y | Y | STATE_MACHINES guard xatolari, `FORBIDDEN` | AC41, AC42, Q7, D1 |
+| B13 MFA | `finalize_fee` (04.10.2026) | `finance.fee_finalize` | — | — | — | — | `FORBIDDEN` `details.reason=step_up_required` (ADR-0021; `staff_mfa_mode` va bitta super_admin qoidasi bo‘yicha audit-only) | ADR-0021 |
 
 `{command}` (B13, `OperatorBookingCommand`): `confirm_no_show`, `reject_no_show`, `complete_with_evidence`, `drop_off`, `require_return`, `return_to_sender`, `resolve_custody_case` — `ops.booking_command` (operator+); `cancel` — `ops.booking_cancel` (admin+); `finalize_fee` — `finance.fee_finalize` (finance roli; ulanguncha super_admin, Q17). Pul ta’sir qiladigan buyruqlar production invariantlari buzilganda `503 PRODUCTION_INVARIANTS_FAILED`. Hech biri guard yoki lock tartibini chetlab o‘tmaydi.
 
@@ -342,6 +346,9 @@ DTO:
 | W3 | `POST /wallet/topups` | `wallet.topup_request` | `TopupCreate` | `TopupDTO` (`pending`) | Y | — | `VALIDATION_ERROR` | AC24 |
 | W4 | `GET /wallet/topups` | `wallet.view_own` | cursor | `list[TopupDTO]` | — | — | — | — |
 | W5 | `GET /admin/topups` | `finance.reports` | `?status&cursor` | `list[TopupAdminDTO]` | — | — | — | — |
+| W5w | `GET /admin/wallets?q&limit` (04.10.2026, admin panel, additiv) | `finance.reports` | `q` 3–64: haydovchi ismi, telefon raqamlari, `usr_…` yoki `wal_…` | `list[AdminWalletLookupDTO]` {id, driver{id, display_name}, driver_full_name, driver_phone, currency, posted/held/available_minor} | — | — | `VALIDATION_ERROR` | PII audit `wallet_lookup_viewed` |
+
+`UserRefDTO.display_name` (04.10.2026, additiv): faqat xodim DTO’larida (top-up: driver/approverlar, tuzatishlar: requested/approved/rejected_by) — ism (birinchi so‘z); boshqa joyda null.
 | W6 | `POST /admin/topups/{topup_id}/approve` | `finance.topup_approve` (finance roli; ulanguncha super_admin — Q17; katta summa ikkinchi, boshqa xodim) | `TopupApprove` | `TopupAdminDTO` | Y | Y | `TOPUP_REFERENCE_DUPLICATE`, `SECOND_APPROVER_REQUIRED`, `VERSION_CONFLICT`, `INVALID_STATE_TRANSITION` | AC23 |
 | W7 | `POST /admin/topups/{topup_id}/reject` | `finance.topup_approve` | `TopupReject` | `TopupAdminDTO` | Y | Y | `INVALID_STATE_TRANSITION` | AC24 |
 | W8 | `POST /admin/ledger/adjustments` | `finance.adjustment` (chegaradan katta — `pending_second_approval`, W16) | `LedgerAdjustmentCreate` | `201 LedgerTransactionDTO` \| **`202 LedgerAdjustmentDTO`** (ikkinchi tasdiqlovchi kerak — W16; wave 1 implementatsiyasi) | Y | — | `LEDGER_UNBALANCED`, `REVERSAL_EXCEEDS_CAPTURED`, `SECOND_APPROVER_REQUIRED` | AC25, D4 |
@@ -495,12 +502,13 @@ DTO: `EventDTO {id (evt_), event_type, aggregate_type, aggregate_id, aggregate_v
 | O2 | `DELETE /share-links/{share_link_id}` | Egasi | — | `{}` | — | — | — | — |
 | O3 | `GET /public/listings/{token}` | Public | — | `PublicListingPageDTO` | — | — | `NOT_FOUND` | §20.2 |
 | O4 | `GET /admin/ops/queues/{queue}` | `ops.view` | `?corridor_id&cursor` | `list[OpsQueueItemDTO]` | — | — | — | §16 |
+| O4s | `GET /admin/ops/queues/summary` (04.10.2026, additiv; `{queue}`dan oldin e’lon qilingan) | `ops.view` | `?corridor_id` | `list[OpsQueueCountDTO]` {queue, count, capped, cap} — har navbat `cap+1` qatorgacha o‘qiladi; `capped=true` ⇒ kamida `cap` | — | — | — | §16 |
 | O5 | `GET /admin/metrics/kpi` | `ops.view` | `?corridor_id&from&to` | `KpiDTO` | — | — | — | §20.4 |
 | O6 | `GET /admin/metrics/slo` | `ops.view` | `?from&to` | `SloDTO` | — | — | — | §19.3 |
 | O7 | `POST /admin/listings/on-behalf` | `ops.booking_command` | `ListingCreate` + `owner_user_id`, `consent_reference` | `ListingDTO` | Y | — | `CAPABILITY_REQUIRED` | §20.2 |
 | O8 | `GET /admin/legacy-orders` \| `GET /admin/legacy-orders/{legacy_order_number}` | `ops.view` | `?status&cursor&limit` | `LegacyOrderViewDTO` | — | — | `NOT_FOUND` | Q4, AC37 |
 
-DTO: `ShareLinkCreate {channel: telegram|generic, ttl_hours}`; `ShareLinkDTO {id (shl_), channel, url, share_text, expires_at, created_at}` — token `crypto.new_secret_token`; `PublicListingPageDTO {kind, service_type, origin_stop_name, destination_stop_name, departure_date, departure_window, total_minor|unit_price_minor, currency, status_open, cta}` — PII yo‘q; `OpsQueueItemDTO {queue, item_type, item_id, corridor, age_minutes, summary}`; `KpiDTO`, `SloDTO` (kichik n’da son bilan); `LegacyOrderViewDTO {legacy_order_number, status, route_summary, engine: "v1", final_price_minor?, legacy_calculated_fee_minor?, currency, flags[unknown_time, unknown_dimensions], created_at, updated_at}` — faqat o‘qish; mutatsiya yo‘q (`LEGACY_OBJECT_READ_ONLY`). O8 egasi A10b (wave 5), UI A9.
+DTO: `ShareLinkCreate {channel: telegram|generic, ttl_hours}`; `ShareLinkDTO {id (shl_), channel, url, share_text, expires_at, created_at}` — token `crypto.new_secret_token`; `PublicListingPageDTO {kind, service_type, origin_stop_name, destination_stop_name, departure_date, departure_window, total_minor|unit_price_minor, currency, status_open, cta}` — PII yo‘q; `OpsQueueItemDTO {queue, item_type, item_id, corridor, age_minutes, summary, service_type?}` (`service_type` — booking/listing uchun, 04.10.2026 additiv); `KpiDTO`, `SloDTO` (kichik n’da son bilan); `LegacyOrderViewDTO {legacy_order_number, status, route_summary, engine: "v1", final_price_minor?, legacy_calculated_fee_minor?, currency, flags[unknown_time, unknown_dimensions], created_at, updated_at}` — faqat o‘qish; mutatsiya yo‘q (`LEGACY_OBJECT_READ_ONLY`). O8 egasi A10b (wave 5), UI A9.
 
 **Wave 5 implementatsiyasi (A10b, 17.09.2026):** O8 faqat `legacy_parcel_orders_v` view’ini o‘qiydi (migratsiya 0065) — `orders` jadvaliga ham, biror v2 yozuv jadvaliga ham tegmaydi. Tafsilot yo‘li v1 `order_number` bilan ochiladi (legacy qatorda `public_id` yo‘q); noma’lum raqam → `404 NOT_FOUND`. `route_summary` — “Shahar (tuman) → Shahar”; telefon, ism, aniq manzil yoki yuk fotosi **yo‘q**. `legacy_calculated_fee_minor` — v1 **hisoblagan** komissiya, tushgan pul emas va haydovchi qarzi emas (§18.2). `flags` — v1 umuman saqlamagan narsalar (va’da qilingan oyna, yuk o‘lchamlari); bo‘sh joyga taxminiy qiymat qo‘yilmaydi. Lifecycle vaqtlari DTO’da yo‘q: ular 0066 dan oldin naive edi, DTO esa faqat aware `UtcDateTime` qabul qiladi — kerak bo‘lsa keyingi additiv qadamda qo‘shiladi.
 

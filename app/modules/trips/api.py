@@ -24,6 +24,7 @@ from app.modules.identity.web import (
 from app.modules.marketplace import service as marketplace_service
 from app.modules.trips import service as trips_service
 from app.modules.trips.schemas import (
+    AdminTripSearchDTO,
     AdminVehicleDTO,
     AdminVehicleStatus,
     TripAvailabilityDTO,
@@ -148,6 +149,37 @@ def _can_see_full_trip(session: Session, trip_driver_id: int, user_id: int | Non
     if user_id == trip_driver_id:
         return True
     return identity_service.get_capabilities(session, user_id).has(Capability.OPS_VIEW)
+
+
+@router.get("/admin/trips/search", response_model=Envelope[list[AdminTripSearchDTO]], responses=ERROR_RESPONSES)
+def search_admin_trips(
+    q: str = Query(min_length=4, max_length=40),
+    limit: int = Query(default=20, ge=1, le=trips_service.ADMIN_TRIP_SEARCH_MAX_LIMIT),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[list[AdminTripSearchDTO]]:
+    from app.contracts.ids import PublicIdPrefix, format_public_id
+    from app.contracts.timeutil import ensure_aware_utc
+    from app.modules.bookings.rules import first_name
+
+    trips = trips_service.admin_search_trips(session, actor_user_id=user_id, q=q, limit=limit)
+    refs = identity_service.user_refs(session, [trip.driver_user_id for trip in trips])
+    vehicles = {trip.vehicle_id: trips_service.get_vehicle(session, trip.vehicle_id) for trip in trips}
+    return Envelope[list[AdminTripSearchDTO]](
+        data=[
+            AdminTripSearchDTO(
+                id=trips_service.trip_public_id(trip),
+                status=TripStatus(trip.status),
+                driver_id=refs[trip.driver_user_id][0],
+                driver_display_name=first_name(refs[trip.driver_user_id][1], "Haydovchi"),
+                vehicle_id=format_public_id(PublicIdPrefix.VEHICLE, vehicles[trip.vehicle_id].public_id),
+                planned_start_at=ensure_aware_utc(trip.planned_start_at),
+                planned_end_at=ensure_aware_utc(trip.planned_end_at),
+                seat_capacity=trip.seat_capacity,
+            )
+            for trip in trips
+        ]
+    )
 
 
 @router.get("/trips/{trip_id}", response_model=Envelope[TripDTO | TripPublicDTO], responses=ERROR_RESPONSES)

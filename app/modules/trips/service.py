@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.contracts.enums import Capability, Role, TripStatus
 from app.contracts.errors import DomainError, ErrorCode
-from app.contracts.ids import PublicIdPrefix, format_public_id, new_public_uuid, parse_public_id
+from app.contracts.ids import PublicIdPrefix, format_public_id, new_public_uuid, parse_public_id, public_id_fragment_range
 from app.contracts.state_machines import TRIP
 from app.contracts.timeutil import ensure_aware_utc, utc_now
 from app.models import AuditLog
@@ -754,3 +754,30 @@ def release(session: Session, trip_id: int, from_seq: int, to_seq: int, demand: 
         row.updated_at = utc_now()
     session.flush()
     return list(span)
+
+
+# --- staff lookup (admin panel) -------------------------------------------------------------------------------
+
+ADMIN_TRIP_SEARCH_MAX_LIMIT = 50
+
+
+def admin_search_trips(session: Session, *, actor_user_id: int, q: str, limit: int = 20) -> list[Trip]:
+    """Staff lookup: a trip id or the start of its code (``trp_ab12`` / ``ab12``), or a driver's ``usr_...`` id
+    (that driver's trips, newest departure first). ``ops.view``; read-only."""
+    caps = identity_service.get_capabilities(session, actor_user_id)
+    identity_service.require_capability(caps, Capability.OPS_VIEW)
+    limit = max(1, min(limit, ADMIN_TRIP_SEARCH_MAX_LIMIT))
+    text_value = (q or "").strip()
+    if text_value.lower().startswith(f"{PublicIdPrefix.USER.value}_"):
+        try:
+            driver_user_id = identity_service.resolve_user_id(session, text_value)
+        except DomainError:
+            return []
+        stmt = select(Trip).where(Trip.driver_user_id == driver_user_id)
+    else:
+        span = public_id_fragment_range(text_value, PublicIdPrefix.TRIP)
+        if span is None:
+            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "q", "reason": "not_a_trip_code"})
+        stmt = select(Trip).where(Trip.public_id >= span[0], Trip.public_id <= span[1])
+    stmt = stmt.order_by(Trip.planned_start_at.desc(), Trip.id.desc()).limit(limit)
+    return list(session.execute(stmt).scalars())

@@ -33,6 +33,7 @@ from app.modules.operations.schemas import (
     LegacyOrderViewDTO,
     KpiValueDTO,
     ListingOnBehalfCreate,
+    OpsQueueCountDTO,
     OpsQueueItemDTO,
     ProviderQuotaDTO,
     PublicListingPageDTO,
@@ -118,6 +119,19 @@ def public_listing_page(
 # --- O4-O6 operator queues and metrics -------------------------------------------------------------------------
 
 
+@router.get("/admin/ops/queues/summary", response_model=Envelope[list[OpsQueueCountDTO]], responses=ERROR_RESPONSES)
+def ops_queue_summary(
+    corridor_id: str | None = Query(default=None, max_length=64),
+    user_id: int = Depends(current_user_id), session: Session = Depends(get_session),
+) -> Envelope[list[OpsQueueCountDTO]]:
+    """O4 summary: one count per queue for the dashboard tiles. Declared before ``/{queue}`` so the literal path
+    is matched first."""
+    counts = service.ops_queue_summary(session, actor_user_id=user_id, corridor_id=corridor_id)
+    return Envelope[list[OpsQueueCountDTO]](
+        data=[OpsQueueCountDTO(queue=item.queue, count=item.count, capped=item.capped, cap=item.cap) for item in counts]
+    )
+
+
 @router.get("/admin/ops/queues/{queue}", response_model=Envelope[list[OpsQueueItemDTO]], responses=ERROR_RESPONSES)
 def ops_queue(
     queue: OpsQueue,
@@ -134,7 +148,7 @@ def ops_queue(
     return Envelope[list[OpsQueueItemDTO]](
         data=[
             OpsQueueItemDTO(queue=queue, item_type=item.item_type, item_id=item.item_id, corridor=item.corridor,
-                            age_minutes=item.age_minutes, summary=item.summary)
+                            age_minutes=item.age_minutes, summary=item.summary, service_type=item.service_type)
             for item in items
         ],
         meta=PageMeta(next_cursor=None, limit=limit),

@@ -119,3 +119,16 @@ class StaffMfaResetDTO(ContractModel):
     user_id: str
     factors_revoked: int
     recovery_codes_invalidated: bool = True
+
+
+class AdminUserSearchDTO(ContractModel):
+    """Staff user lookup row (admin panel, ``ops.view``). Shows name and phone, so the read is audited
+    (``staff_user_search_viewed``: ids and field names only)."""
+
+    id: str
+    role: str = Field(description="users.role (the primary role).")
+    roles: list[str] = Field(description="Effective roles: the primary role plus active activated roles.")
+    full_name: str | None = None
+    phone: str
+    status: str
+    created_at: UtcDateTime

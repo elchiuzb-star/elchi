@@ -448,12 +448,13 @@ Bazaviy prefiks: **`/api/v1`**. Javoblar `{success, data, message}` yoki xatoda
 
 | Metod | Yo'l | Kirish |
 |---|---|---|
-| POST | `/admin/users` | super_admin |
+| POST | `/admin/users` | super_admin (rol: operator/admin/finance; ixtiyoriy `username` + `password` — 04.10.2026, additiv) |
 | GET | `/admin/users` | admin+ |
 | GET | `/admin/users/{user_id}` | admin+ |
 | PATCH | `/admin/users/{user_id}` | super_admin |
 | POST | `/admin/users/{user_id}/block` | super_admin |
 | POST | `/admin/users/{user_id}/unblock` | super_admin |
+| PUT | `/admin/users/{user_id}/credentials` | super_admin (username/parol o‘rnatish; yangi parol sessiyalarni bekor qiladi — 04.10.2026) |
 
 ### Fayllar / Geo / Shaharlar
 

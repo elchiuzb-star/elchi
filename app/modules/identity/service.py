@@ -450,3 +450,88 @@ def unblock_driver_eligibility(
         reason=reason,
         now=now,
     )
+
+
+# --- staff user lookup (admin panel) --------------------------------------------------------------------------
+
+ADMIN_USER_SEARCH_MAX_LIMIT = 50
+ADMIN_USER_SEARCH_MIN_QUERY = 3
+
+
+@dataclass(frozen=True, slots=True)
+class UserSearchHit:
+    id: int
+    public_id: str
+    primary_role: str
+    roles: tuple[str, ...]
+    full_name: str | None
+    phone: str
+    status: str
+    created_at: datetime
+
+
+def admin_search_users(
+    session: Session, *, actor_user_id: int, q: str, role: Role | str | None = None, limit: int = 20,
+    now: datetime | None = None,
+) -> list[UserSearchHit]:
+    """Staff lookup by name, phone digits, username or a full ``usr_...`` id (``ops.view``).
+
+    The answer carries names and phones, so a non-empty answer leaves one ``staff_user_search_viewed`` audit row with
+    the returned public ids and the field names - never the query text (it is usually a phone number) or a value.
+    No commit.
+    """
+    from app.models import User
+
+    caps = get_capabilities(session, actor_user_id, now=now)
+    require_capability(caps, Capability.OPS_VIEW)
+    text_value = (q or "").strip()
+    limit = max(1, min(limit, ADMIN_USER_SEARCH_MAX_LIMIT))
+    stmt = select(User)
+    if text_value.lower().startswith(f"{PublicIdPrefix.USER.value}_"):
+        try:
+            value = parse_public_id(text_value, PublicIdPrefix.USER)
+        except DomainError:
+            return []
+        stmt = stmt.where(User.public_id == value)
+    else:
+        if len(text_value) < ADMIN_USER_SEARCH_MIN_QUERY:
+            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "q", "reason": "too_short"})
+        pattern = f"%{text_value.lower()}%"
+        conditions = [func.lower(User.full_name).like(pattern), func.lower(User.username).like(pattern)]
+        digits = "".join(ch for ch in text_value if ch.isdigit())
+        if len(digits) >= ADMIN_USER_SEARCH_MIN_QUERY:
+            conditions.append(User.phone.like(f"%{digits}%"))
+        from sqlalchemy import or_
+
+        stmt = stmt.where(or_(*conditions))
+    if role is not None:
+        role_value = Role(role).value
+        stmt = stmt.where(
+            (User.role == role_value)
+            | select(UserRole.id)
+            .where(UserRole.user_id == User.id, UserRole.role == role_value, UserRole.status == ROLE_STATUS_ACTIVE)
+            .exists()
+        )
+    users = list(session.execute(stmt.order_by(User.id.desc()).limit(limit)).scalars())
+    hits = [
+        UserSearchHit(
+            id=user.id,
+            public_id=format_public_id(PublicIdPrefix.USER, user.public_id),
+            primary_role=user.role,
+            roles=tuple(sorted(r.value for r in effective_roles(user.role, _activated_roles(session, user.id)))),
+            full_name=user.full_name,
+            phone=user.phone,
+            status=user.status,
+            created_at=ensure_aware_utc(user.created_at),
+        )
+        for user in users
+    ]
+    if hits:
+        session.add(
+            AuditLog(
+                actor_id=actor_user_id, entity_type="user", entity_id=None, action="staff_user_search_viewed",
+                details={"user_ids": [hit.public_id for hit in hits], "fields": ["full_name", "phone"]},
+            )
+        )
+        session.flush()
+    return hits

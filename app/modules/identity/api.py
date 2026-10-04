@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.modules.identity import mfa as staff_mfa
 from app.modules.identity import service as identity_service
 from app.modules.identity.schemas import (
+    AdminUserSearchDTO,
     CapabilitiesDTO,
     DriverEligibilityCommand,
     DriverEligibilityDTO,
@@ -389,4 +390,27 @@ def reset_staff_mfa(
         body=body,
         handler=handler,
         resource_type="staff_mfa_factor",
+    )
+
+
+# --- staff user lookup (admin panel) --------------------------------------------------------------------------
+
+
+@router.get("/admin/users/search", response_model=Envelope[list[AdminUserSearchDTO]], responses=ERROR_RESPONSES)
+def search_users(
+    q: str = Query(min_length=identity_service.ADMIN_USER_SEARCH_MIN_QUERY, max_length=64),
+    role: Role | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=identity_service.ADMIN_USER_SEARCH_MAX_LIMIT),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[list[AdminUserSearchDTO]]:
+    hits = identity_service.admin_search_users(session, actor_user_id=user_id, q=q, role=role, limit=limit)
+    if hits:
+        session.commit()  # the audit row of a read that showed names and phones
+    return Envelope[list[AdminUserSearchDTO]](
+        data=[
+            AdminUserSearchDTO(id=hit.public_id, role=hit.primary_role, roles=list(hit.roles), full_name=hit.full_name,
+                               phone=hit.phone, status=hit.status, created_at=hit.created_at)
+            for hit in hits
+        ]
     )

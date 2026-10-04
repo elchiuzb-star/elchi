@@ -72,6 +72,7 @@ def test_share_link_is_stored_as_a_hash_and_opens_a_page_without_identity(bw: BW
         "kind", "service_type", "origin_stop_name", "destination_stop_name", "departure_window_start",
         "departure_window_end", "timezone", "price_basis", "unit_price_minor", "quantity", "total_minor",
         "currency", "status_open", "cta",
+        "listing_id",  # the listing's public id (not a secret, no identity) so the app link opens it
     }
     assert rows(bw.db, "SELECT opened_count, last_opened_at FROM share_links")[0].opened_count == 1
 
@@ -296,7 +297,7 @@ def test_public_page_and_share_link_through_http(bw: BW, ops_client) -> None:  #
     assert set(body) == {
         "kind", "service_type", "origin_stop_name", "destination_stop_name", "departure_date",
         "departure_window_start", "departure_window_end", "timezone", "price_basis", "unit_price_minor",
-        "quantity", "total_minor", "currency", "status_open", "cta",
+        "quantity", "total_minor", "currency", "status_open", "cta", "listing_id",
     }
     assert ops_client.get("/api/v2/public/listings/unknown-token").status_code == 404
 

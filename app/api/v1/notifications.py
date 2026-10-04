@@ -11,7 +11,7 @@ from app.utils.api_response import error_response
 
 router = APIRouter(prefix="/notifications")
 bearer_scheme = HTTPBearer(auto_error=False)
-ALLOWED_NOTIFICATION_ROLES = {"client", "driver", "operator", "admin", "super_admin"}
+ALLOWED_NOTIFICATION_ROLES = {"client", "driver", "operator", "admin", "super_admin", "finance"}
 
 
 def get_current_notification_user(

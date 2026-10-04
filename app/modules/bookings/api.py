@@ -492,6 +492,28 @@ def list_admin_bookings(
     return Envelope[list[BookingDTO]](data=data, meta=PageMeta(next_cursor=next_cursor, limit=limit))
 
 
+@router.get("/admin/bookings/search", response_model=Envelope[list[BookingDTO]], responses=ERROR_RESPONSES)
+def search_admin_bookings(
+    q: str = Query(min_length=4, max_length=40),
+    limit: int = Query(default=10, ge=1, le=bookings_service.ADMIN_SEARCH_MAX_LIMIT),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[list[BookingDTO]]:
+    """Staff lookup by booking id or code fragment (``bkg_7q2x`` / ``7q2x``): the same staff view as B12, audited the
+    same way when it shows phones or full plates."""
+    rows = bookings_service.admin_search_bookings(session, actor_user_id=user_id, q=q, limit=limit)
+    data = [booking_view(session, b, viewer_role=bookings_service.ViewerRole.STAFF) for b in rows]
+    shown = [(dto.id, staff_contact_fields(dto)) for dto in data]
+    fields = sorted({field for _, dto_fields in shown for field in dto_fields})
+    if fields:
+        bookings_service.record_staff_contact_view(
+            session, actor_user_id=user_id, booking_ids=[dto_id for dto_id, dto_fields in shown if dto_fields],
+            surface="B12:search", fields=fields,
+        )
+        session.commit()
+    return Envelope[list[BookingDTO]](data=data, meta=PageMeta(next_cursor=None, limit=limit))
+
+
 @router.post("/admin/bookings/{booking_id}/commands/{command}", response_model=Envelope[BookingDTO], responses=ERROR_RESPONSES)
 def operator_booking_command(
     booking_id: str,

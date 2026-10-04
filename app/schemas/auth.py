@@ -82,3 +82,22 @@ class AdminUserCreate(BaseModel):
     phone: str = Field(min_length=3, max_length=32)
     role: str
     full_name: str | None = Field(default=None, max_length=255)
+    # Additive (admin panel): an initial staff login. Both or neither; the policy (3-64 char username,
+    # 8 chars / 72 bytes password) is checked by auth_service so errors keep the v1 error envelope.
+    username: str | None = Field(default=None, max_length=256)
+    password: str | None = Field(default=None, max_length=256)
+
+
+class AdminUserCreated(AuthUser):
+    """``POST /admin/users`` response: the unchanged ``AuthUser`` fields plus additive login facts."""
+
+    username: str | None = None
+    public_id: str | None = None
+    has_password: bool = False
+
+
+class StaffCredentialsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str | None = Field(default=None, max_length=256)
+    password: str | None = Field(default=None, max_length=256)

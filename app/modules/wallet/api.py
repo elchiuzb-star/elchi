@@ -86,6 +86,7 @@ from app.modules.wallet.schemas import (
     TopupEvidenceDTO,
     TopupReject,
     UserRefDTO,
+    AdminWalletLookupDTO,
     WalletDTO,
 )
 
@@ -254,17 +255,23 @@ def _command(
     return JSONResponse(status_code=outcome.status_code, content=outcome.body, headers=headers)
 
 
-def _user_ref(session: Session, user_id: int | None) -> UserRefDTO | None:
+def _user_ref(session: Session, user_id: int | None, *, named: bool = False) -> UserRefDTO | None:
+    """``named`` adds the first name - only for staff-only DTOs (top-up review, adjustments), never on a driver's
+    own ledger view."""
     if user_id is None:
         return None
     try:
-        from app.modules.identity.service import user_public_id  # A1: (session, user_id) -> "usr_..."
+        from app.modules.identity.service import get_user_summary  # A1: (session, user_id) -> UserSummary
     except ImportError:  # pragma: no cover - identity module ships in wave 1
         return UserRefDTO(id=None)
     try:
-        return UserRefDTO(id=user_public_id(session, user_id))
+        summary = get_user_summary(session, user_id)
     except DomainError:
         return UserRefDTO(id=None)
+    display_name = None
+    if named and summary.full_name and summary.full_name.strip():
+        display_name = summary.full_name.strip().split()[0][:64]
+    return UserRefDTO(id=summary.public_id, display_name=display_name)
 
 
 def _by_public_id(session: Session, model: Any, text_value: str, prefix: PublicIdPrefix) -> Any:
@@ -327,7 +334,7 @@ def _topup_admin_dto(session: Session, topup: TopupRequest) -> TopupAdminDTO:
     base = _topup_dto(topup).model_dump()
     return TopupAdminDTO(
         **base,
-        driver=_user_ref(session, topup.driver_user_id),
+        driver=_user_ref(session, topup.driver_user_id, named=True),
         evidence=TopupEvidenceDTO(
             payer_reference=topup.payer_reference,
             evidence_file_id=topup.evidence_file_id,
@@ -337,8 +344,8 @@ def _topup_admin_dto(session: Session, topup: TopupRequest) -> TopupAdminDTO:
             received_amount_minor=topup.received_amount_minor,
             received_at=_aware(topup.received_at),
         ),
-        first_approver=_user_ref(session, topup.first_approver_id),
-        second_approver=_user_ref(session, topup.second_approver_id),
+        first_approver=_user_ref(session, topup.first_approver_id, named=True),
+        second_approver=_user_ref(session, topup.second_approver_id, named=True),
         version=topup.version,
     )
 
@@ -375,9 +382,9 @@ def _adjustment_dto(session: Session, request: LedgerAdjustmentRequest) -> Ledge
         direction=request.direction,
         amount_minor=request.amount_minor,
         reason=request.reason,
-        requested_by=_user_ref(session, request.requested_by),
-        approved_by=_user_ref(session, request.approved_by),
-        rejected_by=_user_ref(session, request.rejected_by),
+        requested_by=_user_ref(session, request.requested_by, named=True),
+        approved_by=_user_ref(session, request.approved_by, named=True),
+        rejected_by=_user_ref(session, request.rejected_by, named=True),
         reject_reason=request.reject_reason,
         decided_at=_aware(request.decided_at),
         pending_age_seconds=(
@@ -505,6 +512,43 @@ def list_my_topups(
 
 
 # --- W5-W8, W16-W18: finance staff -------------------------------------------------------------------------
+
+
+@router.get("/admin/wallets", response_model=Envelope[list[AdminWalletLookupDTO]])
+def lookup_wallets_admin(
+    q: str = Query(min_length=wallet_service.ADMIN_WALLET_LOOKUP_MIN_QUERY, max_length=64),
+    limit: int = Query(default=20, ge=1, le=wallet_service.ADMIN_WALLET_LOOKUP_MAX_LIMIT),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    """Wallet lookup by driver (admin panel: the adjustment form's "Hamyon" picker)."""
+
+    def run() -> JSONResponse:
+        _require(db, user, Capability.FINANCE_REPORTS)
+        hits = wallet_service.admin_lookup_wallets(db, actor_user_id=user.id, q=q, limit=limit)
+        data = [
+            AdminWalletLookupDTO(
+                id=format_public_id(PublicIdPrefix.WALLET, hit.wallet.public_id),
+                driver=UserRefDTO(
+                    id=hit.driver_public_id,
+                    display_name=hit.driver_full_name.strip().split()[0][:64]
+                    if hit.driver_full_name and hit.driver_full_name.strip()
+                    else None,
+                ),
+                driver_full_name=hit.driver_full_name,
+                driver_phone=hit.driver_phone,
+                currency=hit.wallet.currency,
+                posted_balance_minor=hit.wallet.posted_balance_minor,
+                held_minor=hit.wallet.held_minor,
+                available_minor=hit.wallet.posted_balance_minor - hit.wallet.held_minor,
+            )
+            for hit in hits
+        ]
+        if hits:
+            db.commit()  # the audit row of a read that showed names and phones
+        return JSONResponse(_envelope(_dump(data)))
+
+    return _read(db, run)
 
 
 @router.get("/admin/topups", response_model=Envelope[list[TopupAdminDTO]])

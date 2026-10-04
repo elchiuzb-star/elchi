@@ -284,7 +284,9 @@ class FraudSignalDTO(ContractModel):
     signal_type: FraudSignalType
     subject_user_id: str
     status: FraudSignalStatus
-    evidence: dict[str, int | list[str]]
+    #: Counts, lists of public ids and single public ids (``self_dealing_device`` stores ``booking_id: "bkg_..."``).
+    #: Widened 04.10.2026 (additive): ``str`` was missing, so every list holding such a signal answered 500.
+    evidence: dict[str, int | str | list[str]]
     detected_at: UtcDateTime
     reviewed_at: UtcDateTime | None = None
     version: StrictInt

@@ -2174,3 +2174,73 @@ def split_adjustment_signals(
             else:
                 i += 1
     return signals
+
+
+# --- staff wallet lookup (admin panel) ------------------------------------------------------------------------
+
+ADMIN_WALLET_LOOKUP_MAX_LIMIT = 50
+ADMIN_WALLET_LOOKUP_MIN_QUERY = 3
+
+
+@dataclass(frozen=True, slots=True)
+class WalletLookupHit:
+    wallet: WalletAccount
+    driver_user_id: int
+    driver_public_id: str
+    driver_full_name: str | None
+    driver_phone: str
+
+
+def admin_lookup_wallets(session: Session, *, actor_user_id: int, q: str, limit: int = 20) -> list[WalletLookupHit]:
+    """Find driver wallets by driver name, phone digits, ``usr_...`` driver id or ``wal_...`` wallet id.
+
+    Read-only; the caller checks ``finance.reports``. Names and phones are shown, so a non-empty answer leaves one
+    ``wallet_lookup_viewed`` audit row (wallet ids and field names only - never the query text). No commit.
+    """
+    from app.contracts.ids import parse_public_id
+    from app.models import AuditLog, User
+
+    text_value = (q or "").strip()
+    limit = max(1, min(limit, ADMIN_WALLET_LOOKUP_MAX_LIMIT))
+    stmt = select(WalletAccount, User).join(User, User.id == WalletAccount.driver_user_id)
+    lowered = text_value.lower()
+    try:
+        if lowered.startswith(f"{PublicIdPrefix.WALLET.value}_"):
+            stmt = stmt.where(WalletAccount.public_id == parse_public_id(text_value, PublicIdPrefix.WALLET))
+        elif lowered.startswith(f"{PublicIdPrefix.USER.value}_"):
+            stmt = stmt.where(User.public_id == parse_public_id(text_value, PublicIdPrefix.USER))
+        else:
+            if len(text_value) < ADMIN_WALLET_LOOKUP_MIN_QUERY:
+                raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "q", "reason": "too_short"})
+            conditions = [func.lower(User.full_name).like(f"%{lowered}%")]
+            digits = "".join(ch for ch in text_value if ch.isdigit())
+            if len(digits) >= ADMIN_WALLET_LOOKUP_MIN_QUERY:
+                conditions.append(User.phone.like(f"%{digits}%"))
+            stmt = stmt.where(or_(*conditions))
+    except DomainError as exc:
+        if exc.code is ErrorCode.NOT_FOUND:  # a malformed full id simply matches nothing
+            return []
+        raise
+    rows = session.execute(stmt.order_by(WalletAccount.id.desc()).limit(limit)).all()
+    hits = [
+        WalletLookupHit(
+            wallet=wallet,
+            driver_user_id=user.id,
+            driver_public_id=format_public_id(PublicIdPrefix.USER, user.public_id),
+            driver_full_name=user.full_name,
+            driver_phone=user.phone,
+        )
+        for wallet, user in rows
+    ]
+    if hits:
+        session.add(
+            AuditLog(
+                actor_id=actor_user_id, entity_type="wallet", entity_id=None, action="wallet_lookup_viewed",
+                details={
+                    "wallet_ids": [format_public_id(PublicIdPrefix.WALLET, hit.wallet.public_id) for hit in hits],
+                    "fields": ["driver_full_name", "driver_phone"],
+                },
+            )
+        )
+        session.flush()
+    return hits

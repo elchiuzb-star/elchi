@@ -25,6 +25,8 @@ SHARE_LINK_WEB_PATH = "/e/{token}"
 # --- ops queues (O4) -------------------------------------------------------------------------------------------
 OPS_QUEUE_DEFAULT_LIMIT = 20
 OPS_QUEUE_MAX_LIMIT = 100
+# O4 summary: each queue is counted up to this many items; beyond it the answer is "at least this many" (capped).
+OPS_QUEUE_SUMMARY_CAP = 200
 
 # --- KPI (O5, §20.4) -------------------------------------------------------------------------------------------
 # "at least one valid offer within 30 minutes for >= 70 % of matching requests"

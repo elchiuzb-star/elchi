@@ -235,3 +235,17 @@ class TripAvailabilityDTO(ContractModel):
     trip_version: int
     computed_at: UtcDateTime
     segments: list[SegmentAvailabilityDTO] = Field(description="Computed remaining capacity; not a reservation.")
+
+
+class AdminTripSearchDTO(ContractModel):
+    """Staff trip lookup row (admin panel). The driver is named by first name only - no phone, no plate - so this
+    read leaves no contact-view audit row. The full trip is ``GET /trips/{id}`` (staff see the full view)."""
+
+    id: str
+    status: TripStatus
+    driver_id: str
+    driver_display_name: str | None = None
+    vehicle_id: str
+    planned_start_at: UtcDateTime
+    planned_end_at: UtcDateTime
+    seat_capacity: StrictInt

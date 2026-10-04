@@ -114,3 +114,41 @@ def parse_public_id(text: str, expected: PublicIdPrefix) -> uuid.UUID:
     if format_public_id(expected, value) != text:
         raise not_found
     return value
+
+
+#: The shortest code fragment a staff lookup accepts (20 bits of the id): short enough to read aloud, long enough that
+#: a fragment rarely matches more than a handful of rows.
+MIN_CODE_FRAGMENT_LENGTH = 4
+_BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567"
+
+
+def public_id_fragment_range(text: str, expected: PublicIdPrefix) -> tuple[uuid.UUID, uuid.UUID] | None:
+    """The UUID range whose public ids start with ``text`` (staff lookup by a short code).
+
+    ``text`` is the start of the code, with or without ``<prefix>_``, case-insensitive (``bkg_7q2x`` or ``7q2x``).
+    Base32 keeps bit order, so a code prefix is a prefix of the 128-bit value and the matching ids form one
+    contiguous ``[low, high]`` range (PostgreSQL compares ``uuid`` bytewise). ``None`` when ``text`` cannot be the
+    start of such an id (wrong prefix, foreign characters, shorter than :data:`MIN_CODE_FRAGMENT_LENGTH`).
+    """
+    if not isinstance(text, str):
+        return None
+    value = text.strip().lower()
+    head, sep, tail = value.partition("_")
+    if sep:
+        if head != expected.value:
+            return None
+        value = tail
+    if not (MIN_CODE_FRAGMENT_LENGTH <= len(value) <= _ENCODED_LENGTH) or any(ch not in _BASE32_ALPHABET for ch in value):
+        return None
+    bits = len(value) * 5
+    number = 0
+    for ch in value:
+        number = (number << 5) | _BASE32_ALPHABET.index(ch)
+    # 26 chars carry 130 bits; the last 2 bits are padding, so drop what lies beyond the 128-bit value.
+    if bits > 128:
+        number >>= bits - 128
+        bits = 128
+    free = 128 - bits
+    low = number << free
+    high = low | ((1 << free) - 1)
+    return uuid.UUID(int=low), uuid.UUID(int=high)

@@ -79,7 +79,7 @@ from app.contracts.enums import (
 )
 from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.events import EventEnvelope
-from app.contracts.ids import PublicIdPrefix, format_public_id, new_public_uuid, parse_public_id
+from app.contracts.ids import PublicIdPrefix, format_public_id, new_public_uuid, parse_public_id, public_id_fragment_range
 from app.contracts.money import commission_minor, initial_commission_status, total_minor as money_total_minor
 from app.contracts.promo import PROMO_CASH_FEATURE, PROMO_SNAPSHOT_KEY, booking_promo_marker, cash_receipt_matches
 from app.contracts.promo import promo_booking_command_allowed as promo_cash_command_allowed
@@ -1683,6 +1683,12 @@ def operator_command(
     required = OPERATOR_COMMAND_CAPABILITY[command]
     if not caps.has(required):
         raise DomainError(ErrorCode.FORBIDDEN, details={"capability": required.value})
+    # ADR-0021: a money command (finalize_fee -> finance.fee_finalize) needs a fresh factor check, exactly like the
+    # top-up and adjustment approvals. Commands whose capability is not in STEP_UP_CAPABILITIES pass through; the
+    # rollout switch (staff_mfa_mode, single super_admin) is honoured inside require_step_up.
+    from app.modules.identity import mfa
+
+    mfa.require_step_up(session, user_id=actor_user_id, capability=required)
     reason = (reason or "").strip()
     if not reason:
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "reason"})
@@ -2590,6 +2596,33 @@ def admin_queue(
     if after_id is not None:
         stmt = stmt.where(Booking.id > after_id)
     return list(session.execute(stmt.order_by(Booking.id).limit(limit)).scalars())
+
+
+ADMIN_SEARCH_MAX_LIMIT = 20
+
+
+def admin_search_bookings(
+    session: Session, *, actor_user_id: int, q: str, limit: int = 10, now: datetime | None = None
+) -> list[Booking]:
+    """Staff lookup by booking id or by the start of its code (``bkg_7q2x`` / ``7q2x``), newest first.
+
+    ``ops.view`` (finance included). Read-only; the caller audits contact fields like every staff booking read.
+    """
+    now = _now(now)
+    caps = identity_service.get_capabilities(session, actor_user_id, now=now)
+    if not caps.has(Capability.OPS_VIEW):
+        raise DomainError(ErrorCode.FORBIDDEN, details={"capability": Capability.OPS_VIEW.value})
+    span = public_id_fragment_range(q, PublicIdPrefix.BOOKING)
+    if span is None:
+        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "q", "reason": "not_a_booking_code"})
+    low, high = span
+    stmt = (
+        select(Booking)
+        .where(Booking.public_id >= low, Booking.public_id <= high)
+        .order_by(Booking.created_at.desc(), Booking.id.desc())
+        .limit(max(1, min(limit, ADMIN_SEARCH_MAX_LIMIT)))
+    )
+    return list(session.execute(stmt).scalars())
 
 
 # ==============================================================================================================

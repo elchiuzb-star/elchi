@@ -62,7 +62,7 @@ def test_openapi_every_route_has_response_schema(client):
         for method, operation in operations.items():
             ok = operation["responses"].get("200") or operation["responses"].get("201")
             assert ok and "schema" in ok["content"]["application/json"], (method, path)
-    assert len([p for p in spec["paths"] if p.startswith("/api/v2/")]) == 19
+    assert len([p for p in spec["paths"] if p.startswith("/api/v2/")]) == 20  # + GET /admin/wallets (admin panel)
 
 
 def test_driver_topup_flow_and_idempotent_replay(client, people, approved_driver):

@@ -34,8 +34,15 @@ _TIMING_DUMMY_HASH = hash_password("elchi-timing-equalizer-not-a-credential")
 logger = logging.getLogger("elchi.auth")
 
 PUBLIC_REGISTRATION_ROLES = {"client", "driver"}
-STAFF_ROLES = {"operator", "admin", "super_admin"}
-SUPER_ADMIN_CREATABLE_ROLES = {"operator", "admin"}
+# Q17/Q69: `finance` is a staff role of its own. It signs in like every other staff role (username + password,
+# never phone OTP) and is created by a super_admin; what it may do is decided by v2 capabilities, not by this set.
+STAFF_ROLES = {"operator", "admin", "super_admin", "finance"}
+SUPER_ADMIN_CREATABLE_ROLES = {"operator", "admin", "finance"}
+#: Same policy as /auth/staff-login (schemas.auth.StaffLogin) and scripts/set_staff_password.py.
+STAFF_PASSWORD_MIN_LENGTH = 8
+STAFF_PASSWORD_MAX_BYTES = 72  # bcrypt truncates past 72 bytes, so longer is refused rather than silently cut
+STAFF_USERNAME_MIN_LENGTH = 3
+STAFF_USERNAME_MAX_LENGTH = 64
 ALL_ROLES = PUBLIC_REGISTRATION_ROLES | STAFF_ROLES
 ACTIVE_STATUSES = {"active"}
 
@@ -519,8 +526,7 @@ def build_token_response(db: Session, user: User) -> dict[str, Any]:
     session_claim = {"sid": refresh_payload["jti"]} if refresh_payload is not None else {}
     # ADR-0021: a staff token is short-lived; the marketplace TTL is unchanged so the frozen Android client
     # keeps its refresh rhythm. The token stays opaque either way, so no v1 response shape changes.
-    # The local STAFF_ROLES above is the v1 *login* set and deliberately excludes `finance`; the TTL question
-    # is about privilege, so it uses the contract set (which includes finance) without touching v1 login rules.
+    # The TTL question is about privilege, so it uses the contract set of staff roles.
     from app.contracts.enums import STAFF_ROLES as PRIVILEGED_ROLES
 
     is_staff = user.role in {role.value for role in PRIVILEGED_ROLES}
@@ -664,21 +670,89 @@ def logout_refresh_session(db: Session, refresh_token: str | None) -> JSONRespon
     return None
 
 
+_USERNAME_ALLOWED = frozenset("abcdefghijklmnopqrstuvwxyz0123456789._-")
+
+
+def validate_staff_username(value: str | None) -> str | JSONResponse:
+    """Normalised (trimmed, lowercase) staff username, or a 400 naming the field."""
+    normalized = normalize_username(value or "")
+    if (
+        len(normalized) < STAFF_USERNAME_MIN_LENGTH
+        or len(normalized) > STAFF_USERNAME_MAX_LENGTH
+        or not set(normalized) <= _USERNAME_ALLOWED
+    ):
+        return error_response(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "Username must be 3-64 characters: letters, digits, dot, underscore or hyphen",
+            details={"field": "username"},
+        )
+    return normalized
+
+
+def validate_staff_password(value: str | None) -> str | JSONResponse:
+    password = value or ""
+    if len(password) < STAFF_PASSWORD_MIN_LENGTH or len(password.encode("utf-8")) > STAFF_PASSWORD_MAX_BYTES:
+        return error_response(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "Password must be at least 8 characters and at most 72 bytes",
+            details={"field": "password"},
+        )
+    return password
+
+
+def _username_taken(db: Session, username: str, *, except_user_id: int | None = None) -> bool:
+    stmt = select(User.id).where(func.lower(User.username) == username)
+    if except_user_id is not None:
+        stmt = stmt.where(User.id != except_user_id)
+    return db.scalar(stmt.limit(1)) is not None
+
+
+def _username_taken_error() -> JSONResponse:
+    return error_response(status.HTTP_409_CONFLICT, "USERNAME_TAKEN", "Username is already taken")
+
+
 def create_admin_user(db: Session, actor: User, payload: AdminUserCreate) -> User | JSONResponse:
     if payload.role not in SUPER_ADMIN_CREATABLE_ROLES:
-        return error_response(status.HTTP_400_BAD_REQUEST, "ROLE_NOT_ALLOWED", "Super admin can create only admin or operator users")
+        return error_response(
+            status.HTTP_400_BAD_REQUEST, "ROLE_NOT_ALLOWED", "Super admin can create only operator, admin or finance users"
+        )
     normalized_phone = normalize_phone(payload.phone)
     if isinstance(normalized_phone, JSONResponse):
         return normalized_phone
+    # Credentials are optional (the old phone-only create still works), but they come as a pair: a username without
+    # a password - or the reverse - would create an account that looks ready and still cannot sign in.
+    if (payload.username is None) != (payload.password is None):
+        missing = "password" if payload.password is None else "username"
+        return error_response(
+            status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "username and password are set together",
+            details={"field": missing},
+        )
+    username: str | None = None
+    password_hash: str | None = None
+    if payload.username is not None:
+        checked_username = validate_staff_username(payload.username)
+        if isinstance(checked_username, JSONResponse):
+            return checked_username
+        checked_password = validate_staff_password(payload.password)
+        if isinstance(checked_password, JSONResponse):
+            return checked_password
+        username = checked_username
+        password_hash = hash_password(checked_password)
     existing = db.scalar(select(User).where(User.phone == normalized_phone))
     if existing is not None:
         return error_response(status.HTTP_409_CONFLICT, "ALREADY_EXISTS", "Phone number is already registered")
+    if username is not None and _username_taken(db, username):
+        return _username_taken_error()
     user = User(
         phone=normalized_phone,
         role=payload.role,
         full_name=payload.full_name,
         status="active",
         is_phone_verified=True,
+        username=username,
+        password_hash=password_hash,
     )
     db.add(user)
     db.flush()
@@ -689,8 +763,73 @@ def create_admin_user(db: Session, actor: User, payload: AdminUserCreate) -> Use
             "users",
             user.id,
             "admin_user_created",
-            new_value={"phone": user.phone, "role": user.role, "full_name": user.full_name},
+            new_value={
+                "phone": user.phone,
+                "role": user.role,
+                "full_name": user.full_name,
+                "username": user.username,
+                "has_password": user.password_hash is not None,
+            },
         )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def set_staff_credentials(
+    db: Session, actor: User, user_id: int, *, username: str | None, password: str | None
+) -> User | JSONResponse:
+    """super_admin sets or resets a staff login. A new password ends the target's live sessions (§17.6)."""
+    not_found = error_response(status.HTTP_404_NOT_FOUND, "USER_NOT_FOUND", "Staff user not found")
+    if username is None and password is None:
+        return error_response(
+            status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR", "username or password is required", details={"field": "password"}
+        )
+    checked_username: str | None = None
+    if username is not None:
+        result = validate_staff_username(username)
+        if isinstance(result, JSONResponse):
+            return result
+        checked_username = result
+    checked_password: str | None = None
+    if password is not None:
+        result = validate_staff_password(password)
+        if isinstance(result, JSONResponse):
+            return result
+        checked_password = result
+    # users.username is a unique column, so the row is locked FOR UPDATE from the start (AGENTS §6 lock modes).
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update().execution_options(populate_existing=True))
+    if user is None or user.role not in STAFF_ROLES:
+        return not_found
+    if user.role == "super_admin" and user.id != actor.id:
+        return not_found
+    if checked_username is not None and _username_taken(db, checked_username, except_user_id=user.id):
+        return _username_taken_error()
+    username_changed = checked_username is not None and checked_username != user.username
+    if checked_username is not None:
+        user.username = checked_username
+    if checked_password is not None:
+        user.password_hash = hash_password(checked_password)
+        now = utcnow()
+        for row in db.scalars(
+            select(RefreshSession)
+            .where(RefreshSession.user_id == user.id, RefreshSession.is_revoked.is_(False))
+            .order_by(RefreshSession.id)
+            .with_for_update()
+        ):
+            row.is_revoked = True
+            row.revoked_at = now
+            row.revoked_reason = "admin_revoke"
+            db.add(row)
+    db.add(user)
+    write_audit_log(
+        db,
+        actor,
+        "users",
+        user.id,
+        "staff_credentials_set",
+        new_value={"username_changed": username_changed, "password_changed": checked_password is not None},
+    )
     db.commit()
     db.refresh(user)
     return user
