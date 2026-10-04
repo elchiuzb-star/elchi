@@ -3,9 +3,12 @@
  *
  * What the panel promises is what the server allows:
  * * a button appears only for a capability `/me/capabilities` really returns - an operator does not see "cancel"
- *   (`ops.booking_cancel`, admin+, Q10) and finance alone sees "finalize fee" (Q17); anything else the server
- *   refuses is shown with the server's own reason, never hidden behind a pretend success;
- * * every command is confirmed first and carries one idempotency key per confirmed action (ADR-0005);
+ *   (`ops.booking_cancel`, admin+, Q10) and finance alone sees "finalize fee" (Q17); a finance user sees only the
+ *   finance-review queue and none of the trust tabs it cannot act on; anything else the server refuses is shown
+ *   with the server's own reason, never hidden behind a pretend success;
+ * * every command is confirmed first and carries one idempotency key per confirmed action (ADR-0005); a money
+ *   command the server wants proven (ADR-0021 step-up) asks for the authenticator code and is replayed with the
+ *   same key;
  * * a cancellation names its cause or leaves it undetermined for review - it is never assumed (Q129);
  * * fraud signals and reports are questions for a human: nothing here blocks, fines or down-ranks anybody (§17.3);
  * * the proposal thread is read-only (Q100) and hiding a booking chat message needs a written reason;
@@ -14,7 +17,7 @@
  * * a listing on behalf of someone needs the real owner and a consent reference (§20.2) - the server stores the
  *   operator as `created_by_operator`.
  */
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 
 import {
   ADMIN_BOOKING_QUEUES,
@@ -41,115 +44,100 @@ import {
   type TripTrackingAdminDTO,
   type UserStrikesDTO,
 } from "../api/v2/admin-trust.api";
+import {
+  SEARCH_MIN,
+  searchAdminBookings,
+  searchAdminTrips,
+  searchAdminUsers,
+  staffBooking,
+} from "../api/v2/admin-market.api";
 import { newIdempotencyKey, type ApiWarning, type Schemas } from "../api/v2/http";
 import { capabilities, type CapabilitiesDTO } from "../api/v2/ops.api";
 import { parcelCategories, type ParcelCategoryDTO } from "../api/v2/marketplace.api";
+import type { StopDTO } from "../api/v2/safety.api";
+import { translate, translateDynamic, type MessageKey } from "../i18n";
+import { useT } from "../i18n/react";
 import { formatDateTime, formatMinor } from "../utils/v2Format";
 import { v2ErrorMessage, warningMessage } from "../utils/v2Errors";
-import { Inbox, Loader2, RefreshCw } from "./ui/icons";
+import {
+  Badge,
+  Btn,
+  Chips,
+  Empty,
+  ErrorLine,
+  Field,
+  INPUT,
+  Kv,
+  LookupField,
+  Note,
+  Spinner,
+  TEXTAREA,
+  countText,
+  hasCap,
+  useLoader,
+  type BadgeTone,
+  type BtnTone,
+  type LookupOption,
+} from "./adminMarketKit";
+import { RefreshCw, X } from "./ui/icons";
+import { isStepUpCancelled, useStepUp, type StepUpController } from "./useStepUp";
+import { VehicleMap } from "./v2/LiveTrackingMap";
+import { StopSearch } from "./v2/StopSearch";
 
 type FaultSide = Schemas["FaultSide"];
 type ProofKind = Schemas["ProofKind"];
 
 export type TrustTab = "bookings" | "reports" | "fraud" | "strikes" | "chat" | "tracking" | "on_behalf";
 
-const TABS: Array<[TrustTab, string]> = [
-  ["bookings", "Bronlar"],
-  ["reports", "Shikoyatlar"],
-  ["fraud", "Firibgarlik signallari"],
-  ["strikes", "Strike'lar"],
-  ["chat", "Yozishmalar"],
-  ["tracking", "Safar kuzatuvi"],
-  ["on_behalf", "Nomidan e'lon"],
+const TABS: Array<[TrustTab, MessageKey]> = [
+  ["bookings", "admin.trust.tab.bookings"],
+  ["reports", "admin.trust.tab.reports"],
+  ["fraud", "admin.trust.tab.fraud"],
+  ["strikes", "admin.trust.tab.strikes"],
+  ["chat", "admin.trust.tab.chat"],
+  ["tracking", "admin.trust.tab.tracking"],
+  ["on_behalf", "admin.trust.tab.onBehalf"],
 ];
+
+/**
+ * Which tabs a role can work in (§2 matrix, 5a.7). Finance holds `ops.view` and `finance.fee_finalize` only, so the
+ * report, fraud, strike, chat and on-behalf tabs - all `ops.trust_review` / `ops.booking_command` work - are hidden.
+ */
+export function visibleTrustTabs(caps: CapabilitiesDTO | null): TrustTab[] {
+  return TABS.map(([tab]) => tab).filter((tab) => {
+    if (tab === "bookings") return has(caps, "ops.booking_command") || has(caps, "finance.fee_finalize");
+    if (tab === "tracking") return has(caps, "ops.view");
+    if (tab === "on_behalf") return has(caps, "ops.booking_command");
+    return has(caps, "ops.trust_review");
+  });
+}
+
+/** The booking queues a role may open: finance sees only the finance-review queue (§2, 5a.7). */
+export function visibleBookingQueues(caps: CapabilitiesDTO | null): AdminBookingQueue[] {
+  if (has(caps, "ops.booking_command")) return ADMIN_BOOKING_QUEUES;
+  if (has(caps, "finance.fee_finalize")) return ["finance_review"];
+  return [];
+}
 
 // --- small shared pieces ------------------------------------------------------------------------------------------
 
-function Spinner() {
-  return <Loader2 size={16} className="animate-spin text-slate-400" />;
-}
-
-function ErrorLine({ error }: { error: unknown }) {
-  if (!error) return null;
-  return (
-    <p role="alert" className="rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
-      {v2ErrorMessage(error)}
-    </p>
-  );
-}
-
-function Empty({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-[12px] border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-      <Inbox size={18} className="mx-auto mb-2 text-slate-400" />
-      {children}
-    </div>
-  );
-}
-
-function useLoader<T>(loader: () => Promise<T>, deps: unknown[], enabled = true) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(enabled);
-  const [nonce, setNonce] = useState(0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const run = useCallback(loader, deps);
-
-  useEffect(() => {
-    if (!enabled) {
-      setBusy(false);
-      return;
-    }
-    let cancelled = false;
-    setBusy(true);
-    setError(null);
-    run()
-      .then((value) => !cancelled && setData(value))
-      .catch((cause) => !cancelled && setError(cause))
-      .finally(() => !cancelled && setBusy(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [run, nonce, enabled]);
-
-  return { data, error, busy, reload: () => setNonce((value) => value + 1) };
-}
-
-const INPUT = "h-9 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground";
-const TEXTAREA = "h-20 rounded-[10px] border border-border bg-card px-3 py-2 text-sm text-foreground";
-
-type Tone = "primary" | "danger" | "neutral";
-
-function toneClass(tone: Tone): string {
-  if (tone === "primary") return "border-primary bg-primary text-primary-foreground";
-  if (tone === "danger") return "border-destructive/25 bg-destructive/10 text-destructive";
-  return "border-border bg-card text-secondary-foreground";
-}
-
-function Btn(props: { children: ReactNode; onClick: () => void; disabled?: boolean; tone?: Tone }) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      disabled={props.disabled}
-      className={`el-press inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border px-3 text-sm font-semibold ${toneClass(props.tone ?? "neutral")} disabled:opacity-50`}
-    >
-      {props.children}
-    </button>
-  );
+function has(caps: CapabilitiesDTO | null, capability: string): boolean {
+  return hasCap(caps as { capabilities?: readonly string[] } | null, capability);
 }
 
 /**
  * A command button that asks first. The idempotency key is minted when the confirmation opens and kept for a
- * retry of the same confirmation, so a double click or a network retry cannot act twice.
+ * retry of the same confirmation, so a double click or a network retry cannot act twice. When the work goes through
+ * `useStepUp` and the person closes the code prompt, the confirmation closes quietly - nothing was executed.
  */
 export function ConfirmButton(props: {
   label: string;
   question: string;
   onConfirm: (idempotencyKey: string) => Promise<void>;
   disabled?: boolean;
-  tone?: Tone;
+  tone?: BtnTone;
 }) {
+  const t = useT();
   const [key, setKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -162,7 +150,8 @@ export function ConfirmButton(props: {
       await props.onConfirm(key);
       setKey(null);
     } catch (cause) {
-      setError(cause);
+      if (isStepUpCancelled(cause)) setKey(null);
+      else setError(cause);
     } finally {
       setBusy(false);
     }
@@ -182,7 +171,7 @@ export function ConfirmButton(props: {
       <div className="flex flex-wrap gap-2">
         <Btn tone={props.tone === "danger" ? "danger" : "primary"} disabled={busy} onClick={() => void confirm()}>
           {busy ? <Spinner /> : null}
-          {error ? "Qayta urinish" : "Ha, bajarish"}
+          {error ? t("common.retry") : t("admin.mk.yesRun")}
         </Btn>
         <Btn
           disabled={busy}
@@ -191,64 +180,77 @@ export function ConfirmButton(props: {
             setError(null);
           }}
         >
-          Bekor qilish
+          {t("common.cancel")}
         </Btn>
       </div>
     </div>
   );
 }
 
-function StatusChip({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex rounded-full border border-border bg-slate-50 px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
-      {children}
-    </span>
-  );
-}
-
-function Field(props: { label: string; children: ReactNode; hint?: string }) {
-  return (
-    <label className="grid gap-1 text-sm font-medium text-secondary-foreground">
-      {props.label}
-      {props.children}
-      {props.hint ? <span className="text-xs font-normal text-muted-foreground">{props.hint}</span> : null}
-    </label>
-  );
-}
-
-function evidenceText(evidence: Record<string, number | string[]>): string {
+function evidenceText(evidence: Record<string, number | string | string[]>): string {
   const parts = Object.entries(evidence ?? {}).map(([key, value]) =>
     Array.isArray(value) ? `${key}: ${value.join(", ")}` : `${key}: ${value}`,
   );
   return parts.join(" · ") || "-";
 }
 
-function has(caps: CapabilitiesDTO | null, capability: string): boolean {
-  return Boolean(caps?.capabilities?.includes(capability as never));
+/** The searches behind the lookup fields. Module-level so their identity never changes between renders. */
+async function lookupUsers(query: string): Promise<LookupOption[]> {
+  const rows = await searchAdminUsers(query, { limit: 10 });
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.full_name || row.phone || row.id,
+    sub: [translateDynamic(`admin.mk.role.${row.role}`) ?? row.role, row.phone].filter(Boolean).join(" · "),
+  }));
+}
+
+/** The code part of `bkg_7q2x` / `trp_...` must be at least 4 characters (contract §5.3/§5.4); shorter is not sent. */
+function codePart(query: string, prefix: string): string {
+  return query.toLowerCase().startsWith(prefix) ? query.slice(prefix.length) : query;
+}
+
+async function lookupBookings(query: string): Promise<LookupOption[]> {
+  if (codePart(query, "bkg_").length < SEARCH_MIN.bookings) return [];
+  const rows = await searchAdminBookings(query, 10);
+  return rows.map((row) => ({
+    id: row.id,
+    title: `${stopText(row.pickup)} → ${stopText(row.dropoff)}`,
+    sub: [serviceLabel(row.service_type), formatDateTime(row.created_at)].join(" · "),
+  }));
+}
+
+async function lookupTrips(query: string): Promise<LookupOption[]> {
+  if (!query.startsWith("usr_") && codePart(query, "trp_").length < SEARCH_MIN.trips) return [];
+  const rows = await searchAdminTrips(query, 10);
+  return rows.map((row) => ({
+    id: row.id,
+    title: [row.driver_display_name, row.planned_start_at ? formatDateTime(row.planned_start_at) : null].filter(Boolean).join(" · ") || row.id,
+    sub: translateDynamic(`admin.trust.tripStatus.${row.status}`) ?? row.status,
+  }));
 }
 
 // --- bookings (B12/B13) -----------------------------------------------------------------------------------------
 
-const QUEUE_LABEL: Record<AdminBookingQueue, string> = {
-  awaiting_confirmation: "Tasdiq kutilmoqda",
-  no_show_review: "Kelmadi ko'rigi",
-  custody_case: "Yuk saqlovda",
-  hold_escalation: "Hold eskalatsiyasi",
-  finance_review: "Moliya ko'rigi",
+export const BOOKING_QUEUE_KEY: Record<AdminBookingQueue, MessageKey> = {
+  awaiting_confirmation: "admin.queue.awaiting_confirmation",
+  no_show_review: "admin.queue.no_show_review",
+  custody_case: "admin.queue.custody_case",
+  hold_escalation: "admin.queue.hold_escalation",
+  finance_review: "admin.queue.finance_review",
 };
 
-const COMMAND_LABEL: Record<OperatorBookingCommand, string> = {
-  confirm_no_show: "Kelmaganini tasdiqlash",
-  reject_no_show: "Kelmadi xabarini rad etish",
-  complete_with_evidence: "Dalil bilan yakunlash",
-  drop_off: "Yo'lovchi tushirildi",
-  require_return: "Qaytarishni talab qilish",
-  return_to_sender: "Jo'natuvchiga qaytarildi",
-  resolve_custody_case: "Saqlov holatini yopish",
-  finalize_fee: "Komissiyani yakunlash",
-  cancel: "Bronni bekor qilish",
-  reissue_proof_code: "Kodni qayta berish",
-  mark_delivered: "Yetkazildi deb qayd etish",
+const COMMAND_KEY: Record<OperatorBookingCommand, MessageKey> = {
+  confirm_no_show: "admin.trust.cmd.confirm_no_show",
+  reject_no_show: "admin.trust.cmd.reject_no_show",
+  complete_with_evidence: "admin.trust.cmd.complete_with_evidence",
+  drop_off: "admin.trust.cmd.drop_off",
+  require_return: "admin.trust.cmd.require_return",
+  return_to_sender: "admin.trust.cmd.return_to_sender",
+  resolve_custody_case: "admin.trust.cmd.resolve_custody_case",
+  finalize_fee: "admin.trust.cmd.finalize_fee",
+  cancel: "admin.trust.cmd.cancel",
+  reissue_proof_code: "admin.trust.cmd.reissue_proof_code",
+  mark_delivered: "admin.trust.cmd.mark_delivered",
 };
 
 /** The server's `OPERATOR_COMMAND_CAPABILITY`, mirrored only to hide what would be refused anyway. */
@@ -266,16 +268,16 @@ export const COMMAND_CAPABILITY: Record<OperatorBookingCommand, string> = {
   cancel: "ops.booking_cancel",
 };
 
-const FAULT_LABEL: Array<["" | FaultSide, string]> = [
-  ["", "Aniqlanmagan — tekshiruvga yuboriladi"],
-  ["client", "Mijoz sababli"],
-  ["driver", "Haydovchi sababli"],
-  ["platform", "Platforma sababli"],
-  ["none", "Hech kim aybdor emas (asosli bekor)"],
+const FAULT_KEY: Array<["" | FaultSide, MessageKey]> = [
+  ["", "admin.trust.fault.undetermined"],
+  ["client", "admin.trust.fault.client"],
+  ["driver", "admin.trust.fault.driver"],
+  ["platform", "admin.trust.fault.platform"],
+  ["none", "admin.trust.fault.none"],
 ];
 
 // ADR-0026 (Q139): only the passenger boarding code is still issued; parcel codes are retired.
-const PROOF_LABEL: Array<[ProofKind, string]> = [["boarding_code", "Chiqish kodi"]];
+const PROOF_KEY: Array<[ProofKind, MessageKey]> = [["boarding_code", "admin.trust.proof.boarding_code"]];
 
 /** Which commands make sense for this booking right now. The server still has the last word. */
 export function applicableCommands(booking: AdminBookingDTO): OperatorBookingCommand[] {
@@ -291,18 +293,54 @@ export function applicableCommands(booking: AdminBookingDTO): OperatorBookingCom
   return out;
 }
 
-function stopText(stop: AdminBookingDTO["pickup"]): string {
+export function stopText(stop: AdminBookingDTO["pickup"]): string {
   const district = stop.point?.district;
   const districtName = typeof district === "string" ? district : district?.name_uz;
   return stop.stop?.name_uz ?? stop.point?.address ?? districtName ?? "-";
 }
 
-function MessagesList(props: {
-  messages: ChatMessageAdminDTO[];
-  canHide: boolean;
-  onHidden?: () => void;
-}) {
-  if (props.messages.length === 0) return <Empty>Xabar yo'q</Empty>;
+export function serviceLabel(service: string | null | undefined): string {
+  if (service === "passenger") return translate("admin.mk.passenger");
+  if (service === "parcel") return translate("admin.mk.parcel");
+  return service ?? "-";
+}
+
+/** `status.*` holds the words the client app already uses for a booking's service status. */
+export function serviceStatusLabel(status: string): string {
+  return translateDynamic(`status.${status}`) ?? status;
+}
+
+const SERVICE_STATUS_TONE: Record<string, BadgeTone> = {
+  awaiting_pickup: "warn",
+  completed: "ok",
+  delivered: "ok",
+  cancelled: "err",
+  no_show: "err",
+  in_transit: "blue",
+  picked_up: "blue",
+  onboard: "blue",
+};
+
+export function commissionLabel(status: string): string {
+  return translateDynamic(`admin.trust.commission.${status}`) ?? status;
+}
+
+const COMMISSION_TONE: Record<string, BadgeTone> = {
+  held: "gray",
+  captured: "ok",
+  released: "blue",
+  exempt: "gray",
+  reversed: "warn",
+  partially_reversed: "warn",
+};
+
+function sideLabel(side: string): string {
+  return translateDynamic(`admin.trust.side.${side}`) ?? side;
+}
+
+function MessagesList(props: { messages: ChatMessageAdminDTO[]; canHide: boolean; onHidden?: () => void }) {
+  const t = useT();
+  if (props.messages.length === 0) return <Empty>{t("admin.trust.noMessages")}</Empty>;
   return (
     <ul className="grid gap-2">
       {props.messages.map((message) => (
@@ -313,35 +351,39 @@ function MessagesList(props: {
 }
 
 function MessageItem({ message, canHide, onHidden }: { message: ChatMessageAdminDTO; canHide: boolean; onHidden?: () => void }) {
+  const t = useT();
   const [reason, setReason] = useState("");
   const hidden = message.moderation_status === "hidden_by_staff";
   const filtered = Object.entries(message.contact_filter_categories ?? {});
   return (
     <li className="grid gap-2 rounded-[10px] border border-border bg-card px-3 py-2 text-sm">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <StatusChip>{message.author_side}</StatusChip>
+        <Badge>{sideLabel(message.author_side)}</Badge>
         <span className="font-mono">{message.author_user_id}</span>
         <span>{formatDateTime(message.created_at)}</span>
-        {hidden ? <span className="font-semibold text-warning">yashirilgan</span> : null}
       </div>
       <p className="text-secondary-foreground">
-        {message.text ?? (message.quick_reply_code ? `Tezkor javob: ${message.quick_reply_code}` : "-")}
+        {message.text ?? (message.quick_reply_code ? t("admin.trust.quickReply", { code: message.quick_reply_code }) : "-")}
       </p>
-      {filtered.length ? (
+      {hidden ? (
+        <p className="text-xs font-semibold text-warning">
+          {t("admin.trust.hiddenMessage", { category: filtered.map(([category]) => category).join(", ") || "-" })}
+        </p>
+      ) : filtered.length ? (
         <p className="text-xs text-muted-foreground">
-          Filtr mosligi: {filtered.map(([category, count]) => `${category} × ${count}`).join(", ")}
+          {t("admin.trust.filterMatch", { categories: filtered.map(([category, count]) => `${category} × ${count}`).join(", ") })}
         </p>
       ) : null}
       {canHide && !hidden && onHidden ? (
         <div className="flex flex-wrap items-end gap-2">
-          <Field label="Yashirish sababi (kamida 3 belgi)">
+          <Field label={t("admin.trust.hideReason")}>
             <input value={reason} onChange={(event) => setReason(event.target.value)} className={INPUT} />
           </Field>
           <ConfirmButton
-            label="Yashirish"
+            label={t("admin.trust.hide")}
             tone="danger"
             disabled={reason.trim().length < 3}
-            question="Xabar ikkala tomondan yashiriladi va audit jurnaliga yoziladi. Davom etasizmi?"
+            question={t("admin.trust.hideConfirm")}
             onConfirm={async (key) => {
               await hideChatMessage(message.id, { reason: reason.trim() }, key);
               setReason("");
@@ -355,19 +397,90 @@ function MessageItem({ message, canHide, onHidden }: { message: ChatMessageAdmin
 }
 
 function BookingMessages({ bookingId, canHide }: { bookingId: string; canHide: boolean }) {
+  const t = useT();
   const messages = useLoader<ChatMessageAdminDTO[]>(() => adminBookingMessages(bookingId, { limit: 50 }), [bookingId]);
   return (
     <div className="grid gap-2">
-      <p className="text-xs text-muted-foreground">Xodim ko'rishi audit jurnaliga yoziladi.</p>
+      <div>
+        <p className="text-sm font-semibold text-foreground">{t("admin.trust.chatTitle")}</p>
+        <p className="text-xs text-muted-foreground">{t("admin.trust.chatAudited")}</p>
+      </div>
       <ErrorLine error={messages.error} />
       {messages.busy ? <Spinner /> : <MessagesList messages={messages.data ?? []} canHide={canHide} onHidden={messages.reload} />}
     </div>
   );
 }
 
-function BookingDetail({ booking, caps, onDone }: { booking: AdminBookingDTO; caps: CapabilitiesDTO | null; onDone: () => void }) {
+function partyText(party: { display_name?: string | null; contact_phone?: string | null } | null | undefined, extra?: string | null): string {
+  if (!party) return "—";
+  return [party.display_name, party.contact_phone, extra].filter(Boolean).join(" · ") || "—";
+}
+
+function noShowText(booking: AdminBookingDTO): string {
+  const review = booking.no_show_review;
+  if (!review) return "—";
+  const time = formatDateTime(review.reported_at);
+  if (review.status === "pending") return translate("admin.trust.noShowPending", { time });
+  return `${translateDynamic(`admin.trust.noShow.${review.status}`) ?? review.status} · ${time}`;
+}
+
+/** The booking's facts as the design's key-value grid (5a.3, 4.6). Names and phones only where the staff DTO has them. */
+export function BookingFacts({ booking, compact = false }: { booking: AdminBookingDTO; compact?: boolean }) {
+  const t = useT();
+  const plate = booking.driver?.vehicle ? booking.driver.vehicle.plate_number ?? booking.driver.vehicle.plate_masked ?? null : null;
+  const rows: Array<[string, string]> = [];
+  if (!compact) {
+    rows.push([t("admin.mk.route"), `${stopText(booking.pickup)} → ${stopText(booking.dropoff)}`]);
+    rows.push([t("admin.mk.trip"), booking.trip_id]);
+  }
+  rows.push([t("admin.mk.client"), partyText(booking.client)]);
+  rows.push([t("admin.mk.driver"), partyText(booking.driver, plate)]);
+  if (!compact || booking.no_show_review) rows.push([t("admin.trust.noShowReview"), noShowText(booking)]);
+  rows.push([
+    t("admin.trust.custody"),
+    booking.custody_case
+      ? `${translateDynamic(`admin.trust.custodyStatus.${booking.custody_case.status}`) ?? booking.custody_case.status} · ${booking.custody_case.reason_code}`
+      : "—",
+  ]);
+  if (!compact) {
+    rows.push([
+      t("admin.trust.cancelled"),
+      booking.cancelled
+        ? [
+            sideLabel(booking.cancelled.by_side),
+            booking.cancelled.fault_side ? translate(FAULT_KEY.find(([value]) => value === booking.cancelled?.fault_side)?.[1] ?? "admin.trust.fault.undetermined") : t("admin.trust.faultUnknown"),
+            formatDateTime(booking.cancelled.at),
+          ].join(" · ")
+        : "—",
+    ]);
+  }
+  return <Kv rows={rows} cols={3} />;
+}
+
+/**
+ * The command form for one booking (B13). Money commands go through `useStepUp`: `finalize_fee` needs a fresh MFA
+ * proof once ADR-0021 is enforced (contract §3); the code is asked here and the command replayed with the same key.
+ */
+export function BookingDetail({
+  booking,
+  caps,
+  onDone,
+  showFacts = true,
+  preferCommand,
+}: {
+  booking: AdminBookingDTO;
+  caps: CapabilitiesDTO | null;
+  onDone: () => void;
+  showFacts?: boolean;
+  /** Pre-selects this command when it is allowed (the finance-review queue opens on `finalize_fee`). */
+  preferCommand?: OperatorBookingCommand;
+}) {
+  const t = useT();
+  const stepUp: StepUpController = useStepUp();
   const allowed = applicableCommands(booking).filter((command) => has(caps, COMMAND_CAPABILITY[command]));
-  const [command, setCommand] = useState<OperatorBookingCommand | "">(allowed[0] ?? "");
+  const [command, setCommand] = useState<OperatorBookingCommand | "">(
+    preferCommand && allowed.includes(preferCommand) ? preferCommand : allowed[0] ?? "",
+  );
   const [reason, setReason] = useState("");
   const [fault, setFault] = useState<"" | FaultSide>("");
   const [proofKind, setProofKind] = useState<ProofKind>("boarding_code");
@@ -376,294 +489,363 @@ function BookingDetail({ booking, caps, onDone }: { booking: AdminBookingDTO; ca
   const [showChat, setShowChat] = useState(false);
   const [warnings, setWarnings] = useState<ApiWarning[]>([]);
   const canCancel = has(caps, "ops.booking_cancel");
+  const canChat = has(caps, "ops.trust_review") || has(caps, "ops.booking_command");
 
   async function send(key: string) {
     if (!command) return;
-    const result = await adminBookingCommand(
-      booking.id,
-      command,
-      {
-        expected_version: booking.version,
-        reason: reason.trim(),
-        cancel_fault_side: command === "cancel" && fault ? fault : null,
-        proof_kind: command === "reissue_proof_code" ? proofKind : null,
-        fee_decision: command === "finalize_fee" ? { mode: feeMode } : null,
-        evidence_file_ids:
-          command === "complete_with_evidence"
-            ? evidence.split(",").map((part) => part.trim()).filter(Boolean).slice(0, 10)
-            : [],
-      },
-      key,
-    );
+    const body = {
+      expected_version: booking.version,
+      reason: reason.trim(),
+      cancel_fault_side: command === "cancel" && fault ? fault : null,
+      proof_kind: command === "reissue_proof_code" ? proofKind : null,
+      fee_decision: command === "finalize_fee" ? { mode: feeMode } : null,
+      evidence_file_ids:
+        command === "complete_with_evidence"
+          ? evidence.split(",").map((part) => part.trim()).filter(Boolean).slice(0, 10)
+          : [],
+    };
+    const result = await stepUp.run(() => adminBookingCommand(booking.id, command, body, key));
     setWarnings(result.warnings);
     setReason("");
     onDone();
   }
 
+  const commandLabel = command ? t(COMMAND_KEY[command]) : "";
+
   return (
     <div className="grid gap-3">
-      <dl className="grid gap-2 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="text-xs text-muted-foreground">Yo'nalish</dt>
-          <dd className="text-secondary-foreground">
-            {stopText(booking.pickup)} → {stopText(booking.dropoff)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Safar</dt>
-          <dd className="font-mono text-xs text-secondary-foreground">{booking.trip_id}</dd>
-        </div>
-        {booking.client ? (
-          <div>
-            <dt className="text-xs text-muted-foreground">Mijoz</dt>
-            <dd className="text-secondary-foreground">
-              {booking.client.display_name}
-              {booking.client.contact_phone ? ` · ${booking.client.contact_phone}` : ""}
-            </dd>
-          </div>
-        ) : null}
-        {booking.driver ? (
-          <div>
-            <dt className="text-xs text-muted-foreground">Haydovchi</dt>
-            <dd className="text-secondary-foreground">
-              {booking.driver.display_name}
-              {booking.driver.contact_phone ? ` · ${booking.driver.contact_phone}` : ""}
-              {booking.driver.vehicle
-                ? ` · ${booking.driver.vehicle.plate_number ?? booking.driver.vehicle.plate_masked ?? ""}`
-                : ""}
-            </dd>
-          </div>
-        ) : null}
-        {booking.no_show_review ? (
-          <div>
-            <dt className="text-xs text-muted-foreground">Kelmadi ko'rigi</dt>
-            <dd className="text-secondary-foreground">
-              {booking.no_show_review.status} · {formatDateTime(booking.no_show_review.reported_at)}
-            </dd>
-          </div>
-        ) : null}
-        {booking.custody_case ? (
-          <div>
-            <dt className="text-xs text-muted-foreground">Saqlov holati</dt>
-            <dd className="text-secondary-foreground">
-              {booking.custody_case.status} · {booking.custody_case.reason_code}
-            </dd>
-          </div>
-        ) : null}
-        {booking.cancelled ? (
-          <div>
-            <dt className="text-xs text-muted-foreground">Bekor qilingan</dt>
-            <dd className="text-secondary-foreground">
-              {booking.cancelled.by_side} · {booking.cancelled.fault_side ?? "sabab aniqlanmagan"} ·{" "}
-              {formatDateTime(booking.cancelled.at)}
-            </dd>
-          </div>
-        ) : null}
-      </dl>
+      {showFacts ? <BookingFacts booking={booking} /> : null}
 
       {warnings.length ? (
-        <p className="rounded-[10px] border border-warning/30 bg-warning/8 px-3 py-2 text-sm text-foreground">
-          {warnings.map((warning) => warningMessage(warning.code)).join(" · ")}
-        </p>
+        <Note tone="warn">{warnings.map((warning) => warningMessage(warning.code)).join(" · ")}</Note>
       ) : null}
 
       {allowed.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Bu bron uchun sizning rolingizda buyruq yo'q.</p>
+        <p className="text-sm text-muted-foreground">{t("admin.trust.noCommands")}</p>
       ) : (
         <div className="grid gap-3 rounded-[12px] border border-border bg-card p-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <Field label="Buyruq">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("admin.trust.command")}>
               <select
-                aria-label="Buyruq"
+                aria-label={t("admin.trust.command")}
                 value={command}
                 onChange={(event) => setCommand(event.target.value as OperatorBookingCommand)}
                 className={INPUT}
               >
                 {allowed.map((value) => (
                   <option key={value} value={value}>
-                    {COMMAND_LABEL[value]}
+                    {t(COMMAND_KEY[value])}
                   </option>
                 ))}
               </select>
             </Field>
             {command === "cancel" ? (
-              <Field label="Bekor qilish sababi kimda (Q129)">
+              <Field label={t("admin.trust.faultSide")}>
                 <select
-                  aria-label="Bekor qilish sababi kimda"
+                  aria-label={t("admin.trust.faultSideShort")}
                   value={fault}
                   onChange={(event) => setFault(event.target.value as "" | FaultSide)}
                   className={INPUT}
                 >
-                  {FAULT_LABEL.map(([value, label]) => (
+                  {FAULT_KEY.map(([value, key]) => (
                     <option key={value || "undetermined"} value={value}>
-                      {label}
+                      {t(key)}
                     </option>
                   ))}
                 </select>
               </Field>
             ) : null}
             {command === "reissue_proof_code" ? (
-              <Field label="Kod turi">
+              <Field label={t("admin.trust.proofKind")}>
                 <select
-                  aria-label="Kod turi"
+                  aria-label={t("admin.trust.proofKind")}
                   value={proofKind}
                   onChange={(event) => setProofKind(event.target.value as ProofKind)}
                   className={INPUT}
                 >
-                  {PROOF_LABEL.map(([value, label]) => (
+                  {PROOF_KEY.map(([value, key]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(key)}
                     </option>
                   ))}
                 </select>
               </Field>
             ) : null}
             {command === "finalize_fee" ? (
-              <Field label="Komissiya qarori">
+              <Field label={t("admin.trust.feeDecision")}>
                 <select
-                  aria-label="Komissiya qarori"
+                  aria-label={t("admin.trust.feeDecision")}
                   value={feeMode}
                   onChange={(event) => setFeeMode(event.target.value as "capture" | "release")}
                   className={INPUT}
                 >
-                  <option value="capture">Undirish (hold'dagi summa)</option>
-                  <option value="release">Bo'shatish</option>
+                  <option value="capture">{t("admin.trust.fee.capture")}</option>
+                  <option value="release">{t("admin.trust.fee.release")}</option>
                 </select>
               </Field>
             ) : null}
             {command === "complete_with_evidence" ? (
-              <Field label="Dalil fayllari (vergul bilan, ixtiyoriy)">
+              <Field label={t("admin.trust.evidence")}>
                 <input value={evidence} onChange={(event) => setEvidence(event.target.value)} className={INPUT} />
               </Field>
             ) : null}
           </div>
-          <Field label="Sabab (majburiy, audit jurnaliga yoziladi)">
-            <textarea aria-label="Sabab" value={reason} onChange={(event) => setReason(event.target.value)} className={TEXTAREA} />
+          <Field label={t("admin.mk.reasonRequiredAudit")}>
+            <textarea aria-label={t("common.reason")} value={reason} onChange={(event) => setReason(event.target.value)} className={TEXTAREA} />
           </Field>
+          {stepUp.prompt}
           {command ? (
             <ConfirmButton
-              label={COMMAND_LABEL[command]}
+              label={commandLabel}
               tone={command === "cancel" ? "danger" : "primary"}
-              disabled={!reason.trim()}
+              disabled={!reason.trim() || stepUp.waiting}
               question={
                 command === "cancel"
-                  ? `Bron bekor qilinadi. Sabab: ${FAULT_LABEL.find(([value]) => value === fault)?.[1] ?? ""}. Davom etasizmi?`
-                  : `«${COMMAND_LABEL[command]}» bajarilsinmi?`
+                  ? t("admin.trust.confirmCancel", { fault: t(FAULT_KEY.find(([value]) => value === fault)?.[1] ?? "admin.trust.fault.undetermined") })
+                  : t("admin.trust.confirmCommand", { command: commandLabel })
               }
               onConfirm={send}
             />
           ) : null}
         </div>
       )}
-      {!canCancel ? (
-        <p className="text-xs text-muted-foreground">Bronni bekor qilish — faqat admin va undan yuqori (Q10).</p>
-      ) : null}
+      {!canCancel && has(caps, "ops.booking_command") ? <p className="text-xs text-muted-foreground">{t("admin.trust.cancelAdminOnly")}</p> : null}
 
-      <div className="grid gap-2">
-        <Btn onClick={() => setShowChat((value) => !value)}>{showChat ? "Yozishmani yopish" : "Bron yozishmasi"}</Btn>
-        {showChat ? <BookingMessages bookingId={booking.id} canHide={has(caps, "ops.trust_review")} /> : null}
-      </div>
+      {canChat ? (
+        <div className="grid gap-2">
+          <Btn onClick={() => setShowChat((value) => !value)}>{showChat ? t("admin.trust.chatHide") : t("admin.trust.chatTitle")}</Btn>
+          {showChat ? <BookingMessages bookingId={booking.id} canHide={has(caps, "ops.trust_review")} /> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The `bk` drawer (DESIGN-ADMIN-DIFF 4.5/4.6): one v2 booking opened from a queue, with its facts, the command form,
+ * the MFA block when the server asks for it, and the booking chat. Loaded by id through the staff booking view.
+ */
+export function AdminBookingDrawer(props: {
+  bookingId: string;
+  summary?: string | null;
+  /** The queue the booking was opened from; `finance_review` pre-selects «Komissiyani yakunlash». */
+  queue?: string | null;
+  onClose: () => void;
+  onChanged?: () => void;
+}) {
+  const t = useT();
+  const caps = useLoader<CapabilitiesDTO>(() => capabilities(), []);
+  const booking = useLoader<AdminBookingDTO>(() => staffBooking(props.bookingId), [props.bookingId]);
+  const data = booking.data;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") props.onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [props.onClose]);
+
+  const sub = data
+    ? [
+        `${stopText(data.pickup)} → ${stopText(data.dropoff)}`,
+        props.summary || null,
+        t("admin.trust.commissionLine", { status: commissionLabel(data.commission_status) }),
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex justify-end bg-foreground/40" onClick={props.onClose}>
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={data ? `${props.bookingId} · ${serviceLabel(data.service_type)}` : props.bookingId}
+        onClick={(event) => event.stopPropagation()}
+        className="flex h-full w-full max-w-[560px] flex-col overflow-hidden border-l border-border bg-background shadow-2xl"
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-border bg-card px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="break-words text-base font-bold text-foreground">
+              <span className="font-mono">{props.bookingId}</span>
+              {data ? ` · ${serviceLabel(data.service_type)}` : ""}
+            </h3>
+            {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
+          </div>
+          <button type="button" onClick={props.onClose} aria-label={t("common.close")} className="el-press rounded-[10px] p-2 text-muted-foreground hover:bg-muted">
+            <X size={18} />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+          <ErrorLine error={caps.error ?? booking.error} />
+          {booking.busy || caps.busy ? (
+            <Spinner />
+          ) : data ? (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Badge tone={SERVICE_STATUS_TONE[data.service_status] ?? "gray"}>{serviceStatusLabel(data.service_status)}</Badge>
+                <Badge tone={COMMISSION_TONE[data.commission_status] ?? "gray"}>{commissionLabel(data.commission_status)}</Badge>
+                <span className="text-sm font-semibold text-foreground">{formatMinor(data.total_minor, data.currency)}</span>
+              </div>
+              <BookingFacts booking={data} />
+              <BookingDetail
+                booking={data}
+                caps={caps.data}
+                showFacts={false}
+                preferCommand={props.queue === "finance_review" ? "finalize_fee" : undefined}
+                onDone={() => {
+                  booking.reload();
+                  props.onChanged?.();
+                }}
+              />
+            </>
+          ) : null}
+        </div>
+      </aside>
     </div>
   );
 }
 
 function BookingsTab({ caps }: { caps: CapabilitiesDTO | null }) {
-  const [queue, setQueue] = useState<AdminBookingQueue>("awaiting_confirmation");
+  const t = useT();
+  const queues = visibleBookingQueues(caps);
+  const [queue, setQueue] = useState<AdminBookingQueue>(queues[0] ?? "awaiting_confirmation");
   const [openId, setOpenId] = useState<string | null>(null);
   const bookings = useLoader<AdminBookingDTO[]>(() => listAdminBookings({ queue, limit: 50 }), [queue]);
   const rows = bookings.data ?? [];
 
   return (
     <div className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Navbat"
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Chips
+          label={t("admin.trust.queue")}
           value={queue}
-          onChange={(event) => setQueue(event.target.value as AdminBookingQueue)}
-          className={INPUT}
-        >
-          {ADMIN_BOOKING_QUEUES.map((value) => (
-            <option key={value} value={value}>
-              {QUEUE_LABEL[value]}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => {
+            setQueue(value);
+            setOpenId(null);
+          }}
+          items={queues.map((value) => ({
+            value,
+            label: t(BOOKING_QUEUE_KEY[value]),
+            count: value === queue && !bookings.busy && !bookings.error ? countText(rows.length, 50) : null,
+          }))}
+        />
         <Btn onClick={bookings.reload}>
-          <RefreshCw size={14} /> Yangilash
+          <RefreshCw size={14} /> {t("support.refresh")}
         </Btn>
       </div>
       <ErrorLine error={bookings.error} />
       {bookings.busy ? (
         <Spinner />
       ) : rows.length === 0 ? (
-        <Empty>Bu navbatda bron yo'q</Empty>
+        <Empty>{t("admin.trust.queueEmpty")}</Empty>
       ) : (
-        <ul className="grid gap-2">
-          {rows.map((booking) => (
-            <li key={booking.id} className="grid gap-3 rounded-[12px] border border-border bg-card p-3 shadow-sm">
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <span className="font-mono text-xs text-secondary-foreground">{booking.id}</span>
-                <StatusChip>{booking.service_type === "passenger" ? "Yo'lovchi" : "Pochta"}</StatusChip>
-                <StatusChip>{booking.service_status}</StatusChip>
-                <span className="text-muted-foreground">komissiya: {booking.commission_status}</span>
-                <span className="font-semibold text-foreground">{formatMinor(booking.total_minor, booking.currency)}</span>
-                <span className="text-muted-foreground">{formatDateTime(booking.created_at)}</span>
-                <span className="ml-auto">
-                  <Btn onClick={() => setOpenId(openId === booking.id ? null : booking.id)}>
-                    {openId === booking.id ? "Yopish" : "Ochish"}
-                  </Btn>
-                </span>
-              </div>
-              {openId === booking.id ? <BookingDetail booking={booking} caps={caps} onDone={bookings.reload} /> : null}
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-x-auto rounded-[12px] border border-border bg-card shadow-sm">
+          <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3 font-semibold">{t("admin.mk.id")}</th>
+                <th className="px-3 py-3 font-semibold">{t("admin.mk.service")}</th>
+                <th className="px-3 py-3 font-semibold">{t("admin.trust.colServiceStatus")}</th>
+                <th className="px-3 py-3 font-semibold">{t("admin.trust.colCommission")}</th>
+                <th className="px-3 py-3 font-semibold">{t("common.total")}</th>
+                <th className="px-3 py-3 font-semibold">{t("admin.trust.colTime")}</th>
+                <th className="px-3 py-3 font-semibold" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-muted">
+              {rows.map((booking) => (
+                <BookingRow
+                  key={booking.id}
+                  booking={booking}
+                  queue={queue}
+                  open={openId === booking.id}
+                  onToggle={() => setOpenId(openId === booking.id ? null : booking.id)}
+                  caps={caps}
+                  onDone={bookings.reload}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
 
+function BookingRow(props: {
+  booking: AdminBookingDTO;
+  queue: AdminBookingQueue;
+  open: boolean;
+  onToggle: () => void;
+  caps: CapabilitiesDTO | null;
+  onDone: () => void;
+}) {
+  const t = useT();
+  const { booking } = props;
+  return (
+    <>
+      <tr className="hover:bg-slate-50">
+        <td className="px-3 py-2 font-mono text-xs text-secondary-foreground">{booking.id}</td>
+        <td className="px-3 py-2 text-secondary-foreground">{serviceLabel(booking.service_type)}</td>
+        <td className="px-3 py-2">
+          <Badge tone={SERVICE_STATUS_TONE[booking.service_status] ?? "gray"}>{serviceStatusLabel(booking.service_status)}</Badge>
+        </td>
+        <td className="px-3 py-2">
+          <Badge tone={COMMISSION_TONE[booking.commission_status] ?? "gray"}>{commissionLabel(booking.commission_status)}</Badge>
+        </td>
+        <td className="px-3 py-2 font-semibold text-foreground">{formatMinor(booking.total_minor, booking.currency)}</td>
+        <td className="px-3 py-2 text-muted-foreground">{formatDateTime(booking.created_at)}</td>
+        <td className="px-3 py-2 text-right">
+          <Btn onClick={props.onToggle}>{props.open ? t("common.close") : t("admin.mk.open")}</Btn>
+        </td>
+      </tr>
+      {props.open ? (
+        <tr className="bg-slate-50/60">
+          <td colSpan={7} className="px-3 py-3">
+            <BookingDetail
+              booking={booking}
+              caps={props.caps}
+              onDone={props.onDone}
+              preferCommand={props.queue === "finance_review" ? "finalize_fee" : undefined}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
 // --- reports and fraud signals (S12, S12b) -----------------------------------------------------------------------
 
-const REVIEW_STATUS_LABEL: Record<string, string> = {
-  open: "Ochiq",
-  under_review: "Ko'rikda",
-  dismissed: "Rad etilgan",
-  actioned: "Chora ko'rilgan",
-  confirmed: "Tasdiqlangan",
+const REVIEW_STATUS_KEY: Record<string, MessageKey> = {
+  open: "admin.mk.open_",
+  under_review: "admin.mk.underReview",
+  dismissed: "status.rejected",
+  actioned: "admin.mk.actioned",
+  confirmed: "status.approved",
 };
 
-const REPORT_REASON_LABEL: Record<string, string> = {
-  off_platform_contact: "Platformadan tashqari aloqa",
-  fraud_suspicion: "Firibgarlik shubhasi",
-  unsafe_behaviour: "Xavfli xatti-harakat",
-  no_show: "Kelmadi",
-  price_pressure: "Narx bosimi",
-  prohibited_item: "Taqiqlangan buyum",
-  harassment: "Bezovta qilish",
-  other: "Boshqa",
+const REVIEW_STATUS_TONE: Record<string, BadgeTone> = {
+  open: "warn",
+  under_review: "blue",
+  dismissed: "gray",
+  actioned: "err",
+  confirmed: "err",
 };
 
-const FRAUD_TYPE_LABEL: Record<string, string> = {
-  shared_device_accounts: "Bir qurilmada bir nechta akkaunt",
-  self_dealing_device: "O'zi bilan bitim (bir qurilma)",
-  repeated_pair_bookings: "Bir juftlikning takroriy bronlari",
-  // Q149: the server saw spoofing-like points (mock flag, impossible jumps, 0 m accuracy, speed contradicting the
-  // movement). A browser cannot prove spoofing - this is a reason to look at the trip, not a finding.
-  suspicious_location: "Shubhali joylashuv nuqtalari (soxta GPS belgilari)",
-};
+function reviewStatusLabel(status: string): string {
+  const key = REVIEW_STATUS_KEY[status];
+  return key ? translate(key) : status;
+}
 
-function StatusFilter(props: { value: string; onChange: (value: string) => void; options: string[] }) {
-  return (
-    <select aria-label="Holat" value={props.value} onChange={(event) => props.onChange(event.target.value)} className={INPUT}>
-      <option value="">Barchasi</option>
-      {props.options.map((value) => (
-        <option key={value} value={value}>
-          {REVIEW_STATUS_LABEL[value] ?? value}
-        </option>
-      ))}
-    </select>
-  );
+function reportReasonLabel(code: string): string {
+  return translateDynamic(`admin.trust.reason.${code}`) ?? code;
+}
+
+function fraudTypeLabel(type: string): string {
+  return translateDynamic(`admin.trust.fraud.${type}`) ?? type;
 }
 
 function ReportItem({ report, canReview, onDone, onStrikes }: {
@@ -672,16 +854,17 @@ function ReportItem({ report, canReview, onDone, onStrikes }: {
   onDone: () => void;
   onStrikes?: (userId: string) => void;
 }) {
+  const t = useT();
   const [note, setNote] = useState("");
   const terminal = report.status === "dismissed" || report.status === "actioned";
 
-  function action(status: "under_review" | "dismissed" | "actioned", label: string, tone: Tone) {
+  function action(status: "under_review" | "dismissed" | "actioned", label: string, tone: BtnTone) {
     return (
       <ConfirmButton
         key={status}
         label={label}
         tone={tone}
-        question={`Shikoyat holati «${REVIEW_STATUS_LABEL[status]}» bo'ladi. Hech bir akkaunt o'zgarmaydi. Davom etasizmi?`}
+        question={t("admin.trust.reportConfirm", { status: reviewStatusLabel(status) })}
         onConfirm={async (key) => {
           await reviewReport(report.id, { expected_version: report.version, status, note: note.trim() || null }, key);
           setNote("");
@@ -692,29 +875,34 @@ function ReportItem({ report, canReview, onDone, onStrikes }: {
   }
 
   return (
-    <li className="grid gap-2 rounded-[12px] border border-border bg-card p-3 text-sm shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs text-secondary-foreground">{report.id}</span>
-        <StatusChip>{REVIEW_STATUS_LABEL[report.status] ?? report.status}</StatusChip>
-        <span className="font-semibold text-foreground">{REPORT_REASON_LABEL[report.reason_code] ?? report.reason_code}</span>
-        <span className="text-muted-foreground">
-          {report.subject_type}: <span className="font-mono text-xs">{report.subject_id}</span>
-        </span>
-        <span className="text-muted-foreground">{formatDateTime(report.created_at)}</span>
-        {report.subject_type === "user" && onStrikes ? (
-          <Btn onClick={() => onStrikes(report.subject_id)}>Strike'lar</Btn>
-        ) : null}
+    <li className="grid content-start gap-2 rounded-[12px] border border-border bg-card p-3 text-sm shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 font-semibold text-foreground">
+          <span className="font-mono text-xs text-secondary-foreground">{report.id}</span> · {reportReasonLabel(report.reason_code)}
+        </p>
+        <Badge tone={REVIEW_STATUS_TONE[report.status] ?? "gray"}>{reviewStatusLabel(report.status)}</Badge>
       </div>
+      <p className="text-xs text-muted-foreground">
+        {t("admin.trust.reportMeta", {
+          object: `${translateDynamic(`admin.trust.subject.${report.subject_type}`) ?? report.subject_type} ${report.subject_id}`,
+          time: formatDateTime(report.created_at),
+        })}
+      </p>
       {report.details ? <p className="text-secondary-foreground">{report.details}</p> : null}
+      {report.subject_type === "user" && onStrikes ? (
+        <div>
+          <Btn onClick={() => onStrikes(report.subject_id)}>{t("admin.trust.tab.strikes")}</Btn>
+        </div>
+      ) : null}
       {canReview && !terminal ? (
         <div className="grid gap-2">
-          <Field label="Izoh (ixtiyoriy)">
-            <textarea aria-label="Izoh" value={note} onChange={(event) => setNote(event.target.value)} className={TEXTAREA} />
+          <Field label={t("admin.trust.noteOptional")}>
+            <textarea aria-label={t("listingOwner.commentLabel")} value={note} onChange={(event) => setNote(event.target.value)} className={TEXTAREA} />
           </Field>
           <div className="flex flex-wrap gap-2">
-            {report.status === "open" ? action("under_review", "Ko'rikka olish", "neutral") : null}
-            {action("dismissed", "Rad etish", "neutral")}
-            {action("actioned", "Chora ko'rildi", "primary")}
+            {report.status === "open" ? action("under_review", t("admin.mk.takeReview"), "soft") : null}
+            {action("dismissed", t("admin.mk.reject"), "neutral")}
+            {action("actioned", t("admin.trust.actioned"), "danger")}
           </div>
         </div>
       ) : null}
@@ -722,26 +910,39 @@ function ReportItem({ report, canReview, onDone, onStrikes }: {
   );
 }
 
+function StatusChips(props: { value: string; onChange: (value: string) => void; options: string[] }) {
+  const t = useT();
+  return (
+    <Chips
+      label={t("admin.mk.status")}
+      value={props.value}
+      onChange={props.onChange}
+      items={props.options.map((value) => ({ value, label: reviewStatusLabel(value) }))}
+    />
+  );
+}
+
 function ReportsTab({ caps, onStrikes }: { caps: CapabilitiesDTO | null; onStrikes: (userId: string) => void }) {
+  const t = useT();
   const [status, setStatus] = useState("open");
   const reports = useLoader<ReportDTO[]>(() => listReports({ status: status || undefined, limit: 50 }), [status]);
   const canReview = has(caps, "ops.trust_review");
   return (
     <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">Shikoyat qarori faqat qayd qilinadi: bron yoki reyting o'zgarmaydi.</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusFilter value={status} onChange={setStatus} options={["open", "under_review", "dismissed", "actioned"]} />
+      <Note>{t("admin.trust.reportsNote")}</Note>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StatusChips value={status} onChange={setStatus} options={["open", "under_review", "dismissed", "actioned"]} />
         <Btn onClick={reports.reload}>
-          <RefreshCw size={14} /> Yangilash
+          <RefreshCw size={14} /> {t("support.refresh")}
         </Btn>
       </div>
       <ErrorLine error={reports.error} />
       {reports.busy ? (
         <Spinner />
       ) : (reports.data ?? []).length === 0 ? (
-        <Empty>Shikoyat yo'q</Empty>
+        <Empty>{t("admin.trust.noReports")}</Empty>
       ) : (
-        <ul className="grid gap-2">
+        <ul className="grid gap-3 lg:grid-cols-2">
           {(reports.data ?? []).map((report) => (
             <ReportItem key={report.id} report={report} canReview={canReview} onDone={reports.reload} onStrikes={onStrikes} />
           ))}
@@ -757,16 +958,17 @@ function FraudItem({ signal, canReview, onDone, onStrikes }: {
   onDone: () => void;
   onStrikes: (userId: string) => void;
 }) {
+  const t = useT();
   const [note, setNote] = useState("");
   const terminal = signal.status === "dismissed" || signal.status === "confirmed";
 
-  function action(status: "under_review" | "dismissed" | "confirmed", label: string, tone: Tone) {
+  function action(status: "under_review" | "dismissed" | "confirmed", label: string, tone: BtnTone) {
     return (
       <ConfirmButton
         key={status}
         label={label}
         tone={tone}
-        question={`Signal holati «${REVIEW_STATUS_LABEL[status]}» bo'ladi. Bu hech kimni avtomatik bloklamaydi. Davom etasizmi?`}
+        question={t("admin.trust.fraudConfirm", { status: reviewStatusLabel(status) })}
         onConfirm={async (key) => {
           await reviewFraudSignal(signal.id, { expected_version: signal.version, status, note: note.trim() || null }, key);
           setNote("");
@@ -777,25 +979,28 @@ function FraudItem({ signal, canReview, onDone, onStrikes }: {
   }
 
   return (
-    <li className="grid gap-2 rounded-[12px] border border-border bg-card p-3 text-sm shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs text-secondary-foreground">{signal.id}</span>
-        <StatusChip>{REVIEW_STATUS_LABEL[signal.status] ?? signal.status}</StatusChip>
-        <span className="font-semibold text-foreground">{FRAUD_TYPE_LABEL[signal.signal_type] ?? signal.signal_type}</span>
-        <span className="font-mono text-xs text-muted-foreground">{signal.subject_user_id}</span>
-        <span className="text-muted-foreground">{formatDateTime(signal.detected_at)}</span>
-        <Btn onClick={() => onStrikes(signal.subject_user_id)}>Strike'lar</Btn>
+    <li className="grid content-start gap-2 rounded-[12px] border border-border bg-card p-3 text-sm shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 font-semibold text-foreground">{fraudTypeLabel(signal.signal_type)}</p>
+        <Badge tone={REVIEW_STATUS_TONE[signal.status] ?? "gray"}>{reviewStatusLabel(signal.status)}</Badge>
       </div>
-      <p className="text-xs text-muted-foreground">Dalil: {evidenceText(signal.evidence)}</p>
+      <p className="text-xs text-muted-foreground">
+        <span className="font-mono">{signal.id}</span> · <span className="font-mono">{signal.subject_user_id}</span> ·{" "}
+        {formatDateTime(signal.detected_at)}
+      </p>
+      <p className="text-xs text-muted-foreground">{t("admin.trust.fraudEvidence", { refs: evidenceText(signal.evidence) })}</p>
+      <div>
+        <Btn onClick={() => onStrikes(signal.subject_user_id)}>{t("admin.trust.tab.strikes")}</Btn>
+      </div>
       {canReview && !terminal ? (
         <div className="grid gap-2">
-          <Field label="Izoh (ixtiyoriy)">
-            <textarea aria-label="Izoh" value={note} onChange={(event) => setNote(event.target.value)} className={TEXTAREA} />
+          <Field label={t("admin.trust.noteOptional")}>
+            <textarea aria-label={t("listingOwner.commentLabel")} value={note} onChange={(event) => setNote(event.target.value)} className={TEXTAREA} />
           </Field>
           <div className="flex flex-wrap gap-2">
-            {signal.status === "open" ? action("under_review", "Ko'rikka olish", "neutral") : null}
-            {action("dismissed", "Asossiz", "neutral")}
-            {action("confirmed", "Tasdiqlash", "danger")}
+            {signal.status === "open" ? action("under_review", t("admin.mk.takeReview"), "soft") : null}
+            {action("dismissed", t("admin.trust.unfounded"), "neutral")}
+            {action("confirmed", t("common.confirm"), "danger")}
           </div>
         </div>
       ) : null}
@@ -804,27 +1009,26 @@ function FraudItem({ signal, canReview, onDone, onStrikes }: {
 }
 
 function FraudTab({ caps, onStrikes }: { caps: CapabilitiesDTO | null; onStrikes: (userId: string) => void }) {
+  const t = useT();
   const [status, setStatus] = useState("open");
   const signals = useLoader<FraudSignalDTO[]>(() => listFraudSignals({ status: status || undefined, limit: 50 }), [status]);
   const canReview = has(caps, "ops.trust_review");
   return (
     <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">
-        Signal — odam uchun savol, hukm emas: hech bir signal hech kimni bloklamagan, undirmagan yoki pastga tushirmagan.
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusFilter value={status} onChange={setStatus} options={["open", "under_review", "dismissed", "confirmed"]} />
+      <Note tone="warn">{t("admin.trust.fraudNote")}</Note>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StatusChips value={status} onChange={setStatus} options={["open", "under_review", "dismissed", "confirmed"]} />
         <Btn onClick={signals.reload}>
-          <RefreshCw size={14} /> Yangilash
+          <RefreshCw size={14} /> {t("support.refresh")}
         </Btn>
       </div>
       <ErrorLine error={signals.error} />
       {signals.busy ? (
         <Spinner />
       ) : (signals.data ?? []).length === 0 ? (
-        <Empty>Signal yo'q</Empty>
+        <Empty>{t("admin.trust.noSignals")}</Empty>
       ) : (
-        <ul className="grid gap-2">
+        <ul className="grid gap-3 lg:grid-cols-2">
           {(signals.data ?? []).map((signal) => (
             <FraudItem key={signal.id} signal={signal} canReview={canReview} onDone={signals.reload} onStrikes={onStrikes} />
           ))}
@@ -837,6 +1041,7 @@ function FraudTab({ caps, onStrikes }: { caps: CapabilitiesDTO | null; onStrikes
 // --- strikes (S20, Q45/Q83/Q85) --------------------------------------------------------------------------------
 
 function StrikesTab({ initialUserId }: { initialUserId: string }) {
+  const t = useT();
   const [input, setInput] = useState(initialUserId);
   const [userId, setUserId] = useState(initialUserId);
   const strikes = useLoader<UserStrikesDTO>(() => userStrikes(userId), [userId], Boolean(userId));
@@ -848,15 +1053,20 @@ function StrikesTab({ initialUserId }: { initialUserId: string }) {
 
   return (
     <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">
-        Pilotda jarima yo'q: strike'lar operator navbatiga signal beradi. Chatdagi 6 xonali kodlar strike emas (Q85).
-      </p>
+      <Note>{t("admin.trust.strikesNote")}</Note>
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="Foydalanuvchi ID">
-          <input aria-label="Foydalanuvchi ID" value={input} onChange={(event) => setInput(event.target.value)} className={INPUT} />
-        </Field>
-        <Btn tone="primary" disabled={!input.trim()} onClick={() => setUserId(input.trim())}>
-          Ko'rish
+        <div className="min-w-[260px] flex-1 sm:max-w-sm">
+          <LookupField
+            label={t("admin.mk.user")}
+            ariaLabel={t("admin.trust.userId")}
+            value={input}
+            onChange={setInput}
+            search={lookupUsers}
+            min={SEARCH_MIN.users}
+          />
+        </div>
+        <Btn tone="soft" disabled={!input.trim()} onClick={() => setUserId(input.trim())}>
+          {t("admin.mk.view")}
         </Btn>
       </div>
       <ErrorLine error={strikes.error} />
@@ -865,16 +1075,25 @@ function StrikesTab({ initialUserId }: { initialUserId: string }) {
       ) : strikes.data ? (
         <div className="grid gap-2">
           <p className="text-sm text-foreground">
-            Oxirgi {strikes.data.window_days} kunda: <strong>{strikes.data.strikes_in_window}</strong> ta strike
+            {t("admin.trust.strikesInWindow", { days: strikes.data.window_days, count: strikes.data.strikes_in_window })}
           </p>
           {strikes.data.strikes.length === 0 ? (
-            <Empty>Strike yo'q</Empty>
+            <Empty>{t("admin.trust.noStrikes")}</Empty>
           ) : (
             <ul className="grid gap-1">
               {strikes.data.strikes.map((strike, index) => (
-                <li key={`${strike.occurred_at}-${index}`} className="rounded-[10px] border border-border bg-card px-3 py-2 text-sm">
-                  {formatDateTime(strike.occurred_at)} · {strike.subject_type} · {strike.reason_code}
-                  {strike.categories.length ? ` · ${strike.categories.join(", ")}` : ""}
+                <li
+                  key={`${strike.occurred_at}-${index}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-border bg-card px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="font-medium text-foreground">
+                      {strike.reason_code} · {translateDynamic(`admin.trust.strikeSource.${strike.subject_type}`) ?? strike.subject_type}
+                    </span>
+                    {strike.categories.length ? <span className="text-xs text-muted-foreground"> · {strike.categories.join(", ")}</span> : null}
+                    <span className="block text-xs text-muted-foreground">{formatDateTime(strike.occurred_at)}</span>
+                  </span>
+                  <Badge tone="warn">{t("admin.trust.strike")}</Badge>
                 </li>
               ))}
             </ul>
@@ -888,6 +1107,7 @@ function StrikesTab({ initialUserId }: { initialUserId: string }) {
 // --- chat lookup (N10; proposal thread read-only, Q100) ----------------------------------------------------------
 
 function ChatTab({ caps }: { caps: CapabilitiesDTO | null }) {
+  const t = useT();
   const [kind, setKind] = useState<"booking" | "proposal">("booking");
   const [input, setInput] = useState("");
   const [target, setTarget] = useState<{ kind: "booking" | "proposal"; id: string } | null>(null);
@@ -902,26 +1122,37 @@ function ChatTab({ caps }: { caps: CapabilitiesDTO | null }) {
 
   return (
     <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">
-        Taklif yozishmasi faqat o'qiladi (Q100). Har ko'rish audit jurnaliga yoziladi.
-      </p>
+      <Note>{t("admin.trust.chatNote")}</Note>
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="Yozishma turi">
+        <Field label={t("admin.trust.threadKind")}>
           <select
-            aria-label="Yozishma turi"
+            aria-label={t("admin.trust.threadKind")}
             value={kind}
             onChange={(event) => setKind(event.target.value as "booking" | "proposal")}
             className={INPUT}
           >
-            <option value="booking">Bron chati</option>
-            <option value="proposal">Taklif yozishmasi</option>
+            <option value="booking">{t("admin.trust.bookingChat")}</option>
+            <option value="proposal">{t("admin.trust.proposalThread")}</option>
           </select>
         </Field>
-        <Field label={kind === "booking" ? "Bron ID" : "Taklif oqimi ID"}>
-          <input aria-label="Yozishma ID" value={input} onChange={(event) => setInput(event.target.value)} className={INPUT} />
-        </Field>
-        <Btn tone="primary" disabled={!input.trim()} onClick={() => setTarget({ kind, id: input.trim() })}>
-          Ochish
+        <div className="min-w-[240px] flex-1 sm:max-w-sm">
+          {kind === "booking" ? (
+            <LookupField
+              label={t("admin.mk.booking")}
+              ariaLabel={t("admin.trust.threadId")}
+              value={input}
+              onChange={setInput}
+              search={lookupBookings}
+              min={SEARCH_MIN.bookings}
+            />
+          ) : (
+            <Field label={t("admin.trust.proposalThreadId")}>
+              <input aria-label={t("admin.trust.threadId")} value={input} onChange={(event) => setInput(event.target.value)} className={INPUT} />
+            </Field>
+          )}
+        </div>
+        <Btn tone="soft" disabled={!input.trim()} onClick={() => setTarget({ kind, id: input.trim() })}>
+          {t("admin.mk.open")}
         </Btn>
       </div>
       <ErrorLine error={messages.error} />
@@ -940,14 +1171,12 @@ function ChatTab({ caps }: { caps: CapabilitiesDTO | null }) {
 
 // --- trip tracking (K9, Q86) -------------------------------------------------------------------------------------
 
-const FRESHNESS_LABEL: Record<string, string> = {
-  fresh: "Yangi (≤ 30 s)",
-  delayed: "Kechikmoqda (31–120 s)",
-  lost: "Aloqa uzilgan (> 120 s)",
-  no_data: "Ma'lumot yo'q",
-};
+function freshnessLabel(freshness: string): string {
+  return translateDynamic(`admin.trust.freshness.${freshness}`) ?? freshness;
+}
 
 function TrackingTab() {
+  const t = useT();
   const [input, setInput] = useState("");
   const [tripId, setTripId] = useState("");
   const tracking = useLoader<TripTrackingAdminDTO>(() => adminTripTracking(tripId), [tripId], Boolean(tripId));
@@ -956,53 +1185,57 @@ function TrackingTab() {
 
   return (
     <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">
-        Kuzatuv oynasi yopiq bo'lsa ham oxirgi nuqta xizmat vazifasi uchun ko'rsatiladi; har ko'rish audit jurnaliga
-        yoziladi (Q86).
-      </p>
+      <Note>{t("admin.trust.trackingNote")}</Note>
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="Safar ID">
-          <input aria-label="Safar ID" value={input} onChange={(event) => setInput(event.target.value)} className={INPUT} />
-        </Field>
-        <Btn tone="primary" disabled={!input.trim()} onClick={() => setTripId(input.trim())}>
-          Ko'rish
+        <div className="min-w-[240px] flex-1 sm:max-w-sm">
+          <LookupField
+            label={t("admin.mk.trip")}
+            ariaLabel={t("admin.trust.tripId")}
+            value={input}
+            onChange={setInput}
+            search={lookupTrips}
+            min={SEARCH_MIN.trips}
+          />
+        </div>
+        <Btn tone="soft" disabled={!input.trim()} onClick={() => setTripId(input.trim())}>
+          {t("admin.mk.view")}
         </Btn>
       </div>
       <ErrorLine error={tracking.error} />
       {!tripId ? null : tracking.busy ? (
         <Spinner />
       ) : data ? (
-        <dl className="grid gap-2 rounded-[12px] border border-border bg-card p-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-xs text-muted-foreground">Oxirgi ishonchli nuqta yangiligi</dt>
-            <dd className="font-semibold text-foreground">{FRESHNESS_LABEL[data.freshness] ?? data.freshness}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">Kuzatuv sessiyasi</dt>
-            <dd className="text-secondary-foreground">
-              {data.active_session ? `ochiq (${formatDateTime(data.session_started_at)} dan)` : "yopiq"}
-            </dd>
-          </div>
-          {point ? (
-            <>
-              <div>
-                <dt className="text-xs text-muted-foreground">Koordinata</dt>
-                <dd className="font-mono text-xs text-secondary-foreground">
-                  {point.lat.toFixed(5)}, {point.lng.toFixed(5)} (±{point.accuracy_m} m
-                  {point.low_accuracy ? ", past aniqlik" : ""})
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted-foreground">Olingan / qabul qilingan</dt>
-                <dd className="text-secondary-foreground">
-                  {formatDateTime(point.captured_at)} / {formatDateTime(point.received_at)}
-                </dd>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">Ishonchli nuqta yo'q.</p>
-          )}
-        </dl>
+        <>
+          <Kv
+            cols={2}
+            rows={[
+              [t("admin.trust.freshness"), <strong key="f">{freshnessLabel(data.freshness)}</strong>],
+              [
+                t("admin.trust.session"),
+                data.active_session
+                  ? t("admin.trust.sessionOpenSince", { time: formatDateTime(data.session_started_at) })
+                  : t("admin.trust.sessionClosed"),
+              ],
+              [
+                t("admin.trust.coordinate"),
+                point ? (
+                  <span key="c" className="font-mono text-xs">
+                    {point.lat.toFixed(5)}, {point.lng.toFixed(5)} · ±{point.accuracy_m} m
+                    {point.low_accuracy ? ` · ${t("admin.trust.lowAccuracy")}` : ""}
+                  </span>
+                ) : (
+                  t("admin.trust.noPoint")
+                ),
+              ],
+              [
+                t("admin.trust.capturedReceived"),
+                point ? `${formatDateTime(point.captured_at)} / ${formatDateTime(point.received_at)}` : "—",
+              ],
+            ]}
+          />
+          {point ? <VehicleMap point={point} live={data.freshness === "fresh"} /> : null}
+          <p className="text-xs text-muted-foreground">{t("admin.trust.trailBlocked")}</p>
+        </>
       ) : null}
     </div>
   );
@@ -1072,7 +1305,44 @@ export function onBehalfBody(form: typeof EMPTY_FORM): ListingOnBehalfBody | nul
   };
 }
 
+/** A stop field: search by name (`GET /stops/search`, 5g.2) or type the `stp_...` id directly. */
+function StopField(props: { label: string; ariaLabel: string; value: string; onChange: (id: string) => void }) {
+  const t = useT();
+  const [picked, setPicked] = useState<StopDTO | null>(null);
+  return (
+    <div className="grid gap-1">
+      <Field label={props.label}>
+        <input
+          aria-label={props.ariaLabel}
+          value={props.value}
+          onChange={(event) => {
+            setPicked(null);
+            props.onChange(event.target.value);
+          }}
+          placeholder="stp_..."
+          className={INPUT}
+        />
+      </Field>
+      {picked ? (
+        <p className="text-xs text-muted-foreground">{t("admin.trust.stopPicked", { name: picked.name_uz })}</p>
+      ) : (
+        <div className="rounded-[10px] border border-dashed border-border p-2">
+          <StopSearch
+            label={t("admin.trust.stopSearch")}
+            limit={8}
+            onSelect={(stop) => {
+              setPicked(stop);
+              props.onChange(stop.id);
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
+  const t = useT();
   const [form, setForm] = useState(EMPTY_FORM);
   const [categories, setCategories] = useState<ParcelCategoryDTO[]>([]);
   useEffect(() => {
@@ -1084,108 +1354,103 @@ function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
     setForm((current) => ({ ...current, [key]: value }));
 
   if (!has(caps, "ops.booking_command")) {
-    return <Empty>Boshqa foydalanuvchi nomidan e'lon yaratish sizning rolingizda yo'q.</Empty>;
+    return <Empty>{t("admin.trust.onBehalfNoRole")}</Empty>;
   }
 
   return (
     <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">
-        E'lon egasi — haqiqiy foydalanuvchi; siz audit'da «operator yaratgan» deb yozilasiz. Egasining roziligi
-        (qo'ng'iroq yoki murojaat raqami) majburiy (§20.2).
-      </p>
+      <Note tone="info">{t("admin.trust.onBehalfNote")}</Note>
       {created ? (
-        <div className="rounded-[12px] border border-success/30 bg-success/10 px-3 py-2 text-sm text-foreground">
-          E'lon yaratildi: <span className="font-mono">{created.listing.id}</span> ({created.listing.status})
+        <Note tone="ok">
+          {t("admin.trust.listingCreated", { id: created.listing.id, status: created.listing.status })}
           {created.warnings.length ? (
-            <p className="mt-1 text-xs">{created.warnings.map((warning) => warningMessage(warning.code)).join(" · ")}</p>
+            <span className="mt-1 block text-xs">{created.warnings.map((warning) => warningMessage(warning.code)).join(" · ")}</span>
           ) : null}
-        </div>
+        </Note>
       ) : null}
       <div className="grid gap-3 rounded-[12px] border border-border bg-card p-3 sm:grid-cols-2">
-        <Field label="Egasi (foydalanuvchi ID) *">
-          <input aria-label="Egasi" value={form.owner} onChange={(event) => set("owner", event.target.value)} className={INPUT} />
-        </Field>
-        <Field label="Rozilik dalili *" hint="Masalan: murojaat raqami yoki qo'ng'iroq yozuvi; kamida 3 belgi.">
+        <LookupField
+          label={t("admin.trust.owner")}
+          ariaLabel={t("admin.trust.ownerAria")}
+          value={form.owner}
+          onChange={(value) => set("owner", value)}
+          search={lookupUsers}
+          min={SEARCH_MIN.users}
+        />
+        <Field label={t("admin.trust.consent")} hint={t("admin.trust.consentHint")}>
           <input
-            aria-label="Rozilik dalili"
+            aria-label={t("admin.trust.consentAria")}
             required
             value={form.consent}
             onChange={(event) => set("consent", event.target.value)}
             className={INPUT}
           />
         </Field>
-        <Field label="Xizmat">
+        <Field label={t("admin.mk.service")}>
           <select value={form.service} onChange={(event) => set("service", event.target.value as "passenger" | "parcel")} className={INPUT}>
-            <option value="passenger">Yo'lovchi</option>
-            <option value="parcel">Pochta</option>
+            <option value="passenger">{t("admin.mk.passenger")}</option>
+            <option value="parcel">{t("admin.mk.parcel")}</option>
           </select>
         </Field>
-        <Field label="Jo'nash bekati ID *">
-          <input aria-label="Jo'nash bekati" value={form.originStop} onChange={(event) => set("originStop", event.target.value)} className={INPUT} />
+        {form.service === "parcel" ? (
+          <Field label={t("admin.trust.sizeCategory")} hint={t("admin.trust.sizeCategoryHint")}>
+            <select aria-label={t("admin.trust.sizeCategoryAria")} value={form.categoryId} onChange={(event) => set("categoryId", event.target.value)} className={INPUT}>
+              <option value="">{t("admin.trust.choose")}</option>
+              {categories.map((item) => (
+                <option key={item.id} value={item.id}>{item.name_uz}</option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <div />
+        )}
+        <StopField label={t("admin.trust.originStop")} ariaLabel={t("admin.trust.originStopAria")} value={form.originStop} onChange={(value) => set("originStop", value)} />
+        <StopField label={t("admin.trust.destStop")} ariaLabel={t("admin.trust.destStopAria")} value={form.destinationStop} onChange={(value) => set("destinationStop", value)} />
+        <Field label={t("admin.trust.windowStart")}>
+          <input aria-label={t("admin.trust.windowStartAria")} type="datetime-local" value={form.start} onChange={(event) => set("start", event.target.value)} className={INPUT} />
         </Field>
-        <Field label="Borish bekati ID *">
-          <input
-            aria-label="Borish bekati"
-            value={form.destinationStop}
-            onChange={(event) => set("destinationStop", event.target.value)}
-            className={INPUT}
-          />
-        </Field>
-        <Field label="Jo'nash oynasi boshi (Toshkent) *">
-          <input aria-label="Oyna boshi" type="datetime-local" value={form.start} onChange={(event) => set("start", event.target.value)} className={INPUT} />
-        </Field>
-        <Field label="Jo'nash oynasi oxiri (Toshkent) *">
-          <input aria-label="Oyna oxiri" type="datetime-local" value={form.end} onChange={(event) => set("end", event.target.value)} className={INPUT} />
+        <Field label={t("admin.trust.windowEnd")}>
+          <input aria-label={t("admin.trust.windowEndAria")} type="datetime-local" value={form.end} onChange={(event) => set("end", event.target.value)} className={INPUT} />
         </Field>
         {form.service === "passenger" ? (
           <>
-            <Field label="Narx asosi">
+            <Field label={t("admin.trust.priceBasis")}>
               <select value={form.basis} onChange={(event) => set("basis", event.target.value as "per_seat" | "total")} className={INPUT}>
-                <option value="per_seat">Bir o'rin uchun</option>
-                <option value="total">Jami</option>
+                <option value="per_seat">{t("admin.trust.perSeat")}</option>
+                <option value="total">{t("common.total")}</option>
               </select>
             </Field>
-            <Field label="O'rinlar soni">
-              <input aria-label="O'rinlar" inputMode="numeric" value={form.seats} onChange={(event) => set("seats", event.target.value)} className={INPUT} />
+            <Field label={t("admin.trust.seats")}>
+              <input aria-label={t("admin.trust.seatsAria")} inputMode="numeric" value={form.seats} onChange={(event) => set("seats", event.target.value)} className={INPUT} />
             </Field>
           </>
         ) : (
-          <>
-            <Field label="Jo'natma turi">
-              <select
-                value={form.parcelType}
-                onChange={(event) => set("parcelType", event.target.value as (typeof PARCEL_TYPES)[number])}
-                className={INPUT}
-              >
-                {PARCEL_TYPES.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="O'lcham toifasi *" hint="GET /parcel-categories dagi toifa (pct_...). Raqamli o'lcham kiritilmaydi (Q140).">
-              <select aria-label="O'lcham toifasi" value={form.categoryId} onChange={(event) => set("categoryId", event.target.value)} className={INPUT}>
-                <option value="">Tanlang</option>
-                {categories.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name_uz}</option>
-                ))}
-              </select>
-            </Field>
-          </>
+          <Field label={t("admin.trust.parcelType")}>
+            <select
+              value={form.parcelType}
+              onChange={(event) => set("parcelType", event.target.value as (typeof PARCEL_TYPES)[number])}
+              className={INPUT}
+            >
+              {PARCEL_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {translateDynamic(`admin.trust.parcelTypeValue.${value}`) ?? value}
+                </option>
+              ))}
+            </select>
+          </Field>
         )}
-        <Field label="Narx (so'm) *">
-          <input aria-label="Narx" inputMode="numeric" value={form.price} onChange={(event) => set("price", event.target.value)} className={INPUT} />
+        <Field label={t("admin.trust.priceSoum")}>
+          <input aria-label={t("admin.trust.priceAria")} inputMode="numeric" value={form.price} onChange={(event) => set("price", event.target.value)} className={INPUT} />
         </Field>
-        <Field label="Izoh" hint="Telefon va boshqa aloqa ma'lumotlari server tomonidan maskalanadi (Q43).">
+        <Field label={t("listingOwner.commentLabel")} hint={t("admin.trust.commentMasked")}>
           <input value={form.comment} onChange={(event) => set("comment", event.target.value)} className={INPUT} />
         </Field>
       </div>
       <ConfirmButton
-        label="E'lon yaratish"
+        label={t("admin.trust.createListing")}
         tone="primary"
         disabled={!body}
-        question="E'lon egasi nomidan yaratiladi va audit jurnaliga yoziladi. Egasining roziligi olinganini tasdiqlaysizmi?"
+        question={t("admin.trust.createListingConfirm")}
         onConfirm={async (key) => {
           if (!body) return;
           const result = await createListingOnBehalf(body, key);
@@ -1200,9 +1465,12 @@ function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
 // --- the panel ---------------------------------------------------------------------------------------------------
 
 export function AdminTrustPanel({ initialTab = "bookings" }: { initialTab?: TrustTab } = {}) {
+  const t = useT();
   const [tab, setTab] = useState<TrustTab>(initialTab);
   const [strikeUser, setStrikeUser] = useState("");
   const caps = useLoader<CapabilitiesDTO>(() => capabilities(), []);
+  const tabs = caps.data ? visibleTrustTabs(caps.data) : [];
+  const current = tabs.includes(tab) ? tab : tabs[0];
 
   function openStrikes(userId: string) {
     setStrikeUser(userId);
@@ -1213,24 +1481,22 @@ export function AdminTrustPanel({ initialTab = "bookings" }: { initialTab?: Trus
     <section className="grid gap-4">
       <header className="grid gap-3">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Ishonch va operatsiyalar</h2>
-          <p className="text-sm text-muted-foreground">
-            Tugmalar faqat rolingiz ruxsat bergan amallar uchun ko'rinadi; server rad etsa, sababi ko'rsatiladi.
-          </p>
+          <h2 className="text-lg font-bold text-foreground">{t("admin.trust.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("admin.trust.subtitle")}</p>
         </div>
         <nav className="flex flex-wrap gap-2" role="tablist">
-          {TABS.map(([value, label]) => (
+          {TABS.filter(([value]) => tabs.includes(value)).map(([value, key]) => (
             <button
               key={value}
               type="button"
               role="tab"
-              aria-selected={tab === value}
+              aria-selected={current === value}
               onClick={() => setTab(value)}
               className={`el-press inline-flex h-9 items-center rounded-[10px] border px-3 text-sm font-semibold ${
-                tab === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-secondary-foreground"
+                current === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-secondary-foreground"
               }`}
             >
-              {label}
+              {t(key)}
             </button>
           ))}
         </nav>
@@ -1238,15 +1504,17 @@ export function AdminTrustPanel({ initialTab = "bookings" }: { initialTab?: Trus
       <ErrorLine error={caps.error} />
       {caps.busy ? (
         <Spinner />
+      ) : !current ? (
+        caps.error ? null : <Empty>{t("admin.trust.noTabs")}</Empty>
       ) : (
         <>
-          {tab === "bookings" ? <BookingsTab caps={caps.data} /> : null}
-          {tab === "reports" ? <ReportsTab caps={caps.data} onStrikes={openStrikes} /> : null}
-          {tab === "fraud" ? <FraudTab caps={caps.data} onStrikes={openStrikes} /> : null}
-          {tab === "strikes" ? <StrikesTab initialUserId={strikeUser} /> : null}
-          {tab === "chat" ? <ChatTab caps={caps.data} /> : null}
-          {tab === "tracking" ? <TrackingTab /> : null}
-          {tab === "on_behalf" ? <OnBehalfTab caps={caps.data} /> : null}
+          {current === "bookings" ? <BookingsTab caps={caps.data} /> : null}
+          {current === "reports" ? <ReportsTab caps={caps.data} onStrikes={openStrikes} /> : null}
+          {current === "fraud" ? <FraudTab caps={caps.data} onStrikes={openStrikes} /> : null}
+          {current === "strikes" ? <StrikesTab initialUserId={strikeUser} /> : null}
+          {current === "chat" ? <ChatTab caps={caps.data} /> : null}
+          {current === "tracking" ? <TrackingTab /> : null}
+          {current === "on_behalf" ? <OnBehalfTab caps={caps.data} /> : null}
         </>
       )}
     </section>

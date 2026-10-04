@@ -105,6 +105,41 @@ describe("flags", () => {
   });
 });
 
+describe("flag gating (Q5, Q138)", () => {
+  const ADMIN_CAPS = ["ops.view", "ops.feature_flag_manage", "ops.corridor_manage", "ops.booking_command"];
+  const passengerRow = {
+    id: "ffv_p", flag_key: "passenger_enabled", scope_type: "country", scope_ref: "UZ", enabled: false, version: 2, updated_at: "2026-09-24T00:00:00Z",
+  };
+
+  it("never offers an admin to turn passenger service on; super_admin may", async () => {
+    caps.capabilities.mockResolvedValue({ capabilities: ADMIN_CAPS, roles: ["admin"] });
+    api.adminFeatureFlags.mockResolvedValue([passengerRow]);
+    const { unmount } = render(<AdminPlatformPanel />);
+    const section = await screen.findByRole("region", { name: "Yo'lovchi xizmati" });
+    expect(within(section).queryByRole("button", { name: "Yoqish…" })).toBeNull();
+    expect(section).toHaveTextContent(/faqat super_admin/);
+    // an admin may still add a scope, but only to switch it off
+    fireEvent.click(within(section).getByRole("button", { name: "Yangi doira qo'shish…" }));
+    const options = within(within(section).getByLabelText("Yangi qiymat")).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["O'chiq"]);
+    unmount();
+
+    caps.capabilities.mockResolvedValue({ capabilities: [...ADMIN_CAPS, "platform.policy_manage"], roles: ["super_admin"] });
+    render(<AdminPlatformPanel />);
+    const asSuper = await screen.findByRole("region", { name: "Yo'lovchi xizmati" });
+    expect(within(asSuper).getByRole("button", { name: "Yoqish…" })).toBeInTheDocument();
+  });
+
+  it("shows driver_listing_enabled as archived with no change control (Q138)", async () => {
+    render(<AdminPlatformPanel />);
+    const section = await screen.findByRole("region", { name: "Haydovchi e'lonlari" });
+    expect(section).toHaveTextContent("eskirgan");
+    expect(section).toHaveTextContent(/Q138/);
+    expect(within(section).queryByRole("button", { name: "Yangi doira qo'shish…" })).toBeNull();
+    expect(within(section).queryByRole("button", { name: "Yoqish…" })).toBeNull();
+  });
+});
+
 describe("corridors", () => {
   it("lists Q47 violations and patches a corridor only after confirmation", async () => {
     api.adminQ47Violations.mockResolvedValue([
@@ -168,7 +203,7 @@ describe("parcel policy", () => {
     ]);
     api.adminConfirmParcelPolicy.mockResolvedValue({});
     render(<AdminPlatformPanel initialTab="policy" />);
-    expect(await screen.findByText(/Tasdiqlagan: usr_b/)).toBeInTheDocument();
+    expect(await screen.findByText(/tasdiqlagan: usr_b/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tasdiqlash…" }));
     expect(api.adminConfirmParcelPolicy).not.toHaveBeenCalled();
     confirm();

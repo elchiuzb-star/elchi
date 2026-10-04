@@ -35,18 +35,42 @@ vi.mock("../api/v2/ops.api", async (importOriginal) => {
     listTrustReviews: vi.fn(),
     ticketCommand: vi.fn(),
     trustReviewCommand: vi.fn(),
+    opsQueue: vi.fn(),
+    listDisputes: vi.fn(),
+    disputeCommand: vi.fn(),
+    listCorridors: vi.fn(async () => [{ id: "cor_1", name: "Toshkent – Samarqand" }]),
   };
 });
 
+vi.mock("../api/v2/admin-market.api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/v2/admin-market.api")>();
+  return {
+    ...actual,
+    opsQueueSummary: vi.fn(),
+    staffBooking: vi.fn(),
+    searchAdminUsers: vi.fn(),
+    searchAdminBookings: vi.fn(),
+    searchAdminTrips: vi.fn(),
+  };
+});
+
+vi.mock("../api/v2/mfa.api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/v2/mfa.api")>();
+  return { ...actual, stepUp: vi.fn() };
+});
+
 import * as trust from "../api/v2/admin-trust.api";
+import * as market from "../api/v2/admin-market.api";
+import * as mfa from "../api/v2/mfa.api";
 import * as ops from "../api/v2/ops.api";
-import { AdminSupportPanel } from "./AdminOpsPanel";
+import { AdminDisputesV2Panel, AdminOpsQueuesPanel, AdminSupportPanel, queueObjectLabel, visibleOpsQueues } from "./AdminOpsPanel";
 import { AdminTrustPanel, applicableCommands, onBehalfBody, tashkentIso } from "./AdminTrustPanel";
 
 const m = <T,>(fn: T) => fn as unknown as ReturnType<typeof vi.fn>;
 
 const OPERATOR = ["ops.view", "ops.booking_command", "ops.dispute_resolve", "ops.trust_review"];
 const ADMIN = [...OPERATOR, "ops.booking_cancel", "ops.dispute_decide"];
+const FINANCE = ["ops.view", "finance.fee_finalize", "finance.reports", "finance.topup_approve"];
 
 function caps(list: string[]) {
   m(ops.capabilities).mockResolvedValue({ roles: [], capabilities: list, driver_eligibility: null });
@@ -98,6 +122,10 @@ beforeEach(() => {
   m(trust.listFraudSignals).mockResolvedValue([]);
   m(trust.adminBookingMessages).mockResolvedValue([]);
   m(trust.adminProposalMessages).mockResolvedValue([]);
+  m(market.searchAdminUsers).mockResolvedValue([]);
+  m(market.searchAdminBookings).mockResolvedValue([]);
+  m(market.searchAdminTrips).mockResolvedValue([]);
+  m(market.opsQueueSummary).mockRejectedValue(new ApiError(404, { code: "NOT_FOUND", message: "no" }));
 });
 
 describe("bookings (B12/B13)", () => {
@@ -108,8 +136,9 @@ describe("bookings (B12/B13)", () => {
     expect(await screen.findByText("Bu navbatda bron yo'q")).toBeInTheDocument();
 
     m(trust.listAdminBookings).mockRejectedValueOnce(new ApiError(403, { code: "FORBIDDEN", message: "Ruxsat yo'q" }));
-    fireEvent.change(screen.getByLabelText("Navbat"), { target: { value: "finance_review" } });
+    fireEvent.click(screen.getByRole("button", { name: "Moliya ko'rigi" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(m(trust.listAdminBookings)).toHaveBeenLastCalledWith({ queue: "finance_review", limit: 50 });
   });
 
   it("hides cancel and fee finalisation from an operator (Q10, Q17) and confirms before sending", async () => {
@@ -216,10 +245,12 @@ describe("reports and fraud signals", () => {
     expect(typeof m(trust.reviewFraudSignal).mock.calls[0][2]).toBe("string");
     unmount();
 
+    // Without ops.trust_review (e.g. finance) the fraud tab is not offered at all (DESIGN-ADMIN-DIFF §2).
     caps(["ops.view"]);
     render(<AdminTrustPanel initialTab="fraud" />);
-    await screen.findByText("frd_1");
-    expect(screen.queryByRole("button", { name: "Tasdiqlash" })).toBeNull();
+    expect(await screen.findByRole("tab", { name: "Safar kuzatuvi" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Firibgarlik signallari" })).toBeNull();
+    expect(screen.queryByText("frd_1")).toBeNull();
   });
 });
 
@@ -314,7 +345,9 @@ describe("listing on behalf (O7)", () => {
   it("is not offered without ops.booking_command", async () => {
     caps(["ops.view"]);
     render(<AdminTrustPanel initialTab="on_behalf" />);
-    expect(await screen.findByText(/rolingizda yo'q/)).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Safar kuzatuvi" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Nomidan e'lon" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "E'lon yaratish" })).toBeNull();
   });
 
   it("builds no body without consent and reads times as Tashkent", () => {
@@ -390,5 +423,153 @@ describe("AdminSupportPanel actions (S17, S19)", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Ko'rish" })[0]);
     expect(screen.queryByRole("button", { name: "Qabul qilish" })).toBeNull();
     expect(screen.getByText(/rolingizda yo'q/)).toBeInTheDocument();
+  });
+});
+
+describe("finance role and MFA step-up (Q17, ADR-0021)", () => {
+  const held = { ...booking, commission_status: "held", no_show_review: null };
+
+  it("shows finance only the bookings and tracking tabs and only the finance-review queue", async () => {
+    caps(FINANCE);
+    m(trust.listAdminBookings).mockResolvedValue([held]);
+    render(<AdminTrustPanel />);
+    expect(await screen.findByRole("tab", { name: "Bronlar" })).toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Bronlar", "Safar kuzatuvi"]);
+    expect(screen.queryByRole("button", { name: "Tasdiq kutilmoqda" })).toBeNull();
+    await waitFor(() => expect(m(trust.listAdminBookings)).toHaveBeenCalledWith({ queue: "finance_review", limit: 50 }));
+    await openBooking();
+    expect(options("Buyruq")).toEqual(["Komissiyani yakunlash"]);
+  });
+
+  it("asks for the authenticator code on step_up_required and replays the same key", async () => {
+    caps(FINANCE);
+    m(trust.listAdminBookings).mockResolvedValue([held]);
+    m(trust.adminBookingCommand)
+      .mockRejectedValueOnce(new ApiError(403, { code: "FORBIDDEN", message: "step up", details: { reason: "step_up_required" } }))
+      .mockResolvedValueOnce({ data: held, warnings: [], meta: null });
+    m(mfa.stepUp).mockResolvedValue({ verified_at: "2026-10-04T10:00:00Z" });
+    render(<AdminTrustPanel />);
+    await openBooking();
+    fireEvent.change(screen.getByLabelText("Sabab"), { target: { value: "Nizo hal qilindi, hold undiriladi" } });
+    fireEvent.click(screen.getByRole("button", { name: "Komissiyani yakunlash" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ha, bajarish" }));
+    const dialog = await screen.findByRole("dialog", { name: "Tasdiqlash kodi kerak" });
+    const submit = within(dialog).getByRole("button", { name: "Tasdiqlash va davom etish" });
+    expect(submit).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "123456" } });
+    fireEvent.click(submit);
+    await waitFor(() => expect(mfa.stepUp).toHaveBeenCalledWith("123456"));
+    await waitFor(() => expect(trust.adminBookingCommand).toHaveBeenCalledTimes(2));
+    const calls = m(trust.adminBookingCommand).mock.calls;
+    expect(calls[0][1]).toBe("finalize_fee");
+    expect(calls[0][2]).toMatchObject({ fee_decision: { mode: "capture" } });
+    expect(calls[1][3]).toBe(calls[0][3]);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Tasdiqlash kodi kerak" })).toBeNull());
+  });
+
+  it("closes quietly when the code prompt is cancelled - nothing is sent again", async () => {
+    caps(FINANCE);
+    m(trust.listAdminBookings).mockResolvedValue([held]);
+    m(trust.adminBookingCommand).mockRejectedValue(
+      new ApiError(403, { code: "FORBIDDEN", message: "step up", details: { reason: "step_up_required" } }),
+    );
+    render(<AdminTrustPanel />);
+    await openBooking();
+    fireEvent.change(screen.getByLabelText("Sabab"), { target: { value: "sabab" } });
+    fireEvent.click(screen.getByRole("button", { name: "Komissiyani yakunlash" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ha, bajarish" }));
+    const dialog = await screen.findByRole("dialog", { name: "Tasdiqlash kodi kerak" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Bekor qilish" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Tasdiqlash kodi kerak" })).toBeNull());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mfa.stepUp).not.toHaveBeenCalled();
+    expect(trust.adminBookingCommand).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("operator queues (§4)", () => {
+  const bookingItem = { queue: "finance_review", item_type: "booking", item_id: "bkg_1", corridor: "cor_1",
+    age_minutes: 70, summary: "parcel delivered x1", service_type: "parcel" };
+  const disputeItem = { queue: "dispute", item_type: "dispute", item_id: "dsp_1", corridor: null, age_minutes: 42,
+    summary: "payment open escalated" };
+
+  it("opens a v2 booking in the drawer instead of routing it to the v1 orders search (4.5)", async () => {
+    caps(ADMIN);
+    m(ops.opsQueue).mockResolvedValue([bookingItem]);
+    m(market.staffBooking).mockResolvedValue(booking);
+    const onOpenItem = vi.fn();
+    render(<AdminOpsQueuesPanel onOpenItem={onOpenItem} />);
+    expect(await screen.findByText("Bron (pochta)")).toBeInTheDocument();
+    expect(screen.getByText("1 soat 10 daq")).toBeInTheDocument();
+    expect(await screen.findByText("Toshkent – Samarqand")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Moliya ko'rigi · 1" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Ochish" }));
+    const drawer = await screen.findByRole("dialog", { name: /bkg_1/ });
+    expect(onOpenItem).not.toHaveBeenCalled();
+    expect(market.staffBooking).toHaveBeenCalledWith("bkg_1");
+    expect(await within(drawer).findByText(/Mijoz A/)).toBeInTheDocument();
+    expect(within(drawer).getByLabelText("Buyruq")).toBeInTheDocument();
+  });
+
+  it("hands a dispute to the shell and shows the server's exact count from /summary", async () => {
+    caps(ADMIN);
+    m(market.opsQueueSummary).mockResolvedValue([
+      { queue: "finance_review", count: 14, capped: false, cap: 200 },
+      { queue: "dispute", count: 200, capped: true, cap: 200 },
+    ]);
+    m(ops.opsQueue).mockImplementation(async (queue: string) => (queue === "dispute" ? [disputeItem] : []));
+    const onOpenItem = vi.fn();
+    render(<AdminOpsQueuesPanel onOpenItem={onOpenItem} />);
+    expect(await screen.findByRole("button", { name: "Moliya ko'rigi · 14" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Nizolar" }));
+    expect(await screen.findByRole("button", { name: "Nizolar · 200+" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Ochish" }));
+    expect(onOpenItem).toHaveBeenCalledWith(disputeItem);
+  });
+
+  it("gives finance the finance-review queue only", () => {
+    expect(visibleOpsQueues({ roles: [], capabilities: FINANCE } as never)).toEqual(["finance_review"]);
+    expect(visibleOpsQueues({ roles: [], capabilities: OPERATOR } as never)).toHaveLength(8);
+    expect(queueObjectLabel({ ...bookingItem, service_type: "passenger" } as never)).toBe("Bron (yo'lovchi)");
+    expect(queueObjectLabel({ ...bookingItem, service_type: undefined, summary: "parcel x1" } as never)).toBe("Bron (pochta)");
+  });
+});
+
+describe("disputes v2 (§8, Q78/Q141)", () => {
+  const dispute = {
+    id: "dsp_1", booking_id: "bkg_1", type: "payment", status: "open", escalated: true, created_at: "2026-09-20T08:00:00Z",
+    escalate_at: "2026-09-21T08:00:00Z", description: "Naqd berilgani bahsli", opened_by_side: "operator", evidence: [], version: 3,
+  };
+
+  it("lets the operator only take a review; the decision is admin+", async () => {
+    caps(OPERATOR);
+    m(ops.listDisputes).mockResolvedValue([dispute]);
+    render(<AdminDisputesV2Panel />);
+    fireEvent.click(await screen.findByRole("button", { name: "Ko'rish" }));
+    expect(screen.getByText(/Q141/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ko'rikka olish" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hal qilish" })).toBeNull();
+  });
+
+  it("asks before resolving and requires the cash outcome on a payment dispute", async () => {
+    caps(ADMIN);
+    m(ops.listDisputes).mockResolvedValue([dispute]);
+    m(ops.disputeCommand).mockResolvedValue({ data: dispute, warnings: [], meta: null });
+    render(<AdminDisputesV2Panel />);
+    expect(await screen.findByText("To'lov")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ko'rish" }));
+    const resolve = screen.getByRole("button", { name: "Hal qilish" });
+    expect(resolve).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Qaror kodi"), { target: { value: "paid_confirmed" } });
+    fireEvent.change(screen.getByLabelText("Naqd natijasi (to'lov nizosida majburiy)"), { target: { value: "paid" } });
+    fireEvent.click(resolve);
+    expect(screen.getByText("Nizo «To'lov tasdiqlandi» bilan hal qilinsinmi?")).toBeInTheDocument();
+    expect(ops.disputeCommand).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Ha, bajarish" }));
+    await waitFor(() =>
+      expect(ops.disputeCommand).toHaveBeenCalledWith("dsp_1", "resolve", expect.objectContaining({
+        expected_version: 3, resolution_code: "paid_confirmed", cash_outcome: "paid",
+      })),
+    );
   });
 });

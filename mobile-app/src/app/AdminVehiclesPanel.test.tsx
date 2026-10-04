@@ -16,6 +16,11 @@ const api = vi.hoisted(() => ({
 
 vi.mock("../api/v2/admin-vehicles.api", () => api);
 
+const caps = vi.hoisted(() => ({ capabilities: vi.fn() }));
+vi.mock("../api/v2/ops.api", async (importOriginal) => ({ ...(await importOriginal<object>()), capabilities: caps.capabilities }));
+
+const ADMIN_CAPS = { roles: ["admin"], capabilities: ["ops.view", "ops.driver_eligibility_manage"], driver_eligibility: null };
+
 import { AdminVehiclesPanel } from "./AdminVehiclesPanel";
 
 function vehicle(overrides: Partial<AdminVehicle> = {}): AdminVehicle {
@@ -55,6 +60,8 @@ beforeEach(() => {
   api.adminVehicles.mockReset();
   api.adminVerifyVehicle.mockReset();
   api.adminSetDriverEligibility.mockReset();
+  caps.capabilities.mockReset();
+  caps.capabilities.mockResolvedValue(ADMIN_CAPS);
 });
 
 describe("AdminVehiclesPanel", () => {
@@ -63,7 +70,7 @@ describe("AdminVehiclesPanel", () => {
     api.adminVehicles.mockReturnValue(new Promise((r) => (resolve = r)));
     const { container } = render(<AdminVehiclesPanel />);
     expect(container.querySelector("[aria-busy='true']")).not.toBeNull();
-    expect(api.adminVehicles).toHaveBeenCalledWith({ status: "pending", limit: 20 });
+    await waitFor(() => expect(api.adminVehicles).toHaveBeenCalledWith({ status: "pending", limit: 20 }));
     resolve({ items: [], nextCursor: null });
     expect(await screen.findByText("Tasdiq kutayotgan avtomobil yo'q.")).toBeInTheDocument();
   });
@@ -148,5 +155,39 @@ describe("AdminVehiclesPanel", () => {
     await screen.findByText(/Chevrolet Cobalt/);
     expect(screen.queryByText("Tasdiqlash")).toBeNull();
     expect(screen.queryByText("Rad etish")).toBeNull();
+  });
+
+  it("explains to the operator that the queue is admin+ and asks the server nothing (ops.driver_eligibility_manage)", async () => {
+    caps.capabilities.mockResolvedValue({ roles: ["operator"], capabilities: ["ops.view", "ops.booking_command"], driver_eligibility: null });
+    render(<AdminVehiclesPanel />);
+    expect(await screen.findByText(/faqat admin va undan yuqori/)).toBeInTheDocument();
+    expect(api.adminVehicles).not.toHaveBeenCalled();
+    expect(screen.queryByText("Tasdiqlash")).toBeNull();
+    expect(screen.queryByText("Rad etish")).toBeNull();
+  });
+
+  it("still asks the server when the capability call fails, and shows its answer", async () => {
+    caps.capabilities.mockRejectedValue(new Error("offline"));
+    api.adminVehicles.mockResolvedValue({ items: [vehicle()], nextCursor: null });
+    render(<AdminVehiclesPanel />);
+    expect(await screen.findByText(/O'rinlar \(haydovchisiz\): 4/)).toBeInTheDocument();
+    expect(screen.queryByText("Tasdiqlash")).toBeNull();
+  });
+
+  it("counts the loaded rows on the selected chip and opens the documents modal", async () => {
+    api.adminVehicles.mockResolvedValue({
+      items: [vehicle({ document_file_ids: ["https://files.example/tex-pasport.jpg", "car_document/2026/09/u1/abc.pdf"] })],
+      nextCursor: "c1",
+    });
+    render(<AdminVehiclesPanel />);
+    expect(await screen.findByRole("button", { name: "Kutilmoqda · 1+" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Hujjatlarni ko'rish"));
+    const modal = await screen.findByRole("dialog", { name: "Hujjat: tex-pasport.jpg" });
+    expect(modal.querySelector("img")?.getAttribute("src")).toBe("https://files.example/tex-pasport.jpg");
+    expect(screen.getByText("Yangi oynada ochish")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("2-fayl"));
+    // A bare storage key is not a link: the modal says so instead of guessing a URL.
+    expect(await screen.findByText(/imzolangan havolasiz/)).toBeInTheDocument();
+    expect(screen.queryByText("Yangi oynada ochish")).toBeNull();
   });
 });

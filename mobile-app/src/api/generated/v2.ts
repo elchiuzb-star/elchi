@@ -21,6 +21,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/admin/bookings/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Admin Bookings
+         * @description Staff lookup by booking id or code fragment (``bkg_7q2x`` / ``7q2x``): the same staff view as B12, audited the
+         *     same way when it shows phones or full plates.
+         */
+        get: operations["search_admin_bookings_api_v2_admin_bookings_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/admin/bookings/{booking_id}/commands/{command}": {
         parameters: {
             query?: never;
@@ -669,6 +690,27 @@ export interface paths {
         };
         /** Slo */
         get: operations["slo_api_v2_admin_metrics_slo_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/ops/queues/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ops Queue Summary
+         * @description O4 summary: one count per queue for the dashboard tiles. Declared before ``/{queue}`` so the literal path
+         *     is matched first.
+         */
+        get: operations["ops_queue_summary_api_v2_admin_ops_queues_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1460,6 +1502,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/admin/trips/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Admin Trips */
+        get: operations["search_admin_trips_api_v2_admin_trips_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/admin/trips/{trip_id}/tracking": {
         parameters: {
             query?: never;
@@ -1528,6 +1587,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/admin/users/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Users */
+        get: operations["search_users_api_v2_admin_users_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/admin/vehicles": {
         parameters: {
             query?: never;
@@ -1559,6 +1635,26 @@ export interface paths {
         put?: never;
         /** Verify Vehicle */
         post: operations["verify_vehicle_api_v2_admin_vehicles__vehicle_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/wallets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lookup Wallets Admin
+         * @description Wallet lookup by driver (admin panel: the adjustment form's "Hamyon" picker).
+         */
+        get: operations["lookup_wallets_admin_api_v2_admin_wallets_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3731,14 +3827,103 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * AdminTripSearchDTO
+         * @description Staff trip lookup row (admin panel). The driver is named by first name only - no phone, no plate - so this
+         *     read leaves no contact-view audit row. The full trip is ``GET /trips/{id}`` (staff see the full view).
+         */
+        AdminTripSearchDTO: {
+            /** Driver Display Name */
+            driver_display_name?: string | null;
+            /** Driver Id */
+            driver_id: string;
+            /** Id */
+            id: string;
+            /**
+             * Planned End At
+             * Format: date-time
+             */
+            planned_end_at: string;
+            /**
+             * Planned Start At
+             * Format: date-time
+             */
+            planned_start_at: string;
+            /** Seat Capacity */
+            seat_capacity: number;
+            status: components["schemas"]["TripStatus"];
+            /** Vehicle Id */
+            vehicle_id: string;
+        };
         /** AdminUserCreate */
         AdminUserCreate: {
             /** Full Name */
             full_name?: string | null;
+            /** Password */
+            password?: string | null;
             /** Phone */
             phone: string;
             /** Role */
             role: string;
+            /** Username */
+            username?: string | null;
+        };
+        /**
+         * AdminUserCreated
+         * @description ``POST /admin/users`` response: the unchanged ``AuthUser`` fields plus additive login facts.
+         */
+        AdminUserCreated: {
+            /** Full Name */
+            full_name?: string | null;
+            /**
+             * Has Password
+             * @default false
+             */
+            has_password: boolean;
+            /** Id */
+            id: number;
+            /** Is Phone Verified */
+            is_phone_verified: boolean;
+            /** Phone */
+            phone: string;
+            /** Public Id */
+            public_id?: string | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /** Username */
+            username?: string | null;
+        };
+        /**
+         * AdminUserSearchDTO
+         * @description Staff user lookup row (admin panel, ``ops.view``). Shows name and phone, so the read is audited
+         *     (``staff_user_search_viewed``: ids and field names only).
+         */
+        AdminUserSearchDTO: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Full Name */
+            full_name?: string | null;
+            /** Id */
+            id: string;
+            /** Phone */
+            phone: string;
+            /**
+             * Role
+             * @description users.role (the primary role).
+             */
+            role: string;
+            /**
+             * Roles
+             * @description Effective roles: the primary role plus active activated roles.
+             */
+            roles: string[];
+            /** Status */
+            status: string;
         };
         /**
          * AdminVehicleDTO
@@ -3835,6 +4020,27 @@ export interface components {
              * @description Opaque user id (usr_...); the target of /admin/drivers/{user_id}/eligibility.
              */
             user_id: string;
+        };
+        /**
+         * AdminWalletLookupDTO
+         * @description Staff wallet lookup row (``finance.reports``). Shows the driver's name and phone, so the read is audited
+         *     (``wallet_lookup_viewed``: wallet ids and field names only).
+         */
+        AdminWalletLookupDTO: {
+            /** Available Minor */
+            available_minor: number;
+            currency: components["schemas"]["Currency"];
+            driver: components["schemas"]["UserRefDTO"];
+            /** Driver Full Name */
+            driver_full_name?: string | null;
+            /** Driver Phone */
+            driver_phone: string;
+            /** Held Minor */
+            held_minor: number;
+            /** Id */
+            id: string;
+            /** Posted Balance Minor */
+            posted_balance_minor: number;
         };
         /** AmendmentAccept */
         AmendmentAccept: {
@@ -7078,10 +7284,58 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[list[AdminTripSearchDTO]] */
+        Envelope_list_AdminTripSearchDTO__: {
+            /** Data */
+            data: components["schemas"]["AdminTripSearchDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[AdminUserSearchDTO]] */
+        Envelope_list_AdminUserSearchDTO__: {
+            /** Data */
+            data: components["schemas"]["AdminUserSearchDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[list[AdminVehicleDTO]] */
         Envelope_list_AdminVehicleDTO__: {
             /** Data */
             data: components["schemas"]["AdminVehicleDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[AdminWalletLookupDTO]] */
+        Envelope_list_AdminWalletLookupDTO__: {
+            /** Data */
+            data: components["schemas"]["AdminWalletLookupDTO"][];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -7466,6 +7720,22 @@ export interface components {
         Envelope_list_NotificationDTO__: {
             /** Data */
             data: components["schemas"]["NotificationDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[OpsQueueCountDTO]] */
+        Envelope_list_OpsQueueCountDTO__: {
+            /** Data */
+            data: components["schemas"]["OpsQueueCountDTO"][];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -8239,7 +8509,7 @@ export interface components {
             detected_at: string;
             /** Evidence */
             evidence: {
-                [key: string]: number | string[];
+                [key: string]: number | string | string[];
             };
             /** Id */
             id: string;
@@ -9149,6 +9419,20 @@ export interface components {
          */
         OpsQueue: "awaiting_confirmation" | "no_show_review" | "custody_case" | "hold_escalation" | "finance_review" | "dispute" | "support_ticket" | "support_thread" | "trust_review" | "unanswered_listing" | "stale_tracking" | "ineligible_driver_trip";
         /**
+         * OpsQueueCountDTO
+         * @description O4 summary: how many items one queue holds. ``count`` is exact while ``capped`` is false; when ``capped`` is
+         *     true there are **at least** ``cap`` items (the panel shows "cap+"), so a long queue never costs a full scan.
+         */
+        OpsQueueCountDTO: {
+            /** Cap */
+            cap: number;
+            /** Capped */
+            capped: boolean;
+            /** Count */
+            count: number;
+            queue: components["schemas"]["OpsQueue"];
+        };
+        /**
          * OpsQueueItemDTO
          * @description O4. ``summary`` is a short operator label: route, status and counts, never a phone or a name.
          */
@@ -9162,6 +9446,7 @@ export interface components {
             /** Item Type */
             item_type: string;
             queue: components["schemas"]["OpsQueue"];
+            service_type?: components["schemas"]["ServiceType"] | null;
             /** Summary */
             summary: string;
         };
@@ -11190,6 +11475,13 @@ export interface components {
              */
             window_start: string;
         };
+        /** StaffCredentialsUpdate */
+        StaffCredentialsUpdate: {
+            /** Password */
+            password?: string | null;
+            /** Username */
+            username?: string | null;
+        };
         /**
          * StaffLogin
          * @description Staff sign in with username + password; clients and drivers use SMS OTP.
@@ -12628,6 +12920,8 @@ export interface components {
         TrustSignalType: "contact_filter_strikes" | "quick_cancel_after_chat" | "repeated_pair_cancellations";
         /** UserRefDTO */
         UserRefDTO: {
+            /** Display Name */
+            display_name?: string | null;
             /** Id */
             id: string | null;
         };
@@ -12798,6 +13092,92 @@ export interface operations {
                 queue: components["schemas"]["AdminBookingQueue"];
                 corridor_id?: string | null;
                 cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_BookingDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    search_admin_bookings_api_v2_admin_bookings_search_get: {
+        parameters: {
+            query: {
+                q: string;
                 limit?: number;
             };
             header?: never;
@@ -15591,6 +15971,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_SloDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    ops_queue_summary_api_v2_admin_ops_queues_summary_get: {
+        parameters: {
+            query?: {
+                corridor_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_OpsQueueCountDTO__"];
                 };
             };
             /** @description Bad Request */
@@ -19552,6 +20017,92 @@ export interface operations {
             };
         };
     };
+    search_admin_trips_api_v2_admin_trips_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_AdminTripSearchDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     get_admin_trip_tracking_api_v2_admin_trips__trip_id__tracking_get: {
         parameters: {
             query?: never;
@@ -19902,6 +20453,93 @@ export interface operations {
             };
         };
     };
+    search_users_api_v2_admin_users_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                role?: components["schemas"]["Role"] | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_AdminUserSearchDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_vehicles_for_review_api_v2_admin_vehicles_get: {
         parameters: {
             query?: {
@@ -20077,6 +20715,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    lookup_wallets_admin_api_v2_admin_wallets_get: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_AdminWalletLookupDTO__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

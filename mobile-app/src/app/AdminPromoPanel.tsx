@@ -1,15 +1,17 @@
 /**
- * Promotions administration (referral stage 5, ADR-0023 §19): campaigns, budget, review queue, reconciliation.
+ * Promotions administration (referral stage 5, ADR-0023 §19; design "Elchi Admin" → Referral va bonuslar):
+ * campaigns, budget requests, review queue, reconciliation.
  *
- * The server decides who may do what: capabilities come from the staff session, and every decision (campaign
- * command, budget change, review decision) needs a fresh MFA step-up there. When the server answers
- * `step_up_required`, this panel asks for the authenticator code and retries - it never marks anything as verified
- * on its own. A large budget change needs a *second, different* finance person: the requester cannot approve it.
- * There is no "grant a bonus" button anywhere: rewards only come from qualification (Q115, Q122).
+ * Every button is gated by the staff capabilities (`/me/capabilities`, DESIGN-ADMIN-DIFF 12.1):
+ * - campaign status, versions, combinations, new draft -> `promo.campaign_manage` (super_admin);
+ * - budget request / approve / reject / withdraw -> `promo.budget_allocate` (finance, super_admin; Q105/Q114);
+ *   the requester never approves their own large change, they can only withdraw it;
+ * - review start -> `promo.fraud_review` (operator, admin, super_admin); review decision -> `promo.fraud_decide` (admin+).
+ * Every status command asks for a confirmation; every decision may need an MFA step-up, which `useStepUp` asks for
+ * and replays. There is no "grant a bonus" button anywhere (Q127/Q133): rewards only come from qualification.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { stepUp } from "../api/v2/mfa.api";
 import {
   adminActivateCampaign,
   adminAddVersion,
@@ -38,77 +40,63 @@ import {
   type ReconciliationIssueDTO,
   type ReviewDTO,
 } from "../api/v2/promo.api";
-import { ApiError } from "../types/api";
-import { v2ErrorMessage } from "../utils/v2Errors";
-import { ShieldAlert } from "./ui/icons";
+import { capabilities as loadCapabilities } from "../api/v2/ops.api";
+import { translateDynamic } from "../i18n";
+import { useT } from "../i18n/react";
+import { formatDateTime } from "../utils/v2Format";
 import { formatUzs } from "../utils/money";
+import { v2ErrorMessage } from "../utils/v2Errors";
+import { Badge, Btn, Card, Empty, Field, Loading, Note, Section, Select, Tabs, useConfirmedCommand, type BadgeTone } from "./adminMoneyUi";
+
+type T = ReturnType<typeof useT>;
+type Caps = ReadonlySet<string>;
+
+/** Capabilities behind each control (app/contracts/enums.py STAFF_ROLE_CAPABILITIES). */
+export const PROMO_CAP = {
+  view: "promo.campaign_view",
+  manage: "promo.campaign_manage",
+  budget: "promo.budget_allocate",
+  review: "promo.fraud_review",
+  decide: "promo.fraud_decide",
+} as const;
+
+export type PromoTab = "campaigns" | "budget" | "reviews" | "reconciliation";
+
+/** Tabs a role may open: the review queue is read with `promo.fraud_review` (the finance role does not have it). */
+export function visiblePromoTabs(caps: Caps): PromoTab[] {
+  const tabs: PromoTab[] = [];
+  if (caps.has(PROMO_CAP.view)) tabs.push("campaigns", "budget");
+  if (caps.has(PROMO_CAP.review)) tabs.push("reviews");
+  if (caps.has(PROMO_CAP.view)) tabs.push("reconciliation");
+  return tabs;
+}
 
 type BudgetKind = "allocate" | "reduce_allocation" | "funding_loss";
-// G14: a reduction stops at spent + obligations; a funding loss (evidence required) may leave a shortfall
-const BUDGET_KIND: Record<BudgetKind, string> = {
-  allocate: "Ajratish", reduce_allocation: "Kamaytirish", funding_loss: "Moliyalashtirish yo'qoldi",
-};
 
-type Tab = "campaigns" | "budget" | "reviews" | "reconciliation";
+const KINDS = ["referral_client_client", "referral_driver_driver", "referral_driver_client"] as const;
 
-const TABS: Array<[Tab, string]> = [
-  ["campaigns", "Kampaniyalar"],
-  ["budget", "Byudjet so'rovlari"],
-  ["reviews", "Tekshiruv navbati"],
-  ["reconciliation", "Solishtirish"],
-];
-
-const KINDS: Array<[string, string]> = [
-  ["referral_client_client", "Mijoz → mijoz"],
-  ["referral_driver_driver", "Haydovchi → haydovchi"],
-  ["referral_driver_client", "Haydovchi → mijoz"],
-];
-
-function soum(minor: number | null | undefined): string {
-  if (minor === null || minor === undefined) return "belgilanmagan";
+function soum(t: T, minor: number | null | undefined): string {
+  if (minor === null || minor === undefined) return t("admin.promo.unset");
   return formatUzs(minor / 100);
 }
 
-const REVIEW_KINDS: Record<string, string> = {
-  identity_match: "Telefon mosligi (qayta berilgan raqam ehtimoli)",
-  qualification_risk: "Shart bajarilishida xavf belgisi",
-  post_grant_recheck: "Mukofotdan keyin o'zgargan dalil",
-  party_not_active: "Ishtirokchi faol emas",
-  reinstate_unfulfilled: "Tiklash bajarilmadi (byudjet yetmadi)",
-  qualification_path_retired: "Pochta dalili olib tashlangan - va'da saqlanadi (rad etib bo'lmaydi; bajarish yo'li D-4 ochiq)",
-  cancel_fault: "Bekor qilish sababi aniqlanmagan (har ega alohida)",
-  restoration_uncovered: "Siyosat qamramagan holat: sarflangan bonus yoki kredit",
-};
+function dyn(key: string, fallback: string): string {
+  return translateDynamic(key) ?? fallback;
+}
 
-// Q127/Q129: what "approve" and "reject" mean for the review kinds whose decision moves promo value (or none).
-const DECISION_HINTS: Record<string, string> = {
-  cancel_fault:
-    "Tasdiqlash — bekor qilish bu egasining aybi emas: berilgan muhlat qoladi. Rad etish — egasining o'z sababi: faqat sarflanmagan muhlat qaytariladi.",
-  restoration_uncovered:
-    "Qaror faqat qayd qilinadi: hech narsa berilmaydi va olinmaydi. Tiklash uchun alohida tasdiqlangan qoida kerak.",
-};
+function statusLabel(status: string): string {
+  return dyn(`admin.promo.status.${status}`, status);
+}
 
-const STATUS: Record<string, string> = {
-  draft: "qoralama", active: "faol", paused: "pauza", closed: "yopilgan", open: "ochiq", under_review: "tekshirilmoqda",
-  approved: "tasdiqlangan", rejected: "rad etilgan", pending: "kutilmoqda", posted: "o'tkazilgan", withdrawn: "qaytarib olingan",
-};
+function statusTone(status: string): BadgeTone {
+  if (status === "active" || status === "approved" || status === "posted") return "ok";
+  if (status === "pending" || status === "open" || status === "under_review" || status === "paused") return "warn";
+  if (status === "rejected") return "err";
+  return "gray";
+}
 
-const REASONS: Record<string, string> = {
-  split_shipment: "jo'natma bo'lib yuborilganga o'xshaydi",
-  cash_time_unverified: "to'lov vaqti aniq emas",
-  identity_match: "telefon avvalgi akkauntga mos",
-  party_not_active: "ishtirokchi faol emas",
-  evidence_changed_after_grant: "mukofotdan keyin dalil o'zgardi",
-  budget_exhausted: "byudjet yetmadi",
-  fault_undetermined: "bekor qilish sababi belgilanmagan",
-  holder_client: "egasi: mijoz (bonus)",
-  holder_driver: "egasi: haydovchi (kredit)",
-  commission_reversed: "komissiya qaytarildi",
-  dispute_resolved: "nizo hal qilindi",
-};
-
-function label(map: Record<string, string>, value: string): string {
-  return map[value] ?? value;
+function serviceLabel(t: T, service: string): string {
+  return service === "parcel" ? t("admin.money.parcel") : t("admin.money.passenger");
 }
 
 function toMinor(value: string): number | null {
@@ -128,106 +116,18 @@ function daysToSeconds(value: string): number | null {
   return n === null ? null : n * 86400;
 }
 
-function isStepUp(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    error.code === "FORBIDDEN" &&
-    typeof error.details === "object" &&
-    error.details !== null &&
-    (error.details as { reason?: string }).reason === "step_up_required"
-  );
-}
-
-function Btn(props: { children: string; onClick: () => void; disabled?: boolean; tone?: "primary" | "danger" | "neutral" }) {
-  const tone = props.tone ?? "neutral";
-  const cls =
-    tone === "primary"
-      ? "border-primary bg-primary text-primary-foreground"
-      : tone === "danger"
-        ? "border-destructive/25 bg-destructive/10 text-destructive"
-        : "border-border bg-card text-secondary-foreground";
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      disabled={props.disabled}
-      className={`el-press inline-flex h-9 items-center justify-center rounded-[10px] border px-3 text-sm font-semibold ${cls} disabled:opacity-50`}
-    >
-      {props.children}
-    </button>
-  );
-}
-
-function Input(props: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string }) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1 text-sm">
-      <span className="font-medium text-secondary-foreground">{props.label}</span>
-      <input
-        value={props.value}
-        placeholder={props.placeholder}
-        onChange={(event) => props.onChange(event.target.value)}
-        className="h-10 rounded-[10px] border border-border bg-card px-3 text-foreground outline-none"
-      />
-      {props.hint && <span className="text-xs text-muted-foreground">{props.hint}</span>}
-    </label>
-  );
-}
-
-/** Runs a staff command; on `step_up_required` asks for the authenticator code, proves it, and retries once. */
-function useStaffAction() {
-  const [busy, setBusy] = useState(false);
+function useList<R>(load: () => Promise<R[]>) {
+  const [rows, setRows] = useState<R[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [needCode, setNeedCode] = useState<null | (() => Promise<void>)>(null);
-  const [code, setCode] = useState("");
-
-  async function act(work: () => Promise<void>) {
-    setBusy(true);
+  const reload = () => {
     setError(null);
-    try {
-      await work();
-    } catch (cause) {
-      if (isStepUp(cause)) {
-        setNeedCode(() => work);
-        setError("Bu amal uchun autentifikator kodi kerak (MFA).");
-      } else {
-        setError(v2ErrorMessage(cause));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function prove() {
-    if (!needCode) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const proved = await stepUp(code.trim());
-      if (!proved) throw new Error("Kod tasdiqlanmadi");
-      const retry = needCode;
-      setNeedCode(null);
-      setCode("");
-      await retry();
-    } catch (cause) {
-      setError(v2ErrorMessage(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const prompt = needCode ? (
-    <div className="flex flex-wrap items-end gap-2 rounded-[12px] border border-warning/30 bg-warning/8 p-3">
-      <ShieldAlert size={18} color="var(--warning)" />
-      <Input label="Autentifikator kodi" value={code} onChange={setCode} placeholder="123456" />
-      <Btn tone="primary" disabled={busy || code.trim().length < 6} onClick={() => void prove()}>
-        Tasdiqlash va davom etish
-      </Btn>
-      <p className="w-full text-xs text-muted-foreground">
-        Faol MFA faktori bo'lmasa bu amal yopiq qoladi: uni «Xavfsizlik (MFA)» bo'limida ulang (boshqa super admin tasdiqlaydi).
-      </p>
-    </div>
-  ) : null;
-  return { busy, error, act, prompt };
+    load()
+      .then(setRows)
+      .catch((cause) => setError(v2ErrorMessage(cause)));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(reload, []);
+  return { rows, error, reload };
 }
 
 // --- campaigns ----------------------------------------------------------------------------------------------------
@@ -238,6 +138,14 @@ const EMPTY_VERSION = {
   review_sla_hours: "", grace_days: "", share_bps: "", per_booking: "", p_cap: "", h_cap: "", cost_fixed: "",
   cost_bps: "", min_margin: "", approval_reference: "",
 };
+
+type VersionField = Exclude<keyof typeof EMPTY_VERSION, "referrer_instrument" | "referee_instrument">;
+
+const VERSION_FIELDS: VersionField[] = [
+  "referrer_reward", "referee_reward", "milestones", "min_distinct_clients", "enrollment_limit", "qualification_days",
+  "validity_days", "review_sla_hours", "grace_days", "share_bps", "per_booking", "p_cap", "h_cap", "cost_fixed",
+  "cost_bps", "min_margin", "approval_reference",
+];
 
 function versionBody(f: typeof EMPTY_VERSION): CampaignVersionCreate {
   // An empty field stays null: "not decided" blocks activation, it is never read as zero (Q105).
@@ -266,7 +174,36 @@ function versionBody(f: typeof EMPTY_VERSION): CampaignVersionCreate {
   };
 }
 
-function CampaignDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
+/** Design `A.kpis`: the eight budget positions of one campaign (Q132: reducible = max(0, B − S − L)). */
+function BudgetKpis({ campaign }: { campaign: CampaignDTO }) {
+  const t = useT();
+  const b = campaign.budget;
+  const items: Array<[string, number | null | undefined]> = [
+    [t("admin.promo.allocated"), b.allocated_minor],
+    [t("admin.promo.promised"), b.promised_minor],
+    [t("admin.promo.granted"), b.granted_minor],
+    [t("promo.bucket.consumed"), b.consumed_minor],
+    [t("admin.promo.released"), b.released_minor],
+    [t("admin.promo.freeForNew"), b.available_for_new_minor],
+    [t("admin.promo.shortfall"), b.shortfall_minor],
+    [t("admin.promo.reducible"), b.reducible_minor ?? 0],
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+      {items.map(([label, value]) => (
+        <div key={label} className="rounded-[10px] border border-border bg-card p-2">
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="font-semibold text-foreground">{soum(t, value)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type StatusCommand = "activate" | "pause" | "resume" | "close" | "suspend" | "resumeProcessing";
+
+function CampaignDetail({ id, caps, onChanged }: { id: string; caps: Caps; onChanged: () => void }) {
+  const t = useT();
   const [campaign, setCampaign] = useState<CampaignDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -274,7 +211,9 @@ function CampaignDetail({ id, onChanged }: { id: string; onChanged: () => void }
   const [form, setForm] = useState(EMPTY_VERSION);
   const [showForm, setShowForm] = useState(false);
   const [budget, setBudget] = useState({ kind: "allocate" as BudgetKind, amount: "", reason: "", evidence: "" });
-  const staff = useStaffAction();
+  const command = useConfirmedCommand();
+  const canManage = caps.has(PROMO_CAP.manage);
+  const canBudget = caps.has(PROMO_CAP.budget);
 
   const load = () => {
     setLoadError(null);
@@ -282,458 +221,606 @@ function CampaignDetail({ id, onChanged }: { id: string; onChanged: () => void }
   };
   useEffect(load, [id]);
 
-  if (loadError) return <p className="text-sm text-destructive">{loadError}</p>;
-  if (!campaign) return <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>;
-  const command = (fn: typeof adminPauseCampaign, extra: { version_no?: number } = {}) =>
-    staff.act(async () => {
-      const next = await fn(campaign.id, { expected_version: campaign.version, reason: reason.trim(), ...extra });
-      setCampaign(next);
-      setReason("");
-      onChanged();
+  if (loadError) return <p role="alert" className="text-sm text-destructive">{loadError}</p>;
+  if (!campaign) return <Loading />;
+
+  const runStatus = (which: StatusCommand) => {
+    const body = { expected_version: campaign.version, reason: reason.trim() };
+    const work: Record<StatusCommand, () => Promise<CampaignDTO>> = {
+      activate: () => adminActivateCampaign(campaign.id, { ...body, version_no: toInt(versionNo) ?? undefined }),
+      pause: () => adminPauseCampaign(campaign.id, body),
+      resume: () => adminResumeCampaign(campaign.id, body),
+      close: () => adminCloseCampaign(campaign.id, body),
+      suspend: () => adminSuspendProcessing(campaign.id, reason.trim()),
+      resumeProcessing: () => adminResumeProcessing(campaign.id, reason.trim()),
+    };
+    command.ask({
+      title: t(`admin.promo.confirm.${which}`, { name: campaign.name, version: versionNo }),
+      lines: [t("admin.finance.reasonLine", { reason: reason.trim() }), t(`admin.promo.effect.${which}`)],
+      tone: which === "close" || which === "suspend" ? "danger" : "primary",
+      work: async () => {
+        setCampaign(await work[which]());
+        setReason("");
+        onChanged();
+      },
     });
-  const b = campaign.budget;
+  };
+
+  const suspended = Boolean(campaign.processing_suspended_at);
   return (
     <div className="space-y-4 rounded-[14px] border border-border bg-card p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-lg font-bold text-foreground">{campaign.name}</h3>
-        <span className="text-sm text-muted-foreground">
-          {label(STATUS, campaign.status)} · {campaign.service_type === "parcel" ? "pochta" : "yo'lovchi"} · faol versiya {campaign.active_version_no ?? "yo'q"}
-        </span>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-lg font-bold text-foreground">{campaign.name}</h3>
+          <p className="text-sm text-muted-foreground">
+            {t("admin.promo.campaignMeta", {
+              status: statusLabel(campaign.status),
+              service: serviceLabel(t, campaign.service_type),
+              version: campaign.active_version_no ?? t("admin.money.notYet"),
+            })}
+          </p>
+        </div>
+        <Badge tone={statusTone(campaign.status)}>{statusLabel(campaign.status)}</Badge>
       </div>
-      {campaign.processing_suspended_at && (
-        <p className="rounded-[10px] bg-warning/10 px-3 py-2 text-sm text-warning">
-          Ishlov to'xtatilgan: {campaign.processing_suspend_reason}. Hech narsa berilmaydi, bo'shatilmaydi va o'chirilmaydi.
-        </p>
-      )}
-      <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-        {[
-          ["Ajratilgan", b.allocated_minor], ["Va'da qilingan", b.promised_minor], ["Berilgan (sarflanmagan)", b.granted_minor],
-          ["Sarflangan", b.consumed_minor], ["Bo'shatilgan", b.released_minor], ["Yangi uchun bo'sh", b.available_for_new_minor],
-          ["Kamomad", b.shortfall_minor], ["Kamaytirish mumkin (B − S − L)", b.reducible_minor ?? 0],
-        ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-[10px] bg-muted/50 p-2">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="font-semibold text-foreground">{soum(value as number)}</p>
-          </div>
-        ))}
-      </div>
+      {suspended && <Note tone="warning">{t("admin.promo.suspendedNote", { reason: campaign.processing_suspend_reason ?? "-" })}</Note>}
+      <BudgetKpis campaign={campaign} />
 
-      <div className="space-y-2">
-        <p className="text-sm font-semibold text-foreground">Versiyalar (o'zgarmas)</p>
-        {(campaign.versions ?? []).length === 0 && <p className="text-sm text-muted-foreground">Hali versiya yo'q.</p>}
+      <Section title={t("admin.promo.versions")}>
+        {(campaign.versions ?? []).length === 0 && <Empty>{t("admin.promo.noVersions")}</Empty>}
         {(campaign.versions ?? []).map((v) => (
           <div key={v.version_no} className="rounded-[10px] border border-border p-2 text-sm">
             <p className="font-semibold">
-              v{v.version_no}: taklif qiluvchi {soum(v.referrer_reward_minor)}, taklif qilingan {soum(v.referee_reward_minor)} · M{" "}
-              {soum(v.min_margin_minor)}
+              {t("admin.promo.versionRow", {
+                no: v.version_no,
+                referrer: soum(t, v.referrer_reward_minor),
+                referee: soum(t, v.referee_reward_minor),
+                margin: soum(t, v.min_margin_minor),
+              })}
             </p>
             {v.missing_for_activation.length > 0 ? (
-              <p className="text-xs text-destructive">Aktivlashtirish uchun yetishmaydi: {v.missing_for_activation.join(", ")}</p>
+              <p className="text-xs text-destructive">{t("admin.promo.missing", { fields: v.missing_for_activation.join(", ") })}</p>
             ) : (
-              <p className="text-xs text-success">Barcha qiymatlar belgilangan</p>
+              <p className="text-xs text-success">{t("admin.promo.allSet")}</p>
             )}
           </div>
         ))}
-        <Btn onClick={() => setShowForm(!showForm)}>{showForm ? "Formani yopish" : "Yangi versiya qo'shish"}</Btn>
-        {showForm && (
+        {canManage && <Btn onClick={() => setShowForm(!showForm)}>{showForm ? t("admin.promo.closeForm") : t("admin.promo.addVersion")}</Btn>}
+        {canManage && showForm && (
           <div className="grid gap-2 rounded-[12px] border border-border p-3 md:grid-cols-3">
-            <p className="md:col-span-3 text-xs text-muted-foreground">
-              Bo'sh maydon «belgilanmagan» bo'lib qoladi va aktivlashtirishni to'xtatadi — hech qachon nol deb o'qilmaydi.
-              Summa, byudjet, O va M simulyatsiyadan keyin tasdiqlanadi.
-            </p>
-            {([
-              ["referrer_reward", "Taklif qiluvchi mukofoti (so'm)"], ["referee_reward", "Taklif qilingan mukofoti (so'm)"],
-              ["milestones", "Bosqichlar (haydovchi: safar soni, vergul bilan; mijoz: bo'sh = bitta bosqich)"], ["min_distinct_clients", "Min. turli mijozlar"],
-              ["enrollment_limit", "Ishtirokchilar limiti"], ["qualification_days", "Shart muddati (kun)"],
-              ["validity_days", "Bonus amal muddati (kun)"], ["review_sla_hours", "Tekshiruv SLA (soat)"],
-              ["grace_days", "Tiklash grace (kun)"], ["share_bps", "Chegirma ulushi (bps)"],
-              ["per_booking", "Bron uchun chegirma cap (so'm)"], ["p_cap", "Bonus cap (so'm)"], ["h_cap", "Kredit cap (so'm)"],
-              ["cost_fixed", "O: qat'iy xarajat (so'm)"], ["cost_bps", "O: foiz (bps)"], ["min_margin", "M: min. marja (so'm)"],
-              ["approval_reference", "Tasdiq hujjati raqami"],
-            ] as Array<[keyof typeof EMPTY_VERSION, string]>).map(([key, label]) => (
-              <Input key={key} label={label} value={form[key]} onChange={(value) => setForm({ ...form, [key]: value })} />
+            <p className="text-xs text-muted-foreground md:col-span-3">{t("admin.promo.versionHint")}</p>
+            {VERSION_FIELDS.map((key) => (
+              <Field key={key} label={t(`admin.promo.vf.${key}`)} value={form[key]} onChange={(value) => setForm({ ...form, [key]: value })} />
             ))}
             <div className="md:col-span-3">
               <Btn
                 tone="primary"
-                disabled={staff.busy}
+                disabled={command.busy}
                 onClick={() =>
-                  void staff.act(async () => {
-                    setCampaign(await adminAddVersion(campaign.id, versionBody(form)));
-                    setForm(EMPTY_VERSION);
-                    setShowForm(false);
+                  command.ask({
+                    title: t("admin.promo.confirmVersion", { name: campaign.name }),
+                    lines: [t("admin.promo.versionHint")],
+                    work: async () => {
+                      setCampaign(await adminAddVersion(campaign.id, versionBody(form)));
+                      setForm(EMPTY_VERSION);
+                      setShowForm(false);
+                    },
                   })
                 }
               >
-                Versiyani saqlash
+                {t("admin.promo.saveVersion")}
               </Btn>
             </div>
           </div>
         )}
-      </div>
+      </Section>
 
-      <Combinations campaign={campaign} staff={staff} onChanged={setCampaign} />
+      <Combinations campaign={campaign} canManage={canManage} onChanged={setCampaign} />
 
-      <div className="space-y-2">
-        <p className="text-sm font-semibold text-foreground">Holatni o'zgartirish</p>
-        <Input label="Sabab (audit)" value={reason} onChange={setReason} />
-        <div className="flex flex-wrap gap-2">
-          <Input label="Aktivlashtiriladigan versiya" value={versionNo} onChange={setVersionNo} placeholder="1" />
-          <Btn tone="primary" disabled={staff.busy || !reason.trim() || !toInt(versionNo)}
-            onClick={() => void command(adminActivateCampaign, { version_no: toInt(versionNo) ?? undefined })}>
-            Aktivlashtirish
+      {canManage && (
+        <Section title={t("admin.promo.changeStatus")} sub={t("admin.promo.pauseHint")}>
+          <Field label={t("admin.money.reasonAudit")} value={reason} onChange={setReason} />
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-40">
+              <Field label={t("admin.promo.activateVersion")} value={versionNo} onChange={setVersionNo} placeholder="1" />
+            </div>
+            <Btn tone="primary" disabled={command.busy || !reason.trim() || !toInt(versionNo)} onClick={() => runStatus("activate")}>
+              {t("admin.promo.activate")}
+            </Btn>
+            <Btn disabled={command.busy || !reason.trim()} onClick={() => runStatus("pause")}>
+              {t("admin.promo.pause")}
+            </Btn>
+            <Btn disabled={command.busy || !reason.trim()} onClick={() => runStatus("resume")}>
+              {t("admin.promo.resume")}
+            </Btn>
+            <Btn tone="danger" disabled={command.busy || !reason.trim()} onClick={() => runStatus("close")}>
+              {t("common.close")}
+            </Btn>
+            <Btn disabled={command.busy || !reason.trim()} onClick={() => runStatus(suspended ? "resumeProcessing" : "suspend")}>
+              {suspended ? t("admin.promo.resumeProcessing") : t("admin.promo.suspend")}
+            </Btn>
+          </div>
+        </Section>
+      )}
+
+      {canBudget && (
+        <Section title={t("admin.promo.budgetChange")} sub={t("admin.promo.budgetChangeHint")}>
+          <div className="grid gap-2 md:grid-cols-4">
+            <Select
+              label={t("admin.finance.type")}
+              value={budget.kind}
+              onChange={(kind) => setBudget({ ...budget, kind })}
+              options={[
+                ["allocate", t("admin.promo.kind.allocate")],
+                ["reduce_allocation", t("admin.promo.kind.reduce_allocation")],
+                ["funding_loss", t("admin.promo.kind.funding_loss")],
+              ]}
+            />
+            <Field label={t("income.amountLabel")} value={budget.amount} onChange={(v) => setBudget({ ...budget, amount: v })} />
+            <Field label={t("common.reason")} value={budget.reason} onChange={(v) => setBudget({ ...budget, reason: v })} />
+            <Field label={t("admin.promo.evidence")} value={budget.evidence} onChange={(v) => setBudget({ ...budget, evidence: v })} />
+          </div>
+          <Btn
+            tone="primary"
+            disabled={command.busy || !toMinor(budget.amount) || !budget.reason.trim() || (budget.kind === "funding_loss" && !budget.evidence.trim())}
+            onClick={() =>
+              command.ask({
+                title: t("admin.promo.confirmBudgetRequest", { kind: t(`admin.promo.kind.${budget.kind}`), amount: soum(t, toMinor(budget.amount)) }),
+                lines: [t("admin.finance.reasonLine", { reason: budget.reason.trim() }), t("admin.promo.budgetChangeHint")],
+                work: async () => {
+                  await adminRequestBudget(campaign.id, {
+                    kind: budget.kind,
+                    amount_minor: toMinor(budget.amount) as number,
+                    reason: budget.reason.trim(),
+                    evidence_reference: budget.evidence.trim() || null,
+                  });
+                  setBudget({ kind: "allocate", amount: "", reason: "", evidence: "" });
+                  load();
+                },
+              })
+            }
+          >
+            {t("admin.finance.sendRequest")}
           </Btn>
-          <Btn disabled={staff.busy || !reason.trim()} onClick={() => void command(adminPauseCampaign)}>Pauza</Btn>
-          <Btn disabled={staff.busy || !reason.trim()} onClick={() => void command(adminResumeCampaign)}>Davom ettirish</Btn>
-          <Btn tone="danger" disabled={staff.busy || !reason.trim()} onClick={() => void command(adminCloseCampaign)}>Yopish</Btn>
-          <Btn disabled={staff.busy || !reason.trim()}
-            onClick={() => void staff.act(async () => setCampaign(await (campaign.processing_suspended_at
-              ? adminResumeProcessing(campaign.id, reason.trim())
-              : adminSuspendProcessing(campaign.id, reason.trim()))))}>
-            {campaign.processing_suspended_at ? "Ishlovni tiklash" : "Ishlovni to'xtatish"}
-          </Btn>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Pauza faqat yangi ishtirokchilarni to'xtatadi: berilgan bonuslar sarflanaveradi, va'dalar saqlanadi.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-sm font-semibold text-foreground">Byudjet o'zgarishi</p>
-        <div className="grid gap-2 md:grid-cols-4">
-          <label className="flex min-w-0 flex-col gap-1 text-sm">
-            <span className="font-medium text-secondary-foreground">Turi</span>
-            <select value={budget.kind} onChange={(event) => setBudget({ ...budget, kind: event.target.value as typeof budget.kind })}
-              className="h-10 w-full min-w-0 rounded-[10px] border border-border bg-card px-3">
-              <option value="allocate">Ajratish</option>
-              <option value="reduce_allocation">Kamaytirish</option>
-              <option value="funding_loss">Moliyalashtirish yo'qoldi</option>
-            </select>
-          </label>
-          <Input label="Summa (so'm)" value={budget.amount} onChange={(v) => setBudget({ ...budget, amount: v })} />
-          <Input label="Sabab" value={budget.reason} onChange={(v) => setBudget({ ...budget, reason: v })} />
-          <Input label="Dalil (hujjat raqami)" value={budget.evidence} onChange={(v) => setBudget({ ...budget, evidence: v })} />
-        </div>
-        <Btn tone="primary" disabled={staff.busy || !toMinor(budget.amount) || !budget.reason.trim()
-          || (budget.kind === "funding_loss" && !budget.evidence.trim())}
-          onClick={() => void staff.act(async () => {
-            await adminRequestBudget(campaign.id, {
-              kind: budget.kind, amount_minor: toMinor(budget.amount) as number, reason: budget.reason.trim(),
-              evidence_reference: budget.evidence.trim() || null,
-            });
-            setBudget({ kind: "allocate", amount: "", reason: "", evidence: "" });
-            load();
-          })}>
-          So'rov yuborish
-        </Btn>
-        <p className="text-xs text-muted-foreground">
-          Katta summa ikkinchi, boshqa moliya xodimi tasdiqlaguncha kutadi — so'rovchi o'zi tasdiqlay olmaydi.
-        </p>
-      </div>
-      {staff.error && <p className="text-sm text-destructive">{staff.error}</p>}
-      {staff.prompt}
+        </Section>
+      )}
+      {command.view}
     </div>
   );
 }
 
-function CampaignsTab() {
-  const [rows, setRows] = useState<CampaignDTO[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+function CampaignsTab({ caps }: { caps: Caps }) {
+  const t = useT();
+  const list = useList(adminCampaigns);
   const [selected, setSelected] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ kind: KINDS[0][0], service_type: "passenger" as "passenger" | "parcel", name: "" });
-  const staff = useStaffAction();
-  const load = () => {
-    setError(null);
-    adminCampaigns().then(setRows).catch((cause) => setError(v2ErrorMessage(cause)));
-  };
-  useEffect(load, []);
+  const [draft, setDraft] = useState({ kind: KINDS[0] as string, service_type: "passenger" as "passenger" | "parcel", name: "" });
+  const command = useConfirmedCommand();
   return (
     <div className="space-y-4">
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {rows === null && !error && <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>}
-      {rows !== null && rows.length === 0 && <p className="text-sm text-muted-foreground">Kampaniya yo'q.</p>}
-      <div className="grid gap-2">
-        {(rows ?? []).map((row) => (
-          <button key={row.id} type="button" onClick={() => setSelected(row.id)}
-            className={`el-press rounded-[12px] border p-3 text-left text-sm ${selected === row.id ? "border-primary" : "border-border"} bg-card`}>
-            <span className="font-semibold">{row.name}</span> · {label(STATUS, row.status)} · {row.service_type === "parcel" ? "pochta" : "yo'lovchi"} · bo'sh:{" "}
-            {soum(row.budget.available_for_new_minor)}
-          </button>
-        ))}
-      </div>
-      {selected && <CampaignDetail id={selected} onChanged={load} />}
-      <div className="space-y-2 rounded-[14px] border border-dashed border-border p-4">
-        <p className="text-sm font-semibold">Yangi kampaniya (qoralama)</p>
-        <div className="grid gap-2 md:grid-cols-3">
-          <label className="flex min-w-0 flex-col gap-1 text-sm">
-            <span className="font-medium text-secondary-foreground">Turi</span>
-            <select value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value })}
-              className="h-10 w-full min-w-0 rounded-[10px] border border-border bg-card px-3">
-              {KINDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </label>
-          <label className="flex min-w-0 flex-col gap-1 text-sm">
-            <span className="font-medium text-secondary-foreground">Xizmat</span>
-            <select value={draft.service_type} onChange={(event) => setDraft({ ...draft, service_type: event.target.value as "passenger" | "parcel" })}
-              className="h-10 w-full min-w-0 rounded-[10px] border border-border bg-card px-3">
-              <option value="passenger">Yo'lovchi</option>
-              <option value="parcel">Pochta</option>
-            </select>
-          </label>
-          <Input label="Nomi" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} />
+      {list.error && <p role="alert" className="text-sm text-destructive">{list.error}</p>}
+      {list.rows === null && !list.error && <Loading />}
+      {list.rows !== null && list.rows.length === 0 && <Empty>{t("admin.promo.noCampaigns")}</Empty>}
+      {list.rows !== null && list.rows.length > 0 && (
+        <div className="divide-y divide-border overflow-hidden rounded-[12px] border border-border bg-card">
+          {list.rows.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => setSelected(row.id)}
+              aria-pressed={selected === row.id}
+              className={`el-press flex w-full items-center justify-between gap-2 p-3 text-left text-sm ${selected === row.id ? "bg-accent" : ""}`}
+            >
+              <span className="min-w-0">
+                <span className="block font-semibold text-foreground">
+                  {[row.name, statusLabel(row.status), serviceLabel(t, row.service_type)].join(" · ")}
+                </span>
+                <span className="block text-xs text-muted-foreground">{t("admin.promo.free", { amount: soum(t, row.budget.available_for_new_minor) })}</span>
+              </span>
+              <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>
+            </button>
+          ))}
         </div>
-        <Btn tone="primary" disabled={staff.busy || !draft.name.trim()}
-          onClick={() => void staff.act(async () => {
-            const created = await adminCreateCampaign({ ...draft, name: draft.name.trim() });
-            setDraft({ ...draft, name: "" });
-            load();
-            setSelected(created.id);
-          })}>
-          Qoralama yaratish
-        </Btn>
-        {staff.error && <p className="text-sm text-destructive">{staff.error}</p>}
-        {staff.prompt}
-      </div>
+      )}
+      {selected && <CampaignDetail key={selected} id={selected} caps={caps} onChanged={list.reload} />}
+      {caps.has(PROMO_CAP.manage) && (
+        <Section title={t("admin.promo.newDraft")}>
+          <div className="space-y-2 rounded-[14px] border border-dashed border-border p-4">
+            <div className="grid gap-2 md:grid-cols-3">
+              <Select
+                label={t("admin.finance.type")}
+                value={draft.kind}
+                onChange={(kind) => setDraft({ ...draft, kind })}
+                options={KINDS.map((kind): [string, string] => [kind, t(`admin.promo.campaignKind.${kind}`)])}
+              />
+              <Select
+                label={t("admin.money.service")}
+                value={draft.service_type}
+                onChange={(service_type) => setDraft({ ...draft, service_type })}
+                options={[
+                  ["passenger", t("admin.money.passengerCap")],
+                  ["parcel", t("admin.money.parcelCap")],
+                ]}
+              />
+              <Field label={t("admin.promo.name")} value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} />
+            </div>
+            {draft.service_type === "parcel" && <Note tone="warning">{t("admin.promo.parcelOff")}</Note>}
+            <Btn
+              tone="primary"
+              disabled={command.busy || !draft.name.trim()}
+              onClick={() =>
+                command.ask({
+                  title: t("admin.promo.confirmDraft", { name: draft.name.trim() }),
+                  lines: [t("admin.promo.draftNote")],
+                  work: async () => {
+                    const created = await adminCreateCampaign({ ...draft, name: draft.name.trim() });
+                    setDraft({ ...draft, name: "" });
+                    list.reload();
+                    setSelected(created.id);
+                  },
+                })
+              }
+            >
+              {t("admin.promo.createDraft")}
+            </Btn>
+            {command.view}
+          </div>
+        </Section>
+      )}
     </div>
+  );
+}
+
+/**
+ * Q123: which campaigns may fund one booking together (P from one, H from the other). Nothing is combined without a
+ * row here; the cost basis is chosen explicitly (no default), and revoking stops only new bookings.
+ */
+function Combinations({ campaign, canManage, onChanged }: { campaign: CampaignDTO; canManage: boolean; onChanged: (next: CampaignDTO) => void }) {
+  const t = useT();
+  const [others, setOthers] = useState<CampaignDTO[]>([]);
+  const [other, setOther] = useState("");
+  const [basis, setBasis] = useState<"" | "shared" | "additive">("");
+  const [reason, setReason] = useState("");
+  const command = useConfirmedCommand();
+  useEffect(() => {
+    adminCampaigns()
+      .then((rows) => setOthers(rows.filter((row) => row.id !== campaign.id)))
+      .catch(() => setOthers([]));
+  }, [campaign.id]);
+  const names = new Map(others.map((row) => [row.id, row.name]));
+  return (
+    <Section title={t("admin.promo.combinations")} sub={t("admin.promo.combinationsHint")}>
+      {(campaign.combinations ?? []).length === 0 && <Empty>{t("admin.promo.noCombinations")}</Empty>}
+      {(campaign.combinations ?? []).map((row) => {
+        const partner = row.campaign_ids.find((cid) => cid !== campaign.id) ?? "";
+        return (
+          <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-border p-2 text-sm">
+            <span className="min-w-0 break-words">
+              {names.get(partner) ?? partner} · {row.cost_basis === "shared" ? t("admin.promo.basis.sharedShort") : t("admin.promo.basis.additiveShort")} ·{" "}
+              {row.status === "active" ? t("admin.promo.status.active") : t("status.cancelled")}
+            </span>
+            {canManage && row.status === "active" && (
+              <Btn
+                tone="danger"
+                disabled={command.busy || !reason.trim()}
+                onClick={() =>
+                  command.ask({
+                    title: t("admin.promo.confirmRevoke", { name: names.get(partner) ?? partner }),
+                    lines: [t("admin.finance.reasonLine", { reason: reason.trim() }), t("admin.promo.revokeEffect")],
+                    tone: "danger",
+                    work: async () => {
+                      await adminRevokeCombination(row.id, row.version, reason.trim());
+                      onChanged(await adminCampaign(campaign.id));
+                      setReason("");
+                    },
+                  })
+                }
+              >
+                {t("common.cancel")}
+              </Btn>
+            )}
+          </div>
+        );
+      })}
+      {canManage && (
+        <>
+          <div className="grid gap-2 md:grid-cols-3">
+            <Select
+              label={t("admin.promo.otherCampaign")}
+              value={other}
+              onChange={setOther}
+              options={[["", t("admin.money.choose")], ...others.map((row): [string, string] => [row.id, row.name])]}
+            />
+            <Select
+              label={t("admin.promo.costBasis")}
+              value={basis}
+              onChange={setBasis}
+              options={[
+                ["", t("admin.promo.basis.none")],
+                ["shared", t("admin.promo.basis.shared")],
+                ["additive", t("admin.promo.basis.additive")],
+              ]}
+            />
+            <Field label={t("admin.money.reasonAudit")} value={reason} onChange={setReason} />
+          </div>
+          <Btn
+            tone="primary"
+            disabled={command.busy || !other || !basis || !reason.trim()}
+            onClick={() =>
+              command.ask({
+                title: t("admin.promo.confirmCombination", { name: names.get(other) ?? other }),
+                lines: [t("admin.finance.reasonLine", { reason: reason.trim() })],
+                work: async () => {
+                  onChanged(await adminApproveCombination(campaign.id, { other_campaign_id: other, cost_basis: basis as "shared" | "additive", reason: reason.trim() }));
+                  setOther("");
+                  setBasis("");
+                  setReason("");
+                },
+              })
+            }
+          >
+            {t("admin.promo.approveCombination")}
+          </Btn>
+        </>
+      )}
+      {command.view}
+    </Section>
   );
 }
 
 // --- budget -------------------------------------------------------------------------------------------------------
 
-function BudgetTab() {
-  const [rows, setRows] = useState<BudgetRequestDTO[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [reasons, setReasons] = useState<Record<string, string>>({});
-  const staff = useStaffAction();
-  const load = () => {
-    setError(null);
-    adminBudgetRequests().then(setRows).catch((cause) => setError(v2ErrorMessage(cause)));
-  };
-  useEffect(load, []);
+function BudgetCard({ row, caps, campaignName, onChanged }: { row: BudgetRequestDTO; caps: Caps; campaignName: string; onChanged: () => void }) {
+  const t = useT();
+  const [note, setNote] = useState("");
+  const command = useConfirmedCommand();
+  const canBudget = caps.has(PROMO_CAP.budget);
+  const kind = dyn(`admin.promo.kind.${row.kind}`, row.kind);
+  const title =
+    row.kind === "allocate" && row.needs_second_approver
+      ? t("admin.promo.budgetAllocate", { amount: soum(t, row.amount_minor) })
+      : `${kind} · ${soum(t, row.amount_minor)}`;
+  const what = [kind, soum(t, row.amount_minor), campaignName].join(" · ");
+  return (
+    <Card title={title} badge={<Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>} testId={`budget-${row.id}`}>
+      <p className="break-words text-xs text-muted-foreground">
+        {t("admin.promo.budgetMetaNoName", { campaign: campaignName, evidence: row.evidence_reference ?? "-", time: formatDateTime(row.created_at) })}
+      </p>
+      <p className="break-words text-secondary-foreground">{t("admin.finance.reasonLine", { reason: row.reason })}</p>
+      {row.status === "pending" && row.requested_by_me && (
+        <>
+          <p className="text-xs text-muted-foreground">{t("admin.promo.youRequested")}</p>
+          {canBudget && (
+            <Btn
+              disabled={command.busy}
+              onClick={() =>
+                command.ask({
+                  title: t("admin.promo.confirmWithdraw"),
+                  lines: [what],
+                  work: async () => {
+                    await adminWithdrawBudget(row.id, row.version);
+                    onChanged();
+                  },
+                })
+              }
+            >
+              {t("admin.promo.withdraw")}
+            </Btn>
+          )}
+        </>
+      )}
+      {/* Q114: the requester is never their own second approver; without promo.budget_allocate the row is read-only. */}
+      {row.status === "pending" && !row.requested_by_me && canBudget && (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[200px] flex-1">
+            <Field label={t("admin.finance.noteOrReject")} value={note} onChange={setNote} />
+          </div>
+          <Btn
+            tone="primary"
+            disabled={command.busy}
+            onClick={() =>
+              command.ask({
+                title: t("admin.promo.confirmBudgetApprove"),
+                lines: [what],
+                work: async () => {
+                  await adminApproveBudget(row.id, row.version, note.trim() || undefined);
+                  onChanged();
+                },
+              })
+            }
+          >
+            {t("common.confirm")}
+          </Btn>
+          <Btn
+            tone="danger"
+            disabled={command.busy || !note.trim()}
+            onClick={() =>
+              command.ask({
+                title: t("admin.promo.confirmBudgetReject"),
+                lines: [what, t("admin.finance.reasonLine", { reason: note.trim() })],
+                tone: "danger",
+                work: async () => {
+                  await adminRejectBudget(row.id, row.version, note.trim());
+                  onChanged();
+                },
+              })
+            }
+          >
+            {t("admin.money.reject")}
+          </Btn>
+        </div>
+      )}
+      {row.status === "pending" && !canBudget && <p className="text-xs text-muted-foreground">{t("admin.promo.budgetOnlyFinance")}</p>}
+      {command.view}
+    </Card>
+  );
+}
+
+function BudgetTab({ caps }: { caps: Caps }) {
+  const t = useT();
+  const list = useList(() => adminBudgetRequests());
+  const campaigns = useList(adminCampaigns);
+  const names = useMemo(() => new Map((campaigns.rows ?? []).map((row) => [row.id, row.name])), [campaigns.rows]);
   return (
     <div className="space-y-3">
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {rows === null && !error && <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>}
-      {rows !== null && rows.length === 0 && <p className="text-sm text-muted-foreground">So'rovlar yo'q.</p>}
-      {(rows ?? []).map((row) => (
-        <div key={row.id} className="space-y-2 rounded-[12px] border border-border bg-card p-3 text-sm">
-          <p className="font-semibold">
-            {BUDGET_KIND[row.kind as BudgetKind] ?? row.kind} · {soum(row.amount_minor)} · {label(STATUS, row.status)}
-            {row.needs_second_approver ? " · ikkinchi tasdiq kerak" : ""}
-          </p>
-          <p className="text-muted-foreground">{row.reason}{row.evidence_reference ? ` (dalil: ${row.evidence_reference})` : ""}</p>
-          {row.status === "pending" && (
-            row.requested_by_me ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground">Siz so'ragansiz — boshqa xodim tasdiqlaydi.</span>
-                <Btn disabled={staff.busy} onClick={() => void staff.act(async () => { await adminWithdrawBudget(row.id, row.version); load(); })}>
-                  Qaytarib olish
-                </Btn>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-end gap-2">
-                <Input label="Izoh / rad sababi" value={reasons[row.id] ?? ""} onChange={(v) => setReasons({ ...reasons, [row.id]: v })} />
-                <Btn tone="primary" disabled={staff.busy}
-                  onClick={() => void staff.act(async () => { await adminApproveBudget(row.id, row.version, reasons[row.id]); load(); })}>
-                  Tasdiqlash
-                </Btn>
-                <Btn tone="danger" disabled={staff.busy || !(reasons[row.id] ?? "").trim()}
-                  onClick={() => void staff.act(async () => { await adminRejectBudget(row.id, row.version, (reasons[row.id] ?? "").trim()); load(); })}>
-                  Rad etish
-                </Btn>
-              </div>
-            )
-          )}
-        </div>
-      ))}
-      {staff.error && <p className="text-sm text-destructive">{staff.error}</p>}
-      {staff.prompt}
+      {!caps.has(PROMO_CAP.budget) && <Note>{t("admin.promo.budgetReadOnly")}</Note>}
+      {list.error && <p role="alert" className="text-sm text-destructive">{list.error}</p>}
+      {list.rows === null && !list.error && <Loading />}
+      {list.rows !== null && list.rows.length === 0 && <Empty>{t("admin.promo.noBudgetRequests")}</Empty>}
+      <div className="grid gap-2 lg:grid-cols-2">
+        {(list.rows ?? []).map((row) => (
+          <BudgetCard key={`${row.id}:${row.version}`} row={row} caps={caps} campaignName={names.get(row.campaign_id) ?? row.campaign_id} onChanged={list.reload} />
+        ))}
+      </div>
     </div>
   );
 }
 
 // --- reviews ------------------------------------------------------------------------------------------------------
 
-/**
- * Q123: which campaigns may fund one booking together (P from one, H from the other). Nothing is combined without a
- * row here; the cost basis is chosen explicitly (no default), and revoking stops only new bookings.
- */
-function Combinations({
-  campaign,
-  staff,
-  onChanged,
-}: {
-  campaign: CampaignDTO;
-  staff: ReturnType<typeof useStaffAction>;
-  onChanged: (next: CampaignDTO) => void;
-}) {
-  const [others, setOthers] = useState<CampaignDTO[]>([]);
-  const [other, setOther] = useState("");
-  const [basis, setBasis] = useState<"" | "shared" | "additive">("");
-  const [reason, setReason] = useState("");
-  useEffect(() => {
-    adminCampaigns().then((rows) => setOthers(rows.filter((row) => row.id !== campaign.id))).catch(() => setOthers([]));
-  }, [campaign.id]);
-  const names = new Map(others.map((row) => [row.id, row.name]));
+function ReviewCard({ row, caps, onChanged }: { row: ReviewDTO; caps: Caps; onChanged: () => void }) {
+  const t = useT();
+  const [note, setNote] = useState("");
+  const command = useConfirmedCommand();
+  const retired = row.kind === "qualification_path_retired";
+  const kindText = dyn(`admin.promo.review.${row.kind}`, row.kind);
+  const hint = translateDynamic(`admin.promo.decisionHint.${row.kind}`);
+  const canStart = caps.has(PROMO_CAP.review) && row.status === "open";
+  const canDecide = caps.has(PROMO_CAP.decide) && (row.status === "open" || row.status === "under_review");
+  const reasons = row.reason_codes.map((code) => dyn(`admin.promo.reason.${code}`, code)).join(", ") || "-";
+  const decide = (decision: "approve" | "reject") =>
+    command.ask({
+      title: decision === "approve" ? t("admin.promo.confirmReviewApprove", { kind: kindText }) : t("admin.promo.confirmReviewReject", { kind: kindText }),
+      lines: [t("listingOwner.commentLabel") + ": " + note.trim(), t("admin.promo.decisionNotGrant")],
+      tone: decision === "reject" ? "danger" : "primary",
+      work: async () => {
+        await adminDecideReview(row.id, decision, note.trim(), row.version);
+        onChanged();
+      },
+    });
   return (
-    <div className="space-y-2">
-      <p className="text-sm font-semibold text-foreground">Boshqa kampaniya bilan birga ishlashi</p>
-      <p className="text-xs text-muted-foreground">
-        Bir bronda mijoz bonusi bitta kampaniyadan, haydovchi krediti bitta kampaniyadan bo'ladi. Ikki turli kampaniya
-        faqat shu yerda tasdiqlangan juftlik bo'lsa birga ishlaydi.
+    <Card
+      title={kindText}
+      badge={
+        row.escalated_at ? <Badge tone="err">{t("admin.promo.overdue")}</Badge> : <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>
+      }
+      testId={`review-${row.id}`}
+    >
+      {retired && <p className="text-xs text-secondary-foreground">{t("admin.promo.cannotReject")}</p>}
+      <p className="break-words text-xs text-muted-foreground">
+        {row.id}
+        {row.due_at ? ` · ${t("admin.promo.dueAt", { time: formatDateTime(row.due_at) })}` : ""}
       </p>
-      {(campaign.combinations ?? []).length === 0 && <p className="text-sm text-muted-foreground">Tasdiqlangan juftlik yo'q.</p>}
-      {(campaign.combinations ?? []).map((row) => {
-        const partner = row.campaign_ids.find((cid) => cid !== campaign.id) ?? "";
-        return (
-          <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-border p-2 text-sm">
-            <span className="min-w-0 break-words">
-              {names.get(partner) ?? partner} · {row.cost_basis === "shared" ? "umumiy xarajat" : "alohida xarajatlar"} ·{" "}
-              {row.status === "active" ? "faol" : "bekor qilingan"}
-            </span>
-            {row.status === "active" && (
-              <Btn tone="danger" disabled={staff.busy || !reason.trim()}
-                onClick={() => void staff.act(async () => {
-                  await adminRevokeCombination(row.id, row.version, reason.trim());
-                  onChanged(await adminCampaign(campaign.id));
-                  setReason("");
-                })}>
-                Bekor qilish
-              </Btn>
-            )}
-          </div>
-        );
-      })}
-      <div className="grid gap-2 md:grid-cols-3">
-        <label className="flex min-w-0 flex-col gap-1 text-sm">
-          <span className="font-medium text-secondary-foreground">Ikkinchi kampaniya</span>
-          <select value={other} onChange={(event) => setOther(event.target.value)} className="h-10 w-full min-w-0 rounded-[10px] border border-border bg-card px-3">
-            <option value="">Tanlang</option>
-            {others.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-          </select>
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-sm">
-          <span className="font-medium text-secondary-foreground">Xarajat asosi (O)</span>
-          <select value={basis} onChange={(event) => setBasis(event.target.value as typeof basis)} className="h-10 w-full min-w-0 rounded-[10px] border border-border bg-card px-3">
-            <option value="">Tanlang — standart yo'q</option>
-            <option value="shared">Umumiy: bir xil bron xarajati (kattasi olinadi)</option>
-            <option value="additive">Alohida: har kampaniyaning o'z xarajati (qo'shiladi)</option>
-          </select>
-        </label>
-        <Input label="Sabab (audit)" value={reason} onChange={setReason} />
+      <p className="break-words text-muted-foreground">{t("admin.finance.reasonLine", { reason: reasons })}</p>
+      <p className="break-words text-xs text-muted-foreground">
+        {t("admin.promo.evidenceLine", { evidence: row.evidence.map((item) => `${String(item.table)}#${String(item.id)}`).join(", ") || "-" })}
+      </p>
+      {hint && <p className="rounded-[8px] bg-muted/60 px-2 py-1.5 text-xs text-secondary-foreground">{hint}</p>}
+      {(canStart || canDecide) && <Field label={t("listingOwner.commentLabel")} value={note} onChange={setNote} />}
+      <div className="flex flex-wrap gap-2">
+        {canStart && (
+          <Btn
+            disabled={command.busy}
+            onClick={() =>
+              command.ask({
+                title: t("admin.promo.confirmStart", { kind: kindText }),
+                lines: note.trim() ? [t("listingOwner.commentLabel") + ": " + note.trim()] : [],
+                work: async () => {
+                  await adminStartReview(row.id, note.trim() || undefined);
+                  onChanged();
+                },
+              })
+            }
+          >
+            {t("admin.promo.startReview")}
+          </Btn>
+        )}
+        {canDecide && (
+          <Btn tone="primary" disabled={command.busy || !note.trim()} onClick={() => decide("approve")}>
+            {t("common.confirm")}
+          </Btn>
+        )}
+        {/* Q147: the retired parcel path is not the participant's breach - the server refuses "reject" for it */}
+        {canDecide && !retired && (
+          <Btn tone="danger" disabled={command.busy || !note.trim()} onClick={() => decide("reject")}>
+            {t("admin.money.reject")}
+          </Btn>
+        )}
       </div>
-      <Btn tone="primary" disabled={staff.busy || !other || !basis || !reason.trim()}
-        onClick={() => void staff.act(async () => {
-          onChanged(await adminApproveCombination(campaign.id, { other_campaign_id: other, cost_basis: basis as "shared" | "additive", reason: reason.trim() }));
-          setOther("");
-          setBasis("");
-          setReason("");
-        })}>
-        Juftlikni tasdiqlash
-      </Btn>
-    </div>
+      {!caps.has(PROMO_CAP.decide) && (row.status === "open" || row.status === "under_review") && (
+        <p className="text-xs text-muted-foreground">{t("admin.promo.decideOnlyAdmin")}</p>
+      )}
+      {command.view}
+    </Card>
   );
 }
 
-function ReviewsTab() {
-  const [rows, setRows] = useState<ReviewDTO[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const staff = useStaffAction();
-  const load = () => {
-    setError(null);
-    adminReviews(true).then(setRows).catch((cause) => setError(v2ErrorMessage(cause)));
-  };
-  useEffect(load, []);
+function ReviewsTab({ caps }: { caps: Caps }) {
+  const t = useT();
+  const list = useList(() => adminReviews(true));
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Operator tekshiruvni boshlaydi va izoh yozadi; qarorni vakolatli admin qabul qiladi. Tasdiq mukofot yaratmaydi va
-        taklif qiluvchini almashtirmaydi — keyingi ishlov shartlarni qayta tekshiradi.
-      </p>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {rows === null && !error && <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>}
-      {rows !== null && rows.length === 0 && <p className="text-sm text-muted-foreground">Ochiq tekshiruv yo'q.</p>}
-      {(rows ?? []).map((row) => (
-        <div key={row.id} className="space-y-2 rounded-[12px] border border-border bg-card p-3 text-sm">
-          <p className="font-semibold">
-            {label(REVIEW_KINDS, row.kind)} · {label(STATUS, row.status)}
-            {row.escalated_at ? " · muddati o'tgan (eskalatsiya)" : ""}
-          </p>
-          <p className="text-muted-foreground">Sabab: {row.reason_codes.map((code) => label(REASONS, code)).join(", ") || "-"}</p>
-          <p className="text-xs text-muted-foreground">
-            Dalil: {row.evidence.map((item) => `${String(item.table)}#${String(item.id)}`).join(", ") || "-"}
-          </p>
-          {DECISION_HINTS[row.kind] && <p className="rounded-[8px] bg-muted/60 px-2 py-1.5 text-xs text-secondary-foreground">{DECISION_HINTS[row.kind]}</p>}
-          <Input label="Izoh" value={notes[row.id] ?? ""} onChange={(v) => setNotes({ ...notes, [row.id]: v })} />
-          <div className="flex flex-wrap gap-2">
-            {row.status === "open" && (
-              <Btn disabled={staff.busy} onClick={() => void staff.act(async () => { await adminStartReview(row.id, notes[row.id]); load(); })}>
-                Tekshiruvni boshlash
-              </Btn>
-            )}
-            <Btn tone="primary" disabled={staff.busy || !(notes[row.id] ?? "").trim()}
-              onClick={() => void staff.act(async () => { await adminDecideReview(row.id, "approve", (notes[row.id] ?? "").trim(), row.version); load(); })}>
-              Tasdiqlash
-            </Btn>
-            {/* Q147: the retired parcel path is not the participant's breach - the server refuses "reject" for it */}
-            {row.kind !== "qualification_path_retired" && (
-              <Btn tone="danger" disabled={staff.busy || !(notes[row.id] ?? "").trim()}
-                onClick={() => void staff.act(async () => { await adminDecideReview(row.id, "reject", (notes[row.id] ?? "").trim(), row.version); load(); })}>
-                Rad etish
-              </Btn>
-            )}
-          </div>
-        </div>
-      ))}
-      {staff.error && <p className="text-sm text-destructive">{staff.error}</p>}
-      {staff.prompt}
+      <Note>{t("admin.promo.reviewsNote")}</Note>
+      {list.error && <p role="alert" className="text-sm text-destructive">{list.error}</p>}
+      {list.rows === null && !list.error && <Loading />}
+      {list.rows !== null && list.rows.length === 0 && <Empty>{t("admin.promo.noReviews")}</Empty>}
+      <div className="grid gap-2 lg:grid-cols-2">
+        {(list.rows ?? []).map((row) => (
+          <ReviewCard key={`${row.id}:${row.version}`} row={row} caps={caps} onChanged={list.reload} />
+        ))}
+      </div>
     </div>
   );
 }
 
 function ReconciliationTab() {
-  const [rows, setRows] = useState<ReconciliationIssueDTO[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const load = () => {
-    setError(null);
-    adminReconciliation().then(setRows).catch((cause) => setError(v2ErrorMessage(cause)));
-  };
-  useEffect(load, []);
+  const t = useT();
+  const list = useList<ReconciliationIssueDTO>(adminReconciliation);
   return (
     <div className="space-y-3">
-      <Btn onClick={load}>Qayta tekshirish</Btn>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {rows !== null && rows.length === 0 && (
-        <p className="text-sm text-success">Promo ledger, byudjet, majburiyatlar va bonuslar bir-biriga mos.</p>
-      )}
-      {(rows ?? []).map((row, index) => (
-        <pre key={index} className="overflow-x-auto rounded-[10px] bg-muted p-2 text-xs">{row.kind}: {JSON.stringify(row.detail)}</pre>
+      <Btn onClick={list.reload}>{t("admin.promo.recheck")}</Btn>
+      {list.error && <p role="alert" className="text-sm text-destructive">{list.error}</p>}
+      {list.rows === null && !list.error && <Loading />}
+      {list.rows !== null && list.rows.length === 0 && <Note tone="success">{t("admin.promo.reconOk")}</Note>}
+      {(list.rows ?? []).map((row, index) => (
+        <pre key={index} className="overflow-x-auto rounded-[10px] bg-muted p-2 text-xs">
+          {row.kind}: {JSON.stringify(row.detail)}
+        </pre>
       ))}
     </div>
   );
 }
 
+/** Props stay empty (AdminApp mounts `<AdminPromoPanel />`); the panel reads its own capabilities. */
 export function AdminPromoPanel() {
-  const [tab, setTab] = useState<Tab>("campaigns");
+  const t = useT();
+  const [caps, setCaps] = useState<Caps | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<PromoTab | null>(null);
+  useEffect(() => {
+    loadCapabilities()
+      .then((dto) => setCaps(new Set<string>(dto.capabilities)))
+      .catch((cause) => setError(v2ErrorMessage(cause)));
+  }, []);
+  const visible = caps ? visiblePromoTabs(caps) : [];
+  const current = tab && visible.includes(tab) ? tab : (visible[0] ?? null);
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {TABS.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setTab(id)}
-            className={`el-press h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-semibold ${tab === id ? "bg-primary text-primary-foreground" : "bg-muted text-secondary-foreground"}`}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <p className="rounded-[12px] bg-accent px-3 py-2 text-xs text-primary">
-        Production'da `promotions_enabled` o'chiq: kampaniyalar bu yerda tayyorlanadi, lekin foydalanuvchilarga ochilmaydi.
-        Mukofot summalari, byudjet, O/M va HMAC saqlash muddati hali tasdiqlanmagan.
-      </p>
-      {tab === "campaigns" && <CampaignsTab />}
-      {tab === "budget" && <BudgetTab />}
-      {tab === "reviews" && <ReviewsTab />}
-      {tab === "reconciliation" && <ReconciliationTab />}
-    </div>
+    <section className="space-y-4">
+      <header>
+        <h2 className="text-lg font-bold text-foreground">{t("admin.promo.title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("admin.promo.subtitle")}</p>
+      </header>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {!caps && !error && <Loading />}
+      {caps && visible.length === 0 && <Note>{t("admin.promo.noAccess")}</Note>}
+      {caps && visible.length > 0 && (
+        <>
+          <Tabs value={current} onChange={setTab} options={visible.map((id): [PromoTab, string] => [id, t(`admin.promo.tab.${id}`)])} />
+          <Note tone="warning">{t("admin.promo.offNote")}</Note>
+          {current === "campaigns" && <CampaignsTab caps={caps} />}
+          {current === "budget" && <BudgetTab caps={caps} />}
+          {current === "reviews" && <ReviewsTab caps={caps} />}
+          {current === "reconciliation" && <ReconciliationTab />}
+        </>
+      )}
+    </section>
   );
 }

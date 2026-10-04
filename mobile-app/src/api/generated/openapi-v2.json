@@ -505,6 +505,63 @@
         "title": "AdminStopDTO",
         "type": "object"
       },
+      "AdminTripSearchDTO": {
+        "additionalProperties": false,
+        "description": "Staff trip lookup row (admin panel). The driver is named by first name only - no phone, no plate - so this\nread leaves no contact-view audit row. The full trip is ``GET /trips/{id}`` (staff see the full view).",
+        "properties": {
+          "driver_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Display Name"
+          },
+          "driver_id": {
+            "title": "Driver Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "planned_end_at": {
+            "format": "date-time",
+            "title": "Planned End At",
+            "type": "string"
+          },
+          "planned_start_at": {
+            "format": "date-time",
+            "title": "Planned Start At",
+            "type": "string"
+          },
+          "seat_capacity": {
+            "title": "Seat Capacity",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TripStatus"
+          },
+          "vehicle_id": {
+            "title": "Vehicle Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "driver_id",
+          "vehicle_id",
+          "planned_start_at",
+          "planned_end_at",
+          "seat_capacity"
+        ],
+        "title": "AdminTripSearchDTO",
+        "type": "object"
+      },
       "AdminUserCreate": {
         "properties": {
           "full_name": {
@@ -519,6 +576,18 @@
             ],
             "title": "Full Name"
           },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
           "phone": {
             "maxLength": 32,
             "minLength": 3,
@@ -528,6 +597,18 @@
           "role": {
             "title": "Role",
             "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
           }
         },
         "required": [
@@ -535,6 +616,135 @@
           "role"
         ],
         "title": "AdminUserCreate",
+        "type": "object"
+      },
+      "AdminUserCreated": {
+        "description": "``POST /admin/users`` response: the unchanged ``AuthUser`` fields plus additive login facts.",
+        "properties": {
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "has_password": {
+            "default": false,
+            "title": "Has Password",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_phone_verified": {
+            "title": "Is Phone Verified",
+            "type": "boolean"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "public_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Id"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id",
+          "phone",
+          "role",
+          "status",
+          "is_phone_verified"
+        ],
+        "title": "AdminUserCreated",
+        "type": "object"
+      },
+      "AdminUserSearchDTO": {
+        "additionalProperties": false,
+        "description": "Staff user lookup row (admin panel, ``ops.view``). Shows name and phone, so the read is audited\n(``staff_user_search_viewed``: ids and field names only).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "role": {
+            "description": "users.role (the primary role).",
+            "title": "Role",
+            "type": "string"
+          },
+          "roles": {
+            "description": "Effective roles: the primary role plus active activated roles.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "roles",
+          "phone",
+          "status",
+          "created_at"
+        ],
+        "title": "AdminUserSearchDTO",
         "type": "object"
       },
       "AdminVehicleDTO": {
@@ -757,6 +967,60 @@
           "active_trip_count"
         ],
         "title": "AdminVehicleOwnerDTO",
+        "type": "object"
+      },
+      "AdminWalletLookupDTO": {
+        "additionalProperties": false,
+        "description": "Staff wallet lookup row (``finance.reports``). Shows the driver's name and phone, so the read is audited\n(``wallet_lookup_viewed``: wallet ids and field names only).",
+        "properties": {
+          "available_minor": {
+            "title": "Available Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "driver": {
+            "$ref": "#/components/schemas/UserRefDTO"
+          },
+          "driver_full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Full Name"
+          },
+          "driver_phone": {
+            "title": "Driver Phone",
+            "type": "string"
+          },
+          "held_minor": {
+            "title": "Held Minor",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "posted_balance_minor": {
+            "title": "Posted Balance Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "driver",
+          "driver_phone",
+          "currency",
+          "posted_balance_minor",
+          "held_minor",
+          "available_minor"
+        ],
+        "title": "AdminWalletLookupDTO",
         "type": "object"
       },
       "AmendmentAccept": {
@@ -11481,6 +11745,122 @@
         "title": "Envelope[list[AdminStopDTO]]",
         "type": "object"
       },
+      "Envelope_list_AdminTripSearchDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdminTripSearchDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[AdminTripSearchDTO]]",
+        "type": "object"
+      },
+      "Envelope_list_AdminUserSearchDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserSearchDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[AdminUserSearchDTO]]",
+        "type": "object"
+      },
       "Envelope_list_AdminVehicleDTO__": {
         "additionalProperties": false,
         "properties": {
@@ -11537,6 +11917,64 @@
           "data"
         ],
         "title": "Envelope[list[AdminVehicleDTO]]",
+        "type": "object"
+      },
+      "Envelope_list_AdminWalletLookupDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdminWalletLookupDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[AdminWalletLookupDTO]]",
         "type": "object"
       },
       "Envelope_list_AmendmentDTO__": {
@@ -12929,6 +13367,64 @@
           "data"
         ],
         "title": "Envelope[list[NotificationDTO]]",
+        "type": "object"
+      },
+      "Envelope_list_OpsQueueCountDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/OpsQueueCountDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[OpsQueueCountDTO]]",
         "type": "object"
       },
       "Envelope_list_OpsQueueItemDTO__": {
@@ -15377,6 +15873,9 @@
               "anyOf": [
                 {
                   "type": "integer"
+                },
+                {
+                  "type": "string"
                 },
                 {
                   "items": {
@@ -17974,6 +18473,35 @@
         "title": "OpsQueue",
         "type": "string"
       },
+      "OpsQueueCountDTO": {
+        "additionalProperties": false,
+        "description": "O4 summary: how many items one queue holds. ``count`` is exact while ``capped`` is false; when ``capped`` is\ntrue there are **at least** ``cap`` items (the panel shows \"cap+\"), so a long queue never costs a full scan.",
+        "properties": {
+          "cap": {
+            "title": "Cap",
+            "type": "integer"
+          },
+          "capped": {
+            "title": "Capped",
+            "type": "boolean"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/OpsQueue"
+          }
+        },
+        "required": [
+          "queue",
+          "count",
+          "capped",
+          "cap"
+        ],
+        "title": "OpsQueueCountDTO",
+        "type": "object"
+      },
       "OpsQueueItemDTO": {
         "additionalProperties": false,
         "description": "O4. ``summary`` is a short operator label: route, status and counts, never a phone or a name.",
@@ -18003,6 +18531,16 @@
           },
           "queue": {
             "$ref": "#/components/schemas/OpsQueue"
+          },
+          "service_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServiceType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "summary": {
             "title": "Summary",
@@ -23579,6 +24117,37 @@
         "title": "SplitAdjustmentSignalDTO",
         "type": "object"
       },
+      "StaffCredentialsUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "StaffCredentialsUpdate",
+        "type": "object"
+      },
       "StaffLogin": {
         "description": "Staff sign in with username + password; clients and drivers use SMS OTP.",
         "properties": {
@@ -27480,6 +28049,17 @@
       "UserRefDTO": {
         "additionalProperties": false,
         "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "id": {
             "anyOf": [
               {
@@ -28110,6 +28690,131 @@
           }
         ],
         "summary": "List Admin Bookings",
+        "tags": [
+          "v2 Bookings"
+        ]
+      }
+    },
+    "/api/v2/admin/bookings/search": {
+      "get": {
+        "description": "Staff lookup by booking id or code fragment (``bkg_7q2x`` / ``7q2x``): the same staff view as B12, audited the\nsame way when it shows phones or full plates.",
+        "operationId": "search_admin_bookings_api_v2_admin_bookings_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 4,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_BookingDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Search Admin Bookings",
         "tags": [
           "v2 Bookings"
         ]
@@ -32568,6 +33273,125 @@
           }
         ],
         "summary": "Slo",
+        "tags": [
+          "v2 Operations"
+        ]
+      }
+    },
+    "/api/v2/admin/ops/queues/summary": {
+      "get": {
+        "description": "O4 summary: one count per queue for the dashboard tiles. Declared before ``/{queue}`` so the literal path\nis matched first.",
+        "operationId": "ops_queue_summary_api_v2_admin_ops_queues_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "corridor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Corridor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_OpsQueueCountDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Ops Queue Summary",
         "tags": [
           "v2 Operations"
         ]
@@ -38436,6 +39260,130 @@
         ]
       }
     },
+    "/api/v2/admin/trips/search": {
+      "get": {
+        "operationId": "search_admin_trips_api_v2_admin_trips_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 4,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_AdminTripSearchDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Search Admin Trips",
+        "tags": [
+          "v2 Trips"
+        ]
+      }
+    },
     "/api/v2/admin/trips/{trip_id}/tracking": {
       "get": {
         "operationId": "get_admin_trip_tracking_api_v2_admin_trips__trip_id__tracking_get",
@@ -38968,6 +39916,146 @@
         ]
       }
     },
+    "/api/v2/admin/users/search": {
+      "get": {
+        "operationId": "search_users_api_v2_admin_users_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 3,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Role"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_AdminUserSearchDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Search Users",
+        "tags": [
+          "v2 Identity"
+        ]
+      }
+    },
     "/api/v2/admin/vehicles": {
       "get": {
         "description": "T3a: vehicles awaiting (or past) a staff decision, oldest first. Same capability as T3 verify.",
@@ -39256,6 +40344,68 @@
         "summary": "Verify Vehicle",
         "tags": [
           "v2 Trips"
+        ]
+      }
+    },
+    "/api/v2/admin/wallets": {
+      "get": {
+        "description": "Wallet lookup by driver (admin panel: the adjustment form's \"Hamyon\" picker).",
+        "operationId": "lookup_wallets_admin_api_v2_admin_wallets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 3,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_AdminWalletLookupDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Lookup Wallets Admin",
+        "tags": [
+          "Wallet"
         ]
       }
     },

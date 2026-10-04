@@ -12,6 +12,9 @@
  *
  * Scope: a band is either corridor-wide (a loose safety range for the whole direction) or for one exact stop
  * pair (the real range for that segment). The segment one wins when both exist (Q53).
+ *
+ * Q52: editing is admin+ (`ops.corridor_manage`). Without that capability the form is not rendered at all - the
+ * operator reads the table and the history, and the button names the version a save would create ("Yangilash (v3)").
  */
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, RefreshCw, ShieldAlert } from "./ui/icons";
@@ -26,14 +29,33 @@ import {
   type PriceBandDTO,
   type PriceBandUpsert,
 } from "../api/v2/ops.api";
-import { v2ErrorMessage } from "../utils/v2Errors";
+import { capabilities, type CapabilitiesDTO } from "../api/v2/ops.api";
+import { translate, type MessageKey } from "../i18n";
+import { useT } from "../i18n/react";
+import { formatDateTime } from "../utils/v2Format";
+import { v2ErrorMessage, warningMessage } from "../utils/v2Errors";
+import { Badge, Note, hasCap } from "./adminMarketKit";
 
 type ServiceType = "passenger" | "parcel";
 
-const SERVICE_LABELS: Record<ServiceType, string> = {
-  passenger: "Yo'lovchi",
-  parcel: "Yuk",
+const SERVICE_KEY: Record<ServiceType, MessageKey> = {
+  passenger: "admin.mk.passenger",
+  parcel: "admin.mk.cargo",
 };
+
+const SERVICE_OPTION_KEY: Record<ServiceType, MessageKey> = {
+  passenger: "admin.bands.passengerPerSeat",
+  parcel: "admin.bands.parcelTotal",
+};
+
+function serviceLabel(value: string): string {
+  return value in SERVICE_KEY ? translate(SERVICE_KEY[value as ServiceType]) : value;
+}
+
+/** Q52: editing a price reference is admin+ (`ops.corridor_manage`); everybody else reads the table and history. */
+export function canEditPriceBands(caps: CapabilitiesDTO | null): boolean {
+  return hasCap(caps as { capabilities?: readonly string[] } | null, "ops.corridor_manage");
+}
 
 function soum(minor: number): string {
   return new Intl.NumberFormat("uz-UZ").format(Math.round(minor / 100));
@@ -44,11 +66,15 @@ function toMinor(value: string): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed * 100 : 0;
 }
 
+const FIELD = "h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 disabled:bg-muted/50";
+
 export function AdminPriceBandsPanel() {
+  const t = useT();
   const [corridors, setCorridors] = useState<CorridorDTO[]>([]);
   const [corridorId, setCorridorId] = useState("");
   const [bands, setBands] = useState<PriceBandDTO[]>([]);
   const [history, setHistory] = useState<PriceBandChangeDTO[]>([]);
+  const [caps, setCaps] = useState<CapabilitiesDTO | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -60,8 +86,10 @@ export function AdminPriceBandsPanel() {
     enforced: false,
     reason: "",
   });
+  const canEdit = canEditPriceBands(caps);
 
   useEffect(() => {
+    capabilities().then(setCaps).catch(() => setCaps(null));
     void (async () => {
       try {
         const rows = await listCorridors();
@@ -112,7 +140,8 @@ export function AdminPriceBandsPanel() {
   const floorMinor = toMinor(form.floor);
   const ceilingMinor = toMinor(form.ceiling);
   const canSave =
-    Boolean(corridorId) && floorMinor > 0 && ceilingMinor >= floorMinor && form.reason.trim().length > 0 && !busy;
+    canEdit && Boolean(corridorId) && floorMinor > 0 && ceilingMinor >= floorMinor && form.reason.trim().length > 0 && !busy;
+  const nextVersion = (current?.version ?? 0) + 1;
 
   async function save() {
     setBusy(true);
@@ -127,7 +156,7 @@ export function AdminPriceBandsPanel() {
         enforced: form.enforced,
         reason: form.reason.trim(),
       } as PriceBandUpsert);
-      setWarnings(result.warnings.map((warning) => warning.message || warning.code));
+      setWarnings(result.warnings.map((warning) => warningMessage(warning.code)));
       await reload();
     } catch (err) {
       setError(v2ErrorMessage(err));
@@ -140,12 +169,8 @@ export function AdminPriceBandsPanel() {
     <section className="grid gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Narx referensi</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Diapazon <strong>narx belgilamaydi</strong>. U saralashga kiradi va odatdan tashqari taklifga
-            ogohlantirish qo&apos;yadi; narxni mijoz va haydovchi kelishadi. Faqat «qat&apos;iy chegara»
-            yoqilgan diapazon taklifni rad etadi.
-          </p>
+          <h2 className="text-lg font-bold text-foreground">{t("admin.bands.title")}</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{t("admin.bands.subtitle")}</p>
         </div>
         <button
           type="button"
@@ -153,12 +178,12 @@ export function AdminPriceBandsPanel() {
           disabled={busy}
           className="el-press inline-flex h-10 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-sm font-semibold text-secondary-foreground disabled:opacity-50"
         >
-          <RefreshCw size={16} /> Yangilash
+          <RefreshCw size={16} /> {t("support.refresh")}
         </button>
       </header>
 
       {error && (
-        <p className="rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+        <p role="alert" className="rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
           {error}
         </p>
       )}
@@ -173,12 +198,8 @@ export function AdminPriceBandsPanel() {
       ))}
 
       <label className="grid max-w-sm gap-1.5 text-sm font-medium text-secondary-foreground">
-        Koridor
-        <select
-          value={corridorId}
-          onChange={(event) => setCorridorId(event.target.value)}
-          className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
-        >
+        {t("admin.mk.corridor")}
+        <select value={corridorId} onChange={(event) => setCorridorId(event.target.value)} className={FIELD}>
           {corridors.map((corridor) => (
             <option key={corridor.id} value={corridor.id}>
               {corridor.name}
@@ -187,159 +208,136 @@ export function AdminPriceBandsPanel() {
         </select>
       </label>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <form
-          className="grid gap-3 rounded-[12px] border border-border bg-card p-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (canSave) void save();
-          }}
-        >
-          <p className="text-sm font-semibold text-foreground">
-            Koridor bo&apos;yicha diapazon {current ? `(v${current.version})` : "(yangi)"}
-          </p>
+      <div className={`grid gap-4 ${canEdit ? "lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]" : ""}`}>
+        {canEdit ? (
+          <form
+            className="grid content-start gap-3 rounded-[12px] border border-border bg-card p-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (canSave) void save();
+            }}
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {current ? t("admin.bands.formCurrent", { version: current.version }) : t("admin.bands.formNew")}
+            </p>
 
-          <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
-            Xizmat turi
-            <select
-              value={form.service_type}
-              onChange={(event) => setForm({ ...form, service_type: event.target.value as ServiceType })}
-              className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
+            <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
+              {t("admin.bands.serviceType")}
+              <select
+                value={form.service_type}
+                onChange={(event) => setForm({ ...form, service_type: event.target.value as ServiceType })}
+                className={FIELD}
+              >
+                {(Object.keys(SERVICE_OPTION_KEY) as ServiceType[]).map((value) => (
+                  <option key={value} value={value}>
+                    {t(SERVICE_OPTION_KEY[value])}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
+                {t("admin.bands.min")}
+                <input value={form.floor} onChange={(event) => setForm({ ...form, floor: event.target.value })} inputMode="numeric" className={FIELD} />
+              </label>
+              <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
+                {t("admin.bands.max")}
+                <input value={form.ceiling} onChange={(event) => setForm({ ...form, ceiling: event.target.value })} inputMode="numeric" className={FIELD} />
+              </label>
+            </div>
+            {ceilingMinor > 0 && ceilingMinor < floorMinor && (
+              <p className="text-xs font-medium text-destructive">{t("admin.bands.maxBelowMin")}</p>
+            )}
+
+            <label className="flex items-start gap-2 text-sm text-secondary-foreground">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(event) => setForm({ ...form, is_active: event.target.checked })}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                {t("admin.bands.active")}
+                <span className="block text-xs text-muted-foreground">{t("admin.bands.activeHint")}</span>
+              </span>
+            </label>
+
+            {/* Q90: the one switch that can refuse a negotiated price. It is deliberately loud. */}
+            <label
+              className={`flex items-start gap-2 rounded-[10px] border p-3 text-sm ${
+                form.enforced ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border bg-slate-50 text-secondary-foreground"
+              }`}
             >
-              {(Object.keys(SERVICE_LABELS) as ServiceType[]).map((value) => (
-                <option key={value} value={value}>
-                  {SERVICE_LABELS[value]}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs font-normal text-muted-foreground">
-              Yo&apos;lovchi — bir o&apos;rin narxi; yuk — yetkazish jami.
-            </span>
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
-              Quyi chegara (so&apos;m)
               <input
-                value={form.floor}
-                onChange={(event) => setForm({ ...form, floor: event.target.value })}
-                inputMode="numeric"
-                className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
+                type="checkbox"
+                checked={form.enforced}
+                onChange={(event) => setForm({ ...form, enforced: event.target.checked })}
+                className="mt-0.5 h-4 w-4"
               />
+              <span>
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <ShieldAlert size={15} /> {t("admin.bands.enforced")}
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-destructive">{t("admin.bands.enforcedHint")}</span>
+              </span>
             </label>
+
             <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
-              Yuqori chegara (so&apos;m)
-              <input
-                value={form.ceiling}
-                onChange={(event) => setForm({ ...form, ceiling: event.target.value })}
-                inputMode="numeric"
-                className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
-              />
+              {t("admin.bands.reasonVisible")} *
+              <input value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} className={FIELD} />
             </label>
-          </div>
-          {ceilingMinor > 0 && ceilingMinor < floorMinor && (
-            <p className="text-xs font-medium text-destructive">Yuqori chegara quyi chegaradan kichik bo&apos;la olmaydi.</p>
-          )}
 
-          <label className="flex items-start gap-2 text-sm text-secondary-foreground">
-            <input
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(event) => setForm({ ...form, is_active: event.target.checked })}
-              className="mt-0.5 h-4 w-4"
-            />
-            <span>
-              Faol
-              <span className="block text-xs text-muted-foreground">O&apos;chirilgan diapazon saralashga ham kirmaydi.</span>
-            </span>
-          </label>
+            <button
+              type="submit"
+              disabled={!canSave}
+              className="el-press inline-flex h-10 items-center justify-center rounded-[10px] bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? t("admin.bands.saving") : current ? t("admin.bands.saveVersion", { version: nextVersion }) : t("admin.bands.createVersion", { version: nextVersion })}
+            </button>
+          </form>
+        ) : caps ? (
+          <Note>{t("admin.bands.readOnly")}</Note>
+        ) : null}
 
-          {/* Q90: the one switch that can refuse a negotiated price. It is deliberately loud. */}
-          <label
-            className={`flex items-start gap-2 rounded-[10px] border p-3 text-sm ${
-              form.enforced ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border bg-slate-50 text-secondary-foreground"
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={form.enforced}
-              onChange={(event) => setForm({ ...form, enforced: event.target.checked })}
-              className="mt-0.5 h-4 w-4"
-            />
-            <span>
-              <span className="flex items-center gap-1.5 font-semibold">
-                <ShieldAlert size={15} /> Qat&apos;iy chegara (taklifni rad etadi)
-              </span>
-              <span className="mt-1 block text-xs leading-5">
-                Odatda <strong>o&apos;chiq</strong> bo&apos;ladi. Yoqilsa, bu diapazondan tashqari har qanday
-                taklif va qarshi taklif <code>400 PRICE_OUT_OF_BAND</code> bilan rad etiladi — ya&apos;ni
-                kelishuvning o&apos;zi bloklanadi. Faqat suiiste&apos;mol yoki xavfsizlik holati uchun.
-              </span>
-            </span>
-          </label>
-
-          <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
-            Sabab
-            <input
-              value={form.reason}
-              onChange={(event) => setForm({ ...form, reason: event.target.value })}
-              placeholder="Auditda ko'rinadi"
-              className="h-10 rounded-[10px] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-blue-100"
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={!canSave}
-            className="el-press inline-flex h-10 items-center justify-center rounded-[10px] bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy ? "Saqlanmoqda..." : current ? "Yangilash" : "Yaratish"}
-          </button>
-        </form>
-
-        <div className="grid gap-4">
-          <div className="overflow-hidden rounded-[12px] border border-border bg-card">
-            <table className="w-full text-left text-sm">
+        <div className="grid content-start gap-4">
+          <div className="overflow-x-auto rounded-[12px] border border-border bg-card">
+            <table className="w-full min-w-[520px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2">Xizmat</th>
-                  <th className="px-3 py-2">Doira</th>
-                  <th className="px-3 py-2">Diapazon</th>
-                  <th className="px-3 py-2">Holat</th>
+                  <th className="px-3 py-2">{t("admin.mk.service")}</th>
+                  <th className="px-3 py-2">{t("admin.bands.scope")}</th>
+                  <th className="px-3 py-2">{t("admin.bands.range")}</th>
+                  <th className="px-3 py-2">{t("admin.mk.status")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-muted">
                 {bands.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
-                      Bu koridorda diapazon yo&apos;q — taklif narxlari cheklanmaydi va saralashda narx
-                      komponenti neytral (0.5) bo&apos;ladi.
+                      {t("admin.bands.empty")}
                     </td>
                   </tr>
                 )}
                 {bands.map((band) => (
-                  <tr key={`${band.service_type}-${band.origin_stop_id ?? "corridor"}`}>
-                    <td className="px-3 py-2 font-medium text-foreground">{SERVICE_LABELS[band.service_type as ServiceType]}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{band.origin_stop_id ? "Segment" : "Butun koridor"}</td>
+                  <tr key={`${band.service_type}-${band.origin_stop_id ?? "corridor"}-${band.destination_stop_id ?? ""}`}>
+                    <td className="px-3 py-2 font-medium text-foreground">{serviceLabel(band.service_type)}</td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {band.origin_stop_id ? t("admin.bands.segment") : t("admin.bands.wholeCorridor")}
+                    </td>
                     <td className="px-3 py-2 text-foreground">
-                      {soum(band.floor_minor)} – {soum(band.ceiling_minor)} so&apos;m
-                      <span className="block text-xs text-muted-foreground">
-                        {band.price_basis === "per_seat" ? "bir o'rin uchun" : "jami"}
-                      </span>
+                      {t(band.price_basis === "per_seat" ? "admin.bands.rangePerSeat" : "admin.bands.rangeTotal", {
+                        min: soum(band.floor_minor),
+                        max: soum(band.ceiling_minor),
+                      })}
                     </td>
                     <td className="px-3 py-2">
                       {!band.is_active ? (
-                        <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                          O&apos;chirilgan
-                        </span>
+                        <Badge>{t("admin.bands.disabled")}</Badge>
                       ) : band.enforced ? (
-                        <span className="inline-flex rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
-                          Qat&apos;iy chegara
-                        </span>
+                        <Badge tone="err">{t("admin.bands.enforcedBadge")}</Badge>
                       ) : (
-                        <span className="inline-flex rounded-full bg-success/12 px-2.5 py-1 text-xs font-semibold text-success">
-                          Maslahat
-                        </span>
+                        <Badge tone="blue">{t("admin.bands.advisory")}</Badge>
                       )}
                     </td>
                   </tr>
@@ -349,19 +347,23 @@ export function AdminPriceBandsPanel() {
           </div>
 
           <div className="rounded-[12px] border border-border bg-card p-4">
-            <p className="text-sm font-semibold text-foreground">O&apos;zgarishlar tarixi</p>
+            <p className="text-sm font-semibold text-foreground">{t("admin.bands.history")}</p>
             {history.length === 0 ? (
-              <p className="mt-2 text-sm text-muted-foreground">Hozircha o&apos;zgarish yo&apos;q.</p>
+              <p className="mt-2 text-sm text-muted-foreground">{t("admin.bands.noHistory")}</p>
             ) : (
               <ul className="mt-2 grid gap-2 text-sm text-secondary-foreground">
                 {history.map((change, index) => (
                   <li key={index} className="border-b border-muted pb-2 last:border-0 last:pb-0">
                     <span className="font-medium text-foreground">
-                      {SERVICE_LABELS[change.service_type as ServiceType]} v{change.version}
-                    </span>{" "}
-                    {soum(change.new_floor_minor)} – {soum(change.new_ceiling_minor)} so&apos;m
+                      {t("admin.bands.historyTitle", {
+                        service: serviceLabel(change.service_type),
+                        version: change.version,
+                        min: soum(change.new_floor_minor),
+                        max: soum(change.new_ceiling_minor),
+                      })}
+                    </span>
                     <span className="block text-xs text-muted-foreground">
-                      {new Date(change.changed_at).toLocaleString("uz-UZ")} · {change.actor ?? "—"} · {change.reason}
+                      {formatDateTime(change.changed_at)} · {change.actor ?? "—"} · {change.reason}
                     </span>
                   </li>
                 ))}

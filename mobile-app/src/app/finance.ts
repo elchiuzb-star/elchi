@@ -5,6 +5,7 @@
  * that is certain to be refused (the requester's own approve, a manage action without the capability) and to say
  * *why* a money command was refused in words a finance person can act on.
  */
+import { translate } from "../i18n";
 import { ApiError } from "../types/api";
 import { v2ErrorMessage } from "../utils/v2Errors";
 
@@ -22,6 +23,23 @@ export const CAP = {
 
 /** The capability that should reveal the finance menu item: every finance tab reads with it. */
 export const FINANCE_MENU_CAPABILITY = CAP.reports;
+
+export type FinanceTab = "topups" | "adjustments" | "reports" | "policies";
+
+/**
+ * Tabs in the design order (DESIGN-ADMIN-DIFF §11) and the capability that reveals each. Top-uplar needs
+ * `finance.topup_approve` (Q69): a queue the admin can never act on is not shown to the admin at all.
+ */
+export const FINANCE_TABS: Array<[FinanceTab, string]> = [
+  ["topups", CAP.topupApprove],
+  ["adjustments", CAP.reports],
+  ["reports", CAP.reports],
+  ["policies", CAP.policyView],
+];
+
+export function visibleFinanceTabs(caps: Capabilities): FinanceTab[] {
+  return FINANCE_TABS.filter(([, cap]) => caps.has(cap)).map(([tab]) => tab);
+}
 
 /**
  * "150 000", "150000", "150 000,50" or "150000.5" so'm -> integer tiyin. Parsed as text, never through a float.
@@ -77,16 +95,14 @@ export function topupActions(topup: TopupLike, meId: string | null, caps: Capabi
   const open = topup.status === "pending" || topup.status === "awaiting_second_approval";
   const may = caps.has(CAP.topupApprove);
   if (!open) return { approve: false, reject: false, secondStep: false, note: null };
-  if (!may) {
-    return { approve: false, reject: false, secondStep: false, note: "Top-upni faqat faol moliya xodimi yoki super admin tasdiqlaydi." };
-  }
+  if (!may) return { approve: false, reject: false, secondStep: false, note: translate("admin.finance.topupOnlyFinance") };
   const secondStep = topup.status === "awaiting_second_approval";
   const iApprovedFirst = secondStep && meId !== null && topup.first_approver?.id === meId;
   return {
     approve: !iApprovedFirst,
     reject: true,
     secondStep,
-    note: iApprovedFirst ? "Siz birinchi tasdiqlagansiz — ikkinchi tasdiqni boshqa moliya xodimi beradi." : null,
+    note: iApprovedFirst ? translate("admin.finance.youApprovedFirst") : null,
   };
 }
 
@@ -99,20 +115,11 @@ export function adjustmentActions(row: AdjustmentLike, meId: string | null, caps
   if (row.status !== "pending_second_approval") return { approve: false, reject: false, withdraw: false, note: null };
   const mine = meId !== null && row.requested_by.id === meId;
   if (mine) {
-    return {
-      approve: false,
-      reject: false,
-      withdraw: caps.has(CAP.adjustment),
-      note: "Siz so'ragansiz — tasdiqlash yoki rad etishni boshqa moliya xodimi qiladi.",
-    };
+    return { approve: false, reject: false, withdraw: caps.has(CAP.adjustment), note: translate("admin.finance.youRequestedAdj") };
   }
   const may = caps.has(CAP.adjustmentApprove);
-  return {
-    approve: may,
-    reject: may,
-    withdraw: false,
-    note: may ? null : "Tasdiqlash uchun «finance.adjustment_approve» ruxsati kerak.",
-  };
+  // Q69: without the capability the row is simply read-only; no "ask somebody" button.
+  return { approve: may, reject: may, withdraw: false, note: may ? null : translate("admin.finance.adjOnlyFinance") };
 }
 
 /** `entries` exists only on a posted ledger transaction (201); a request waiting for a second person has none. */
@@ -122,33 +129,62 @@ export function isPostedTransaction(value: object): boolean {
 
 // --- labels -------------------------------------------------------------------------------------------------------
 
-export const TOPUP_STATUS: Record<string, string> = {
-  pending: "kutilmoqda",
-  awaiting_second_approval: "ikkinchi tasdiq kutilmoqda",
-  approved: "tasdiqlangan (balansga o'tgan)",
-  rejected: "rad etilgan",
-};
+export function topupStatusLabel(status: string): string {
+  if (status === "pending") return translate("status.pending");
+  if (status === "awaiting_second_approval") return translate("admin.finance.status.second");
+  if (status === "approved") return translate("status.approved");
+  if (status === "rejected") return translate("status.rejected");
+  return status;
+}
 
-export const ADJUSTMENT_STATUS: Record<string, string> = {
-  pending_second_approval: "ikkinchi tasdiq kutilmoqda",
-  posted: "o'tkazilgan",
-  rejected: "rad etilgan",
-  withdrawn: "qaytarib olingan",
-};
+export function topupStatusTone(status: string): "ok" | "warn" | "err" | "gray" {
+  return status === "approved" ? "ok" : status === "rejected" ? "err" : "warn";
+}
 
-export const REPORTS: Array<[string, string, string]> = [
-  ["commission_revenue", "Undirilgan komissiya", "Haqiqatda capture qilingan komissiya (ledger)."],
-  [
-    "calculated_commission",
-    "Hisoblangan komissiya (hold)",
-    "Bronlarda band qilingan summa. Bu tushgan pul emas — capture bo'lmaguncha daromad hisoblanmaydi.",
-  ],
-  ["cash_inflows", "Tasdiqlangan top-uplar", "Moliya xodimi bank/kassa hujjati bilan tasdiqlagan tushumlar."],
-  ["reversals", "Komissiya qaytarishlari", "Capture qilingan komissiyaning qaytarilgan qismi."],
+export function adjustmentStatusLabel(status: string): string {
+  if (status === "pending_second_approval") return translate("admin.finance.status.second");
+  if (status === "posted") return translate("admin.finance.status.posted");
+  if (status === "rejected") return translate("status.rejected");
+  if (status === "withdrawn") return translate("status.withdrawn");
+  return status;
+}
+
+export function topupMethodLabel(method: string): string {
+  return method === "bank_transfer" ? translate("admin.finance.method.bank") : translate("admin.finance.method.cash");
+}
+
+export function sourceTypeLabel(source: string | null | undefined): string {
+  return source === "cashier_receipt" ? translate("admin.finance.source.cashier_receipt") : translate("admin.finance.source.bank_statement");
+}
+
+export type ReportMeta = { key: FinanceReportKey; title: string; hint: string; kind: MoneyKind };
+export type FinanceReportKey = "commission_revenue" | "calculated_commission" | "cash_inflows" | "reversals";
+
+/**
+ * What kind of money each report counts. The four are never added into one "Jami" (11c.3): captured commission is
+ * income, a hold is not received money, a top-up is a driver's prepaid balance (a liability), and a reversal
+ * subtracts from income. The table therefore totals each kind on its own row only.
+ */
+export type MoneyKind = "income" | "hold" | "prepaid" | "reversal";
+
+export const REPORT_KEYS: Array<[FinanceReportKey, MoneyKind]> = [
+  ["commission_revenue", "income"],
+  ["calculated_commission", "hold"],
+  ["cash_inflows", "prepaid"],
+  ["reversals", "reversal"],
 ];
 
-export function label(map: Record<string, string>, value: string): string {
-  return map[value] ?? value;
+export function reportMeta(): ReportMeta[] {
+  return REPORT_KEYS.map(([key, kind]) => ({
+    key,
+    kind,
+    title: translate(`admin.finance.report.${key}`),
+    hint: translate(`admin.finance.reportHint.${key}`),
+  }));
+}
+
+export function moneyKindLabel(kind: MoneyKind): string {
+  return translate(`admin.finance.kindOf.${kind}`);
 }
 
 // --- errors -------------------------------------------------------------------------------------------------------
@@ -167,30 +203,34 @@ export function isGateRefusal(error: unknown): boolean {
   return error instanceof ApiError && error.code === "PRODUCTION_INVARIANTS_FAILED";
 }
 
-export const GATE_MESSAGE =
-  "Production pul himoyasi (Q48) hali o'tmagan: top-up tasdiqlash va kredit tuzatishlar bloklangan. Bu xato emas — " +
-  "DB rollari ajratilib, balans himoyasi va seed stavka tasdiqlangach ochiladi. Hech qanday pul o'tkazilmadi.";
+/**
+ * Refusals that are a state of the world, not a failure: the Q48 launch gate, and a day nobody reconciled yet.
+ * They are shown as a calm warning, never as a red error with "try again".
+ */
+export function isCalmRefusal(error: unknown): boolean {
+  if (isGateRefusal(error)) return true;
+  return error instanceof ApiError && error.code === "NOT_FOUND" && reasonOf(error) === "reconciliation_not_run";
+}
+
+export function gateMessage(): string {
+  return translate("admin.finance.gate");
+}
+
+/** @deprecated the Uzbek text at import time; use `gateMessage()` (follows the active language). */
+export const GATE_MESSAGE = gateMessage();
 
 export function financeErrorMessage(error: unknown): string {
-  if (isGateRefusal(error)) return GATE_MESSAGE;
+  if (isGateRefusal(error)) return gateMessage();
   if (error instanceof ApiError) {
     const reason = reasonOf(error);
-    if (error.code === "SECOND_APPROVER_REQUIRED") {
-      return "Ikkinchi tasdiqni boshqa xodim berishi kerak: so'rovchi yoki birinchi tasdiqlovchi o'zi tasdiqlay olmaydi.";
-    }
-    if (error.code === "FORBIDDEN" && reason === "self_approval") return "O'z top-upingizni tasdiqlay olmaysiz.";
-    if (error.code === "FORBIDDEN" && reason === "only_requester_may_withdraw") {
-      return "So'rovni faqat uni yuborgan xodim qaytarib oladi.";
-    }
-    if (error.code === "VERSION_CONFLICT") return "Yozuv boshqa xodim tomonidan o'zgartirilgan. Ro'yxat yangilandi — qayta ko'rib chiqing.";
-    if (error.code === "VALIDATION_ERROR" && reason === "second_approval_mismatch") {
-      return "Ikkinchi tasdiqdagi manba turi, hujjat raqami yoki summa birinchi tasdiqdagisi bilan mos emas.";
-    }
-    if (error.code === "NOT_FOUND" && reason === "reconciliation_not_run") {
-      return "Bu kun uchun solishtiruv hali ishga tushirilmagan. Natija yo'q — bu «hammasi mos» degani emas.";
-    }
-    if (error.code === "COMMISSION_POLICY_RETROACTIVE") return "Siyosat o'tgan vaqtdan boshlana yoki tugay olmaydi.";
-    if (error.code === "COMMISSION_POLICY_OVERLAP") return "Shu doirada bu davrda boshqa siyosat amal qiladi.";
+    if (error.code === "SECOND_APPROVER_REQUIRED") return translate("admin.finance.err.secondApprover");
+    if (error.code === "FORBIDDEN" && reason === "self_approval") return translate("admin.finance.err.selfApproval");
+    if (error.code === "FORBIDDEN" && reason === "only_requester_may_withdraw") return translate("admin.finance.err.onlyRequester");
+    if (error.code === "VERSION_CONFLICT") return translate("admin.finance.err.versionConflict");
+    if (error.code === "VALIDATION_ERROR" && reason === "second_approval_mismatch") return translate("admin.finance.err.secondMismatch");
+    if (error.code === "NOT_FOUND" && reason === "reconciliation_not_run") return translate("admin.finance.err.reconNotRun");
+    if (error.code === "COMMISSION_POLICY_RETROACTIVE") return translate("admin.finance.err.retroactive");
+    if (error.code === "COMMISSION_POLICY_OVERLAP") return translate("admin.finance.err.overlap");
   }
   return v2ErrorMessage(error);
 }

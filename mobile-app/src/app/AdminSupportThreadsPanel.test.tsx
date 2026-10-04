@@ -79,7 +79,25 @@ describe("AdminSupportThreadsPanel", () => {
     await waitFor(() => expect(m(trust.supportThreadCommand)).toHaveBeenCalledWith("sth_1", "reply", { expected_version: 2, text: "Ko'rib chiqyapmiz" }, expect.any(String)));
     fireEvent.click(screen.getByText("Yopish"));
     await waitFor(() => expect(m(trust.supportThreadCommand)).toHaveBeenCalledWith("sth_1", "close", expect.objectContaining({ expected_version: 2 }), expect.any(String)));
-    expect(await screen.findByText(/Holat: yopiq/)).toBeTruthy();
+    expect(await screen.findByText(/Holat: Yopilgan/)).toBeTruthy();
+  });
+
+  it("shows the design's note, system line and staff-only marker, and counts the queue chip", async () => {
+    m(trust.getSupportThreadAdmin).mockResolvedValue({
+      ...thread,
+      carried_over_from_dispute: true,
+      messages: [
+        ...thread.messages,
+        { id: "smg_2", author: "operator", text: "Ichki eslatma", has_files: false, staff_only: true, created_at: "2026-09-25T08:05:00Z" },
+      ],
+    });
+    render(<AdminSupportThreadsPanel />);
+    expect(await screen.findByRole("button", { name: "Navbat · 1" })).toBeTruthy();
+    expect(screen.getByText(/1 ta xabar/)).toBeTruthy();
+    fireEvent.click(screen.getByText(/Mijoz · bkg_1/));
+    expect(await screen.findByText("Bron bkg_1")).toBeTruthy();
+    expect(screen.getByText(/faqat xodimga \(so'rovchiga ko'rinmaydi\)/)).toBeTruthy();
+    expect(screen.getByText(/Q141\/Q146/)).toBeTruthy();
   });
 
   it("hides the commands without ops.trust_review", async () => {

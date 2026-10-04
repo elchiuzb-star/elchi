@@ -25,6 +25,9 @@ import { promoHelpersMessages } from "./screens/promoHelpers";
 import { flowHelpersMessages } from "./screens/flowHelpers";
 import { adr0026Messages } from "./screens/adr0026";
 import { liveTrackingMessages } from "./screens/liveTracking";
+import { adminShellMessages } from "./screens/adminShell";
+import { adminMarketMessages } from "./screens/adminMarket";
+import { adminMoneyMessages } from "./screens/adminMoney";
 
 export interface Message {
   uz: string;
@@ -649,6 +652,9 @@ export const messageSources = {
   flowHelpers: flowHelpersMessages,
   adr0026: adr0026Messages,
   liveTracking: liveTrackingMessages,
+  adminShell: adminShellMessages,
+  adminMarket: adminMarketMessages,
+  adminMoney: adminMoneyMessages,
 } as const;
 
 export const messages = {
@@ -667,6 +673,9 @@ export const messages = {
   ...flowHelpersMessages,
   ...adr0026Messages,
   ...liveTrackingMessages,
+  ...adminShellMessages,
+  ...adminMarketMessages,
+  ...adminMoneyMessages,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof messages;

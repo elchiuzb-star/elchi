@@ -6,11 +6,10 @@
  * copy only explains to an operator which row wins where; it never decides whether a change is allowed.
  */
 import type { CorridorRolloutState, FeatureFlagKey, FlagScopeType, FlagValueDTO } from "../api/v2/admin-platform.api";
+import { translate } from "../i18n";
 import { ApiError } from "../types/api";
 
 export type FlagMeta = {
-  label: string;
-  hint: string;
   /** Value when no row matches (every environment; flags.py PRODUCTION_FLAG_DEFAULTS). */
   defaultValue: boolean;
   /** Production can only hold this value (Q1: wallet_required). */
@@ -19,6 +18,13 @@ export type FlagMeta = {
   needsApprovalReference: boolean;
   /** v2 service flag behind the Q48 launch gate (Q56). */
   q48Gated: boolean;
+  /**
+   * Turning it ON is super_admin-only (Q5 passenger, card payments): the "Yoqish…" control is hidden from other
+   * roles (DESIGN-ADMIN-DIFF 13a.3). Turning it off stays with `ops.feature_flag_manage`.
+   */
+  superAdminToEnable: boolean;
+  /** Q138: the driver listing was removed; the flag is shown as "eskirgan" and offers no change (13a.2). */
+  deprecated: boolean;
 };
 
 export const FLAG_KEYS: FeatureFlagKey[] = [
@@ -33,49 +39,47 @@ export const FLAG_KEYS: FeatureFlagKey[] = [
 ];
 
 export const FLAG_META: Record<FeatureFlagKey, FlagMeta> = {
-  passenger_enabled: {
-    label: "Yo'lovchi xizmati",
-    hint: "Production'da huquqiy tekshiruvgacha o'chiq (K7/Q5). Yoqish: super_admin, tasdiq hujjati, support telefoni (Q87) va Q48.",
-    defaultValue: false, lockedInProduction: null, needsApprovalReference: true, q48Gated: true,
-  },
-  parcel_enabled: {
-    label: "Pochta (v2)", hint: "Koridor bo'yicha yoqiladi (Q5); production'da Q48 o'tmaguncha yoqilmaydi.",
-    defaultValue: false, lockedInProduction: null, needsApprovalReference: false, q48Gated: true,
-  },
-  driver_listing_enabled: {
-    label: "Haydovchi e'lonlari", hint: "Production'da Q48 o'tmaguncha yoqilmaydi.",
-    defaultValue: false, lockedInProduction: null, needsApprovalReference: false, q48Gated: true,
-  },
-  corridor_matching_enabled: {
-    label: "Koridor bo'yicha moslash", hint: "Production'da Q48 o'tmaguncha yoqilmaydi.",
-    defaultValue: false, lockedInProduction: null, needsApprovalReference: false, q48Gated: true,
-  },
-  tracking_enabled: {
-    label: "Jonli kuzatuv", hint: "Production'da Q48 o'tmaguncha yoqilmaydi.",
-    defaultValue: false, lockedInProduction: null, needsApprovalReference: false, q48Gated: true,
-  },
-  card_payments_enabled: {
-    label: "Karta to'lovlari", hint: "Yoqish: super_admin, tasdiq hujjati va Q48.",
-    defaultValue: false, lockedInProduction: null, needsApprovalReference: true, q48Gated: true,
-  },
-  wallet_required: {
-    label: "Balans tekshiruvi", hint: "Production'da doim yoqiq (Q1). Boshqa muhitda o'chirish komissiyani nolga tushirmaydi.",
-    defaultValue: true, lockedInProduction: true, needsApprovalReference: false, q48Gated: false,
-  },
-  promotions_enabled: {
-    label: "Referral va bonuslar", hint: "Production'da o'chiq (Q101). Yoqish: super_admin va tasdiq hujjati.",
-    defaultValue: false, lockedInProduction: null, needsApprovalReference: true, q48Gated: false,
-  },
+  passenger_enabled: { defaultValue: false, lockedInProduction: null, needsApprovalReference: true, q48Gated: true, superAdminToEnable: true, deprecated: false },
+  parcel_enabled: { defaultValue: false, lockedInProduction: null, needsApprovalReference: false, q48Gated: true, superAdminToEnable: false, deprecated: false },
+  driver_listing_enabled: { defaultValue: false, lockedInProduction: null, needsApprovalReference: false, q48Gated: true, superAdminToEnable: false, deprecated: true },
+  corridor_matching_enabled: { defaultValue: false, lockedInProduction: null, needsApprovalReference: false, q48Gated: true, superAdminToEnable: false, deprecated: false },
+  tracking_enabled: { defaultValue: false, lockedInProduction: null, needsApprovalReference: false, q48Gated: true, superAdminToEnable: false, deprecated: false },
+  card_payments_enabled: { defaultValue: false, lockedInProduction: null, needsApprovalReference: true, q48Gated: true, superAdminToEnable: true, deprecated: false },
+  wallet_required: { defaultValue: true, lockedInProduction: true, needsApprovalReference: false, q48Gated: false, superAdminToEnable: false, deprecated: false },
+  promotions_enabled: { defaultValue: false, lockedInProduction: null, needsApprovalReference: true, q48Gated: false, superAdminToEnable: false, deprecated: false },
 };
+
+/** The flag's name for people ("Pochta (v2)"); the raw key is shown next to it. */
+export function flagLabel(key: FeatureFlagKey): string {
+  return translate(`admin.flag.${key}`);
+}
+
+export function flagHint(key: FeatureFlagKey): string {
+  return translate(`admin.flag.hint.${key}`);
+}
+
+/**
+ * Whether this role may be offered a change of the flag to `enabled` (Q5, Q72, Q138). The server stays the authority:
+ * it refuses an enable without super_admin + approval reference in production anyway; this only hides the button.
+ */
+export function mayOfferFlagValue(key: FeatureFlagKey, enabled: boolean, ctx: { canManage: boolean; superAdmin: boolean }): boolean {
+  const meta = FLAG_META[key];
+  if (!ctx.canManage || meta.deprecated) return false;
+  if (enabled && meta.superAdminToEnable && !ctx.superAdmin) return false;
+  return true;
+}
+
+/** Badge of a flag card: "yoqiq" / "o'chiq" / "eskirgan" (13a.1). */
+export function flagBadge(key: FeatureFlagKey, enabled: boolean): { text: string; tone: "ok" | "gray" | "warn" } {
+  if (FLAG_META[key].deprecated) return { text: translate("admin.flag.deprecated"), tone: "warn" };
+  return enabled ? { text: translate("admin.platform.on"), tone: "ok" } : { text: translate("admin.platform.off"), tone: "gray" };
+}
 
 export const SCOPE_PRECEDENCE: FlagScopeType[] = ["cohort", "corridor", "region", "country"];
 
-export const SCOPE_LABELS: Record<FlagScopeType, string> = {
-  cohort: "Kohorta",
-  corridor: "Koridor",
-  region: "Hudud",
-  country: "Mamlakat",
-};
+export function scopeLabel(scope: FlagScopeType): string {
+  return translate(`admin.platform.scope.${scope}`);
+}
 
 export const COUNTRY_SCOPE_REF = "UZ";
 
@@ -115,20 +119,18 @@ export function resolveFlag(rows: FlagValueDTO[], key: FeatureFlagKey, ctx: Flag
 }
 
 export function describeResolution(resolution: FlagResolution): string {
-  if (resolution.conflict) {
-    return `${SCOPE_LABELS[resolution.sourceScope as FlagScopeType]} darajasida ziddiyatli qatorlar — xavfsiz standart (Q26)`;
-  }
-  if (!resolution.sourceScope) return "Qator yo'q — standart qiymat";
-  return `${SCOPE_LABELS[resolution.sourceScope]}: ${resolution.sourceRef}`;
+  if (resolution.conflict) return translate("admin.platform.resConflict", { scope: scopeLabel(resolution.sourceScope as FlagScopeType) });
+  if (!resolution.sourceScope) return translate("admin.platform.resDefault");
+  return `${scopeLabel(resolution.sourceScope)}: ${resolution.sourceRef}`;
 }
 
 /** Same syntax check as `flags.validate_scope_ref`; returns an Uzbek hint or null when the ref looks valid. */
 export function scopeRefProblem(scope: FlagScopeType, ref: string): string | null {
   const value = ref.trim();
-  if (scope === "country") return value === COUNTRY_SCOPE_REF ? null : "Mamlakat doirasi faqat «UZ».";
-  if (scope === "region") return /^[A-Z]{2}-[A-Z0-9]{1,3}$/.test(value) ? null : "Hudud kodi, masalan «UZ-SA».";
-  if (scope === "cohort") return /^[a-z0-9][a-z0-9_-]{1,63}$/.test(value) ? null : "Kohorta: kichik lotin harflari, raqam, «_» yoki «-».";
-  return value.startsWith("cor_") && value.length === 30 ? null : "Koridor id'si «cor_…» ko'rinishida.";
+  if (scope === "country") return value === COUNTRY_SCOPE_REF ? null : translate("admin.platform.ref.country");
+  if (scope === "region") return /^[A-Z]{2}-[A-Z0-9]{1,3}$/.test(value) ? null : translate("admin.platform.ref.region");
+  if (scope === "cohort") return /^[a-z0-9][a-z0-9_-]{1,63}$/.test(value) ? null : translate("admin.platform.ref.cohort");
+  return value.startsWith("cor_") && value.length === 30 ? null : translate("admin.platform.ref.corridor");
 }
 
 function details(error: ApiError): Record<string, unknown> {
@@ -144,27 +146,21 @@ export function flagRefusalMessage(error: unknown): string | null {
   const d = details(error);
   switch (error.code) {
     case "PRODUCTION_INVARIANTS_FAILED":
-      return (
-        "Production'da rad etildi: Q48 ishga tushirish sharti o'tmagan" +
-        (d.reason ? ` (${String(d.reason)})` : "") +
-        ". DB rollari, balans himoyasi, ledger manbalari va seed stavka tasdig'i yopilmaguncha v2 xizmatlari yoqilmaydi (Q56)."
-      );
+      return translate("admin.platform.err.q48", { reason: d.reason ? ` (${String(d.reason)})` : "" });
     case "APPROVAL_REFERENCE_REQUIRED":
-      return "Production'da bu flag faqat huquqiy/biznes tasdiq hujjati raqami bilan yoqiladi (Q5). «Tasdiq hujjati» maydonini to'ldiring.";
+      return translate("admin.platform.err.approval");
     case "FLAG_LOCKED_IN_ENVIRONMENT":
-      return `Bu muhitda flag qulflangan: qiymati faqat ${d.locked_value === true ? "yoqiq" : "o'chiq"} bo'la oladi (Q1).`;
+      return translate("admin.platform.err.locked", { value: d.locked_value === true ? translate("admin.platform.on") : translate("admin.platform.off") });
     case "FORBIDDEN":
-      if (d.required_role === "super_admin") return "Production'da bu flagni faqat super_admin yoqa oladi (Q5).";
-      if (d.capability) return "Sizda flaglarni o'zgartirish huquqi yo'q (ops.feature_flag_manage).";
+      if (d.required_role === "super_admin") return translate("admin.platform.err.superAdmin");
+      if (d.capability) return translate("admin.platform.err.noFlagCap");
       return null;
     case "VALIDATION_ERROR":
-      if (d.reason === "support_contact_not_configured") {
-        return "Yo'lovchi xizmatini yoqishdan oldin javob beriladigan support telefoni va ish vaqti kiritilishi shart (Q87).";
-      }
-      if (d.field === "scope_ref") return "Doira qiymati noto'g'ri yoki mavjud emas.";
+      if (d.reason === "support_contact_not_configured") return translate("admin.platform.err.supportPhone");
+      if (d.field === "scope_ref") return translate("admin.platform.err.scopeRef");
       return null;
     case "VERSION_CONFLICT":
-      return "Boshqa xodim bu qatorni hozirgina o'zgartirdi. Ro'yxat yangilandi — qarorni qayta ko'rib chiqing.";
+      return translate("admin.platform.err.flagVersion");
     default:
       return null;
   }
@@ -172,13 +168,13 @@ export function flagRefusalMessage(error: unknown): string | null {
 
 // --- corridors --------------------------------------------------------------------------------------------------------
 
-export const ROLLOUT_LABELS: Record<CorridorRolloutState, string> = {
-  draft: "Qoralama",
-  internal: "Ichki sinov",
-  pilot: "Pilot",
-  active: "Faol",
-  closed: "Yopilgan",
-};
+export function rolloutLabel(state: CorridorRolloutState): string {
+  return translate(`admin.platform.rollout.${state}`);
+}
+
+export function rolloutTone(state: CorridorRolloutState): "ok" | "blue" | "gray" | "warn" {
+  return state === "active" ? "ok" : state === "pilot" ? "blue" : state === "internal" ? "warn" : "gray";
+}
 
 /** CORRIDOR_ROLLOUT transitions (state_machines.py). */
 export const ROLLOUT_TRANSITIONS: Record<CorridorRolloutState, CorridorRolloutState[]> = {
@@ -189,16 +185,18 @@ export const ROLLOUT_TRANSITIONS: Record<CorridorRolloutState, CorridorRolloutSt
   closed: [],
 };
 
-export const CORRIDOR_REASON_LABELS: Record<string, string> = {
-  needs_two_active_stops: "kamida 2 ta faol bekat kerak (Q47)",
-  stops_missing_meeting_evidence: "bekatlarda uchrashuv izohi yoki foto dalil yo'q (Q27)",
-  needs_active_stop: "ichki sinov uchun kamida 1 ta faol bekat kerak",
-  active_bookings: "koridorda faol bronlar bor",
-  stop_used_by_confirmed_route: "bekat tasdiqlangan marshrutda ishlatilmoqda",
-};
+const CORRIDOR_REASONS = [
+  "needs_two_active_stops",
+  "stops_missing_meeting_evidence",
+  "needs_active_stop",
+  "active_bookings",
+  "stop_used_by_confirmed_route",
+] as const;
 
 export function corridorReasonLabel(reason: string): string {
-  return CORRIDOR_REASON_LABELS[reason] ?? reason;
+  return (CORRIDOR_REASONS as readonly string[]).includes(reason)
+    ? translate(`admin.platform.corridorReason.${reason as (typeof CORRIDOR_REASONS)[number]}`)
+    : reason;
 }
 
 /** Rollout/stop guard refusal (INVALID_STATE_TRANSITION with a reason) in words; null for anything else. */
@@ -206,10 +204,11 @@ export function corridorRefusalMessage(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
   const d = details(error);
   if (error.code === "INVALID_STATE_TRANSITION" && typeof d.reason === "string") {
-    const stops = Array.isArray(d.stop_ids) && d.stop_ids.length ? ` Bekatlar: ${(d.stop_ids as string[]).join(", ")}.` : "";
-    return `Rad etildi: ${corridorReasonLabel(d.reason)}.${stops}`;
+    const stops =
+      Array.isArray(d.stop_ids) && d.stop_ids.length ? translate("admin.platform.err.stopsList", { stops: (d.stop_ids as string[]).join(", ") }) : "";
+    return translate("admin.platform.err.refused", { reason: corridorReasonLabel(d.reason), stops });
   }
-  if (error.code === "VERSION_CONFLICT") return "Boshqa xodim bu yozuvni o'zgartirdi. Yangilab, qayta urinib ko'ring.";
+  if (error.code === "VERSION_CONFLICT") return translate("admin.platform.err.recordVersion");
   return null;
 }
 
@@ -220,17 +219,20 @@ export function stopHasEvidence(stop: { meeting_note?: string | null; meeting_ph
 
 // --- parcel policy ----------------------------------------------------------------------------------------------------
 
-export const POLICY_STATUS_LABELS: Record<string, string> = {
-  draft: "Qoralama — hech kimga amal qilmaydi",
-  active: "Amalda",
-  superseded: "Almashtirilgan",
-};
+export function policyStatusLabel(status: string): string {
+  if (status === "draft") return translate("admin.platform.draftNoEffect");
+  if (status === "active") return translate("admin.platform.inForce");
+  if (status === "superseded") return translate("admin.platform.superseded");
+  return status;
+}
 
-export const POLICY_CATEGORY_LABELS: Record<string, string> = {
-  prohibited: "Taqiqlangan (qonun)",
-  restricted: "Cheklangan",
-  business_declined: "Platforma qabul qilmaydi",
-};
+export const POLICY_CATEGORIES = ["prohibited", "restricted", "business_declined"] as const;
+
+export function policyCategoryLabel(category: string): string {
+  return (POLICY_CATEGORIES as readonly string[]).includes(category)
+    ? translate(`admin.platform.cat.${category as (typeof POLICY_CATEGORIES)[number]}`)
+    : category;
+}
 
 /**
  * What the list header says. An empty or unconfirmed list is never "everything is allowed": with no active version
@@ -238,21 +240,19 @@ export const POLICY_CATEGORY_LABELS: Record<string, string> = {
  */
 export function policySummary(versions: Array<{ status: string; item_count: number }>): string {
   const active = versions.find((v) => v.status === "active");
-  if (!active) {
-    return "Tasdiqlangan ro'yxat yo'q: yangi pochta e'lonlari va bronlari yopiq. Bu «hammasi mumkin» degani emas.";
-  }
-  return `Amaldagi ro'yxatda ${active.item_count} ta band.`;
+  if (!active) return translate("admin.platform.noPolicy");
+  return translate("admin.platform.policyCount", { count: active.item_count });
 }
 
 /** R5.2 / DB check: a `prohibited` item names its legal basis and source. */
 export function policyItemProblem(item: {
   code: string; category: string; title_uz: string; description_uz: string; legal_basis?: string | null; source_ref?: string | null;
 }): string | null {
-  if (item.code.trim().length < 2) return "Kod kamida 2 belgi.";
-  if (item.title_uz.trim().length < 2) return "Nomi kamida 2 belgi.";
-  if (item.description_uz.trim().length < 2) return "Tavsif kamida 2 belgi.";
+  if (item.code.trim().length < 2) return translate("admin.platform.item.code");
+  if (item.title_uz.trim().length < 2) return translate("admin.platform.item.title");
+  if (item.description_uz.trim().length < 2) return translate("admin.platform.item.description");
   if (item.category === "prohibited" && (!(item.legal_basis ?? "").trim() || !(item.source_ref ?? "").trim())) {
-    return "Taqiqlangan band uchun huquqiy asos va manba majburiy.";
+    return translate("admin.platform.prohibitedNeedsBasis");
   }
   return null;
 }
@@ -260,19 +260,16 @@ export function policyItemProblem(item: {
 export function policyRefusalMessage(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
   const d = details(error);
-  if (error.code === "FORBIDDEN" && d.reason === "author_cannot_confirm_own_policy") {
-    return "Muallif o'z qoralamasini tasdiqlay olmaydi — boshqa super_admin tasdiqlashi kerak.";
-  }
-  if (d.reason === "prohibited_item_needs_legal_basis_and_source") return "Taqiqlangan band uchun huquqiy asos va manba majburiy.";
-  if (d.reason === "label_exists") return "Bunday nomli versiya allaqachon bor.";
-  if (d.reason === "empty_policy") return "Ro'yxatda kamida bitta band bo'lishi kerak.";
+  if (error.code === "FORBIDDEN" && d.reason === "author_cannot_confirm_own_policy") return translate("admin.platform.err.author");
+  if (d.reason === "prohibited_item_needs_legal_basis_and_source") return translate("admin.platform.prohibitedNeedsBasis");
+  if (d.reason === "label_exists") return translate("admin.platform.err.labelExists");
+  if (d.reason === "empty_policy") return translate("admin.platform.err.emptyPolicy");
   return null;
 }
 
 // --- outbox / system --------------------------------------------------------------------------------------------------
 
-export const QUOTA_STATE_LABELS: Record<string, string> = {
-  ok: "Me'yorda",
-  warn: "Ogohlantirish (≥70%)",
-  restrict: "Cheklangan (≥85%)",
-};
+export function quotaStateLabel(state: string): string {
+  if (state === "ok" || state === "warn" || state === "restrict") return translate(`admin.platform.quota.${state}`);
+  return state;
+}

@@ -8,9 +8,11 @@
  * * activation and reset are somebody else's buttons: the panel shows them only with `staff.mfa_approve`, and
  *   the server refuses self-approval anyway (`ck_staff_mfa_factors_two_person`).
  */
-import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Check, KeyRound, Loader2, RefreshCw, ShieldCheck, ShieldOff } from "./ui/icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import qrcode from "qrcode-generator";
+import { AlertTriangle, Check, KeyRound, Loader2, RefreshCw, Search, ShieldCheck, ShieldOff } from "./ui/icons";
 
+import { getAdminUsers } from "../api/admin-users.api";
 import {
   activateStaffMfa,
   enrollMfa,
@@ -22,6 +24,10 @@ import {
   type StaffMfaStateDTO,
 } from "../api/v2/mfa.api";
 import { capabilities, type CapabilitiesDTO } from "../api/v2/ops.api";
+import { translate, type MessageKey } from "../i18n";
+import { useT } from "../i18n/react";
+import type { AdminStaffUser } from "../types/admin-user";
+import { adminRoleLabel } from "../utils/adminUserLabels";
 import { formatDateTime } from "../utils/v2Format";
 import { v2ErrorMessage } from "../utils/v2Errors";
 
@@ -41,37 +47,132 @@ function Notice({ tone, children }: { tone: "info" | "warn" | "ok"; children: Re
 function ErrorLine({ error }: { error: unknown }) {
   if (!error) return null;
   return (
-    <p className="rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+    <p role="alert" className="rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
       {v2ErrorMessage(error)}
     </p>
   );
 }
 
-const BUTTON = "inline-flex items-center gap-2 rounded-[10px] bg-foreground px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50";
-const SECONDARY = "inline-flex items-center gap-2 rounded-[10px] border border-slate-300 px-3 py-2 text-sm font-semibold text-secondary-foreground disabled:opacity-50";
-const INPUT = "w-full rounded-[10px] border border-slate-300 px-3 py-2 text-sm";
+const BUTTON = "el-press inline-flex h-10 items-center gap-2 rounded-[10px] bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50";
+const SECONDARY = "el-press inline-flex h-10 items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-sm font-semibold text-secondary-foreground hover:bg-slate-50 disabled:opacity-50";
+const DANGER = "el-press inline-flex h-10 items-center gap-2 rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 text-sm font-semibold text-destructive hover:bg-destructive/25 disabled:opacity-50";
+const INPUT = "h-10 w-full rounded-[10px] border border-border bg-card px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-blue-100";
 
 /** One honest sentence about what MFA is doing for this account right now. */
-function statusLine(state: StaffMfaStateDTO): { tone: "info" | "warn" | "ok"; text: string } {
-  if (!state.enrolled) {
-    return { tone: "warn", text: "Ikkinchi omil yo'q. Pul va flag buyruqlari hozircha faqat yozib boriladi." };
-  }
-  if (!state.active) {
-    return { tone: "warn", text: "Omil tasdiqlanmagan: boshqa super_admin bitta jonli kodni tasdiqlashi kerak." };
-  }
+export function statusLine(state: StaffMfaStateDTO): { tone: "info" | "warn" | "ok"; text: string } {
+  if (!state.enrolled) return { tone: "warn", text: translate("admin.mfa.noFactor") };
+  if (!state.active) return { tone: "warn", text: translate("admin.mfa.notApproved") };
   if (!state.enforced) {
     return {
       tone: "info",
-      text:
-        state.mode === "audit_only"
-          ? "Omil faol, lekin majburlash o'chiq (audit_only) — buyruqlar hozircha rad etilmaydi."
-          : `Omil faol, lekin faol super_admin soni ${state.active_super_admin_count} — majburlash yoqilmaydi (yagona operatorni qulflab qo'ymaslik uchun).`,
+      text: state.mode === "audit_only"
+        ? translate("admin.mfa.auditOnly")
+        : translate("admin.mfa.singleSuper", { count: state.active_super_admin_count }),
     };
   }
-  return { tone: "ok", text: "Omil faol va majburlash yoqilgan." };
+  return { tone: "ok", text: translate("admin.mfa.enforced") };
+}
+
+function factorState(state: StaffMfaStateDTO): MessageKey {
+  if (state.active) return "admin.common.active";
+  if (state.pending_activation) return "status.pending";
+  return "common.none";
+}
+
+/** The provisioning URI as a QR code, drawn locally (qrcode-generator, no network): the secret never leaves the page. */
+export function ProvisioningQr({ uri, size = 184 }: { uri: string; size?: number }) {
+  const t = useT();
+  const cells = useMemo(() => {
+    const qr = qrcode(0, "M");
+    qr.addData(uri, "Byte");
+    qr.make();
+    const count = qr.getModuleCount();
+    const dark: string[] = [];
+    for (let row = 0; row < count; row += 1) {
+      for (let col = 0; col < count; col += 1) {
+        if (qr.isDark(row, col)) dark.push(`M${col + 4} ${row + 4}h1v1h-1z`);
+      }
+    }
+    return { count: count + 8, path: dark.join("") };
+  }, [uri]);
+  return (
+    <svg role="img" aria-label={t("admin.mfa.qrAria")} width={size} height={size} viewBox={`0 0 ${cells.count} ${cells.count}`} shapeRendering="crispEdges" className="rounded-[8px]">
+      <rect width={cells.count} height={cells.count} fill="var(--qr-light)" />
+      <path d={cells.path} fill="var(--qr-dark)" />
+    </svg>
+  );
+}
+
+/**
+ * "Xodim (qidiruv)": the staff list now carries the v2 `public_id` (contract §5.1), so the approver picks a person
+ * by name or phone instead of typing `usr_...`. A typed `usr_...` id still works.
+ */
+function StaffPicker(props: { value: string; onChange: (publicId: string) => void }) {
+  const t = useT();
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<AdminStaffUser[]>([]);
+  const [label, setLabel] = useState("");
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2 || q.startsWith("usr_")) {
+      setOptions([]);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      getAdminUsers({ search: q, limit: 10 })
+        .then((page) => setOptions((page.items ?? []).filter((item) => item.public_id)))
+        .catch(() => setOptions([]));
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+  return (
+    <label className="relative grid gap-1.5 text-sm font-medium text-secondary-foreground">
+      {t("admin.mfa.staff")}
+      <span className="relative">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          className={`${INPUT} pl-9`}
+          value={label || query}
+          placeholder={t("admin.mfa.staffPh")}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setLabel("");
+            setQuery(next);
+            setOpen(true);
+            props.onChange(next.trim().startsWith("usr_") ? next.trim() : "");
+          }}
+        />
+      </span>
+      {props.value && <span className="font-mono text-xs text-muted-foreground">{props.value}</span>}
+      {open && options.length > 0 && (
+        <div className="absolute left-0 right-0 top-[68px] z-30 max-h-56 overflow-y-auto rounded-[10px] border border-border bg-card py-1 shadow-lg">
+          {options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                props.onChange(option.public_id ?? "");
+                setLabel(`${option.full_name || option.phone} · ${adminRoleLabel(option.role)}`);
+                setOpen(false);
+              }}
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-accent"
+            >
+              <span className="block font-semibold">{option.full_name || option.phone}</span>
+              <span className="block text-xs text-muted-foreground">{option.phone} · {adminRoleLabel(option.role)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </label>
+  );
 }
 
 export function AdminSecurityPanel() {
+  const t = useT();
   const [state, setState] = useState<StaffMfaStateDTO | null>(null);
   const [caps, setCaps] = useState<CapabilitiesDTO | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -121,11 +222,14 @@ export function AdminSecurityPanel() {
   const status = state ? statusLine(state) : null;
 
   return (
-    <section className="grid gap-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-foreground">Xavfsizlik — ikkinchi omil (MFA)</h2>
+    <section className="grid gap-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">{t("admin.nav.security")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("admin.mfa.subtitle")}</p>
+        </div>
         <button type="button" className={SECONDARY} onClick={() => void load()} disabled={busy}>
-          <RefreshCw size={14} /> Yangilash
+          <RefreshCw size={14} /> {t("support.refresh")}
         </button>
       </div>
 
@@ -140,94 +244,90 @@ export function AdminSecurityPanel() {
           <div className="grid gap-3 rounded-[12px] border border-border bg-card p-4 shadow-sm">
             <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
               {state.active ? <ShieldCheck size={16} className="text-success" /> : <ShieldOff size={16} className="text-warning" />}
-              Mening omilim
+              {t("admin.mfa.myFactor")}
             </h3>
-            <dl className="grid gap-2 text-sm text-secondary-foreground sm:grid-cols-2">
-              <div>
-                <dt className="text-muted-foreground">Holat</dt>
-                <dd>{state.active ? "faol" : state.pending_activation ? "tasdiq kutilmoqda" : "yo'q"}</dd>
+            <dl className="grid gap-3 text-sm text-secondary-foreground sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-[10px] border border-border p-3">
+                <dt className="text-xs text-muted-foreground">{t("admin.common.status")}</dt>
+                <dd className="mt-1 font-bold text-foreground">{t(factorState(state))}</dd>
               </div>
-              <div>
-                <dt className="text-muted-foreground">Rejim</dt>
-                <dd>{state.mode}</dd>
+              <div className="rounded-[10px] border border-border p-3">
+                <dt className="text-xs text-muted-foreground">{t("admin.mfa.mode")}</dt>
+                <dd className="mt-1 font-mono font-bold text-foreground">{state.mode}</dd>
               </div>
-              <div>
-                <dt className="text-muted-foreground">Oxirgi tasdiq (step-up)</dt>
-                <dd>{state.stepped_up_at ? formatDateTime(state.stepped_up_at) : "—"}</dd>
+              <div className="rounded-[10px] border border-border p-3">
+                <dt className="text-xs text-muted-foreground">{t("admin.mfa.lastStepUp")}</dt>
+                <dd className="mt-1 font-bold text-foreground">{state.stepped_up_at ? formatDateTime(state.stepped_up_at) : "—"}</dd>
               </div>
-              <div>
-                <dt className="text-muted-foreground">Qolgan tiklash kodlari</dt>
-                <dd>{state.recovery_codes_remaining}</dd>
+              <div className="rounded-[10px] border border-border p-3">
+                <dt className="text-xs text-muted-foreground">{t("admin.mfa.recoveryLeft")}</dt>
+                <dd className="mt-1 font-bold text-foreground">{state.recovery_codes_remaining}</dd>
               </div>
             </dl>
             {state.failed_attempts_in_window > 0 && (
-              <Notice tone="warn">
-                Oynada {state.failed_attempts_in_window} / {state.max_failed_attempts} xato kod. Limitga
-                yetilsa akkaunt vaqtincha kod qabul qilmaydi.
-              </Notice>
+              <Notice tone="warn">{t("admin.mfa.failedAttempts", { count: state.failed_attempts_in_window, max: state.max_failed_attempts })}</Notice>
             )}
 
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className={BUTTON}
+                className={SECONDARY}
                 disabled={working}
                 onClick={() =>
                   void run(async () => {
                     const created = await enrollMfa();
                     setEnrollment(created);
-                    return "Sir yaratildi. Uni hozir saqlang — boshqa ko'rsatilmaydi.";
+                    return t("admin.mfa.secretCreated");
                   })
                 }
               >
-                <KeyRound size={14} /> {state.enrolled ? "Yangi qurilmaga ulash" : "Omil ulash"}
+                <KeyRound size={14} /> {t(state.enrolled ? "admin.mfa.enrollNew" : "admin.mfa.enroll")}
               </button>
             </div>
-            {state.active && state.pending_activation && (
-              <Notice tone="info">
-                Yangi qurilma tasdiqlanmaguncha eski omil ishlaydi — hech narsa uzilmaydi.
-              </Notice>
-            )}
+            {state.active && state.pending_activation && <Notice tone="info">{t("admin.mfa.oldStillWorks")}</Notice>}
           </div>
 
           {enrollment && (
-            <div className="grid gap-3 rounded-[12px] border border-warning/28 bg-warning/14 p-4">
-              <h3 className="flex items-center gap-2 text-base font-semibold text-warning">
-                <AlertTriangle size={16} /> Faqat bir marta ko'rsatiladi
+            <div className="grid gap-3 rounded-[12px] border border-blue-200 bg-accent/60 p-4">
+              <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                <AlertTriangle size={16} className="text-warning" /> {t("admin.mfa.enrolledTitle")}
               </h3>
-              <p className="text-sm text-warning">
-                Sirni autentifikator ilovasiga kiriting, tiklash kodlarini esa xavfsiz joyda saqlang. Bu oyna
-                yopilgach ular qayta ko'rsatilmaydi. Omil boshqa super_admin tasdiqlagunicha ishlamaydi.
-              </p>
-              <p className="font-mono text-sm text-warning">{enrollment.secret}</p>
-              <p className="break-all font-mono text-xs text-warning">{enrollment.provisioning_uri}</p>
-              <ul className="grid grid-cols-2 gap-1 font-mono text-xs text-warning sm:grid-cols-5">
-                {enrollment.recovery_codes.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
+              <p className="text-sm text-secondary-foreground">{t("admin.mfa.onceOnly")} {t("admin.mfa.onceOnlyDetail")}</p>
+              <div className="flex flex-wrap items-start gap-4">
+                <ProvisioningQr uri={enrollment.provisioning_uri} />
+                <div className="grid min-w-0 flex-1 gap-2">
+                  <p className="font-mono text-sm text-foreground">{enrollment.secret}</p>
+                  <p className="break-all font-mono text-xs text-muted-foreground">{enrollment.provisioning_uri}</p>
+                  <ul className="grid grid-cols-2 gap-1 font-mono text-xs text-foreground sm:grid-cols-5">
+                    {enrollment.recovery_codes.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
               <div>
                 <button type="button" className={SECONDARY} onClick={() => setEnrollment(null)}>
-                  <Check size={14} /> Saqladim, yashir
+                  <Check size={14} /> {t("admin.mfa.savedHide")}
                 </button>
               </div>
             </div>
           )}
 
           <div className="grid gap-3 rounded-[12px] border border-border bg-card p-4 shadow-sm">
-            <h3 className="text-base font-semibold text-foreground">Kodni tasdiqlash (step-up)</h3>
-            <p className="text-sm text-muted-foreground">
-              Pul va flag buyruqlari uchun {Math.round(state.step_up_max_age_seconds / 60)} daqiqaga amal qiladi.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className={`${INPUT} max-w-[180px]`}
-                value={code}
-                inputMode="numeric"
-                aria-label="Tasdiqlash kodi"
-                placeholder="123456"
-                onChange={(event) => setCode(event.target.value)}
-              />
+            <h3 className="text-base font-semibold text-foreground">{t("admin.mfa.stepUpTitle")}</h3>
+            <p className="text-sm text-muted-foreground">{t("admin.mfa.stepUpHint", { minutes: Math.round(state.step_up_max_age_seconds / 60) })}</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
+                {t("admin.common.authCode")}
+                <input className={INPUT} value={code} inputMode="numeric" autoComplete="one-time-code" placeholder="123456" onChange={(event) => setCode(event.target.value)} />
+              </label>
+              <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
+                {t("admin.mfa.recoveryCode")}
+                <input className={INPUT} value={recovery} autoComplete="off" placeholder="ABCD1234" onChange={(event) => setRecovery(event.target.value)} />
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("admin.mfa.recoveryHint")}</p>
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 className={BUTTON}
@@ -236,28 +336,12 @@ export function AdminSecurityPanel() {
                   void run(async () => {
                     const proved = await stepUp(code.trim());
                     setCode("");
-                    return `Tasdiqlandi, ${formatDateTime(proved.expires_at)} gacha amal qiladi.`;
+                    return t("admin.mfa.stepUpDone", { until: formatDateTime(proved.expires_at) });
                   })
                 }
               >
-                Tasdiqlash
+                {t("common.confirm")}
               </button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 rounded-[12px] border border-border bg-card p-4 shadow-sm">
-            <h3 className="text-base font-semibold text-foreground">Tiklash kodi</h3>
-            <p className="text-sm text-muted-foreground">
-              Tiklash kodi faqat yangi omil ulash huquqini qaytaradi: u step-up ham, moliyaviy tasdiq ham emas.
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className={`${INPUT} max-w-[260px]`}
-                value={recovery}
-                aria-label="Tiklash kodi"
-                placeholder="ABCD1234..."
-                onChange={(event) => setRecovery(event.target.value)}
-              />
               <button
                 type="button"
                 className={SECONDARY}
@@ -266,38 +350,31 @@ export function AdminSecurityPanel() {
                   void run(async () => {
                     const used = await useRecoveryCode(recovery.trim());
                     setRecovery("");
-                    return `Kod ishlatildi. Qolgan kodlar: ${used.recovery_codes_remaining}. Endi yangi omil ulashingiz mumkin.`;
+                    return t("admin.mfa.recoveryUsed", { count: used.recovery_codes_remaining });
                   })
                 }
               >
-                Ishlatish
+                {t("admin.mfa.use")}
               </button>
             </div>
           </div>
 
           {mayApprove && (
             <div className="grid gap-3 rounded-[12px] border border-border bg-card p-4 shadow-sm">
-              <h3 className="text-base font-semibold text-foreground">Boshqa xodimning omili</h3>
-              <p className="text-sm text-muted-foreground">
-                Xodim sizga jonli kodni aytadi — o'z omilingizni o'zingiz tasdiqlay olmaysiz (server ham, baza
-                ham rad etadi).
-              </p>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <input
-                  className={INPUT}
-                  value={subjectId}
-                  aria-label="Xodim identifikatori"
-                  placeholder="usr_..."
-                  onChange={(event) => setSubjectId(event.target.value)}
-                />
-                <input
-                  className={INPUT}
-                  value={subjectCode}
-                  inputMode="numeric"
-                  aria-label="Xodimning tasdiqlash kodi"
-                  placeholder="123456"
-                  onChange={(event) => setSubjectCode(event.target.value)}
-                />
+              <h3 className="text-base font-semibold text-foreground">{t("admin.mfa.otherTitle")}</h3>
+              <p className="text-sm text-muted-foreground">{t("admin.mfa.otherHint")}</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <StaffPicker value={subjectId} onChange={setSubjectId} />
+                <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
+                  {t("admin.mfa.liveCode")}
+                  <input className={INPUT} value={subjectCode} inputMode="numeric" placeholder="123456" onChange={(event) => setSubjectCode(event.target.value)} />
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium text-secondary-foreground">
+                  {t("common.reason")}
+                  <input className={INPUT} value={resetReason} placeholder={t("admin.mfa.resetReasonPh")} onChange={(event) => setResetReason(event.target.value)} />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   className={BUTTON}
@@ -306,34 +383,25 @@ export function AdminSecurityPanel() {
                     void run(async () => {
                       const factor = await activateStaffMfa(subjectId.trim(), subjectCode.trim());
                       setSubjectCode("");
-                      return `Omil faollashtirildi (${factor.status}).`;
+                      return t("admin.mfa.activated", { status: factor.status });
                     })
                   }
                 >
-                  Faollashtirish
+                  {t("admin.mfa.activate")}
                 </button>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <input
-                  className={INPUT}
-                  value={resetReason}
-                  aria-label="Tiklash sababi"
-                  placeholder="Sabab: telefon yo'qoldi"
-                  onChange={(event) => setResetReason(event.target.value)}
-                />
                 <button
                   type="button"
-                  className={`el-press ${SECONDARY} sm:col-span-2 sm:justify-self-start`}
+                  className={DANGER}
                   disabled={working || !subjectId.trim() || resetReason.trim().length < 3}
                   onClick={() =>
                     void run(async () => {
                       const done = await resetStaffMfa(subjectId.trim(), resetReason.trim());
                       setResetReason("");
-                      return `Omil bekor qilindi (${done.factors_revoked} ta) va tiklash kodlari yaroqsiz qilindi.`;
+                      return t("admin.mfa.resetDone", { count: done.factors_revoked });
                     })
                   }
                 >
-                  Omilni bekor qilish (yo'qolgan telefon)
+                  {t("admin.mfa.reset")}
                 </button>
               </div>
             </div>
