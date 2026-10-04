@@ -150,6 +150,21 @@ _DISTRICT_STOPS_SQL = text(
     "WHERE cs.geo_district_id = :district AND cs.is_active ORDER BY cs.id LIMIT :limit"
 )
 
+# Q88 fallback: the verified stop of the listing's own corridor nearest to a marked place whose district has no
+# verified stop (most districts have none). The place was proved to sit on the confirmed route at publish time.
+_NEAREST_CORRIDOR_STOP_SQL = {
+    "origin": text(
+        "SELECT cs.id FROM corridor_stops cs JOIN listings l ON l.id = :listing "
+        "WHERE cs.corridor_id = l.corridor_id AND cs.is_active AND l.origin_point IS NOT NULL "
+        "ORDER BY ST_Distance(cs.point::geography, l.origin_point::geography), cs.id LIMIT 1"
+    ),
+    "destination": text(
+        "SELECT cs.id FROM corridor_stops cs JOIN listings l ON l.id = :listing "
+        "WHERE cs.corridor_id = l.corridor_id AND cs.is_active AND l.destination_point IS NOT NULL "
+        "ORDER BY ST_Distance(cs.point::geography, l.destination_point::geography), cs.id LIMIT 1"
+    ),
+}
+
 
 def _region_pk(session: Session, region_public_id: str, field_name: str) -> int:
     try:
@@ -270,6 +285,7 @@ class _Reads:
         self._nearby: dict[int, tuple[int, ...]] = {}
         self._region_stops: dict[int, frozenset[int]] = {}
         self._district_stops: dict[int, frozenset[int]] = {}
+        self._nearest_stops: dict[tuple[int, str], frozenset[int]] = {}
         self._spans: dict[int, tuple[int, int] | None] = {}
         self._vehicles: dict[int, bool] = {}
 
@@ -421,6 +437,17 @@ class _Reads:
             ).stop_ids
         return self._district_stops[district_id]
 
+    def nearest_corridor_stop(self, listing_id: int, end: str) -> frozenset[int]:
+        """The listing corridor's verified stop nearest to its marked ``end`` ("origin" / "destination")."""
+        key = (listing_id, end)
+        if key not in self._nearest_stops:
+            if self.session.get_bind().dialect.name != "postgresql":
+                self._nearest_stops[key] = frozenset()  # PostGIS only; the SQLite suite has no geometry
+            else:
+                rows = self.session.execute(_NEAREST_CORRIDOR_STOP_SQL[end], {"listing": listing_id}).all()
+                self._nearest_stops[key] = frozenset(row.id for row in rows)
+        return self._nearest_stops[key]
+
 
 def listing_end_candidates(reads: _Reads, listing: Listing) -> tuple[frozenset[int], frozenset[int]]:
     """The verified stops that can stand for this listing's two ends (Q88).
@@ -433,17 +460,25 @@ def listing_end_candidates(reads: _Reads, listing: Listing) -> tuple[frozenset[i
     `listing_matches`, saved searches - goes through it, because a consumer that reads `listing.origin_stop_id`
     directly silently drops every point-ended listing: `None` is not a stop, so nothing ever matches and the
     listing simply never appears. That is the marketplace loop breaking without a single error being raised.
+
+    The same silence happens when the marked district has **no** verified stop (most districts have none, Q88):
+    then the corridor's verified stop nearest to the marked place stands for it. It is still only ever an
+    ``on_route`` match (see `_point_listing_match`), never ``exact``.
     """
     if listing.origin_stop_id is not None:
         origin = frozenset({listing.origin_stop_id})
     else:
         origin = reads.district_stops(listing.origin_district_id) if listing.origin_district_id else frozenset()
+        if not origin:
+            origin = reads.nearest_corridor_stop(listing.id, "origin")
     if listing.destination_stop_id is not None:
         destination = frozenset({listing.destination_stop_id})
     else:
         destination = (
             reads.district_stops(listing.destination_district_id) if listing.destination_district_id else frozenset()
         )
+        if not destination:
+            destination = reads.nearest_corridor_stop(listing.id, "destination")
     return origin, destination
 
 

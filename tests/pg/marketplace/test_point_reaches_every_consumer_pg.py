@@ -179,6 +179,51 @@ def test_a_saved_search_fires_for_a_point_listing(bw: BW) -> None:
     assert matched == 1, "the saved search never fired for a point listing before"
 
 
+def test_a_point_in_a_district_without_stops_still_reaches_the_feed(bw: BW) -> None:
+    """Most districts have no verified stop (Q88). A place marked there used to match nothing - its district
+    gave no stop to stand for it - so the request never reached a single driver (seen live: Toshkent ->
+    Toyloq). The corridor's verified stop nearest to the place stands in, and the match stays ``on_route``."""
+    sa = __import__("sqlalchemy")
+    with bw.db.session() as s:
+        s.execute(sa.text(
+            "INSERT INTO geo_districts (public_id, region_id, name_uz) "
+            "SELECT gen_random_uuid(), region_id, 'Bekatsiz tuman' FROM geo_districts ORDER BY id LIMIT 1"
+        ))
+        s.commit()
+    with bw.db.session() as s:
+        feed_service.create_saved_search(
+            s,
+            user_id=bw.w.driver_id,
+            data=SavedSearchCreate.model_validate(
+                {
+                    "service_type": ServiceType.PASSENGER.value,
+                    "side": FeedSide.REQUESTS.value,
+                    "origin_stop_id": bw.w.stop_public_ids["A"],
+                    "destination_stop_id": bw.w.stop_public_ids["D"],
+                    "time_window_start": (bw.base - timedelta(hours=2)).isoformat(),
+                    "time_window_end": (bw.base + timedelta(hours=8)).isoformat(),
+                    "quantity": 1,
+                }
+            ),
+            now=bw.base,
+        )
+        s.commit()
+
+    listing = publish_point_request(bw)
+    with bw.db.session() as s:
+        listing_id = marketplace_service.resolve_listing_id(s, listing)
+        # the marked destination now lies in a district with no verified stop at all
+        s.execute(sa.text(
+            "UPDATE listings SET destination_district_id = "
+            "(SELECT id FROM geo_districts WHERE name_uz = 'Bekatsiz tuman') WHERE id = :l"
+        ), {"l": listing_id})
+        s.commit()
+    with bw.db.session() as s:
+        matched = feed_service.match_saved_searches_for_listing(s, listing_id, now=bw.base)
+        s.commit()
+    assert matched == 1, "a point in a stop-less district must still reach drivers on its route"
+
+
 # ----------------------------------------------------------------- Q42 as a reference, not a fare
 
 
