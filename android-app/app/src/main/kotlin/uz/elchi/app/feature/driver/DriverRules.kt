@@ -81,6 +81,39 @@ enum class DocState(val wire: String) { MISSING("missing"), PENDING("pending"), 
 
 data class DocRow(val type: DocType, val state: DocState, val reason: String?, val fileUrl: String?)
 
+/**
+ * The account as the driver reads it (design 06 §1.5). The server moves `new` to `pending` on the first upload, so
+ * "pending" alone does not mean "under review": [REVIEW] needs the car stored and all five documents sent with none
+ * rejected; anything short of that is [INCOMPLETE].
+ */
+enum class VerifyState(val labelKey: String, val tone: Tone, val hintKey: String) {
+    INCOMPLETE("driver.verify.incomplete", Tone.WARN, "driverHome.onboardingHint"),
+    REVIEW("app.driverVerification.pending", Tone.WARN, "driver.verify.reviewHint"),
+    APPROVED("status.approved", Tone.OK, "driverHome.approvedHint"),
+    REJECTED("status.rejected", Tone.ERR, "app.driverGate.decided"),
+    BLOCKED("app.driverVerification.blocked", Tone.ERR, "app.driverGate.decided"),
+}
+
+/** A checklist row's circle: its number, a green tick, or a red cross. */
+enum class StepMark { OPEN, DONE, FAILED }
+
+/**
+ * One row of home's 3-step checklist (design 06 §1.7). The sub-line is a dictionary key with its params, or
+ * [subText] when it is the driver's own data ("Cobalt · 01 A 452 KA"); [alert] paints it red.
+ */
+data class ChecklistStep(
+    val mark: StepMark,
+    val subKey: String? = null,
+    val params: Map<String, Any> = emptyMap(),
+    val subText: String? = null,
+    val alert: Boolean = false,
+)
+
+data class Checklist(val profile: ChecklistStep, val documents: ChecklistStep, val review: ChecklistStep)
+
+/** One line of the lock dialog's summary: the field's label key and the value as it will be stored. */
+data class LockSummaryRow(val labelKey: String, val value: String, val params: Map<String, Any> = emptyMap())
+
 /** Pure driver-side rules for Stage 07 (unit-tested in DriverRulesTest). */
 object DriverRules {
     const val SEATS_MIN = 1
@@ -119,6 +152,63 @@ object DriverRules {
     fun homeHintKey(status: DriverStatus): String =
         if (status == DriverStatus.APPROVED) "driverHome.approvedHint" else "driverHome.onboardingHint"
 
+    // -- derived verification state and the checklist (design 06) ---------------------------------------------
+
+    /**
+     * Step 1 is done when the car is stored: the v1 profile holds it (Q94 lock) and, once the vehicles are read,
+     * the v2 vehicle exists too (a failed v2 call leaves the form to finish). [vehicles] null = not read.
+     */
+    fun profileDone(profile: DriverProfileDTO?, vehicles: List<VehicleDTO>?): Boolean =
+        vehicleLocked(profile) && (vehicles == null || vehicles.isNotEmpty())
+
+    /** All five documents sent and none of them rejected. */
+    fun documentsDone(rows: List<DocRow>): Boolean = submitted(rows) == DocType.entries.size && rows.none { it.state == DocState.REJECTED }
+
+    /**
+     * approved / rejected / blocked come from the server; otherwise [VerifyState.REVIEW] only when the operator has
+     * everything ([profileDone] and [documentsDone]). [rows] null = the documents could not be read: the server's
+     * word decides.
+     */
+    fun verifyState(status: DriverStatus, profileDone: Boolean, rows: List<DocRow>?): VerifyState = when (status) {
+        DriverStatus.APPROVED -> VerifyState.APPROVED
+        DriverStatus.REJECTED -> VerifyState.REJECTED
+        DriverStatus.BLOCKED -> VerifyState.BLOCKED
+        DriverStatus.NEW, DriverStatus.PENDING -> when {
+            rows == null -> if (status == DriverStatus.PENDING && profileDone) VerifyState.REVIEW else VerifyState.INCOMPLETE
+            profileDone && documentsDone(rows) -> VerifyState.REVIEW
+            else -> VerifyState.INCOMPLETE
+        }
+    }
+
+    /** "Profilni ko'rish" once the car is stored, "Profilni to'ldirish" before (home and the gate). */
+    fun profileButtonKey(profileDone: Boolean): String = if (profileDone) "driverHome.viewProfile" else "driverHome.completeProfile"
+
+    /** Home's checklist until approval: profile and car, documents, the operator's review. */
+    fun checklist(profile: DriverProfileDTO, vehicles: List<VehicleDTO>?, rows: List<DocRow>?, state: VerifyState): Checklist {
+        val done = profileDone(profile, vehicles)
+        val car = listOfNotNull(profile.carModel, profile.plateNumber).filter { it.isNotBlank() }.joinToString(" · ")
+        val profileStep = if (done) ChecklistStep(StepMark.DONE, subText = car) else ChecklistStep(StepMark.OPEN, "driver.checklist.profileTodo")
+        val total = DocType.entries.size
+        val rejected = rows?.count { it.state == DocState.REJECTED } ?: 0
+        val docsStep = when {
+            rows == null -> ChecklistStep(StepMark.OPEN, "driverProfile.action.documentsHint")
+            rejected > 0 -> ChecklistStep(StepMark.FAILED, "driver.checklist.docsRejected", mapOf("count" to rejected), alert = true)
+            else -> ChecklistStep(
+                if (documentsDone(rows)) StepMark.DONE else StepMark.OPEN,
+                "driver.checklist.docsCount",
+                mapOf("submitted" to submitted(rows), "total" to total),
+            )
+        }
+        val reviewStep = when (state) {
+            VerifyState.REVIEW -> ChecklistStep(StepMark.OPEN, "status.pending")
+            VerifyState.REJECTED -> ChecklistStep(StepMark.FAILED, "status.rejected", alert = true)
+            VerifyState.BLOCKED -> ChecklistStep(StepMark.FAILED, "app.driverVerification.blocked", alert = true)
+            VerifyState.APPROVED -> ChecklistStep(StepMark.DONE, "status.approved")
+            VerifyState.INCOMPLETE -> ChecklistStep(StepMark.OPEN, "driver.checklist.reviewAfter")
+        }
+        return Checklist(profileStep, docsStep, reviewStep)
+    }
+
     /** rejected / blocked: home adds the way to support next to "complete the profile". */
     fun showsSupport(status: DriverStatus): Boolean = gate(status) == GateVariant.DECIDED
 
@@ -133,8 +223,11 @@ object DriverRules {
     fun availabilitySubtitleKey(status: DriverStatus, on: Boolean): String = when {
         status != DriverStatus.APPROVED && !on -> "driverHome.availabilityLocked"
         on -> "driver.home.availableOn"
-        else -> "driverProfile.availabilityOff"
+        else -> "driver.home.availableOff"
     }
+
+    /** The banner after the switch moved: "Faollik o'chirildi" / "Faolman — buyurtma qabul qilishga tayyor". */
+    fun availabilityDoneKey(on: Boolean): String = if (on) "driver.home.availableOn" else "driver.home.availabilityOffDone"
 
     // -- profile form: lock and values ------------------------------------------------------------------------
 
@@ -183,7 +276,12 @@ object DriverRules {
 
     private fun positiveInt(text: String): Long? = text.trim().toLongOrNull()?.takeIf { it > 0 }
 
-    /** What stops a save. Cargo is optional, but a number there must be a whole number above 0. */
+    private fun wholeNumber(text: String): Long? = text.trim().toLongOrNull()?.takeIf { it >= 0 }
+
+    /**
+     * What stops a save. Cargo kg and litres are required, 0 included: 0 = "no parcels" and is sent as null
+     * (v2 `VehicleCreate` takes `> 0` or null, and reads null as no cargo capacity).
+     */
     fun issues(form: DriverForm, profileLocked: Boolean, capacityLocked: Boolean): Set<FormIssue> {
         val issues = mutableSetOf<FormIssue>()
         if (form.fullName.isBlank()) issues += FormIssue.NAME
@@ -195,8 +293,8 @@ object DriverRules {
         if (!capacityLocked) {
             val seats = form.seats.trim().toIntOrNull()
             if (seats == null || seats !in SEATS_MIN..SEATS_MAX) issues += FormIssue.SEATS
-            if (form.cargoKg.isNotBlank() && positiveInt(form.cargoKg) == null) issues += FormIssue.CARGO_KG
-            if (form.cargoLitres.isNotBlank() && positiveInt(form.cargoLitres) == null) issues += FormIssue.CARGO_LITRES
+            if (wholeNumber(form.cargoKg) == null) issues += FormIssue.CARGO_KG
+            if (wholeNumber(form.cargoLitres) == null) issues += FormIssue.CARGO_LITRES
         }
         return issues
     }
@@ -233,6 +331,27 @@ object DriverRules {
         return SavePlan(patch, vehicle)
     }
 
+    /**
+     * Q94: this save stores the car on v1, after which only an operator can change it - ask first. A name-only save
+     * and the retry of a missing v2 vehicle (the car is already locked) go straight through.
+     */
+    fun locksCar(plan: SavePlan): Boolean = plan.patch?.plateNumber != null
+
+    /**
+     * The lock dialog's summary: model, colour, plate, seats, and cargo ("Yuk") whose value is
+     * `driver.form.cargoSummary` "{kg} kg · {litres} l" filled with [LockSummaryRow.params] (empty = 0).
+     */
+    fun lockSummary(form: DriverForm): List<LockSummaryRow> {
+        fun zero(text: String) = text.trim().ifEmpty { "0" }
+        return listOf(
+            LockSummaryRow("driverProfileForm.carModel", form.carModel.trim()),
+            LockSummaryRow("driverProfileForm.carColor", form.carColor.trim()),
+            LockSummaryRow("driverProfileForm.plateNumber", form.plate.trim()),
+            LockSummaryRow("driverProfileForm.passengerSeats", form.seats.trim()),
+            LockSummaryRow("offerCreate.serviceParcel", "", mapOf("kg" to zero(form.cargoKg), "litres" to zero(form.cargoLitres))),
+        )
+    }
+
     // -- documents --------------------------------------------------------------------------------------------
 
     fun docState(status: String?): DocState = when (status) {
@@ -250,6 +369,16 @@ object DriverRules {
 
     /** N of "N / 5": types with a row. */
     fun submitted(rows: List<DocRow>): Int = rows.count { it.state != DocState.MISSING }
+
+    /**
+     * The row's upload button: none on an approved document (a re-upload would quietly put it back to review), and
+     * none at all once the account is rejected or blocked (decided: support is the way on, Q96).
+     */
+    fun canUpload(state: DocState, account: DriverStatus?): Boolean =
+        state != DocState.APPROVED && account != DriverStatus.REJECTED && account != DriverStatus.BLOCKED
+
+    /** "Yuklash" is primary for a missing or rejected document; a pending one's "Qayta yuklash" is soft. */
+    fun uploadPrimary(state: DocState): Boolean = state == DocState.MISSING || state == DocState.REJECTED
 
     fun docTone(state: DocState): Tone = when (state) {
         DocState.APPROVED -> Tone.OK

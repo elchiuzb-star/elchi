@@ -147,7 +147,9 @@ struct DriverFlow: View {
     var body: some View {
         NavigationStack(path: $path) {
             root
-                .safeAreaInset(edge: .bottom, spacing: 0) { DriverTabBar(selected: tab) { tab = $0 } }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    DriverTabBar(selected: tab, locked: driver.status.map { !$0.isApproved } ?? false) { tab = $0 }
+                }
                 .navigationDestination(for: DriverRoute.self, destination: screen)
         }
         #if DEBUG
@@ -203,10 +205,15 @@ struct DriverFlow: View {
         switch tab {
         case .home:
             DriverHomeView(driver: driver, inbox: inbox, referralCode: container.links.referralCode, applyingReferral: applyingReferral,
-                           onReferral: { Task { await applyReferral() } }, onBell: { path.append(.notifications) },
+                           onReferral: { Task { await applyReferral() } }, onForgetReferral: { container.links.forgetReferral() }, onBell: { path.append(.notifications) },
                            onProfile: openForm, onDocuments: openDocuments, onSupport: { path.append(.support) },
-                           onMatches: { tab = .matches }, onProposals: { path.append(.proposals) }, onWallet: { path.append(.wallet) })
-        case .routes, .matches, .orders:
+                           onMatches: { tab = .matches }, onProposals: { path.append(.proposals) }, onWallet: { path.append(.wallet) },
+                           work: AnyView(DriverWorkSummary(trips: trips, proposals: proposals, bookings: bookings, onTab: { tab = $0 },
+                                                           onPlanTrip: openAddTrip)))
+        case .orders:
+            // DESIGN06 0.3 / D16: the bookings stay visible whatever the status (a blocked driver keeps obligations).
+            work
+        case .routes, .matches:
             if driver.status?.isApproved == true {
                 work
             } else {
@@ -228,12 +235,16 @@ struct DriverFlow: View {
             TripsTabView(trips: trips, onAdd: openAddTrip) { path.append(.trip($0)) }
                 .environment(\.screenAccessory, AnyView(gps.tracker.map { TripsGpsBar(tracker: $0, trips: trips) }))
         case .matches:
-            FeedTabView(feed: feed, onPickEnd: { path.append(.feedEnd(origin: $0)) }, onSaved: { path.append(.savedRoutes) }) { item in
+            FeedTabView(feed: feed, proposals: proposals, saved: saved, onPickEnd: { path.append(.feedEnd(origin: $0)) },
+                        onSaved: { path.append(.savedRoutes) }, onProposals: { path.append(.proposals) },
+                        onThread: { path.append(.thread($0)) }) { item in
                 feed.forgetOffer(item.listing.id)
                 path.append(.offer(item.listing.id))
             }
+            .environment(\.screenAccessory, AnyView(gps.tracker.map { TripsGpsBar(tracker: $0, trips: trips) }))
         default:
             DriverOrdersTab(proposals: proposals, bookings: bookings, onProposals: { path.append(.proposals) }) { path.append(.booking($0)) }
+                .environment(\.screenAccessory, AnyView(gps.tracker.map { TripsGpsBar(tracker: $0, trips: trips) }))
         }
     }
 
@@ -245,7 +256,8 @@ struct DriverFlow: View {
     /// A saved trip: back to the offer it was planned for, or on to its detail.
     private func tripSaved(_ trip: TripDTO) {
         trips.added(trip)
-        container.banners.ok("addRoute.added")
+        // DESIGN07 3.7: a trip was planned, not a route added.
+        container.banners.show(.template("driver.trip.saved", values: ["route": strings.route(trip)]), tone: .ok)
         if !path.isEmpty { path.removeLast() }
         if case .offer? = path.last { return }
         path.append(.trip(trip.id))
@@ -255,7 +267,11 @@ struct DriverFlow: View {
     private func offerSent(_ thread: ProposalThreadDTO?, id: String, warnings: [ApiWarning]) {
         let model = proposals.thread(id, initial: thread)
         model.adopt(warnings)
-        if thread != nil { container.banners.ok("driverBid.sent") }
+        if let thread {
+            // DESIGN07 7.12: with the price sent.
+            let total = thread.currentVersion.map { strings.money($0.totalMinor) }
+            if let total { container.banners.show(.template("driver.offer.sentPrice", values: ["price": total]), tone: .ok) } else { container.banners.ok("driverBid.sent") }
+        }
         if !path.isEmpty { path.removeLast() }
         path.append(.thread(id))
         Task { await proposals.load(.open) }
@@ -266,7 +282,7 @@ struct DriverFlow: View {
         let back = { if !path.isEmpty { path.removeLast() } }
         switch route {
         case .profileForm:
-            DriverProfileFormView(driver: driver, form: form, onBack: back)
+            DriverProfileFormView(driver: driver, form: form, onBack: back, onSupport: { path.append(.support) })
         case .documents:
             DriverDocumentsView(driver: driver, mediaURL: { [transport = container.transport] in transport.mediaURL($0) }, onBack: back)
         case .notifications:
@@ -294,14 +310,18 @@ struct DriverFlow: View {
                 Task { await container.endDeletedSession(notice: notice) }
             }
         case .trip(let id):
-            TripDetailView(model: trips.detail(id), trips: trips, onBack: back)
+            TripDetailView(model: trips.detail(id), trips: trips, onBack: back,
+                           onChat: { booking in path.append(.booking(booking)); path.append(.bookingChat(booking)) }, onCancelled: back)
                 .environment(\.screenAccessory, AnyView(gps.tracker.map { TripGpsBar(tracker: $0, trip: trips.detail(id)) }))
         case .addTrip:
             AddTripView(model: addTrip, driver: driver, onBack: back, onSaved: tripSaved)
         case .feedEnd(let origin):
             FeedEndPickerView(feed: feed, origin: origin, onDone: back)
         case .savedRoutes:
-            SavedRoutesView(model: saved, feed: feed, onBack: back)
+            SavedRoutesView(model: saved, feed: feed, onBack: back) {
+                back()
+                tab = .matches
+            }
         case .offer(let id):
             if let model = feed.offer(id, keys: driver.keys) {
                 OfferView(model: model, trips: trips, onBack: back, onAddTrip: openAddTrip) { thread, threadId, warnings in
@@ -311,7 +331,13 @@ struct DriverFlow: View {
         case .proposals:
             DriverProposalsView(model: proposals, onBack: back) { thread in path.append(.thread(thread.id)) ; _ = proposals.thread(thread.id, initial: thread) }
         case .thread(let id):
-            DriverThreadView(model: proposals.thread(id), onBack: back) { path.append(.booking($0)) }
+            DriverThreadView(model: proposals.thread(id), onBack: back, onOpenBooking: { path.append(.booking($0)) },
+                             onAccepted: { booking in
+                                 // Q100: accept -> the booking's chat (its detail under it for "back").
+                                 path.append(.booking(booking))
+                                 path.append(.bookingChat(booking))
+                                 Task { await bookings.load() }
+                             })
         case .booking(let id):
             let booking = bookings.detail(id)
             DriverBookingDetailView(model: booking, onBack: back, onChat: { path.append(.bookingChat(id)) },
@@ -466,6 +492,8 @@ struct DriverFlow: View {
 /// The bottom navigation: five equal items, the current one in brand colour (icon) and azure-ink label.
 struct DriverTabBar: View {
     let selected: DriverTab
+    /// Before approval: a small lock on Yo'nalishlar and Moslar (DESIGN06 0.2).
+    var locked = false
     let onSelect: (DriverTab) -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
@@ -477,6 +505,15 @@ struct DriverTabBar: View {
                 Button { onSelect(tab) } label: {
                     VStack(spacing: 4) {
                         tab.icon.image(size: 22).foregroundStyle(active ? c.brand : c.placeholder)
+                            .overlay(alignment: .topTrailing) {
+                                if locked && (tab == .routes || tab == .matches) {
+                                    ElchiIcon.lock.image(size: 11).foregroundStyle(c.muted)
+                                        .frame(width: 14, height: 14)
+                                        .background(c.card, in: Circle())
+                                        .offset(x: 6, y: -4)
+                                        .accessibilityHidden(true)
+                                }
+                            }
                         Text(strings.t(tab.labelKey)).font(ElchiFont.poppins(10, active ? .semibold : .medium))
                             .foregroundStyle(active ? c.accentText : c.placeholder)
                             .lineLimit(1).minimumScaleFactor(0.8)

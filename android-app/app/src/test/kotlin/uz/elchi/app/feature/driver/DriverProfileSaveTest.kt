@@ -114,6 +114,8 @@ class DriverProfileSaveTest {
     private fun saveAndWait() {
         val before = calls.size
         vm.save()
+        // The save that locks the car waits for "Ha, saqlash" (Q94).
+        if (vm.state.value.confirmingLock) vm.confirmLock()
         await { !it.saving && calls.size > before }
     }
 
@@ -173,6 +175,34 @@ class DriverProfileSaveTest {
 
         assertTrue(writes().isEmpty())
         assertTrue(vm.state.value.showIssues)
-        assertEquals(setOf(FormIssue.MODEL, FormIssue.COLOR, FormIssue.PLATE), vm.state.value.issues)
+        assertEquals(setOf(FormIssue.MODEL, FormIssue.COLOR, FormIssue.PLATE, FormIssue.CARGO_KG, FormIssue.CARGO_LITRES), vm.state.value.issues)
+    }
+
+    @Test
+    fun `the save that locks the car asks first and sends nothing until confirmed`() {
+        fill()
+        vm.save()
+        assertTrue(vm.state.value.confirmingLock)
+        assertTrue(writes().isEmpty())
+
+        vm.cancelLock()
+        assertTrue(!vm.state.value.confirmingLock)
+        assertTrue(writes().isEmpty())
+
+        saveAndWait()
+        assertEquals(listOf("PATCH /api/v1/driver/profile", "POST /api/v2/vehicles"), writes())
+        assertTrue(vm.state.value.finished)
+    }
+
+    @Test
+    fun `a name-only save on a locked profile goes straight through`() {
+        fill()
+        saveAndWait()
+        val before = writes().size
+        vm.edit { it.copy(fullName = "Jasur T.") }
+        vm.save()
+        assertTrue(!vm.state.value.confirmingLock)
+        await { !it.saving && writes().size > before }
+        assertEquals("PATCH /api/v1/driver/profile", writes().last())
     }
 }

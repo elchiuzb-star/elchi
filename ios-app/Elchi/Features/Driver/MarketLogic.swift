@@ -51,12 +51,14 @@ public struct TripActions: Equatable, Sendable {
 }
 
 public enum TripStatusStyle {
-    /// planned / boarding ok-green, on the road blue, finished grey, interrupted warn (the state is also in the words).
+    /// DESIGN07 2.2: planned blue, boarding / on the road green, interrupted warn (an incident, not a pause), completed
+    /// grey, cancelled red (the state is also in the words).
     public static func tone(_ status: TripStatus) -> Tone {
         switch status {
-        case .planned, .boarding: .ok
-        case .inProgress: .blue
+        case .planned: .blue
+        case .boarding, .inProgress: .ok
         case .interrupted: .warn
+        case .cancelled: .err
         default: .gray
         }
     }
@@ -549,5 +551,252 @@ public enum MarketErrorText {
         case "QUANTITY_MISMATCH": return .key("error.QUANTITY_MISMATCH", [:])
         default: return .generic
         }
+    }
+}
+
+// MARK: - DESIGN07 (BOSQICH 07: trips, feed, saved routes, offers, negotiation)
+
+/// One live trip at a time (DESIGN07 2.6): the phone runs one GPS session, so boarding a second trip waits until the
+/// running one (boarding, on the road or interrupted) is finished.
+public enum LiveTrip {
+    public static func isLive(_ status: TripStatus) -> Bool {
+        switch status {
+        case .boarding, .inProgress, .interrupted: true
+        default: false
+        }
+    }
+
+    /// `start_boarding` on `trip` while another trip is live.
+    public static func blocksStart(_ trip: TripDTO, among trips: [TripDTO]) -> Bool {
+        trips.contains { $0.id != trip.id && isLive($0.status) }
+    }
+
+    /// The banner after a command the server took (2.5 / 4.7): departure says the clients were told (in-app, Q82),
+    /// cancel says the open offers were closed (the server expires them); the rest the shared "Safar holati yangilandi".
+    public static func bannerKey(_ command: TripCommand) -> String {
+        switch command {
+        case .depart: "driver.trip.departed"
+        case .cancel: "driver.trip.cancelled"
+        default: "driverRoutes.tripStatusUpdated"
+        }
+    }
+}
+
+/// The stops' dots from the trip status (DESIGN07 4.2; real per-stop passage is not on the DTO): completed -> all
+/// done; on the road -> first done, second current; boarding -> first current; otherwise all ahead.
+public enum TripStopDot: Equatable, Sendable {
+    case done, current, ahead
+
+    public static func of(index: Int, status: TripStatus) -> TripStopDot {
+        switch status {
+        case .completed: .done
+        case .inProgress: index == 0 ? .done : (index == 1 ? .current : .ahead)
+        case .boarding: index == 0 ? .current : .ahead
+        default: .ahead
+        }
+    }
+}
+
+extension TripPlan {
+    /// The departure's sentence under the field (DESIGN07 3.4): empty -> "Jo'nash vaqtini kiriting.", past ->
+    /// "Jo'nash vaqti kelajakda bo'lishi kerak."; nil when it is fine.
+    public static func departureKey(_ problem: TripPlanProblem?) -> String? {
+        switch problem {
+        case .required: "driver.trip.departureRequired"
+        case .past: "driver.trip.departurePast"
+        default: nil
+        }
+    }
+}
+
+/// The three home tiles (DESIGN07 1.2), counted on the client (there is no stats endpoint): trips not finished,
+/// offers still open (waiting or countered, not run out), bookings not terminal. nil = not known (shown as "—").
+public struct DriverHomeStats: Equatable, Sendable {
+    public let trips: Int?
+    public let offers: Int?
+    public let bookings: Int?
+
+    public static func of(trips: [TripDTO]?, openProposals: [ProposalThreadDTO]?, bookingStatuses: [String]?,
+                          now: Date = Date()) -> DriverHomeStats {
+        DriverHomeStats(trips: trips.map { $0.filter { TripStatusStyle.isActive($0.status) }.count },
+                        offers: openProposals.map { $0.filter { DriverNegotiation.of($0, now: now).open }.count },
+                        bookings: bookingStatuses.map { $0.filter(DriverBookingFilter.active.includes).count })
+    }
+
+    public static func text(_ count: Int?) -> String { count.map(String.init) ?? "—" }
+}
+
+/// "You already offered" on a feed card (DESIGN07 5.7), joined on the client from `/me/proposals` by listing.
+public enum FeedOfferMark: Equatable, Sendable {
+    case none
+    /// "Siz taklif yubordingiz: {price}" (the driver's own latest price) + "Taklifni ko'rish".
+    case offered(threadId: String, totalMinor: Int)
+    /// The client answered with a counter and the driver's own price is not known here: "Mijoz qarshi taklif yubordi".
+    case countered(threadId: String)
+    /// "Mijoz qabul qildi" + "Taklifni ko'rish".
+    case accepted(threadId: String)
+
+    /// `versions`: a thread's known history (the list has none) - the driver's price under the client's counter.
+    public static func of(listingId: String, open: [ProposalThreadDTO]?, accepted: [ProposalThreadDTO]?,
+                          versions: (String) -> [ProposalVersionDTO]? = { _ in nil }, now: Date = Date()) -> FeedOfferMark {
+        if let thread = accepted?.first(where: { $0.listingId == listingId && ($0.state == "accepted" || $0.bookingId != nil) }) {
+            return .accepted(threadId: thread.id)
+        }
+        guard let thread = open?.first(where: { $0.listingId == listingId && $0.state == "open" }), let version = thread.currentVersion,
+              !DriverNegotiation.of(thread, now: now).expiredByClock else { return .none }
+        if version.authorSide == .driver { return .offered(threadId: thread.id, totalMinor: version.totalMinor) }
+        let mine = (versions(thread.id) ?? thread.versions ?? [])
+            .filter { $0.authorSide == .driver && $0.revision < version.revision }.max { $0.revision < $1.revision }
+        return mine.map { .offered(threadId: thread.id, totalMinor: $0.totalMinor) } ?? .countered(threadId: thread.id)
+    }
+
+    public var threadId: String? {
+        switch self {
+        case .none: nil
+        case .offered(let id, _), .countered(let id), .accepted(let id): id
+        }
+    }
+}
+
+/// A negotiation card's badge and line (DESIGN07 8.1 / 8.2).
+public enum ProposalBadge: Equatable, Sendable {
+    case waiting, countered, myCounter, accepted, rejected, withdrawn, expired
+
+    public static func of(_ thread: ProposalThreadDTO, now: Date = Date()) -> ProposalBadge {
+        if thread.state == "accepted" || thread.bookingId != nil { return .accepted }
+        let actions = DriverNegotiation.of(thread, now: now)
+        if actions.expiredByClock { return .expired }
+        if actions.open, let version = thread.currentVersion {
+            if actions.driversTurn { return .countered }
+            // The driver's own version after the first one: a counter to the client's counter.
+            return version.authorSide == .driver && version.revision > 1 ? .myCounter : .waiting
+        }
+        switch thread.currentVersion?.status {
+        case .rejected?: return .rejected
+        case .withdrawn?: return .withdrawn
+        case .accepted?: return .accepted
+        default: return .expired
+        }
+    }
+
+    public var key: String {
+        switch self {
+        case .waiting: "status.proposed"
+        case .countered: "driver.offer.badgeCountered"
+        case .myCounter: "driver.offer.badgeMyCounter"
+        case .accepted: "client.booking.amendStatusAccepted"
+        case .rejected: "status.rejected"
+        case .withdrawn: "status.withdrawn"
+        case .expired: "status.expired"
+        }
+    }
+
+    public var tone: Tone {
+        switch self {
+        case .waiting, .withdrawn, .expired: .gray
+        case .countered: .warn
+        case .myCounter: .blue
+        case .accepted: .ok
+        case .rejected: .err
+        }
+    }
+
+    /// The client countered: the card is outlined (the driver's turn).
+    public var outlined: Bool { self == .countered }
+    /// Withdrawn and run-out offers are faded.
+    public var faded: Bool { self == .withdrawn || self == .expired }
+}
+
+/// The status sentence under a negotiation card.
+public enum ProposalLine: Equatable, Sendable {
+    case key(String)
+    /// "Mijoz qarshi taklif yubordi: {price} (siz {mine} taklif qilgansiz)".
+    case clientCounter(priceMinor: Int, mineMinor: Int)
+    /// "Qarshi taklifingiz ({price}) yuborildi — mijoz javobi kutilmoqda."
+    case myCounter(priceMinor: Int)
+
+    /// `versions`: the thread's history when known (the list DTO has none; then the countered line has no prices).
+    public static func of(_ thread: ProposalThreadDTO, versions: [ProposalVersionDTO]? = nil, now: Date = Date()) -> ProposalLine? {
+        let current = thread.currentVersion
+        switch ProposalBadge.of(thread, now: now) {
+        case .countered:
+            guard let current else { return .key("negotiation.clientCountered") }
+            let history = versions ?? thread.versions ?? []
+            let mine = history.filter { $0.authorSide == .driver && $0.revision < current.revision }.max { $0.revision < $1.revision }
+            guard let mine else { return .key("negotiation.clientCountered") }
+            return .clientCounter(priceMinor: current.totalMinor, mineMinor: mine.totalMinor)
+        case .waiting: return .key("negotiation.waitingForAnswer")
+        case .myCounter: return current.map { .myCounter(priceMinor: $0.totalMinor) } ?? .key("negotiation.waitingForAnswer")
+        case .accepted: return .key("driver.offer.acceptedLine")
+        case .rejected, .withdrawn, .expired: return nil
+        }
+    }
+}
+
+/// The counter's new price (DESIGN07 8.5): required, and different from the client's price (the same price would
+/// only spend a revision).
+public enum DriverCounterCheck {
+    public static func problemKey(priceMinor: Int, clientUnitMinor: Int) -> String? {
+        if priceMinor <= 0 { return "driver.offer.priceRequired" }
+        if priceMinor == clientUnitMinor { return "driver.offer.counterSame" }
+        return nil
+    }
+}
+
+/// After the driver accepts the client's price (Q100): the booking's chat opens, straight away.
+public enum AcceptNext: Equatable, Sendable {
+    case bookingChat(String)
+    /// No booking id came back (a refusal): the thread stays and says why.
+    case stay
+
+    public static func after(bookingId: String?) -> AcceptNext {
+        guard let bookingId, !bookingId.isEmpty else { return .stay }
+        return .bookingChat(bookingId)
+    }
+}
+
+/// "Shu yo'nalishni saqlash" (DESIGN07 6.2 / 6.3): no route yet, already saved (grey "Allaqachon saqlangan"), the
+/// limit reached, or free to save.
+public enum SavedRouteState: Equatable, Sendable {
+    case noRoute, canSave, alreadySaved, limitReached
+}
+
+extension SavedRoute {
+    /// The same ends (district, else region, each side) and the same service as one already saved.
+    public static func isSaved(_ body: SavedSearchCreate, in list: [SavedSearchDTO]) -> Bool {
+        list.contains { saved in
+            saved.serviceType == body.serviceType && saved.side == body.side
+                && (saved.originDistrictId ?? saved.originRegionId) == (body.originDistrictId ?? body.originRegionId)
+                && (saved.destinationDistrictId ?? saved.destinationRegionId) == (body.destinationDistrictId ?? body.destinationRegionId)
+        }
+    }
+
+    public static func state(_ filter: FeedFilter, passengerAllowed: Bool, saved: [SavedSearchDTO]?) -> SavedRouteState {
+        guard let body = body(filter, passengerAllowed: passengerAllowed) else { return .noRoute }
+        let list = saved ?? []
+        if isSaved(body, in: list) { return .alreadySaved }
+        if list.count >= limit { return .limitReached }
+        return .canSave
+    }
+
+    /// "Lentada ochish" (DESIGN07 6.5): the feed filter from a saved route's ids (a district brings its region), its
+    /// service, the current date chip kept. nil when an end cannot be named yet (the lists are still loading).
+    public static func feedFilter(from saved: SavedSearchDTO, current: FeedFilter, regions: [RegionDTO],
+                                  districts: [String: DistrictDTO]) -> FeedFilter? {
+        let byId = Dictionary(regions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        func end(_ regionId: String?, _ districtId: String?) -> FeedEnd? {
+            if let districtId, let district = districts[districtId] {
+                let region = byId[district.region.id]
+                return FeedEnd(regionId: district.region.id, regionName: region?.nameUz ?? district.region.nameUz, regionNameRu: region?.nameRu,
+                               districtId: district.id, districtName: district.nameUz, districtNameRu: district.nameRu)
+            }
+            if let regionId, let region = byId[regionId] {
+                return FeedEnd(regionId: region.id, regionName: region.nameUz, regionNameRu: region.nameRu)
+            }
+            return nil
+        }
+        guard let origin = end(saved.originRegionId, saved.originDistrictId),
+              let destination = end(saved.destinationRegionId, saved.destinationDistrictId) else { return nil }
+        return FeedFilter(passenger: saved.serviceType == .passenger, origin: origin, destination: destination, chip: current.chip)
     }
 }

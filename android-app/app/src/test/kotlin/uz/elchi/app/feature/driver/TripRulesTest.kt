@@ -40,9 +40,10 @@ class TripRulesTest {
 
     @Test
     fun `status tones and ordering put live trips first`() {
-        assertEquals(Tone.OK, TripRules.statusTone(TripStatus.PLANNED))
+        assertEquals(Tone.BLUE, TripRules.statusTone(TripStatus.PLANNED))
         assertEquals(Tone.OK, TripRules.statusTone(TripStatus.BOARDING))
-        assertEquals(Tone.BLUE, TripRules.statusTone(TripStatus.IN_PROGRESS))
+        assertEquals(Tone.OK, TripRules.statusTone(TripStatus.IN_PROGRESS))
+        assertEquals(Tone.ERR, TripRules.statusTone(TripStatus.CANCELLED))
         assertEquals(Tone.WARN, TripRules.statusTone(TripStatus.INTERRUPTED))
         assertEquals(Tone.GRAY, TripRules.statusTone(TripStatus.COMPLETED))
         val old = S08.trip("a", TripStatus.COMPLETED, start = "2026-09-20T04:00:00Z")

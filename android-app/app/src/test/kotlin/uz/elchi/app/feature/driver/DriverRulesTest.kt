@@ -109,7 +109,7 @@ class DriverRulesTest {
     fun `the switch explains itself`() {
         assertEquals("driverHome.availabilityLocked", DriverRules.availabilitySubtitleKey(DriverStatus.PENDING, on = false))
         assertEquals("driver.home.availableOn", DriverRules.availabilitySubtitleKey(DriverStatus.APPROVED, on = true))
-        assertEquals("driverProfile.availabilityOff", DriverRules.availabilitySubtitleKey(DriverStatus.APPROVED, on = false))
+        assertEquals("driver.home.availableOff", DriverRules.availabilitySubtitleKey(DriverStatus.APPROVED, on = false))
         assertEquals("driver.home.availableOn", DriverRules.availabilitySubtitleKey(DriverStatus.BLOCKED, on = true))
     }
 
@@ -167,14 +167,17 @@ class DriverRulesTest {
     // -- validation and the save sequence ---------------------------------------------------------------------
 
     @Test
-    fun `first save needs the name, the car and 1 to 8 seats, cargo only when given and positive`() {
+    fun `first save needs the name, the car, 1 to 8 seats and both cargo numbers, 0 included`() {
         val empty = DriverRules.issues(DriverForm(seats = ""), profileLocked = false, capacityLocked = false)
-        assertEquals(setOf(FormIssue.NAME, FormIssue.MODEL, FormIssue.COLOR, FormIssue.PLATE, FormIssue.SEATS), empty)
-        val filled = DriverForm("Jasur", "Cobalt", "Oq", "01 A 123 AA", "4", "", "")
+        assertEquals(
+            setOf(FormIssue.NAME, FormIssue.MODEL, FormIssue.COLOR, FormIssue.PLATE, FormIssue.SEATS, FormIssue.CARGO_KG, FormIssue.CARGO_LITRES),
+            empty,
+        )
+        val filled = DriverForm("Jasur", "Cobalt", "Oq", "01 A 123 AA", "4", "0", "0")
         assertEquals(emptySet<FormIssue>(), DriverRules.issues(filled, false, false))
         assertEquals(setOf(FormIssue.SEATS), DriverRules.issues(filled.copy(seats = "9"), false, false))
         assertEquals(setOf(FormIssue.SEATS), DriverRules.issues(filled.copy(seats = "0"), false, false))
-        assertEquals(setOf(FormIssue.CARGO_KG, FormIssue.CARGO_LITRES), DriverRules.issues(filled.copy(cargoKg = "0", cargoLitres = "x"), false, false))
+        assertEquals(setOf(FormIssue.CARGO_KG, FormIssue.CARGO_LITRES), DriverRules.issues(filled.copy(cargoKg = "", cargoLitres = "x"), false, false))
         assertEquals(setOf(FormIssue.PLATE), DriverRules.issues(filled.copy(plate = "   "), false, false))
         // Locked: only the name is checked.
         assertEquals(setOf(FormIssue.NAME), DriverRules.issues(DriverForm(), profileLocked = true, capacityLocked = true))
@@ -195,8 +198,8 @@ class DriverRulesTest {
     }
 
     @Test
-    fun `cargo left empty is not sent`() {
-        val plan = DriverRules.savePlan(DriverForm("Jasur", "Cobalt", "Oq", "01A123AA", "4", "", ""), profile(), emptyList())
+    fun `cargo 0 means no parcels and is sent as null`() {
+        val plan = DriverRules.savePlan(DriverForm("Jasur", "Cobalt", "Oq", "01A123AA", "4", "0", "0"), profile(), emptyList())
         val vehicle = plan.vehicle!!
         assertNull(vehicle.cargoMaxWeightG)
         assertNull(vehicle.cargoMaxVolumeMl)

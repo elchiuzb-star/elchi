@@ -7,15 +7,27 @@ import SwiftUI
 /// the dashed alternatives with their reason.
 struct FeedTabView: View {
     let feed: FeedModel
+    /// DESIGN07: the driver's offers (the bar's "Takliflarim" count, "you already offered" on the cards).
+    let proposals: DriverProposalsModel
+    /// DESIGN07 5.4: "Saqlangan yo'nalishlar ({count})".
+    let saved: SavedRoutesModel
     let onPickEnd: (Bool) -> Void
     let onSaved: () -> Void
+    /// The bar's "Takliflarim" pill.
+    var onProposals: () -> Void = {}
+    /// "Taklifni ko'rish": the driver's thread on that request.
+    var onThread: (String) -> Void = { _ in }
     let onOffer: (FeedItemDTO) -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
     var body: some View {
         @Bindable var feed = feed
-        DriverTabScreen(title: strings.t("driverFeed.title")) {
+        let countered = (proposals.lists[.open]?.value ?? []).filter { ProposalBadge.of($0) == .countered }.count
+        DriverTabScreen(title: strings.t("driverFeed.title"),
+                        trailing: AnyView(TabPill(icon: .tag, title: strings.t("proposals.title"), badge: countered > 0 ? "\(countered)" : nil,
+                                                  action: onProposals)
+                            .accessibilityIdentifier("elchi.feed.proposals"))) {
             if feed.passengerAllowed {
                 Segmented([(false, strings.t("driverFeed.modeParcel")), (true, strings.t("driverFeed.modeTaxi"))],
                           selected: feed.filter.passenger) { feed.filter.passenger = $0 }
@@ -31,15 +43,36 @@ struct FeedTabView: View {
                 }
             }
             Text(strings.t("driverFeed.districtHint")).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
-            ElchiButton(strings.t("driverFeed.savedSearches"), variant: .outline, size: .medium, icon: .route, action: onSaved)
+            ElchiButton(saved.list.value.map { strings.t("driver.feed.savedCount", ("count", $0.count)) } ?? strings.t("driverFeed.savedSearches"),
+                        variant: .outline, size: .medium, icon: .route, action: onSaved)
+                .accessibilityIdentifier("elchi.feed.saved")
             results
         }
-        .refreshable { await feed.load() }
+        .refreshable {
+            async let list: Void = self.feed.load()
+            async let offers: Void = loadOffers()
+            _ = await (list, offers)
+        }
         .task {
+            async let offers: Void = loadOffers()
+            async let routes: Void = saved.load()
             await feed.loadFlags()
             await feed.load()
+            _ = await (offers, routes)
         }
         .onChange(of: feed.filter) { _, _ in Task { await feed.load() } }
+    }
+
+    /// The open and accepted offers, for the cards' "already offered" mark and the bar's count.
+    private func loadOffers() async {
+        async let open: Void = proposals.load(.open)
+        async let accepted: Void = proposals.load(.accepted)
+        _ = await (open, accepted)
+    }
+
+    private func mark(_ item: FeedItemDTO) -> FeedOfferMark {
+        FeedOfferMark.of(listingId: item.listing.id, open: proposals.lists[.open]?.value, accepted: proposals.lists[.accepted]?.value,
+                         versions: { proposals.versions($0) })
     }
 
     private func end(_ end: FeedEnd?, question: String, origin: Bool) -> RouteCard.End {
@@ -68,13 +101,13 @@ struct FeedTabView: View {
             }
             let groups = FeedGroups.split(items)
             if items.isEmpty {
-                EmptyState(icon: .radar, title: strings.t("driverFeed.emptyTitle"), description: strings.t("driverFeed.emptyTryOther"))
+                EmptyState(icon: .radar, title: strings.t("driverFeed.emptyTitle"), description: strings.t("driver.feed.emptyHint"))
             }
-            ForEach(groups.primary, id: \.listing.id) { FeedCard(item: $0, alternative: false, onOffer: onOffer) }
+            ForEach(groups.primary, id: \.listing.id) { FeedCard(item: $0, alternative: false, mark: mark($0), onOffer: onOffer, onThread: onThread) }
             if !groups.alternative.isEmpty {
                 SectionTitle(strings.t("match.alternativesTitle"), description: strings.t("match.alternativesNote"))
                     .accessibilityIdentifier("elchi.feed.alternatives")
-                ForEach(groups.alternative, id: \.listing.id) { FeedCard(item: $0, alternative: true, onOffer: onOffer) }
+                ForEach(groups.alternative, id: \.listing.id) { FeedCard(item: $0, alternative: true, mark: mark($0), onOffer: onOffer, onThread: onThread) }
             }
             if feed.nextCursor != nil {
                 ElchiButton(strings.t("blockReport.loadMore"), variant: .ghost, size: .medium, loading: feed.loadingMore) {
@@ -90,16 +123,27 @@ struct FeedTabView: View {
 struct FeedCard: View {
     let item: FeedItemDTO
     let alternative: Bool
+    /// DESIGN07 5.7: the driver's own offer on this request, if any.
+    var mark: FeedOfferMark = .none
     let onOffer: (FeedItemDTO) -> Void
+    var onThread: (String) -> Void = { _ in }
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
     var body: some View {
         let listing = item.listing
-        let card = ItemCard(title: strings.route(listing), icon: .pin, badge: badge, lines: lines, right: strings.money(listing.totalMinor)) {
-            ElchiButton(strings.t("driverFeed.sendOffer"), variant: alternative ? .outline : .primary, size: .medium) { onOffer(item) }
-                .padding(.top, 6)
-                .accessibilityIdentifier("elchi.feed.offer.\(listing.id)")
+        // Meta left (my offer / accepted), the client's price right, then one full-width button.
+        let card = ItemCard(title: strings.route(listing), icon: .pin, badge: badge, lines: lines, meta: meta,
+                            right: strings.money(listing.totalMinor), metaAccent: mark != .none) {
+            if let threadId = mark.threadId {
+                ElchiButton(strings.t("driver.feed.viewOffer"), variant: .neutral, size: .medium) { onThread(threadId) }
+                    .padding(.top, 6)
+                    .accessibilityIdentifier("elchi.feed.viewOffer.\(listing.id)")
+            } else {
+                ElchiButton(strings.t("driverFeed.sendOffer"), variant: alternative ? .outline : .primary, size: .medium) { onOffer(item) }
+                    .padding(.top, 6)
+                    .accessibilityIdentifier("elchi.feed.offer.\(listing.id)")
+            }
         }
         if alternative {
             card.overlay {
@@ -107,6 +151,15 @@ struct FeedCard: View {
             }
         } else {
             card
+        }
+    }
+
+    private var meta: String? {
+        switch mark {
+        case .none: nil
+        case .offered(_, let total): strings.t("driver.feed.myOffer", ("price", strings.money(total)))
+        case .countered: strings.t("negotiation.clientCountered")
+        case .accepted: strings.t("driver.feed.clientAccepted")
         }
     }
 
@@ -213,8 +266,11 @@ struct SavedRoutesView: View {
     let model: SavedRoutesModel
     let feed: FeedModel
     let onBack: () -> Void
+    /// DESIGN07 6.5: "Lentada ochish" set the feed's ends; back to the feed.
+    var onOpenInFeed: () -> Void = {}
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
     @State private var confirming: SavedSearchDTO?
 
     var body: some View {
@@ -224,10 +280,12 @@ struct SavedRoutesView: View {
                 CardRow(strings.t("savedSearches.currentDirection"), current ?? strings.t("savedSearches.pickEndsFirst"), first: true,
                         placeholder: current == nil)
             }
-            ElchiButton(strings.t("savedSearches.save"), loading: model.saving) {
+            let state = SavedRoute.state(feed.filter, passengerAllowed: feed.passengerAllowed, saved: model.list.value)
+            ElchiButton(strings.t(state == .alreadySaved ? "driver.routes.alreadySaved" : "savedSearches.save"), loading: model.saving) {
                 Task { await model.save(feed.filter, passengerAllowed: feed.passengerAllowed) }
             }
-            .disabled(!feed.filter.hasRoute || (model.list.value?.count ?? 0) >= SavedRoute.limit)
+            .disabled(state != .canSave || model.list.value == nil)
+            .accessibilityIdentifier("elchi.saved.save")
             if let error = model.error { Note(strings.marketErrorText(error), tone: .err).accessibilityIdentifier("elchi.saved.error") }
             switch model.list {
             case .loading:
@@ -240,8 +298,20 @@ struct SavedRoutesView: View {
                 ForEach(list, id: \.id) { saved in
                     ItemCard(title: name(saved), icon: .route,
                              sub: "\(strings.windowDays(saved.timeWindowStart, saved.timeWindowEnd)) · \(strings.t("savedSearches.notifyOn"))") {
-                        ElchiButton(strings.t("common.delete"), variant: .dangerSoft, size: .medium, loading: model.deleting == saved.id) {
-                            confirming = saved
+                        let target = SavedRoute.feedFilter(from: saved, current: feed.filter, regions: feed.regions.value ?? [],
+                                                           districts: feed.districtNames)
+                        HStack(spacing: 8) {
+                            ElchiButton(strings.t("driver.routes.openInFeed"), variant: .soft, size: .pair) {
+                                guard let target else { return }
+                                feed.filter = target
+                                banners?.show(.template("driver.routes.openedInFeed", values: ["name": endName(target.destination)]), tone: .ok)
+                                onOpenInFeed()
+                            }
+                            .disabled(target == nil)
+                            .accessibilityIdentifier("elchi.saved.open.\(saved.id)")
+                            ElchiButton(strings.t("common.delete"), variant: .dangerSoft, size: .pair, loading: model.deleting == saved.id) {
+                                confirming = saved
+                            }
                         }
                         .padding(.top, 6)
                     }
@@ -249,7 +319,10 @@ struct SavedRoutesView: View {
                 }
             }
             Text(strings.t("driver.saved.notifyNote")).font(ElchiFont.caption).foregroundStyle(c.muted)
-            Text(strings.t("driver.saved.limitHint", ("limit", SavedRoute.limit))).font(ElchiFont.caption).foregroundStyle(c.muted)
+            Text(model.list.value.map { strings.t("driver.routes.limitCount", ("limit", SavedRoute.limit), ("count", $0.count)) }
+                    ?? strings.t("driver.saved.limitHint", ("limit", SavedRoute.limit)))
+                .font(ElchiFont.caption).foregroundStyle(c.muted)
+                .accessibilityIdentifier("elchi.saved.limit")
         } footer: {
             EmptyView()
         }
@@ -272,6 +345,12 @@ struct SavedRoutesView: View {
                 }
             }
         }
+    }
+
+    private func endName(_ end: FeedEnd?) -> String {
+        guard let end else { return "…" }
+        if let district = end.districtName { return strings.locale == .ru ? end.districtNameRu ?? district : district }
+        return strings.locale == .ru ? end.regionNameRu ?? end.regionName : end.regionName
     }
 
     private var current: String? {
@@ -306,6 +385,8 @@ struct OfferView: View {
     @State private var priceText = ""
     @State private var message = ""
     @State private var editingWindow: Edge?
+    /// "Taklif yuborish" was tapped with no price (DESIGN07 7.11).
+    @State private var priceMissing = false
 
     enum Edge: String, Identifiable {
         case start, end
@@ -336,7 +417,8 @@ struct OfferView: View {
             ElchiField(text: $priceText, label: strings.t("driverBid.priceLabel") + (perSeat ? strings.t("listingEdit.perSeatSuffix") : ""),
                        placeholder: strings.t("driverBid.pricePlaceholder"),
                        hint: listing.priceBasis == .perSeat ? "\(strings.t("common.total")): \(strings.money(model.totalMinor))" : nil,
-                       keyboard: .numberPad)
+                       error: priceMissing && model.priceMinor <= 0 ? strings.t("driver.offer.priceRequired") : nil,
+                       keyboard: .numberPad, suffix: strings.t("common.soum"))
                 .onChange(of: priceText) { _, typed in
                     model.priceDigits = Money.soumDigits(typed)
                     let formatted = Money.grouped(model.priceDigits)
@@ -353,10 +435,13 @@ struct OfferView: View {
             if let error = model.error { Note(strings.marketErrorText(error, seats: max(listing.quantity, 1)), tone: .err).accessibilityIdentifier("elchi.offer.error") }
             Text(strings.t("driverBid.noHoldNote")).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
         } footer: {
-            ElchiButton(strings.t("driverBid.send"), loading: model.sending && model.priceMinor != listing.unitPriceMinor) {
+            // Grey while the price is empty; a tap then marks the field (DESIGN07 7.11).
+            ElchiButton(strings.t("driverBid.send"), loading: model.sending && model.priceMinor != listing.unitPriceMinor,
+                        dimmed: model.priceMinor <= 0) {
+                guard model.priceMinor > 0 else { priceMissing = true; return }
                 Task { await send(model.priceMinor) }
             }
-            .disabled(!canSend || model.priceMinor <= 0)
+            .disabled(!canSend)
             .accessibilityIdentifier("elchi.offer.send")
         }
         .task {
@@ -470,7 +555,7 @@ struct OfferView: View {
         case .loaded(let list) where list.isEmpty:
             SelectField(label: strings.t("driverBid.trip"), options: [(String, String)](), selected: nil, placeholder: strings.t("driverBid.noPlannedTrips")) { _ in }
             Note(strings.t("driverBid.planTripFirst"), tone: .err).accessibilityIdentifier("elchi.offer.planTripFirst")
-            ElchiButton(strings.t("driverRoutes.addRoute"), variant: .soft, size: .medium, icon: .plus, action: onAddTrip)
+            ElchiButton(strings.t("driver.offer.planTrip"), variant: .soft, size: .medium, icon: .plus, action: onAddTrip)
         case .loaded(let list):
             SelectField(label: strings.t("driverBid.trip"), options: list.map { ($0.id, "\(strings.route($0)) · \(strings.tripMeta($0))") },
                         selected: model.tripId, placeholder: strings.t("driverBid.tripPlaceholder")) { model.choose($0) }
@@ -484,7 +569,9 @@ struct OfferView: View {
     private var commission: some View {
         switch model.quote {
         case nil:
-            EmptyView()
+            // DESIGN07 7.8: before a price, what the card will show.
+            ElchiCard { CardRow(strings.t("commissionPreview.title"), strings.t("driver.offer.commissionPrompt"), first: true, placeholder: true) }
+                .accessibilityIdentifier("elchi.offer.commissionPrompt")
         case .loading?:
             ElchiCard { CardRow(strings.t("commissionPreview.title"), strings.t("common.loading"), first: true) }
         case .failed?:
@@ -501,4 +588,40 @@ struct OfferView: View {
     }
 
     private func time(_ text: String) -> String { ServerTime.parse(text).map(DepartureWindow.shortText) ?? "?" }
+}
+
+/// A bar pill with an icon, a word and a red count (DESIGN07 0.2: "Takliflarim" on the Moslar bar).
+struct TabPill: View {
+    let icon: ElchiIcon
+    let title: String
+    let badge: String?
+    let action: () -> Void
+    @Environment(\.elchi) private var c
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                icon.image(size: 16)
+                Text(title).font(ElchiFont.poppins(13, .semibold)).lineLimit(1)
+                if let badge {
+                    Text(badge).font(ElchiFont.poppins(11, .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Color(hex: 0xE0413A), in: Capsule())
+                }
+            }
+            .foregroundStyle(c.text)
+            .padding(.horizontal, 14)
+            .frame(height: 40)
+            .background(c.card, in: Capsule())
+            .shadow(color: c.shadow, radius: 12, y: 6)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressFade())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(badge ?? "")
+        .accessibilityAddTraits(.isButton)
+    }
 }

@@ -1999,5 +1999,315 @@
   "client.bonus.nextExpiryLabel": {
     "uz": "Eng yaqin muddat",
     "ru": "Ближайший срок"
+  },
+  "driver.verify.incomplete": {
+    "uz": "To'ldirilmagan",
+    "ru": "Не заполнено",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.verify.reviewHint": {
+    "uz": "Operator hujjatlaringizni tekshirmoqda.",
+    "ru": "Оператор проверяет ваши документы.",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.checklist.profileTitle": {
+    "uz": "Profil va avtomobil",
+    "ru": "Профиль и автомобиль",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.checklist.profileTodo": {
+    "uz": "Ism va avtomobil ma'lumotlari",
+    "ru": "Имя и данные автомобиля",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.checklist.docsCount": {
+    "uz": "{submitted} / {total} yuklangan",
+    "ru": "Загружено: {submitted} из {total}",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.checklist.docsRejected": {
+    "uz": "{count} ta hujjat rad etildi — qayta yuklang",
+    "ru": "Отклонено документов: {count} — загрузите заново",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.checklist.reviewTitle": {
+    "uz": "Operator tekshiruvi",
+    "ru": "Проверка оператором",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.checklist.reviewAfter": {
+    "uz": "Profil va hujjatlar yuborilgach",
+    "ru": "После отправки профиля и документов",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driverHome.viewProfile": {
+    "uz": "Profilni ko'rish",
+    "ru": "Открыть профиль",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.home.availableOff": {
+    "uz": "Faol emasman — yangi buyurtmalar ko'rsatilmaydi",
+    "ru": "Не активен — новые заказы не показываются",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.home.availabilityOffDone": {
+    "uz": "Faollik o'chirildi",
+    "ru": "Активность выключена",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.lockTitle": {
+    "uz": "Avtomobil ma'lumotlari qulflanadi",
+    "ru": "Данные автомобиля будут заблокированы",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.lockText": {
+    "uz": "Saqlangach model, rang, davlat raqami, o'rinlar va yuk joyini faqat operator o'zgartira oladi. Hammasi to'g'rimi?",
+    "ru": "После сохранения модель, цвет, госномер, число мест и место для груза сможет изменить только оператор. Всё верно?",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.lockConfirm": {
+    "uz": "Ha, saqlash",
+    "ru": "Да, сохранить",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.lockReview": {
+    "uz": "Tekshirib chiqaman",
+    "ru": "Проверю ещё раз",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.cargoSummary": {
+    "uz": "{kg} kg · {litres} l",
+    "ru": "{kg} кг · {litres} л",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.savedLocked": {
+    "uz": "Profil saqlandi — avtomobil ma'lumotlari qulflandi",
+    "ru": "Профиль сохранён — данные автомобиля заблокированы",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.askOperator": {
+    "uz": "O'zgartirish uchun operatorga yozish",
+    "ru": "Написать оператору об изменении",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.seatsRange": {
+    "uz": "1 dan 8 gacha o'rin.",
+    "ru": "От 1 до 8 мест.",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.cargoKgRequired": {
+    "uz": "Kiriting (0 bo'lsa posilka olinmaydi).",
+    "ru": "Укажите значение (0 — посылки не берёте).",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.nameRequired": {
+    "uz": "Ism familiyani kiriting.",
+    "ru": "Введите имя и фамилию.",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.modelRequired": {
+    "uz": "Avtomobil modelini kiriting.",
+    "ru": "Укажите модель автомобиля.",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.form.colorRequired": {
+    "uz": "Rangni kiriting.",
+    "ru": "Укажите цвет.",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.profile.formHintOpen": {
+    "uz": "Ism va avtomobil ma'lumotlarini kiriting",
+    "ru": "Укажите имя и данные автомобиля",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.profile.unreadCount": {
+    "uz": "{count} ta o'qilmagan",
+    "ru": "Непрочитанных: {count}",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driverOrders.emptyHint": {
+    "uz": "Mijoz taklifingizni qabul qilgach, bron shu yerda ko'rinadi.",
+    "ru": "Когда клиент примет ваше предложение, бронь появится здесь.",
+    "_why": "BOSQICH 06 design (Haydovchi Royxat), DESIGN06-DIFF.md."
+  },
+  "driver.dash.balanceNoHold": {
+    "uz": "Taklif yuborish balansni band qilmaydi — mijoz qabul qilganda komissiya band qilinadi.",
+    "ru": "Отправка предложения не блокирует баланс — комиссия резервируется, когда клиент примет предложение.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.dash.statTrips": {
+    "uz": "Safarlar",
+    "ru": "Поездки",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.dash.planTrip": {
+    "uz": "Yangi safar rejalashtirish",
+    "ru": "Запланировать поездку",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.vehicleLocked": {
+    "uz": "Tasdiqlangan · qulflangan",
+    "ru": "Подтверждён · изменить нельзя",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.departureRequired": {
+    "uz": "Jo'nash vaqtini kiriting.",
+    "ru": "Укажите время отправления.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.departurePast": {
+    "uz": "Jo'nash vaqti kelajakda bo'lishi kerak.",
+    "ru": "Время отправления должно быть в будущем.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.seatsMaxNote": {
+    "uz": "Bo'sh o'rinlar avtomobildagi {count} o'rindan oshmaydi.",
+    "ru": "Свободных мест не больше, чем в автомобиле: {count}.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.saved": {
+    "uz": "Safar rejalashtirildi: {route}",
+    "ru": "Поездка запланирована: {route}",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.oneLiveTrip": {
+    "uz": "Avval faol safarni yakunlang",
+    "ru": "Сначала завершите текущую поездку",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.departed": {
+    "uz": "Yo'lga chiqdingiz — mijozlarga xabar yuborildi",
+    "ru": "Вы выехали — клиенты получили уведомление",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.manifestEmpty": {
+    "uz": "Hozircha bron yo'q — mijoz taklifingizni qabul qilgach shu yerda ko'rinadi.",
+    "ru": "Броней пока нет — они появятся здесь, когда клиент примет ваше предложение.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.phoneAfterDepart": {
+    "uz": "Telefon safar jo'nagach ko'rinadi. Hozircha ilova chatidan foydalaning.",
+    "ru": "Телефон появится после отправления. Пока пишите в чат приложения.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.phoneAfterBoard": {
+    "uz": "Telefon yo'lovchi mashinaga chiqqach ko'rinadi. Hozircha ilova chatidan foydalaning.",
+    "ru": "Телефон появится, когда пассажир сядет в машину. Пока пишите в чат приложения.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.trip.cancelled": {
+    "uz": "Safar bekor qilindi · ochiq takliflar yopildi",
+    "ru": "Поездка отменена · открытые предложения закрыты",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.feed.savedCount": {
+    "uz": "Saqlangan yo'nalishlar ({count})",
+    "ru": "Сохранённые направления ({count})",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.feed.emptyHint": {
+    "uz": "Sana oralig'ini kengaytiring yoki yo'nalishni saqlang — yangi so'rov chiqqanda xabar beramiz.",
+    "ru": "Расширьте диапазон дат или сохраните направление — мы сообщим, когда появится новый запрос.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.feed.myOffer": {
+    "uz": "Siz taklif yubordingiz: {price}",
+    "ru": "Вы предложили: {price}",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.feed.clientAccepted": {
+    "uz": "Mijoz qabul qildi",
+    "ru": "Клиент принял",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.feed.viewOffer": {
+    "uz": "Taklifni ko'rish",
+    "ru": "Открыть предложение",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.routes.alreadySaved": {
+    "uz": "Allaqachon saqlangan",
+    "ru": "Уже сохранено",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.routes.limitCount": {
+    "uz": "Limit: {limit} ta yo'nalish · saqlangan: {count}",
+    "ru": "Лимит: {limit} направлений · сохранено: {count}",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.routes.openInFeed": {
+    "uz": "Lentada ochish",
+    "ru": "Открыть в ленте",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.routes.openedInFeed": {
+    "uz": "Lentada ochildi: {name}",
+    "ru": "Открыто в ленте: {name}",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.routes.savedNotify": {
+    "uz": "Saqlandi — yangi so'rov chiqqanda xabar beramiz",
+    "ru": "Сохранено — сообщим, когда появится новый запрос",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.planTrip": {
+    "uz": "Safar rejalashtirish",
+    "ru": "Запланировать поездку",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.commissionPrompt": {
+    "uz": "Narxni kiriting — komissiya hisoblanadi",
+    "ru": "Введите цену — рассчитаем комиссию",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.priceRequired": {
+    "uz": "Taklif narxini kiriting",
+    "ru": "Укажите цену предложения",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.sentPrice": {
+    "uz": "Taklif yuborildi: {price}",
+    "ru": "Предложение отправлено: {price}",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.badgeCountered": {
+    "uz": "Mijoz qarshi taklif",
+    "ru": "Встречное от клиента",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.badgeMyCounter": {
+    "uz": "Qarshi taklifingiz yuborildi",
+    "ru": "Ваше встречное отправлено",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.clientCounterLine": {
+    "uz": "Mijoz qarshi taklif yubordi: {price} (siz {mine} taklif qilgansiz)",
+    "ru": "Клиент предложил {price} (вы предлагали {mine})",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.myCounterLine": {
+    "uz": "Qarshi taklifingiz ({price}) yuborildi — mijoz javobi kutilmoqda.",
+    "ru": "Ваше встречное предложение ({price}) отправлено — ждём ответа клиента.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.acceptedLine": {
+    "uz": "Bron yaratildi — «Buyurtmalar» bo'limida ko'ring. Komissiya balansingizda band qilindi.",
+    "ru": "Бронь создана — она в разделе «Заказы». Комиссия зарезервирована на вашем балансе.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.counterSame": {
+    "uz": "Mijoz narxidan farqli narx kiriting.",
+    "ru": "Введите цену, отличную от цены клиента.",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.clientPriceAccepted": {
+    "uz": "Mijoz narxi qabul qilindi — bron yaratildi",
+    "ru": "Цена клиента принята — бронь создана",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "driver.offer.counterRejected": {
+    "uz": "Qarshi taklif rad etildi",
+    "ru": "Встречное предложение отклонено",
+    "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
   }
 }

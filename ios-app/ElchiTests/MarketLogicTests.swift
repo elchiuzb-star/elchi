@@ -117,10 +117,11 @@ struct TripActionsTests {
     }
 
     @Test func statusTones() {
-        #expect(TripStatusStyle.tone(.planned) == .ok && TripStatusStyle.tone(.boarding) == .ok)
-        #expect(TripStatusStyle.tone(.inProgress) == .blue)
+        // DESIGN07 2.2: planned blue, boarding / on the road green, interrupted warn, completed grey, cancelled red.
+        #expect(TripStatusStyle.tone(.planned) == .blue && TripStatusStyle.tone(.boarding) == .ok)
+        #expect(TripStatusStyle.tone(.inProgress) == .ok)
         #expect(TripStatusStyle.tone(.interrupted) == .warn)
-        #expect(TripStatusStyle.tone(.completed) == .gray && TripStatusStyle.tone(.cancelled) == .gray)
+        #expect(TripStatusStyle.tone(.completed) == .gray && TripStatusStyle.tone(.cancelled) == .err)
     }
 
     @Test func activeFirstThenHistoryNewestFirst() {

@@ -13,7 +13,7 @@ struct DriverOrdersTab: View {
     @Environment(\.elchi) private var c
 
     var body: some View {
-        DriverTabScreen(title: strings.t("app.nav.orders")) {
+        DriverTabScreen(title: strings.t("driverOrders.title")) {
             ElchiList {
                 ListRow(icon: .tag, title: strings.t("proposals.title"), description: strings.t("proposals.emptyDriver"),
                         trailing: proposals.openCount.map { $0 > 0 ? "\($0)" : nil } ?? nil, first: true, action: onProposals)
@@ -29,7 +29,7 @@ struct DriverOrdersTab: View {
             case .loaded:
                 let list = bookings.visible
                 if list.isEmpty {
-                    EmptyState(icon: .clip, title: strings.t("driverOrders.empty"))
+                    EmptyState(icon: .clip, title: strings.t("driverOrders.empty"), description: strings.t("driverOrders.emptyHint"))
                 }
                 ForEach(list) { booking in
                     DriverBookingRow(booking: booking) { onOpen(booking.id) }

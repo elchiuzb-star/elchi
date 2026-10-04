@@ -26,7 +26,8 @@ struct TripsTabView: View {
                 let sections = TripList.sections(list)
                 Text(strings.t("driver.routes.privateHint")).font(ElchiFont.caption).foregroundStyle(c.muted)
                 ForEach(sections.active, id: \.id) { TripCard(trip: $0, trips: trips) { onOpen($0) } }
-                ForEach(sections.history, id: \.id) { TripCard(trip: $0, trips: trips) { onOpen($0) } }
+                // DESIGN07 2.3: the finished ones faded under the live / planned ones.
+                ForEach(sections.history, id: \.id) { TripCard(trip: $0, trips: trips) { onOpen($0) }.opacity(0.7) }
             }
         }
         .refreshable { await trips.load() }
@@ -44,9 +45,10 @@ struct TripCard: View {
 
     var body: some View {
         let actions = TripActions.of(trip.status)
-        ItemCard(title: strings.route(trip), icon: .route, sub: strings.tripMeta(trip), lines: lines) {
+        ItemCard(title: strings.route(trip), icon: .route, badge: (strings.tripStatus(trip.status), TripStatusStyle.tone(trip.status)),
+                 sub: strings.tripMeta(trip), lines: lines) {
             if let next = actions.next {
-                ElchiButton(strings.t(next.labelKey), variant: .soft, size: .medium, loading: trips.running == trip.id) {
+                ElchiButton(strings.t(next.labelKey), size: .medium, loading: trips.running == trip.id) {
                     Task { await trips.run(next, on: trip) }
                 }
                 .disabled(trips.running != nil && trips.running != trip.id)
@@ -62,7 +64,8 @@ struct TripCard: View {
     }
 
     private var lines: [ItemLine] {
-        var out = [ItemLine(strings.t("driverRoutes.status", ("status", strings.tripStatus(trip.status))), tone: TripStatusStyle.tone(trip.status))]
+        // DESIGN07 2.1: the status is the badge at the top right; the lines are the next step's hint and any refusal.
+        var out: [ItemLine] = []
         if trip.status == .planned { out.append(ItemLine(strings.t("driverRoutes.boardingWindowHint"))) }
         if let error = trips.refusals[trip.id] {
             out.append(ItemLine(strings.tripRefusalText(error), tone: TripRefusal.of(error) == .other ? .err : .warn))
@@ -84,6 +87,9 @@ struct AddTripView: View {
     @Environment(\.elchi) private var c
     @State private var picking = false
     @State private var stopQuery = ""
+    /// "Saqlash" was tapped with something missing: every field says what (DESIGN07 3.7).
+    @State private var tried = false
+    @State private var scrollTop = 0
 
     private var approved: [VehicleDTO] { (driver.vehicles ?? []).filter { $0.verificationStatus == "approved" } }
     private var vehicle: VehicleDTO? { approved.first { $0.id == model.form.vehicleId } }
@@ -91,29 +97,43 @@ struct AddTripView: View {
     var body: some View {
         @Bindable var model = model
         let problems = model.problems(vehicle: vehicle)
-        ScreenScaffold(title: strings.t("driverRoutes.addRoute"), backLabel: strings.t("common.back"), onBack: onBack) {
+        let departureKey = TripPlan.departureKey(tried || problems[.start] == .past ? problems[.start] : nil)
+        ScreenScaffold(title: strings.t("driverRoutes.addRoute"), backLabel: strings.t("common.back"), onBack: onBack, scrollTop: scrollTop) {
             vehicleField
+            if tried, problems[.vehicle] != nil, !approved.isEmpty { fieldError(strings.t("addRoute.vehiclePlaceholder")) }
             corridorField
+            if tried, problems[.corridor] != nil { fieldError(strings.t("addRoute.corridorPlaceholder")) }
             if (model.routes?.value?.count ?? 0) > 1 { stopFilter }
             routeField
+            if tried, problems[.route] != nil, model.form.corridorId != nil { fieldError(strings.t("addRoute.routePlaceholder")) }
             PickerField(label: strings.t("addRoute.departureTime"), value: model.form.start.map(DepartureWindow.text),
-                        placeholder: strings.t("client.routeSummary.windowPlaceholder"), error: problems[.start] == .past) { picking = true }
-            if problems[.start] == .past { fieldError(strings.t("app.validation.windowPast")) }
+                        placeholder: strings.t("client.routeSummary.windowPlaceholder"), error: departureKey != nil) { picking = true }
+            if let departureKey { fieldError(strings.t(departureKey)).accessibilityIdentifier("elchi.addTrip.departureError") }
             numberField($model.form.seats, .seats, label: strings.t("addRoute.freeSeats"), problems)
             HStack(alignment: .top, spacing: 10) {
                 numberField($model.form.cargoKg, .cargoKg, label: strings.t("driverProfileForm.cargoKg"), problems)
                 numberField($model.form.cargoLitres, .cargoLitres, label: strings.t("driverProfileForm.cargoLitres"), problems)
             }
-            Text(strings.t("addRoute.plannedOnApprovedRoute")).font(ElchiFont.caption).foregroundStyle(c.muted)
+            // DESIGN07 3.6: the two sentences, then the vehicle's seat ceiling once a vehicle is chosen.
+            Text([strings.t("addRoute.plannedOnApprovedRoute"), vehicle.map { strings.t("driver.trip.seatsMaxNote", ("count", $0.seatCapacity)) }]
+                    .compactMap { $0 }.joined(separator: " "))
+                .font(ElchiFont.caption).foregroundStyle(c.muted)
                 .fixedSize(horizontal: false, vertical: true)
             if let error = model.error, model.refused == nil {
                 Note(strings.marketErrorText(error), tone: .err).accessibilityIdentifier("elchi.addTrip.error")
             }
         } footer: {
-            ElchiButton(strings.t("common.save"), loading: model.saving) {
+            // Always tappable while there is a vehicle: a tap with gaps marks every field and goes back to the top.
+            ElchiButton(strings.t("common.save"), loading: model.saving, dimmed: !problems.isEmpty) {
+                guard problems.isEmpty else {
+                    tried = true
+                    scrollTop += 1
+                    return
+                }
                 Task { if let trip = await model.save(vehicle: vehicle) { onSaved(trip) } }
             }
-            .disabled(!problems.isEmpty || approved.isEmpty)
+            .disabled(approved.isEmpty)
+            .accessibilityIdentifier("elchi.addTrip.save")
         }
         .sheet(isPresented: $picking) {
             WindowPickerSheet(title: strings.t("addRoute.departureTime"), initial: model.form.start ?? DepartureWindow.suggested().start) { date in
@@ -132,6 +152,19 @@ struct AddTripView: View {
 
     @ViewBuilder
     private var vehicleField: some View {
+        if approved.count == 1, let only = approved.first {
+            // DESIGN07 3.1: the one approved car is read-only here (Q94: changed only through an operator).
+            LockedField(label: strings.t("addRoute.vehicle"),
+                        value: strings.t("addRoute.vehicleOption", ("model", only.makeModel), ("plate", only.plateMasked), ("seats", only.seatCapacity)),
+                        hint: strings.t("driver.trip.vehicleLocked"))
+                .accessibilityIdentifier("elchi.addTrip.vehicleLocked")
+        } else {
+            vehicleSelect
+        }
+    }
+
+    @ViewBuilder
+    private var vehicleSelect: some View {
         SelectField(label: strings.t("addRoute.vehicle"),
                     options: approved.map { ($0.id, strings.t("addRoute.vehicleOption", ("model", $0.makeModel), ("plate", $0.plateMasked),
                                                                  ("seats", $0.seatCapacity))) },
@@ -246,12 +279,26 @@ struct TripDetailView: View {
     let model: TripDetailModel
     let trips: TripsModel
     let onBack: () -> Void
+    /// DESIGN07 4.4: a manifest row's "Chat" opens that booking's chat.
+    var onChat: (String) -> Void = { _ in }
+    /// DESIGN07 4.7: after a cancel the list shows again.
+    var onCancelled: () -> Void = {}
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
     @State private var asking: TripCommand?
+    @State private var refreshing = false
 
     var body: some View {
-        ScreenScaffold(title: strings.t("trip.detailsTitle"), backLabel: strings.t("common.back"), onBack: onBack) {
+        ScreenScaffold(title: strings.t("trip.detailsTitle"), backLabel: strings.t("common.back"), onBack: onBack,
+                       actions: [BarAction(id: "refresh", icon: .refresh, label: strings.t("proposal.refresh"), loading: refreshing) {
+                           Task {
+                               refreshing = true
+                               await model.load()
+                               refreshing = false
+                               banners?.ok("client.booking.refreshed")
+                           }
+                       }]) {
             switch model.trip {
             case .loading:
                 SkeletonCards(count: 3)
@@ -271,8 +318,9 @@ struct TripDetailView: View {
                 ReasonSheet(command: command, working: trips.running == trip.id) { reason in
                     // A refusal closes the sheet too: the detail says why, under the trip.
                     Task {
-                        await trips.run(command, on: trip, reason: reason)
+                        let done = await trips.run(command, on: trip, reason: reason)
                         asking = nil
+                        if done && command == .cancel { onCancelled() }
                     }
                 } onBack: { asking = nil }
             }
@@ -297,13 +345,12 @@ struct TripDetailView: View {
             let command: TripCommand = actions.canPause ? .interrupt : .resume
             ElchiButton(strings.t(command.labelKey), variant: .soft) { trips.clearRefusal(trip.id); asking = command }
         }
-        HStack(spacing: 8) {
-            if actions.canCancel {
-                ElchiButton(strings.t("driver.trip.cancel"), variant: .dangerSoft, size: .pair) { trips.clearRefusal(trip.id); asking = .cancel }
-            }
-            ElchiButton(strings.t("tripDetail.refresh"), variant: .neutral, size: .pair, icon: .refresh) { Task { await model.load() } }
+        // DESIGN07 0.3: refresh is the bar's icon now; cancel stands alone.
+        if actions.canCancel {
+            ElchiButton(strings.t("driver.trip.cancel"), variant: .dangerSoft) { trips.clearRefusal(trip.id); asking = .cancel }
+                .disabled(trips.running != nil)
+                .accessibilityIdentifier("elchi.trip.cancel")
         }
-        .disabled(trips.running != nil)
     }
 
     private func header(_ trip: TripDTO) -> some View {
@@ -322,15 +369,15 @@ struct TripDetailView: View {
 
     /// The stops in order with their planned time (and the ETA when the server has one).
     private func stops(_ trip: TripDTO) -> some View {
-        let now = Date()
         let sorted = trip.stops.sorted { $0.seq < $1.seq }
         return StepLadder(sorted.enumerated().map { index, stop in
             let planned = ServerTime.parse(stop.plannedArrivalAt)
             let eta = ServerTime.parse(stop.etaArrivalAt)
-            let state: StepLadder.Step.State = switch trip.status {
-            case .inProgress: (eta ?? planned).map { $0 < now } == true ? .done : (index == 0 ? .done : .ahead)
-            case .completed: .done
-            default: index == 0 ? .current : .ahead
+            // DESIGN07 4.2: the dots follow the trip status (the DTO has no per-stop passage).
+            let state: StepLadder.Step.State = switch TripStopDot.of(index: index, status: trip.status) {
+            case .done: .done
+            case .current: .current
+            case .ahead: .ahead
             }
             var detail = [strings.t("tripDetail.stopSeq", ("seq", stop.seq)), planned.map(DepartureWindow.shortText)].compactMap { $0 }
             if let eta { detail.append("ETA \(strings.clock(eta))") }
@@ -363,8 +410,8 @@ struct TripDetailView: View {
         .accessibilityIdentifier("elchi.trip.availability")
     }
 
-    /// Pickups and drop-offs per stop. A phone only when the server sends it (its rules: a parcel's receiver only after
-    /// departure); otherwise the grey note. The chat button waits for the booking screens (Stage 09).
+    /// Pickups and drop-offs per stop. A phone only when the server sends it (Q142: a parcel's receiver once the trip
+    /// departs; a passenger once on board); otherwise the grey note. "Chat" opens the booking's chat (Q100).
     @ViewBuilder
     private func manifest(_ trip: TripDTO) -> some View {
         ElchiCard {
@@ -379,7 +426,7 @@ struct TripDetailView: View {
                     stop.pickups.map { (stop, $0, true) } + stop.dropoffs.map { (stop, $0, false) }
                 }
                 if rows.isEmpty {
-                    Text(strings.t("tripDetail.manifestEmpty")).font(ElchiFont.caption).foregroundStyle(c.muted).padding(.vertical, 8)
+                    Text(strings.t("driver.trip.manifestEmpty")).font(ElchiFont.caption).foregroundStyle(c.muted).padding(.vertical, 8)
                 } else {
                     ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                         let (stop, item, pickup) = row
@@ -388,10 +435,25 @@ struct TripDetailView: View {
                         let what = item.parcelSummary.map { "\(strings.t("tripDetail.parcel")): \($0)" }
                             ?? item.seats.map { strings.t("tripDetail.seats", ("count", $0)) } ?? ""
                         let status = strings.tOrNil("tripDetail.service.\(item.serviceStatus)")
-                        CardRow("\(place) · \(when) · \(strings.t(pickup ? "tripDetail.pickups" : "tripDetail.dropoffs"))",
-                                "\(item.clientFirstName) — \(what)\(status.map { " · \($0)" } ?? "")",
-                                detail: item.contactPhone.map { UzPhone.display($0) }
-                                    ?? strings.t(item.serviceType == .parcel ? "tripDetail.phoneAfterPickup" : "tripDetail.phoneAfterStart"))
+                        HStack(alignment: .center, spacing: 10) {
+                            CardRow("\(place) · \(when) · \(strings.t(pickup ? "tripDetail.pickups" : "tripDetail.dropoffs"))",
+                                    "\(item.clientFirstName) — \(what)\(status.map { " · \($0)" } ?? "")",
+                                    detail: item.contactPhone.map { UzPhone.display($0) }
+                                        ?? strings.t(item.serviceType == .parcel ? "driver.trip.phoneAfterDepart" : "driver.trip.phoneAfterBoard"))
+                            Button { onChat(item.bookingId) } label: {
+                                HStack(spacing: 6) {
+                                    ElchiIcon.chat.image(size: 15)
+                                    Text(strings.t("driverBooking.messages")).font(ElchiFont.poppins(13, .semibold)).lineLimit(1)
+                                }
+                                .foregroundStyle(c.softText)
+                                .padding(.horizontal, 12).frame(minHeight: 36)
+                                .background(c.soft, in: Capsule())
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(PressFade())
+                            .accessibilityIdentifier("elchi.trip.manifestChat.\(item.bookingId)")
+                        }
                     }
                 }
             }
@@ -433,5 +495,59 @@ struct ReasonSheet: View {
         .background(c.card.ignoresSafeArea())
         .presentationDetents([.medium])
         .presentationCornerRadius(ElchiShape.sheet)
+    }
+}
+
+// MARK: - Home: the work summary (DESIGN07 1.1-1.3)
+
+/// Under the home's balance / status / availability blocks (DESIGN06 owns those): that an offer holds no money, the
+/// three counts (trips not finished, offers still open, bookings not finished - each opens its tab; "—" when a list
+/// could not be read) and "Yangi safar rejalashtirish". Approved drivers only (the home decides).
+struct DriverWorkSummary: View {
+    let trips: TripsModel
+    let proposals: DriverProposalsModel
+    let bookings: DriverBookingsModel
+    let onTab: (DriverTab) -> Void
+    let onPlanTrip: () -> Void
+    @Environment(LocaleStore.self) private var strings
+    @Environment(\.elchi) private var c
+
+    var body: some View {
+        let stats = DriverHomeStats.of(trips: trips.trips.value, openProposals: proposals.lists[.open]?.value,
+                                       bookingStatuses: bookings.items.value?.map(\.status))
+        Text(strings.t("driver.dash.balanceNoHold")).font(ElchiFont.caption).foregroundStyle(c.muted)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("elchi.driver.home.noHold")
+        HStack(spacing: 8) {
+            tile("driver.dash.statTrips", stats.trips, tab: .routes)
+            tile("client.listing.stepOffers", stats.offers, tab: .matches)
+            tile("client.orders.bookings", stats.bookings, tab: .orders)
+        }
+        .accessibilityIdentifier("elchi.driver.home.stats")
+        ElchiButton(strings.t("driver.dash.planTrip"), variant: .soft, icon: .plus, action: onPlanTrip)
+            .accessibilityIdentifier("elchi.driver.home.planTrip")
+            .task {
+                async let offers: Void = proposals.load(.open)
+                async let list: Void = bookings.load()
+                _ = await (offers, list)
+            }
+    }
+
+    private func tile(_ key: String, _ count: Int?, tab: DriverTab) -> some View {
+        Button { onTab(tab) } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(strings.t(key)).font(ElchiFont.caption).foregroundStyle(c.muted).lineLimit(1).minimumScaleFactor(0.8)
+                Text(DriverHomeStats.text(count)).font(ElchiFont.poppins(20, .semibold)).foregroundStyle(c.text).lineLimit(1)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(c.card, in: RoundedRectangle(cornerRadius: 18))
+            .shadow(color: c.shadow.opacity(0.7), radius: 12, y: 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressFade())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("elchi.driver.home.stat.\(tab.rawValue)")
     }
 }

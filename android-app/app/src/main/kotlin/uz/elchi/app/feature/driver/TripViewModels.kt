@@ -81,7 +81,7 @@ internal class TripCommandRunner(private val api: ElchiApi, private val banners:
         // Boarding and departure are when a client may look for the car (§10.6): publishing starts; the end stops it.
         if (result.isSuccess) gps?.after(trip.id, TripRules.gpsEffect(command))
         result
-            .onSuccess { banners.show(BannerTone.OK, BannerText.Key("driverRoutes.tripStatusUpdated")) }
+            .onSuccess { banners.show(BannerTone.OK, BannerText.Key(Design07Rules.commandBannerKey(command))) }
             .onFailure { e ->
                 val opens = TripRules.boardingOpensAt(e)
                 if (opens != null) {
@@ -98,7 +98,7 @@ internal class TripCommandRunner(private val api: ElchiApi, private val banners:
  * "Yo'nalishlarim": the driver's private trip plans (Q138 - never shown to clients). One per driver flow: the
  * offer screen reads the same list to pick a trip from.
  */
-class TripsViewModel(private val api: ElchiApi, banners: BannerCenter, gps: TripGps? = null) : ViewModel() {
+class TripsViewModel(private val api: ElchiApi, private val banners: BannerCenter, gps: TripGps? = null) : ViewModel() {
     data class State(
         val trips: Load<List<TripDTO>> = Load.Loading,
         val refreshing: Boolean = false,
@@ -132,6 +132,11 @@ class TripsViewModel(private val api: ElchiApi, banners: BannerCenter, gps: Trip
     /** The card's next-step button. */
     fun act(trip: TripDTO, command: TripCommand) {
         if (trip.id in _state.value.busy) return
+        // Design 07 §2.6: one tracker session at a time.
+        if (Design07Rules.blocksStart(_state.value.list, trip, command)) {
+            banners.show(BannerTone.WARN, BannerText.Key("driver.trip.oneLiveTrip"))
+            return
+        }
         _state.update { it.copy(busy = it.busy + trip.id) }
         viewModelScope.launch {
             val result = runner.run(trip, command, reason = null)
@@ -287,7 +292,10 @@ class AddTripViewModel(
             banners.endAction()
             result
                 .onSuccess { trip ->
-                    banners.show(BannerTone.OK, BannerText.Key("addRoute.added"))
+                    // Design 07 §3.7: "Safar rejalashtirildi: Toshkent – Samarqand" (a trip, not a route).
+                    val corridor = (s.corridors as? Load.Ready)?.value?.firstOrNull { it.id == s.form.corridorId }?.name
+                    if (corridor != null) banners.show(BannerTone.OK, BannerText.Key("driver.trip.saved", params = mapOf("route" to corridor)))
+                    else banners.show(BannerTone.OK, BannerText.Key("addRoute.added"))
                     _state.update { it.copy(saving = false, created = trip.id) }
                 }
                 .onFailure { e ->
@@ -307,10 +315,12 @@ class AddTripViewModel(
 /** `GET /trips/{id}` + `/availability` + `/manifest`, and the commands; every command reads all three again. */
 class TripDetailViewModel(
     private val api: ElchiApi,
-    banners: BannerCenter,
+    private val banners: BannerCenter,
     private val tripId: String,
     private val onChanged: () -> Unit,
     gps: TripGps? = null,
+    /** The driver's other trips, for the one-live-trip guard (design 07 §2.6). */
+    private val liveTrips: () -> List<TripDTO> = { emptyList() },
 ) : ViewModel() {
     data class State(
         val trip: Load<TripDTO> = Load.Loading,
@@ -319,6 +329,8 @@ class TripDetailViewModel(
         val refreshing: Boolean = false,
         val busy: TripCommand? = null,
         val opensAt: Instant? = null,
+        /** Set once the trip was cancelled: the screen goes back to the list (design 07 §4.7). */
+        val cancelled: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State())
@@ -329,7 +341,8 @@ class TripDetailViewModel(
         refresh()
     }
 
-    fun refresh() {
+    /** [manual] = the bar's refresh icon: "Yangilandi" once the trip is read again. */
+    fun refresh(manual: Boolean = false) {
         if (_state.value.refreshing) return
         _state.update { it.copy(refreshing = true) }
         viewModelScope.launch {
@@ -346,16 +359,21 @@ class TripDetailViewModel(
                 .onSuccess { m -> _state.update { it.copy(manifest = Load.Ready(m)) } }
                 .onFailure { e -> _state.update { if (it.manifest is Load.Ready) it else it.copy(manifest = Load.Failed(e)) } }
             _state.update { it.copy(refreshing = false) }
+            if (manual) banners.show(BannerTone.OK, BannerText.Key("client.booking.refreshed"))
         }
     }
 
     fun act(command: TripCommand, reason: String? = null) {
         val trip = (_state.value.trip as? Load.Ready)?.value ?: return
         if (_state.value.busy != null) return
+        if (Design07Rules.blocksStart(liveTrips(), trip, command)) {
+            banners.show(BannerTone.WARN, BannerText.Key("driver.trip.oneLiveTrip"))
+            return
+        }
         _state.update { it.copy(busy = command) }
         viewModelScope.launch {
             val result = runner.run(trip, command, reason)
-            result.onSuccess { t -> _state.update { it.copy(trip = Load.Ready(t)) } }
+            result.onSuccess { t -> _state.update { it.copy(trip = Load.Ready(t), cancelled = command == TripCommand.CANCEL) } }
             _state.update { it.copy(busy = null, opensAt = result.exceptionOrNull()?.let(TripRules::boardingOpensAt)) }
             refresh()
             if (result.isSuccess) onChanged()

@@ -77,11 +77,15 @@ object TripRules {
 
     fun statusKey(status: TripStatus): String = "tripStatus.${status.value}"
 
-    /** planned / boarding green, on the way blue, interrupted warn, finished grey (the word says it too). */
+    /**
+     * Design 07 §2.2: planned blue, boarding / on the way green, interrupted warn (an incident, not a pause),
+     * cancelled red, completed grey (the word says it too).
+     */
     fun statusTone(status: TripStatus): Tone = when (status) {
-        TripStatus.PLANNED, TripStatus.BOARDING -> Tone.OK
-        TripStatus.IN_PROGRESS -> Tone.BLUE
+        TripStatus.PLANNED -> Tone.BLUE
+        TripStatus.BOARDING, TripStatus.IN_PROGRESS -> Tone.OK
         TripStatus.INTERRUPTED -> Tone.WARN
+        TripStatus.CANCELLED -> Tone.ERR
         else -> Tone.GRAY
     }
 

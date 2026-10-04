@@ -80,6 +80,11 @@ final class TripsModel {
     @discardableResult
     func run(_ command: TripCommand, on trip: TripDTO, reason: String? = nil) async -> Bool {
         guard running == nil else { return false }
+        // DESIGN07 2.6: one live trip (one GPS session) at a time.
+        if command == .startBoarding, LiveTrip.blocksStart(trip, among: trips.value ?? []) {
+            banners.show(.key("driver.trip.oneLiveTrip"), tone: .warn)
+            return false
+        }
         banners.clearError()
         refusals[trip.id] = nil
         running = trip.id
@@ -93,7 +98,7 @@ final class TripsModel {
                                                    idempotencyKey: keys.key(action)).data
             keys.settle(action)
             replace(updated)
-            banners.ok("driverRoutes.tripStatusUpdated")
+            banners.ok(LiveTrip.bannerKey(command))
             await afterCommand?(command, updated)
             await details[trip.id]?.load()
             return true
@@ -437,7 +442,7 @@ final class SavedRoutesModel {
         do {
             _ = try await api.createSavedSearch(body: body, idempotencyKey: keys.key(action))
             keys.settle(action)
-            banners.ok("savedSearches.saved")
+            banners.ok("driver.routes.savedNotify")
             await load()
         } catch {
             keys.settle(action, after: error)
@@ -572,6 +577,8 @@ final class DriverProposalsModel {
     var tab: ProposalTab = .open
     private(set) var lists: [ProposalTab: Loadable<[ProposalThreadDTO]>] = [:]
     private var threads: [String: DriverThreadModel] = [:]
+    /// DESIGN07 8.2: the history of countered threads (the list has none), for "(siz {mine} taklif qilgansiz)".
+    private(set) var histories: [String: [ProposalVersionDTO]] = [:]
 
     init(api: ElchiAPI, banners: BannerCenter, keys: ActionKeys) {
         self.api = api
@@ -582,11 +589,27 @@ final class DriverProposalsModel {
     func load(_ tab: ProposalTab? = nil) async {
         let tab = tab ?? self.tab
         do {
-            lists[tab] = .loaded(try await api.listMyProposals(state: tab.rawValue, limit: 50).data)
+            let list = try await api.listMyProposals(state: tab.rawValue, limit: 50).data
+            lists[tab] = .loaded(list)
+            if tab == .open { await loadHistories(list) }
         } catch {
             if lists[tab]?.value == nil { lists[tab] = .failed(error) }
         }
     }
+
+    /// The versions of the threads the client countered (a few at most), read once per current version.
+    private func loadHistories(_ list: [ProposalThreadDTO]) async {
+        let wanted = list.filter { thread in
+            ProposalBadge.of(thread) == .countered
+                && !(histories[thread.id]?.contains { $0.id == thread.currentVersion?.id } ?? false)
+        }
+        for thread in wanted.prefix(10) {
+            if let versions = try? await api.getProposal(threadId: thread.id).data.versions { histories[thread.id] = versions }
+        }
+    }
+
+    /// The versions known for a thread: an opened thread's own, else the ones read for the list.
+    func versions(_ id: String) -> [ProposalVersionDTO]? { threads[id]?.thread.value?.versions ?? histories[id] }
 
     /// How many offers are still open (the Buyurtmalar entry's count); nil until known.
     var openCount: Int? { lists[.open]?.value?.count }
@@ -693,9 +716,12 @@ final class DriverThreadModel {
 
     func reject() async -> Bool {
         guard let version = thread.value?.currentVersion else { return false }
-        return await run("reject", key: "reject:\(id):\(version.revision)") { api, key in
+        let done = await run("reject", key: "reject:\(id):\(version.revision)") { api, key in
             try await api.rejectProposal(threadId: self.id, body: ProposalDecision(expectedRevision: version.revision), idempotencyKey: key).warnings
         }
+        // DESIGN07 8.8: the driver only ever rejects the client's counter.
+        if done { banners.ok("driver.offer.counterRejected") }
+        return done
     }
 
     func withdraw() async -> Bool {

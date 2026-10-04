@@ -66,6 +66,10 @@ class FeedViewModel(
         /** Every district id → name, for saved routes (read once, lazily). */
         val names: Map<String, String> = emptyMap(),
         val namesRu: Map<String, String> = emptyMap(),
+        /** Every district read so far by id (a saved route's district → its region, design 07 §6.5). */
+        val allDistricts: Map<String, DistrictDTO> = emptyMap(),
+        /** "Saqlangan yo'nalishlar ({count})" (design 07 §5.4); null until read. */
+        val savedCount: Int? = null,
     ) {
         fun names(ru: Boolean): Map<String, String> = if (ru) names + namesRu else names
 
@@ -94,7 +98,7 @@ class FeedViewModel(
         if (regionId in _state.value.districts) return
         viewModelScope.launch {
             tryCall { api.listDistricts(regionId = regionId, limit = 200).data }
-                .onSuccess { list -> _state.update { s -> s.copy(districts = s.districts + (regionId to list), names = s.names + list.associate { it.id to it.nameUz }, namesRu = s.namesRu + list.associate { it.id to (it.nameRu ?: it.nameUz) }) } }
+                .onSuccess { list -> _state.update { s -> s.copy(districts = s.districts + (regionId to list), allDistricts = s.allDistricts + list.associateBy { it.id }, names = s.names + list.associate { it.id to it.nameUz }, namesRu = s.namesRu + list.associate { it.id to (it.nameRu ?: it.nameUz) }) } }
         }
     }
 
@@ -102,7 +106,7 @@ class FeedViewModel(
     fun loadAllNames() {
         viewModelScope.launch {
             tryCall { api.listDistricts(limit = 500).data }
-                .onSuccess { list -> _state.update { s -> s.copy(names = s.names + list.associate { it.id to it.nameUz }, namesRu = s.namesRu + list.associate { it.id to (it.nameRu ?: it.nameUz) }) } }
+                .onSuccess { list -> _state.update { s -> s.copy(allDistricts = s.allDistricts + list.associateBy { it.id }, names = s.names + list.associate { it.id to it.nameUz }, namesRu = s.namesRu + list.associate { it.id to (it.nameRu ?: it.nameUz) }) } }
         }
     }
 
@@ -129,8 +133,32 @@ class FeedViewModel(
 
     fun pickService(service: ServiceType) = setFilter(_state.value.filter.copy(service = service.value))
 
+    /** The saved routes' count for the feed's button (requests side only, as the saved screen lists them). */
+    fun refreshSavedCount() {
+        viewModelScope.launch {
+            tryCall { api.listMySavedSearches(limit = 50).data }
+                .onSuccess { list -> setSavedCount(list.count { it.side == FeedSide.REQUESTS }) }
+        }
+    }
+
+    fun setSavedCount(count: Int) = _state.update { it.copy(savedCount = count) }
+
+    /**
+     * "Lentada ochish" (design 07 §6.5): the saved route's ends (and service) become the feed's filter. False when
+     * an end cannot be shown as a pick (a stop end, or its district not read yet).
+     */
+    fun applySaved(saved: SavedSearchDTO): Boolean {
+        val s = _state.value
+        val regions = (s.regions as? Load.Ready)?.value.orEmpty()
+        val filter = Design07Rules.filterFor(saved, s.filter, regions, s.allDistricts) ?: return false
+        listOfNotNull(filter.origin.regionId, filter.destination.regionId).distinct().forEach(::loadDistricts)
+        setFilter(FeedRules.effectiveService(filter, s.passengerEnabled))
+        return true
+    }
+
     fun refresh() {
         val query = FeedRules.query(_state.value.filter, now())
+        refreshSavedCount()
         loadJob?.cancel()
         if (query == null) {
             _state.update { it.copy(items = emptyList(), loaded = false, loading = false, error = null, next = null, degraded = emptyList()) }
@@ -206,7 +234,11 @@ class SavedSearchesViewModel(
     fun refresh() {
         viewModelScope.launch {
             tryCall { api.listMySavedSearches(limit = 50).data }
-                .onSuccess { list -> _state.update { it.copy(saved = Load.Ready(list.filter { s -> s.side == FeedSide.REQUESTS })) } }
+                .onSuccess { list ->
+                    val requests = list.filter { s -> s.side == FeedSide.REQUESTS }
+                    _state.update { it.copy(saved = Load.Ready(requests)) }
+                    feed.setSavedCount(requests.size)
+                }
                 .onFailure { e -> _state.update { if (it.saved is Load.Ready) it else it.copy(saved = Load.Failed(e)) } }
         }
     }
@@ -214,6 +246,16 @@ class SavedSearchesViewModel(
     fun saveCurrent() {
         if (_state.value.saving) return
         val query = FeedRules.query(feed.state.value.filter, now()) ?: return
+        // Design 07 §6.2 / §6.3: the button is already grey for these; a tap still says why.
+        val list = (_state.value.saved as? Load.Ready)?.value.orEmpty()
+        if (Design07Rules.alreadySaved(list, query)) {
+            banners.show(BannerTone.WARN, BannerText.Key("driver.routes.alreadySaved"))
+            return
+        }
+        if (Design07Rules.atLimit(list)) {
+            banners.show(BannerTone.WARN, BannerText.Key("driver.saved.limitHint", params = mapOf("limit" to FeedRules.SAVED_LIMIT.toString())))
+            return
+        }
         val body = FeedRules.savedSearchBody(query, now())
         val scope = "saved:${query.origin}:${query.destination}:${query.service}"
         _state.update { it.copy(saving = true) }
@@ -224,7 +266,7 @@ class SavedSearchesViewModel(
             banners.endAction()
             result
                 .onSuccess {
-                    banners.show(BannerTone.OK, BannerText.Key("savedSearches.saved"))
+                    banners.show(BannerTone.OK, BannerText.Key("driver.routes.savedNotify"))
                     refresh()
                 }
                 .onFailure { e -> banners.show(BannerTone.ERR, BannerText.Error(e)) }
@@ -243,9 +285,17 @@ class SavedSearchesViewModel(
                 .onSuccess {
                     banners.show(BannerTone.OK, BannerText.Key("savedSearches.deleted"))
                     _state.update { s -> s.copy(saved = (s.saved as? Load.Ready)?.let { r -> Load.Ready(r.value.filterNot { it.id == saved.id }) } ?: s.saved) }
+                    ((_state.value.saved as? Load.Ready)?.value)?.let { feed.setSavedCount(it.size) }
                 }
                 .onFailure { e -> banners.show(BannerTone.ERR, BannerText.Error(e)) }
             _state.update { it.copy(deleting = it.deleting - saved.id) }
         }
+    }
+
+    /** "Lentada ochish": true when the feed now shows [saved] ([name] goes into the banner). */
+    fun openInFeed(saved: SavedSearchDTO, name: String): Boolean {
+        if (!feed.applySaved(saved)) return false
+        banners.show(BannerTone.OK, BannerText.Key("driver.routes.openedInFeed", params = mapOf("name" to name)))
+        return true
     }
 }

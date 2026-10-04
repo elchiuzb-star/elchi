@@ -50,7 +50,7 @@ public enum DriverProfileAction: String, CaseIterable, Sendable {
 
     var titleKey: String {
         switch self {
-        case .form: "driverProfileForm.title"
+        case .form: "driver.checklist.profileTitle"
         case .documents: "driverProfile.action.documents"
         case .routes: "driverProfile.action.routes"
         case .proposals: "driverProfile.action.proposals"
@@ -141,13 +141,13 @@ struct DriverProfileView: View {
             ElchiCard {
                 CardRow(strings.t("driverProfile.vehicle"), vehicleLine(profile), first: true)
             }
-            StatTiles([(strings.t("driverProfile.status"), status.map(strings.verificationLabel) ?? "—"),
+            StatTiles([(strings.t("driverProfile.status"), driver.homeState.map(strings.homeStateLabel) ?? "—"),
                        (strings.t("driverProfile.routes"), trips.trips.value.map { "\(DriverProfileStats.routesCount($0))" } ?? "—"),
                        (strings.t("driver.profile.complaints"), stats.reports.map(String.init) ?? "—")])
             SectionTitle(strings.t("driverProfile.quickActions"))
             ElchiList {
                 ForEach(Array(DriverProfileAction.allCases.enumerated()), id: \.element) { index, action in
-                    ListRow(icon: action.icon, title: strings.t(action.titleKey), description: action.hintKey.map { strings.t($0) },
+                    ListRow(icon: action.icon, title: strings.t(action.titleKey), description: hint(action),
                             danger: action == .logout, first: index == 0) { onAction(action) }
                         .accessibilityIdentifier("elchi.driver.menu.\(action.rawValue)")
                 }
@@ -157,10 +157,24 @@ struct DriverProfileView: View {
         .task { await load() }
     }
 
-    /// The verification status and availability, both in words (never the raw codes).
+    /// DESIGN06 6.3 / 6.4: the form row says whether the car is locked; the documents row adds "n / 5" once known.
+    private func hint(_ action: DriverProfileAction) -> String? {
+        switch action {
+        case .form:
+            return strings.t(driver.vehicleLocked ? "driver.profile.editHint" : "driver.profile.formHintOpen")
+        case .documents:
+            let base = strings.t("driverProfile.action.documentsHint")
+            guard driver.documents.value != nil else { return base }
+            return "\(base) · \(DocumentSlots.submitted(driver.slots)) / \(DriverDocumentType.allCases.count)"
+        default:
+            return action.hintKey.map { strings.t($0) }
+        }
+    }
+
+    /// The account state (DESIGN06 1.5, derived) and availability, both in words (never the raw codes).
     private func badges(_ profile: DriverProfileV1?, _ status: DriverVerification?) -> [(text: String, tone: Tone)] {
         var out: [(text: String, tone: Tone)] = []
-        if let status { out.append((strings.verificationLabel(status), status.tone)) }
+        if let state = driver.homeState { out.append((strings.homeStateLabel(state), state.tone)) }
         if profile != nil {
             out.append(driver.isAvailable ? (strings.t("driverProfile.active"), .blue) : (strings.t("driverProfile.inactive"), .gray))
         }
@@ -168,7 +182,7 @@ struct DriverProfileView: View {
     }
 
     private func load() async {
-        async let profile: Void = driver.loadProfile()
+        async let profile: Void = driver.refresh()
         async let figures: Void = stats.load()
         async let list: Void = trips.load()
         _ = await (profile, figures, list)

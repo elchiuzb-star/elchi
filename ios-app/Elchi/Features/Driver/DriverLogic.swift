@@ -60,6 +60,107 @@ public enum DriverVerification: Hashable, Sendable {
     }
 }
 
+// MARK: - Home state (DESIGN06 1.5)
+
+/// What home, the gate and the profile badge call the account: the server's word for a decision (approved /
+/// rejected / blocked), otherwise derived from what the driver has sent - the server turns `new` into `pending` on
+/// the first upload, so "pending" with one document is not "under review" yet. Review = the car is in (Q94 lock),
+/// all five documents were sent, and none of them is rejected; anything short of that is "To'ldirilmagan".
+public enum DriverHomeState: Hashable, Sendable {
+    case incomplete, review, approved, rejected, blocked
+
+    /// `slots` nil = the documents have not answered yet: the server's word decides until they do.
+    public static func derive(status: DriverVerification, vehicleLocked: Bool, slots: [DocumentSlot]?) -> DriverHomeState {
+        switch status {
+        case .approved: return .approved
+        case .rejected: return .rejected
+        case .blocked: return .blocked
+        case .new: return .incomplete
+        case .pending, .other:
+            guard let slots else { return vehicleLocked ? .review : .incomplete }
+            let complete = vehicleLocked && DocumentSlots.submitted(slots) == DriverDocumentType.allCases.count
+                && DocumentSlots.rejected(slots) == 0
+            return complete ? .review : .incomplete
+        }
+    }
+
+    public var labelKey: String {
+        switch self {
+        case .incomplete: "driver.verify.incomplete"
+        case .review: "app.driverVerification.pending"
+        case .approved: "status.approved"
+        case .rejected: "status.rejected"
+        case .blocked: "app.driverVerification.blocked"
+        }
+    }
+
+    public var hintKey: String {
+        switch self {
+        case .incomplete: "driverHome.onboardingHint"
+        case .review: "driver.verify.reviewHint"
+        case .approved: "driverHome.approvedHint"
+        case .rejected, .blocked: "app.driverGate.decided"
+        }
+    }
+
+    public var tone: Tone {
+        switch self {
+        case .approved: .ok
+        case .rejected, .blocked: .err
+        case .incomplete, .review: .warn
+        }
+    }
+
+    public var isDecided: Bool { self == .rejected || self == .blocked }
+}
+
+// MARK: - Onboarding checklist (DESIGN06 1.7)
+
+/// The three steps under the status card until approval: the car (form), the five documents, the operator.
+public struct ChecklistStep: Hashable, Sendable {
+    public enum Mark: Hashable, Sendable { case todo, done, failed }
+    public enum Target: Hashable, Sendable { case form, documents, gate }
+
+    public let number: Int
+    public let mark: Mark
+    public let titleKey: String
+    /// The sub-line: a key with its fillers, or text taken as it is (the car's model and plate).
+    public let detail: Detail
+    public let target: Target
+
+    public enum Detail: Hashable, Sendable {
+        case key(String, [String: String])
+        case text(String)
+    }
+}
+
+public enum DriverChecklist {
+    public static func steps(state: DriverHomeState, profile: DriverProfileV1?, slots: [DocumentSlot]) -> [ChecklistStep] {
+        let locked = VehicleLock.isLocked(profile)
+        let car = [profile?.carModel, profile?.plateNumber].compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }.joined(separator: " · ")
+        let first = ChecklistStep(number: 1, mark: locked ? .done : .todo, titleKey: "driver.checklist.profileTitle",
+                                  detail: locked && !car.isEmpty ? .text(car) : .key("driver.checklist.profileTodo", [:]), target: .form)
+        let total = DriverDocumentType.allCases.count
+        let sent = DocumentSlots.submitted(slots)
+        let rejected = DocumentSlots.rejected(slots)
+        let docs: ChecklistStep = rejected > 0
+            ? ChecklistStep(number: 2, mark: .failed, titleKey: "driverDocs.title",
+                            detail: .key("driver.checklist.docsRejected", ["count": String(rejected)]), target: .documents)
+            : ChecklistStep(number: 2, mark: sent == total ? .done : .todo, titleKey: "driverDocs.title",
+                            detail: .key("driver.checklist.docsCount", ["submitted": String(sent), "total": String(total)]), target: .documents)
+        let review: ChecklistStep.Detail = switch state {
+        case .review: .key("status.pending", [:])
+        case .rejected: .key("disputeStatus.rejected", [:])
+        case .blocked: .key("app.driverVerification.blocked", [:])
+        case .incomplete, .approved: .key("driver.checklist.reviewAfter", [:])
+        }
+        let third = ChecklistStep(number: 3, mark: state.isDecided ? .failed : state == .approved ? .done : .todo,
+                                  titleKey: "driver.checklist.reviewTitle", detail: review, target: .gate)
+        return [first, docs, third]
+    }
+}
+
 /// The verification gate's two variants: keep going (documents + profile), or a decision was made (support only;
 /// nothing the driver uploads changes it).
 public enum DriverGate: Hashable, Sendable { case pending, decided }
@@ -75,7 +176,12 @@ public enum DriverAvailability {
     /// The subtitle under "Faollik holati".
     public static func subtitleKey(status: DriverVerification, isOn: Bool) -> String {
         if !status.isApproved && !isOn { return "driverHome.availabilityLocked" }
-        return isOn ? "driver.home.availableOn" : "driverProfile.availabilityOff"
+        return isOn ? "driver.home.availableOn" : "driver.home.availableOff"
+    }
+
+    /// The confirmation after the switch moved (DESIGN06 1.10).
+    public static func doneKey(isOn: Bool) -> String {
+        isOn ? "driver.home.availableOn" : "driver.home.availabilityOffDone"
     }
 }
 
@@ -86,6 +192,13 @@ public enum DriverAvailability {
 public enum VehicleLock {
     public static func isLocked(_ profile: DriverProfileV1?) -> Bool {
         !(profile?.plateNumber?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
+    }
+
+    /// The vehicle this profile registered: the one with the profile's plate, else the first (DESIGN06 2.9: the form
+    /// and home show the driver's own car, not every row the list returns).
+    public static func ownVehicle(profile: DriverProfileV1?, vehicles: [VehicleDTO]) -> VehicleDTO? {
+        let plate = profile?.plateNumber.map(Plate.compact).flatMap { $0.isEmpty ? nil : $0 }
+        return vehicles.first { plate != nil && Plate.compact($0.plateNumber) == plate } ?? vehicles.first
     }
 
     /// Grams -> kilograms and millilitres -> litres for the read-only fields: whole numbers stay whole, anything else
@@ -160,6 +273,8 @@ public enum DriverFormProblem: Hashable, Sendable {
     case seatsRange
     /// Not a whole number above zero.
     case positive
+    /// Not a whole number (0 allowed: cargo 0 = no parcels).
+    case notNumber
 }
 
 public enum DriverFormRules {
@@ -172,8 +287,37 @@ public enum DriverFormRules {
         return value
     }
 
+    /// The sentence under a field (DESIGN06 2.3, 2.5, 2.6): per-field "kiriting" lines, seats "1 dan 8 gacha o'rin.",
+    /// cargo kg says that 0 means no parcels.
+    public static func messageKey(_ field: DriverFormField, _ problem: DriverFormProblem) -> String {
+        switch (field, problem) {
+        case (.seats, _): "driver.form.seatsRange"
+        case (.fullName, .required): "driver.form.nameRequired"
+        case (.carModel, .required): "driver.form.modelRequired"
+        case (.carColor, .required): "driver.form.colorRequired"
+        case (.cargoKg, .required), (.cargoKg, .notNumber): "driver.form.cargoKgRequired"
+        case (_, .positive): "driver.form.positiveNumber"
+        default: "driver.form.required"
+        }
+    }
+
+    /// A whole number, zero included, or nil ("", "abc", "-3", "2.5").
+    public static func wholeNumber(_ text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed.allSatisfy(\.isNumber), let value = Int(trimmed) else { return nil }
+        return value
+    }
+
+    /// Cargo for v2: kg or litres -> grams or millilitres; 0 means "no parcels", which v2 takes as null (`gt=0` or
+    /// null; null counts as no capacity).
+    public static func cargoThousandths(_ text: String) -> Int? {
+        guard let value = wholeNumber(text), value > 0 else { return nil }
+        return value * 1000
+    }
+
     /// What is wrong with each editable field. `vehicleLocked` = the v1 car is in (model, colour, plate read-only);
-    /// `hasVehicle` = the v2 vehicle exists (seats and cargo read-only). Cargo is optional, but positive when given.
+    /// `hasVehicle` = the v2 vehicle exists (seats and cargo read-only). Both cargo figures are required, 0 allowed
+    /// (DESIGN06 2.6: 0 = no parcels).
     public static func problems(_ form: DriverForm, vehicleLocked: Bool, hasVehicle: Bool) -> [DriverFormField: DriverFormProblem] {
         var out: [DriverFormField: DriverFormProblem] = [:]
         if form.fullName.trimmingCharacters(in: .whitespaces).isEmpty { out[.fullName] = .required }
@@ -190,9 +334,12 @@ public enum DriverFormRules {
             } else if positiveInt(form.seats) == nil {
                 out[.seats] = .seatsRange
             }
-            if !form.cargoKg.trimmingCharacters(in: .whitespaces).isEmpty && positiveInt(form.cargoKg) == nil { out[.cargoKg] = .positive }
-            if !form.cargoLitres.trimmingCharacters(in: .whitespaces).isEmpty && positiveInt(form.cargoLitres) == nil {
-                out[.cargoLitres] = .positive
+            for (field, text) in [(DriverFormField.cargoKg, form.cargoKg), (.cargoLitres, form.cargoLitres)] {
+                if text.trimmingCharacters(in: .whitespaces).isEmpty {
+                    out[field] = .required
+                } else if wholeNumber(text) == nil {
+                    out[field] = .notNumber
+                }
             }
         }
         return out
@@ -224,17 +371,40 @@ public struct DriverSavePlan: Equatable, Sendable {
         return plan
     }
 
+    /// Q94: this save fixes the car for good (model, colour, plate on v1, or seats and cargo on the v2 vehicle), so
+    /// it needs the "Avtomobil ma'lumotlari qulflanadi" confirmation first. A name-only save does not.
+    public var locksVehicle: Bool { patch?.plateNumber != nil || vehicle != nil }
+
     /// The v2 body, or nil while a required value is missing: plate without spaces in upper case, kg*1000 and
-    /// litres*1000 (cargo optional, positive when present).
+    /// litres*1000 (0 or empty = null: no parcels).
     public static func vehicleCreate(_ form: DriverForm) -> VehicleCreate? {
         let plate = Plate.compact(form.plate)
         let model = form.carModel.trimmingCharacters(in: .whitespaces)
         let color = form.carColor.trimmingCharacters(in: .whitespaces)
         guard !plate.isEmpty, !model.isEmpty, !color.isEmpty, let seats = DriverFormRules.positiveInt(form.seats),
               DriverFormRules.seats.contains(seats) else { return nil }
-        return VehicleCreate(cargoMaxVolumeMl: DriverFormRules.positiveInt(form.cargoLitres).map { $0 * 1000 },
-                             cargoMaxWeightG: DriverFormRules.positiveInt(form.cargoKg).map { $0 * 1000 },
+        return VehicleCreate(cargoMaxVolumeMl: DriverFormRules.cargoThousandths(form.cargoLitres),
+                             cargoMaxWeightG: DriverFormRules.cargoThousandths(form.cargoKg),
                              color: color, makeModel: model, plateNumber: plate, seatCapacity: seats)
+    }
+}
+
+/// The confirmation's grey summary (DESIGN06 2.2): what is about to be locked, as typed (cargo blank or 0 reads 0).
+public struct LockSummary: Equatable, Sendable {
+    public let model: String
+    public let color: String
+    public let plate: String
+    public let seats: String
+    public let cargoKg: String
+    public let cargoLitres: String
+
+    public init(_ form: DriverForm) {
+        model = form.carModel.trimmingCharacters(in: .whitespaces)
+        color = form.carColor.trimmingCharacters(in: .whitespaces)
+        plate = Plate.display(form.plate)
+        seats = form.seats.trimmingCharacters(in: .whitespaces)
+        cargoKg = String(DriverFormRules.wholeNumber(form.cargoKg) ?? 0)
+        cargoLitres = String(DriverFormRules.wholeNumber(form.cargoLitres) ?? 0)
     }
 }
 
@@ -285,6 +455,21 @@ public struct DocumentSlot: Hashable, Sendable {
     public let state: DocumentState
     public let document: DriverDocumentV1?
 
+    /// Whether the row offers "Yuklash" / "Qayta yuklash" (DESIGN06 3.5, 3.6): never on an approved document (a
+    /// re-upload would silently send it back to review), and not at all once the account was rejected or blocked
+    /// (Q96: support decides; the server refuses a blocked driver anyway).
+    public func canUpload(account: DriverVerification?) -> Bool {
+        guard state != .approved else { return false }
+        switch account {
+        case .rejected?, .blocked?: return false
+        default: return true
+        }
+    }
+
+    /// "Yuklash" (primary) for a missing or rejected row, "Qayta yuklash" (soft) for one waiting for review.
+    public var uploadLabelKey: String { state == .pending ? "driverDocs.reupload" : "driverDocs.upload" }
+    public var uploadIsPrimary: Bool { state != .pending }
+
     /// A rejection says why (in red); without it the same photo goes back a second time.
     public var rejectionReason: String? {
         guard state == .rejected, let reason = document?.rejectionReason?.trimmingCharacters(in: .whitespaces), !reason.isEmpty else { return nil }
@@ -306,6 +491,11 @@ public enum DocumentSlots {
     /// N in "N / 5 hujjat yuborilgan": the types that have a row, whatever its state.
     public static func submitted(_ slots: [DocumentSlot]) -> Int {
         slots.filter { $0.state != .missing }.count
+    }
+
+    /// The rows the operator turned down (the checklist counts them; there is no per-document decision event).
+    public static func rejected(_ slots: [DocumentSlot]) -> Int {
+        slots.filter { $0.state == .rejected }.count
     }
 }
 

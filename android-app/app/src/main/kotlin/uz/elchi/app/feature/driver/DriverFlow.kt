@@ -122,7 +122,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
     )
     val proposals: ProposalsViewModel = viewModel(
         key = "driver-proposals-${session.user.id}",
-        factory = viewModelFactory { initializer { ProposalsViewModel(container.api) } },
+        factory = viewModelFactory { initializer { ProposalsViewModel(container.api, container.banners) } },
     )
     // Stage 09: the bookings and the profile's numbers.
     val bookings: DriverBookingsViewModel = viewModel(
@@ -248,13 +248,14 @@ fun DriverFlow(container: AppContainer, session: Session) {
             val vm: DriverProfileFormViewModel = viewModel(factory = viewModelFactory {
                 initializer { DriverProfileFormViewModel(container.api, container.driver, container.banners, driver::refresh) }
             })
-            DriverProfileFormScreen(vm = vm, onBack = { nav.popBackStack() })
+            DriverProfileFormScreen(vm = vm, onBack = { nav.popBackStack() }, onHelp = routes.onHelp)
         }
         composable<Documents> {
             val vm: DriverDocumentsViewModel = viewModel(factory = viewModelFactory {
                 initializer { DriverDocumentsViewModel(container.driver, container.files, ContentDocumentSource(appContext), container.banners, driver::refresh) }
             })
-            DriverDocumentsScreen(vm = vm, onBack = { nav.popBackStack() })
+            val record by driver.state.collectAsStateWithLifecycle()
+            DriverDocumentsScreen(vm = vm, onBack = { nav.popBackStack() }, account = record.status)
         }
         composable<Notifications> {
             NotificationsScreen(vm = inbox, drawer = null, languageTag = locale.tag, onTarget = openTarget, onBack = { nav.popBackStack() })
@@ -298,7 +299,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
         }
         composable<TripDetail> { entry ->
             val id = entry.toRoute<TripDetail>().id
-            val vm: TripDetailViewModel = viewModel(key = "trip-$id", factory = viewModelFactory { initializer { TripDetailViewModel(container.api, container.banners, id, trips::refresh, gps) } })
+            val vm: TripDetailViewModel = viewModel(key = "trip-$id", factory = viewModelFactory { initializer { TripDetailViewModel(container.api, container.banners, id, trips::refresh, gps, liveTrips = { trips.state.value.list }) } })
             TripDetailScreen(
                 vm = vm,
                 onBack = { nav.popBackStack() },
@@ -312,7 +313,11 @@ fun DriverFlow(container: AppContainer, session: Session) {
         }
         composable<SavedSearches> {
             val vm: SavedSearchesViewModel = viewModel(factory = viewModelFactory { initializer { SavedSearchesViewModel(container.api, container.banners, feed) } })
-            SavedSearchesScreen(vm = vm, feed = feed, onBack = { nav.popBackStack() })
+            // "Lentada ochish" (design 07 §6.5): back to the feed, which now shows the saved direction.
+            SavedSearchesScreen(vm = vm, feed = feed, onBack = { nav.popBackStack() }, onOpenedInFeed = {
+                nav.popBackStack<Tabs>(inclusive = false)
+                tab = DriverTab.MATCHES
+            })
         }
         composable<Bid> { entry ->
             val id = entry.toRoute<Bid>().listingId
@@ -330,7 +335,14 @@ fun DriverFlow(container: AppContainer, session: Session) {
         composable<ProposalThread> { entry ->
             val id = entry.toRoute<ProposalThread>().id
             val vm: ProposalThreadViewModel = viewModel(key = "thread-$id", factory = viewModelFactory { initializer { ProposalThreadViewModel(container.api, container.banners, id, proposals) } })
-            ProposalThreadScreen(vm = vm, onBack = { nav.popBackStack() }, onBooking = { bookingId -> nav.navigate(DriverBooking(bookingId)) })
+            ProposalThreadScreen(
+                vm = vm, onBack = { nav.popBackStack() }, onBooking = { bookingId -> nav.navigate(DriverBooking(bookingId)) },
+                // Q100 / design 07 §8.7: after the accept, straight into the booking's chat (back = the booking).
+                onBookingChat = { bookingId ->
+                    nav.navigate(DriverBooking(bookingId)) { popUpTo<ProposalThread> { inclusive = true } }
+                    nav.navigate(DriverBookingChat(bookingId))
+                },
+            )
         }
         composable<DriverBooking> { entry ->
             val id = entry.toRoute<DriverBooking>().id

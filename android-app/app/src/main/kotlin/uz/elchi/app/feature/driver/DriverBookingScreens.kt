@@ -81,15 +81,22 @@ private const val NOTICE_SHOWN_MS = 4_000L
 
 /** The Orders tab body (the gate is the caller's): "Takliflarim" on top, then the bookings, live first. */
 @Composable
-internal fun ColumnScope.DriverOrdersBody(vm: DriverBookingsViewModel, proposals: ProposalsViewModel, onProposals: () -> Unit, onBooking: (String) -> Unit) {
+internal fun ColumnScope.DriverOrdersBody(
+    vm: DriverBookingsViewModel,
+    proposals: ProposalsViewModel,
+    onProposals: () -> Unit,
+    onBooking: (String) -> Unit,
+    /** Before approval there are no offers to list (design 06 §0.3): the bookings only. */
+    showProposals: Boolean = true,
+) {
     val s by vm.state.collectAsStateWithLifecycle()
     var activeFilter by rememberSaveable { mutableStateOf(true) }
-    ProposalsEntry(proposals, onProposals)
+    if (showProposals) ProposalsEntry(proposals, onProposals)
     when (val load = s.bookings) {
         Load.Loading -> LoadingState(count = 3)
         is Load.Failed -> LoadFailed(t(R.string.driverOrders_title), load.error, vm::refresh)
         is Load.Ready -> if (load.value.isEmpty()) {
-            EmptyState(DriverTab.ORDERS.icon, t(R.string.driverOrders_empty), Modifier.padding(top = 12.dp), description = t(R.string.driverProfile_action_ordersHint))
+            EmptyState(DriverTab.ORDERS.icon, t(R.string.driverOrders_empty), Modifier.padding(top = 12.dp), description = t(R.string.driverOrders_emptyHint))
         } else {
             val (live, done) = load.value.partition { DriverBookingRules.isActive(it.serviceStatus) }
             Segmented(

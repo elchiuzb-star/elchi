@@ -87,6 +87,13 @@ final class DriverUITests: ClientUITestCase {
         waitFor(done, timeout: 30)
     }
 
+    /// A profile menu row: scrolled into view first (the list runs under the tab bar).
+    private func menu(_ action: String) {
+        let row = byId("elchi.driver.menu.\(action)")
+        scrollTo(row)
+        row.tap()
+    }
+
     private func toggleAvailability() {
         let toggle = app.switches.firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 15))
@@ -127,7 +134,9 @@ final class DriverUITests: ClientUITestCase {
         launch(theme: "light")
         signInAsDriver(phone("DRIVER_A"), shots: true)
         waitFor("Profilni to'ldiring")
-        waitFor("Yangi")
+        // DESIGN06 1.5 / 1.7: the derived word, not the server's "Yangi", and the three-step checklist.
+        waitFor("To'ldirilmagan")
+        waitFor("Profil va avtomobil")
         snap("03-home-new")
         XCTAssertTrue(app.switches.firstMatch.exists && !app.switches.firstMatch.isEnabled, "availability must be locked")
 
@@ -138,8 +147,9 @@ final class DriverUITests: ClientUITestCase {
         waitFor("Mos buyurtmalar")
         snap("05-gate-matches-new")
         tab("orders")
-        waitFor("Holat: Yangi")
-        snap("06-gate-orders-new")
+        // DESIGN06 0.3 / D16: Buyurtmalar is never gated - the empty history with its hint.
+        waitFor("Mijoz taklifingizni qabul qilgach", timeout: 20)
+        snap("06-orders-open-new")
         tab("profile")
         waitFor("Hujjatlar")
         snap("07-profile-menu-new")
@@ -160,8 +170,13 @@ final class DriverUITests: ClientUITestCase {
         waitFor("saqlangach qulflanadi")
         snap("10-form-filled")
         tap("Saqlash")
-        waitFor("Avtomobil ma'lumotlari qulflangan", timeout: 25)
-        waitFor("Profil saqlandi")
+        // Q94 / DESIGN06 2.2: the first save asks before locking; then back on home with the locked banner.
+        waitFor("Avtomobil ma'lumotlari qulflanadi")
+        snap("10b-lock-dialog")
+        tap("Ha, saqlash")
+        waitFor("avtomobil ma'lumotlari qulflandi", timeout: 25)
+        tap("Profilni ko'rish")
+        waitFor("Avtomobil ma'lumotlari qulflangan", timeout: 20)
         snap("11-form-locked")
         app.swipeUp()
         waitFor("Avtomobil holati")
@@ -206,14 +221,15 @@ final class DriverUITests: ClientUITestCase {
         snap("19-home-approved")
         toggleAvailability()
         waitFor("Faolman — buyurtma qabul qilishga tayyor", timeout: 20)
-        waitFor("Faollik yangilandi")
         snap("20-available-on")
         toggleAvailability()
-        waitFor("Vaqtincha faol emas", timeout: 20)
+        // DESIGN06 1.8 / 1.10: the off subtitle and its own toast.
+        waitFor("Faol emasman — yangi buyurtmalar ko'rsatilmaydi", timeout: 20)
+        waitFor("Faollik o'chirildi")
         snap("21-available-off")
         tap("Mos buyurtmalarni ko'rish")
-        waitFor("Bu bo'lim keyingi bosqichda qo'shiladi.")
-        snap("22-tab-next-stage")
+        waitFor("Mos buyurtmalar")
+        snap("22-matches-approved")
         tab("profile")
         byId("elchi.driver.menu.form").tap()
         waitFor("Avtomobil ma'lumotlari qulflangan", timeout: 20)
@@ -259,8 +275,10 @@ final class DriverUITests: ClientUITestCase {
         launch(theme: "light")
         signInAsDriver(phone("DRIVER_E"))
         tap("Profilni to'ldirish")
-        fillFirstTimeForm(plate: "95 V 7203 VV", name: "Eldor Nazarov")
+        // A plate another driver holds on v2 only (`TEST_RUNNER_V2_ONLY_PLATE`): v1 takes it, v2 refuses it.
+        fillFirstTimeForm(plate: ProcessInfo.processInfo.environment["V2_ONLY_PLATE"] ?? "95 V 7203 VV", name: "Eldor Nazarov")
         tap("Saqlash")
+        tap("Ha, saqlash")
         waitFor("Avtomobil ma'lumotlari qulflangan", timeout: 25)
         waitFor("Bu davlat raqami boshqa haydovchiga biriktirilgan")
         snap("12c-form-v2-failed")
@@ -273,10 +291,14 @@ final class DriverUITests: ClientUITestCase {
     func test5d_V2Retry() {
         launch(theme: "light")
         signInAsDriver(phone("DRIVER_E"))
-        tap("Profilni to'ldirish")
+        tap("Profilni ko'rish") // DESIGN06 1.11: the car is locked
         waitFor("Avtomobil ma'lumotlari qulflangan", timeout: 20)
         type("4", into: "Yo'lovchi o'rinlari")
+        type("20", into: "Yuk uchun joy (kg)")
+        type("100", into: "Yuk hajmi (litr)")
         tap("Saqlash")
+        // Seats and cargo lock with the v2 vehicle: the retry asks too.
+        tap("Ha, saqlash")
         waitFor("Bu davlat raqami boshqa haydovchiga biriktirilgan", timeout: 20)
         snap("12e-form-v2-retry")
     }
@@ -287,18 +309,18 @@ final class DriverUITests: ClientUITestCase {
         tab("profile")
         waitFor("Tasdiqlangan", timeout: 20)
         snap("29-profile-menu")
-        byId("elchi.driver.menu.threads").tap()
+        menu("threads")
         waitFor("Murojaatlarim")
         snap("30-threads-reused")
         back()
-        byId("elchi.driver.menu.help").tap()
+        menu("help")
         waitFor("Murojaat yuborish")
         app.swipeUp()
         app.swipeUp()
         waitFor("Buyurtmalarni qanday olaman?")
         snap("30b-help-driver-faq")
         back()
-        byId("elchi.driver.menu.settings").tap()
+        menu("settings")
         waitFor("Ko'rinish")
         snap("31-settings-reused")
         back()
@@ -343,6 +365,7 @@ final class DriverUITests: ClientUITestCase {
         tap("Profilni to'ldirish")
         fillFirstTimeForm(plate: "90 D 002 BB", name: "Dilshod Karimov")
         tap("Saqlash")
+        tap("Ha, saqlash")
         waitFor("Bu davlat raqami boshqa haydovchiga biriktirilgan", timeout: 25)
         snap("D8-form-plate-taken-dark")
     }
@@ -396,7 +419,7 @@ final class DriverUITests: ClientUITestCase {
         waitFor("saqlangach qulflanadi")
         snap("09b-form-first-warning")
         tap("Saqlash")
-        waitFor("Bu maydonni to'ldiring")
+        waitFor("Ism familiyani kiriting.")
         snap("09c-form-required")
     }
 }

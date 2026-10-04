@@ -12547,6 +12547,159 @@
         }
       }
     },
+    "driver.checklist.docsCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Загружено: {submitted} из {total}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{submitted} / {total} yuklangan"
+          }
+        }
+      }
+    },
+    "driver.checklist.docsRejected": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отклонено документов: {count} — загрузите заново"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta hujjat rad etildi — qayta yuklang"
+          }
+        }
+      }
+    },
+    "driver.checklist.profileTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Профиль и автомобиль"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profil va avtomobil"
+          }
+        }
+      }
+    },
+    "driver.checklist.profileTodo": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Имя и данные автомобиля"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ism va avtomobil ma'lumotlari"
+          }
+        }
+      }
+    },
+    "driver.checklist.reviewAfter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "После отправки профиля и документов"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profil va hujjatlar yuborilgach"
+          }
+        }
+      }
+    },
+    "driver.checklist.reviewTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверка оператором"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operator tekshiruvi"
+          }
+        }
+      }
+    },
+    "driver.dash.balanceNoHold": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправка предложения не блокирует баланс — комиссия резервируется, когда клиент примет предложение."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklif yuborish balansni band qilmaydi — mijoz qabul qilganda komissiya band qilinadi."
+          }
+        }
+      }
+    },
+    "driver.dash.planTrip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запланировать поездку"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yangi safar rejalashtirish"
+          }
+        }
+      }
+    },
+    "driver.dash.statTrips": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поездки"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safarlar"
+          }
+        }
+      }
+    },
     "driver.docs.fileHintImage": {
       "extractionState": "manual",
       "localizations": {
@@ -12802,6 +12955,23 @@
         }
       }
     },
+    "driver.feed.clientAccepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент принял"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz qabul qildi"
+          }
+        }
+      }
+    },
     "driver.feed.date14": {
       "extractionState": "manual",
       "localizations": {
@@ -12870,6 +13040,57 @@
         }
       }
     },
+    "driver.feed.emptyHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расширьте диапазон дат или сохраните направление — мы сообщим, когда появится новый запрос."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sana oralig'ini kengaytiring yoki yo'nalishni saqlang — yangi so'rov chiqqanda xabar beramiz."
+          }
+        }
+      }
+    },
+    "driver.feed.myOffer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы предложили: {price}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siz taklif yubordingiz: {price}"
+          }
+        }
+      }
+    },
+    "driver.feed.savedCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранённые направления ({count})"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saqlangan yo'nalishlar ({count})"
+          }
+        }
+      }
+    },
     "driver.feed.stopsNote": {
       "extractionState": "manual",
       "localizations": {
@@ -12883,6 +13104,193 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mosliklar tasdiqlangan bekatlar bo'yicha hisoblangan. Yo'ldan chetga chiqish hisoblanmagan — aniq uchrashuv joyini bron chatida kelishasiz."
+          }
+        }
+      }
+    },
+    "driver.feed.viewOffer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть предложение"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklifni ko'rish"
+          }
+        }
+      }
+    },
+    "driver.form.askOperator": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Написать оператору об изменении"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O'zgartirish uchun operatorga yozish"
+          }
+        }
+      }
+    },
+    "driver.form.cargoKgRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите значение (0 — посылки не берёте)."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kiriting (0 bo'lsa posilka olinmaydi)."
+          }
+        }
+      }
+    },
+    "driver.form.cargoSummary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{kg} кг · {litres} л"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{kg} kg · {litres} l"
+          }
+        }
+      }
+    },
+    "driver.form.colorRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите цвет."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rangni kiriting."
+          }
+        }
+      }
+    },
+    "driver.form.lockConfirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Да, сохранить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ha, saqlash"
+          }
+        }
+      }
+    },
+    "driver.form.lockReview": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверю ещё раз"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tekshirib chiqaman"
+          }
+        }
+      }
+    },
+    "driver.form.lockText": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "После сохранения модель, цвет, госномер, число мест и место для груза сможет изменить только оператор. Всё верно?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saqlangach model, rang, davlat raqami, o'rinlar va yuk joyini faqat operator o'zgartira oladi. Hammasi to'g'rimi?"
+          }
+        }
+      }
+    },
+    "driver.form.lockTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Данные автомобиля будут заблокированы"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avtomobil ma'lumotlari qulflanadi"
+          }
+        }
+      }
+    },
+    "driver.form.modelRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите модель автомобиля."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avtomobil modelini kiriting."
+          }
+        }
+      }
+    },
+    "driver.form.nameRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите имя и фамилию."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ism familiyani kiriting."
           }
         }
       }
@@ -12917,6 +13325,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bu maydonni to'ldiring"
+          }
+        }
+      }
+    },
+    "driver.form.savedLocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Профиль сохранён — данные автомобиля заблокированы"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profil saqlandi — avtomobil ma'lumotlari qulflandi"
+          }
+        }
+      }
+    },
+    "driver.form.seatsRange": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "От 1 до 8 мест."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 dan 8 gacha o'rin."
           }
         }
       }
@@ -13087,6 +13529,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Telefonda joylashuv xizmati o'chiq yoki mavjud emas."
+          }
+        }
+      }
+    },
+    "driver.home.availabilityOffDone": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Активность выключена"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faollik o'chirildi"
+          }
+        }
+      }
+    },
+    "driver.home.availableOff": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не активен — новые заказы не показываются"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faol emasman — yangi buyurtmalar ko'rsatilmaydi"
           }
         }
       }
@@ -13346,6 +13822,210 @@
         }
       }
     },
+    "driver.offer.acceptedLine": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бронь создана — она в разделе «Заказы». Комиссия зарезервирована на вашем балансе."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bron yaratildi — «Buyurtmalar» bo'limida ko'ring. Komissiya balansingizda band qilindi."
+          }
+        }
+      }
+    },
+    "driver.offer.badgeCountered": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встречное от клиента"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz qarshi taklif"
+          }
+        }
+      }
+    },
+    "driver.offer.badgeMyCounter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше встречное отправлено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklifingiz yuborildi"
+          }
+        }
+      }
+    },
+    "driver.offer.clientCounterLine": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент предложил {price} (вы предлагали {mine})"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz qarshi taklif yubordi: {price} (siz {mine} taklif qilgansiz)"
+          }
+        }
+      }
+    },
+    "driver.offer.clientPriceAccepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цена клиента принята — бронь создана"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz narxi qabul qilindi — bron yaratildi"
+          }
+        }
+      }
+    },
+    "driver.offer.commissionPrompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите цену — рассчитаем комиссию"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Narxni kiriting — komissiya hisoblanadi"
+          }
+        }
+      }
+    },
+    "driver.offer.counterRejected": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Встречное предложение отклонено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklif rad etildi"
+          }
+        }
+      }
+    },
+    "driver.offer.counterSame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите цену, отличную от цены клиента."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz narxidan farqli narx kiriting."
+          }
+        }
+      }
+    },
+    "driver.offer.myCounterLine": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше встречное предложение ({price}) отправлено — ждём ответа клиента."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qarshi taklifingiz ({price}) yuborildi — mijoz javobi kutilmoqda."
+          }
+        }
+      }
+    },
+    "driver.offer.planTrip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запланировать поездку"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar rejalashtirish"
+          }
+        }
+      }
+    },
+    "driver.offer.priceRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите цену предложения"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklif narxini kiriting"
+          }
+        }
+      }
+    },
+    "driver.offer.sentPrice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложение отправлено: {price}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklif yuborildi: {price}"
+          }
+        }
+      }
+    },
     "driver.orders.filterActive": {
       "extractionState": "manual",
       "localizations": {
@@ -13410,6 +14090,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ism; avtomobil qulflangan — o'zgartirish operator orqali"
+          }
+        }
+      }
+    },
+    "driver.profile.formHintOpen": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите имя и данные автомобиля"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ism va avtomobil ma'lumotlarini kiriting"
           }
         }
       }
@@ -13482,6 +14179,23 @@
         }
       }
     },
+    "driver.profile.unreadCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Непрочитанных: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta o'qilmagan"
+          }
+        }
+      }
+    },
     "driver.proposals.bookingCreated": {
       "extractionState": "manual",
       "localizations": {
@@ -13533,6 +14247,74 @@
         }
       }
     },
+    "driver.routes.alreadySaved": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уже сохранено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allaqachon saqlangan"
+          }
+        }
+      }
+    },
+    "driver.routes.limitCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лимит: {limit} направлений · сохранено: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limit: {limit} ta yo'nalish · saqlangan: {count}"
+          }
+        }
+      }
+    },
+    "driver.routes.openInFeed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть в ленте"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lentada ochish"
+          }
+        }
+      }
+    },
+    "driver.routes.openedInFeed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыто в ленте: {name}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lentada ochildi: {name}"
+          }
+        }
+      }
+    },
     "driver.routes.privateHint": {
       "extractionState": "manual",
       "localizations": {
@@ -13546,6 +14328,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Safar rejasi faqat sizga ko'rinadi: mos e'lonlarga taklif berish uchun kerak."
+          }
+        }
+      }
+    },
+    "driver.routes.savedNotify": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранено — сообщим, когда появится новый запрос"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saqlandi — yangi so'rov chiqqanda xabar beramiz"
           }
         }
       }
@@ -13652,6 +14451,108 @@
         }
       }
     },
+    "driver.trip.cancelled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поездка отменена · открытые предложения закрыты"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar bekor qilindi · ochiq takliflar yopildi"
+          }
+        }
+      }
+    },
+    "driver.trip.departed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы выехали — клиенты получили уведомление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'lga chiqdingiz — mijozlarga xabar yuborildi"
+          }
+        }
+      }
+    },
+    "driver.trip.departurePast": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время отправления должно быть в будущем."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jo'nash vaqti kelajakda bo'lishi kerak."
+          }
+        }
+      }
+    },
+    "driver.trip.departureRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите время отправления."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jo'nash vaqtini kiriting."
+          }
+        }
+      }
+    },
+    "driver.trip.manifestEmpty": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Броней пока нет — они появятся здесь, когда клиент примет ваше предложение."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hozircha bron yo'q — mijoz taklifingizni qabul qilgach shu yerda ko'rinadi."
+          }
+        }
+      }
+    },
+    "driver.trip.oneLiveTrip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала завершите текущую поездку"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avval faol safarni yakunlang"
+          }
+        }
+      }
+    },
     "driver.trip.pause": {
       "extractionState": "manual",
       "localizations": {
@@ -13665,6 +14566,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Safarni to'xtatish"
+          }
+        }
+      }
+    },
+    "driver.trip.phoneAfterBoard": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон появится, когда пассажир сядет в машину. Пока пишите в чат приложения."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon yo'lovchi mashinaga chiqqach ko'rinadi. Hozircha ilova chatidan foydalaning."
+          }
+        }
+      }
+    },
+    "driver.trip.phoneAfterDepart": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Телефон появится после отправления. Пока пишите в чат приложения."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon safar jo'nagach ko'rinadi. Hozircha ilova chatidan foydalaning."
           }
         }
       }
@@ -13703,6 +14638,40 @@
         }
       }
     },
+    "driver.trip.saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поездка запланирована: {route}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar rejalashtirildi: {route}"
+          }
+        }
+      }
+    },
+    "driver.trip.seatsMaxNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Свободных мест не больше, чем в автомобиле: {count}."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bo'sh o'rinlar avtomobildagi {count} o'rindan oshmaydi."
+          }
+        }
+      }
+    },
     "driver.trip.vehicleLimit": {
       "extractionState": "manual",
       "localizations": {
@@ -13720,6 +14689,23 @@
         }
       }
     },
+    "driver.trip.vehicleLocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подтверждён · изменить нельзя"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tasdiqlangan · qulflangan"
+          }
+        }
+      }
+    },
     "driver.trip.windowOpensAt": {
       "extractionState": "manual",
       "localizations": {
@@ -13733,6 +14719,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chiqish oynasi {time} da ochiladi."
+          }
+        }
+      }
+    },
+    "driver.verify.incomplete": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не заполнено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To'ldirilmagan"
+          }
+        }
+      }
+    },
+    "driver.verify.reviewHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оператор проверяет ваши документы."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operator hujjatlaringizni tekshirmoqda."
           }
         }
       }
@@ -15352,6 +16372,23 @@
         }
       }
     },
+    "driverHome.viewProfile": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть профиль"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profilni ko'rish"
+          }
+        }
+      }
+    },
     "driverOrders.empty": {
       "extractionState": "manual",
       "localizations": {
@@ -15365,6 +16402,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Buyurtmalar tarixi bo'sh"
+          }
+        }
+      }
+    },
+    "driverOrders.emptyHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Когда клиент примет ваше предложение, бронь появится здесь."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz taklifingizni qabul qilgach, bron shu yerda ko'rinadi."
           }
         }
       }

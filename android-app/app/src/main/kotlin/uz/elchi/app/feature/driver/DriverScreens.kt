@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -109,7 +110,12 @@ fun DriverShell(
     LaunchedEffect(tab) {
         when (tab) {
             DriverTab.ROUTES -> work.trips.refresh()
-            DriverTab.MATCHES -> work.feed.refresh()
+            DriverTab.MATCHES -> {
+                work.feed.refresh()
+                // Design 07 §5.7 / §0.2: "already offered" on the cards and the pill's counter count.
+                work.proposals.refresh(ProposalTab.OPEN)
+                work.proposals.refresh(ProposalTab.ACCEPTED)
+            }
             DriverTab.ORDERS -> {
                 work.proposals.refresh(ProposalTab.OPEN)
                 work.bookings.refresh()
@@ -117,6 +123,7 @@ fun DriverShell(
             DriverTab.HOME -> {
                 work.proposals.refresh(ProposalTab.OPEN)
                 work.trips.refresh()
+                work.bookings.refresh()
             }
             DriverTab.PROFILE -> work.trips.refresh()
         }
@@ -128,16 +135,41 @@ fun DriverShell(
                 DriverTab.ROUTES -> GatedTab(driver, t(R.string.driverRoutes_title), nav, onPlus = nav.onAddTrip, onRefresh = work.trips::refresh) {
                     TripsList(work.trips, onAdd = nav.onAddTrip, onTrip = nav.onTrip, tracker = work.tracker)
                 }
-                DriverTab.MATCHES -> GatedTab(driver, t(R.string.driverFeed_title), nav, onRefresh = work.feed::refresh) {
-                    FeedBody(work.feed, onSaved = nav.onSavedSearches, onOffer = nav.onOffer)
+                DriverTab.MATCHES -> GatedTab(
+                    driver, t(R.string.driverFeed_title), nav, onRefresh = work.feed::refresh,
+                    // Design 07 §0.2: the "Takliflarim" pill with the client-countered count.
+                    action = { ProposalsPill(work.proposals, nav.onProposals) },
+                ) {
+                    FeedBody(work.feed, onSaved = nav.onSavedSearches, onOffer = nav.onOffer, proposals = work.proposals, onThread = nav.onThread, trips = work.trips, tracker = work.tracker)
                 }
-                DriverTab.ORDERS -> GatedTab(driver, t(R.string.app_nav_orders), nav, onRefresh = { work.proposals.refresh(ProposalTab.OPEN); work.bookings.refresh() }) {
-                    DriverOrdersBody(work.bookings, work.proposals, nav.onProposals, nav.onBooking)
-                }
+                // Not gated (design 06 §0.3, D16): a driver blocked while holding bookings still sees and serves them.
+                DriverTab.ORDERS -> OrdersTab(driver, work, nav)
                 DriverTab.PROFILE -> DriverProfileTab(driver, work, session, nav)
             }
         }
-        BottomNav(tab, onTab)
+        val record by driver.state.collectAsStateWithLifecycle()
+        // Before approval the work tabs show the gate: a small lock on their icons (design 06 §0.2).
+        val locked = record.status?.let { DriverRules.gate(it) != GateVariant.NONE } == true
+        BottomNav(tab, onTab, lockedTabs = if (locked) setOf(DriverTab.ROUTES, DriverTab.MATCHES) else emptySet())
+    }
+}
+
+/** "Buyurtmalar" for every status: the bookings; the "Takliflarim" entry only once approved (no offers before). */
+@Composable
+private fun OrdersTab(driver: DriverViewModel, work: DriverWork, nav: DriverNav) {
+    val s by driver.state.collectAsStateWithLifecycle()
+    val approved = s.status == DriverStatus.APPROVED
+    TabFrame(
+        // Design 07 §9.1: "Buyurtmalar tarixi".
+        title = t(R.string.driverOrders_title),
+        refreshing = s.refreshing && s.profile is Load.Ready,
+        onRefresh = {
+            driver.refresh()
+            if (approved) work.proposals.refresh(ProposalTab.OPEN)
+            work.bookings.refresh()
+        },
+    ) {
+        DriverOrdersBody(work.bookings, work.proposals, nav.onProposals, nav.onBooking, showProposals = approved)
     }
 }
 
@@ -153,7 +185,7 @@ class DriverWork(
 
 /** 70dp bar, rounded top, the current tab in brand blue with a heavier label. */
 @Composable
-private fun BottomNav(current: DriverTab, onTab: (DriverTab) -> Unit) {
+private fun BottomNav(current: DriverTab, onTab: (DriverTab) -> Unit, lockedTabs: Set<DriverTab> = emptySet()) {
     val c = Elchi.colors
     val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     Box(Modifier.fillMaxWidth().shadow(16.dp, shape, ambientColor = c.shadow, spotColor = c.shadow).clip(shape).background(c.card)) {
@@ -166,7 +198,15 @@ private fun BottomNav(current: DriverTab, onTab: (DriverTab) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                 ) {
-                    ElchiIconView(item.icon, if (active) c.brand else c.placeholder, size = 22.dp)
+                    Box {
+                        ElchiIconView(item.icon, if (active) c.brand else c.placeholder, size = 22.dp)
+                        if (item in lockedTabs) {
+                            Box(
+                                Modifier.align(Alignment.BottomEnd).offset(x = 5.dp, y = 3.dp).size(15.dp).clip(CircleShape).background(c.card),
+                                contentAlignment = Alignment.Center,
+                            ) { ElchiIconView(ElchiIcon.LOCK, c.placeholder, size = 11.dp) }
+                        }
+                    }
                     Text(
                         label,
                         style = Elchi.type.badge.copy(fontSize = 10.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium),
@@ -182,7 +222,7 @@ private fun BottomNav(current: DriverTab, onTab: (DriverTab) -> Unit) {
 
 /** The design's `h1` top: a large title and, on home, the bell with its unread count. */
 @Composable
-private fun H1Bar(title: String, bell: String? = null, bellLabel: String? = null, onBell: (() -> Unit)? = null, onPlus: (() -> Unit)? = null) {
+private fun H1Bar(title: String, bell: String? = null, bellLabel: String? = null, onBell: (() -> Unit)? = null, onPlus: (() -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
     val c = Elchi.colors
     Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -194,6 +234,7 @@ private fun H1Bar(title: String, bell: String? = null, bellLabel: String? = null
             overflow = TextOverflow.Ellipsis,
         )
         if (onPlus != null) RoundIconButton(ElchiIcon.PLUS, t(R.string.driverRoutes_addRoute), onPlus)
+        action?.invoke()
         if (onBell != null) {
             Box(Modifier.size(44.dp)) {
                 Box(
@@ -236,10 +277,12 @@ private fun TabFrame(
     bellLabel: String? = null,
     onBell: (() -> Unit)? = null,
     onPlus: (() -> Unit)? = null,
+    /** Anything else at the bar's right (design 07: the Moslar "Takliflarim" pill). */
+    action: (@Composable () -> Unit)? = null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.statusBarsPadding()) { H1Bar(title, bell, bellLabel, onBell, onPlus) }
+        Column(Modifier.statusBarsPadding()) { H1Bar(title, bell, bellLabel, onBell, onPlus, action) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 18.dp),
@@ -294,7 +337,10 @@ private fun DriverHomeTab(driver: DriverViewModel, inbox: InboxViewModel, work: 
         onBell = nav.onNotifications,
     ) {
         pendingReferral?.let { code ->
-            PendingReferralRow(t(R.string.driverHome_pendingReferral, "code" to code), driver::confirmReferral, loading = s.referralBusy)
+            PendingReferralRow(
+                t(R.string.link_referralSaved, "code" to code), driver::confirmReferral, loading = s.referralBusy,
+                sub = t(R.string.client_order_promoTap), onDismiss = driver::forgetReferral, dismissLabel = t(R.string.common_close),
+            )
         }
         // Q148: a running trip's GPS state, right on the home screen.
         val trips by work.trips.state.collectAsStateWithLifecycle()
@@ -306,25 +352,38 @@ private fun DriverHomeTab(driver: DriverViewModel, inbox: InboxViewModel, work: 
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Box(Modifier.size(38.dp).clip(CircleShape).background(if (c.isDark) c.field else Color(0xFFEEF4FA)), contentAlignment = Alignment.Center) {
-                    ElchiIconView(ElchiIcon.WALLET, c.accentText, size = 18.dp)
+                Box(Modifier.size(40.dp).clip(CircleShape).background(if (c.isDark) c.field else Color(0xFFEEF4FA)), contentAlignment = Alignment.Center) {
+                    ElchiIconView(ElchiIcon.WALLET, c.accentText, size = 20.dp)
                 }
-                Text(t(R.string.driverHome_commissionBalance), Modifier.weight(1f), style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text)
-                val wallet = s.wallet
-                Text(if (wallet is Load.Ready) soum(wallet.value) else "—", style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text)
-                ElchiIconView(ElchiIcon.CHEV_R, c.placeholder, size = 18.dp)
+                // Title over value (design 06 §1.2).
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(t(R.string.driverHome_commissionBalance), style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+                    val wallet = s.wallet
+                    Text(if (wallet is Load.Ready) soum(wallet.value) else "—", style = Elchi.type.label.copy(fontWeight = FontWeight.Normal), color = c.muted)
+                }
+                ElchiIconView(ElchiIcon.CHEV_R, c.placeholder, size = 16.dp)
             }
         }
         WithProfile(driver, s.profile) { profile ->
             val st = DriverStatus.from(profile.verificationStatus)
-            val tone = c.tone(DriverRules.statusTone(st))
+            // The derived status (design 06 §1.5): "To'ldirilmagan" until the operator has everything.
+            val verify = s.verify ?: DriverRules.verifyState(st, s.profileDone, s.documents)
+            val tone = c.tone(verify.tone)
             ElchiCard(padding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
                 Text(t(R.string.driver_home_verificationLabel), style = Elchi.type.caption, color = c.muted)
                 Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(tone.fg))
-                    Text(statusText(st), style = Elchi.type.bodyStrong, color = tone.fg)
+                    Text(tOrNull(verify.labelKey) ?: st.wire, style = Elchi.type.bodyStrong, color = tone.fg)
                 }
-                Text(tOrNull(DriverRules.homeHintKey(st)).orEmpty(), Modifier.padding(top = 4.dp), style = Elchi.type.caption, color = c.muted)
+                Text(tOrNull(verify.hintKey).orEmpty(), Modifier.padding(top = 4.dp), style = Elchi.type.caption, color = c.muted)
+            }
+            if (st != DriverStatus.APPROVED) {
+                ChecklistCard(
+                    DriverRules.checklist(profile, s.vehicles, s.documents, verify),
+                    onProfile = nav.onProfileForm,
+                    onDocuments = nav.onDocuments,
+                    onReview = onMatches,
+                )
             }
             ToggleRow(
                 title = t(R.string.driverHome_availabilityTitle),
@@ -336,13 +395,62 @@ private fun DriverHomeTab(driver: DriverViewModel, inbox: InboxViewModel, work: 
             if (st == DriverStatus.APPROVED) {
                 ElchiButton(t(R.string.driverHome_viewMatchingOrders), onMatches, Modifier.fillMaxWidth(), ButtonVariant.SOFT, icon = ElchiIcon.RADAR)
                 ProposalsEntry(work.proposals, nav.onProposals)
+                // Design 07 §1.1-1.3 (balance note, stat tiles, plan a trip): its own block under the 06 content.
+                DriverHomeWork(work, nav)
             } else {
-                ElchiButton(t(R.string.driverHome_completeProfile), nav.onProfileForm, Modifier.fillMaxWidth())
+                ElchiButton(tOrNull(DriverRules.profileButtonKey(s.profileDone)).orEmpty(), nav.onProfileForm, Modifier.fillMaxWidth())
                 ElchiButton(t(R.string.driverHome_uploadDocuments), nav.onDocuments, Modifier.fillMaxWidth(), ButtonVariant.SOFT)
                 if (DriverRules.showsSupport(st)) {
                     ElchiButton(t(R.string.app_driverGate_support), nav.onHelp, Modifier.fillMaxWidth(), ButtonVariant.NEUTRAL, icon = ElchiIcon.HEAD)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Home's 3-step checklist until approval (design 06 §1.7): a numbered circle (green tick when done, red cross when
+ * rejected), the title, the sub-line and a chevron. Step 3 opens the Matches tab, where the gate explains the wait.
+ */
+@Composable
+private fun ChecklistCard(list: Checklist, onProfile: () -> Unit, onDocuments: () -> Unit, onReview: () -> Unit) {
+    ListCard {
+        ChecklistRow(1, t(R.string.driver_checklist_profileTitle), list.profile, first = true, onClick = onProfile)
+        ChecklistRow(2, t(R.string.driverDocs_title), list.documents, onClick = onDocuments)
+        ChecklistRow(3, t(R.string.driver_checklist_reviewTitle), list.review, onClick = onReview)
+    }
+}
+
+@Composable
+private fun ChecklistRow(number: Int, title: String, step: ChecklistStep, first: Boolean = false, onClick: () -> Unit) {
+    val c = Elchi.colors
+    val ok = c.tone(Tone.OK)
+    val err = c.tone(Tone.ERR)
+    val sub = step.subText ?: step.subKey?.let { tOrNull(it, *step.params.toList().toTypedArray()) }.orEmpty()
+    val (bg, fg) = when (step.mark) {
+        StepMark.DONE -> ok.bg to ok.fg
+        StepMark.FAILED -> err.bg to err.fg
+        StepMark.OPEN -> c.field to c.muted
+    }
+    Column {
+        if (!first) Box(Modifier.fillMaxWidth().height(1.dp).background(c.field))
+        Row(
+            Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.size(26.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
+                when (step.mark) {
+                    StepMark.DONE -> ElchiIconView(ElchiIcon.CHECK, fg, size = 14.dp)
+                    StepMark.FAILED -> ElchiIconView(ElchiIcon.X, fg, size = 14.dp)
+                    StepMark.OPEN -> Text(number.toString(), style = Elchi.type.badge.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold), color = fg)
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(title, style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+                if (sub.isNotEmpty()) Text(sub, style = Elchi.type.caption, color = if (step.alert) err.fg else c.muted)
+            }
+            ElchiIconView(ElchiIcon.CHEV_R, c.placeholder, size = 16.dp)
         }
     }
 }
@@ -357,6 +465,7 @@ private fun GatedTab(
     nav: DriverNav,
     onPlus: (() -> Unit)? = null,
     onRefresh: () -> Unit,
+    action: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val s by driver.state.collectAsStateWithLifecycle()
@@ -369,13 +478,18 @@ private fun GatedTab(
             if (approved) onRefresh()
         },
         onPlus = onPlus.takeIf { approved },
+        action = action.takeIf { approved },
     ) {
         WithProfile(driver, s.profile) { profile ->
             val status = DriverStatus.from(profile.verificationStatus)
             if (DriverRules.gate(status) == GateVariant.NONE) {
                 content()
             } else {
-                VerificationGate(status, onDocuments = nav.onDocuments, onProfile = nav.onProfileForm, onSupport = nav.onHelp)
+                VerificationGate(
+                    status, onDocuments = nav.onDocuments, onProfile = nav.onProfileForm, onSupport = nav.onHelp,
+                    statusWord = s.verify?.let { tOrNull(it.labelKey) },
+                    profileLabel = tOrNull(DriverRules.profileButtonKey(s.profileDone)),
+                )
             }
         }
     }
@@ -386,16 +500,25 @@ private fun GatedTab(
  * decided: no upload changes them, so the only way on is support.
  */
 @Composable
-fun VerificationGate(status: DriverStatus, onDocuments: () -> Unit, onProfile: () -> Unit, onSupport: () -> Unit) {
+fun VerificationGate(
+    status: DriverStatus,
+    onDocuments: () -> Unit,
+    onProfile: () -> Unit,
+    onSupport: () -> Unit,
+    /** The derived word (design 06 §4.1, "To'ldirilmagan" / "Ko'rib chiqilmoqda"); null = the server's. */
+    statusWord: String? = null,
+    /** "Profilni ko'rish" once the car is stored (§4.2); null = "Profilni to'ldirish". */
+    profileLabel: String? = null,
+) {
     val decided = DriverRules.gate(status) == GateVariant.DECIDED
-    val statusLine = t(R.string.app_driverGate_status, "status" to statusText(status))
+    val statusLine = t(R.string.app_driverGate_status, "status" to (statusWord ?: statusText(status)))
     val body = t(if (decided) R.string.app_driverGate_decided else R.string.app_driverGate_pending)
     Note("$statusLine. $body", tone = if (decided) Tone.ERR else Tone.WARN, title = t(R.string.app_driverGate_title))
     if (decided) {
         ElchiButton(t(R.string.app_driverGate_support), onSupport, Modifier.fillMaxWidth(), ButtonVariant.SOFT, icon = ElchiIcon.HEAD)
     } else {
         ElchiButton(t(R.string.app_driverGate_documents), onDocuments, Modifier.fillMaxWidth())
-        ElchiButton(t(R.string.app_driverGate_profile), onProfile, Modifier.fillMaxWidth(), ButtonVariant.SOFT)
+        ElchiButton(profileLabel ?: t(R.string.app_driverGate_profile), onProfile, Modifier.fillMaxWidth(), ButtonVariant.SOFT)
     }
 }
 

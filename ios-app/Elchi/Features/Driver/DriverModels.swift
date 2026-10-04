@@ -35,15 +35,24 @@ final class DriverModel {
 
     var status: DriverVerification? { profile.value.map { DriverVerification($0.verificationStatus) } }
     var isAvailable: Bool { availabilityPending ?? profile.value?.isAvailable ?? false }
-    var vehicle: VehicleDTO? { vehicles?.first }
+    /// The driver's own car (the profile's plate), not just the first row of the list.
+    var vehicle: VehicleDTO? { VehicleLock.ownVehicle(profile: profile.value, vehicles: vehicles ?? []) }
     var slots: [DocumentSlot] { DocumentSlots.derive(documents.value ?? []) }
+    /// Model, colour and plate are in (Q94).
+    var vehicleLocked: Bool { VehicleLock.isLocked(profile.value) }
 
-    /// Home, the tabs and the form: profile, vehicle and balance together.
+    /// What home, the gate and the profile call the account (DESIGN06 1.5), nil until the profile answers.
+    var homeState: DriverHomeState? {
+        status.map { DriverHomeState.derive(status: $0, vehicleLocked: vehicleLocked, slots: documents.value.map(DocumentSlots.derive)) }
+    }
+
+    /// Home, the tabs and the form: profile, vehicle, balance and documents together.
     func refresh() async {
         async let profile: Void = loadProfile()
         async let vehicles: Void = loadVehicles()
         async let wallet: Void = loadWallet()
-        _ = await (profile, vehicles, wallet)
+        async let documents: Void = loadDocuments()
+        _ = await (profile, vehicles, wallet, documents)
     }
 
     func loadProfile() async {
@@ -92,7 +101,7 @@ final class DriverModel {
             _ = try await driverAPI.setAvailability(on)
             await loadProfile()
             availabilityPending = nil
-            banners.ok("driverHome.availabilityUpdated")
+            banners.ok(DriverAvailability.doneKey(isOn: on))
         } catch {
             availabilityPending = nil
             showError(error)
@@ -231,6 +240,35 @@ final class DriverProfileFormModel {
         filledFrom = profile
         filledVehicle = vehicle
     }
+
+    /// Q94: the "Avtomobil ma'lumotlari qulflanadi" dialog is up, with what is about to be locked.
+    private(set) var confirming: LockSummary?
+
+    /// What a successful save changed (the banner after it).
+    enum Saved: Equatable { case name, locked }
+
+    /// "Saqlash": the fields are checked first; a save that fixes the car asks for confirmation before anything is
+    /// sent (nil = nothing saved yet - problems shown or the dialog opened).
+    func requestSave() async -> Saved? {
+        attempted = true
+        failure = nil
+        guard problems.isEmpty, let plan, !plan.isEmpty else { return nil }
+        if plan.locksVehicle {
+            confirming = LockSummary(form)
+            return nil
+        }
+        return await save() ? .name : nil
+    }
+
+    /// "Ha, saqlash".
+    func confirmLock() async -> Saved? {
+        guard confirming != nil else { return nil }
+        confirming = nil
+        return await save() ? .locked : nil
+    }
+
+    /// "Tekshirib chiqaman": back to the form, nothing sent.
+    func cancelLock() { confirming = nil }
 
     func save() async -> Bool {
         attempted = true

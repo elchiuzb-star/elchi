@@ -9,16 +9,20 @@ struct DriverTabScreen<Content: View>: View {
     let bell: BellButton?
     /// The top-right "+" (Yo'nalishlar: add a trip).
     let plus: (label: String, action: () -> Void)?
+    /// DESIGN07 0.2: a bar control at the right (Moslar: the "Takliflarim" pill).
+    let trailing: AnyView?
     let content: Content
     @Environment(\.elchi) private var c
     @Environment(BannerCenter.self) private var banners: BannerCenter?
     /// The GPS bar on the trips tab while a trip runs (Stage 09).
     @Environment(\.screenAccessory) private var accessory
 
-    init(title: String, bell: BellButton? = nil, plus: (label: String, action: () -> Void)? = nil, @ViewBuilder content: () -> Content) {
+    init(title: String, bell: BellButton? = nil, plus: (label: String, action: () -> Void)? = nil, trailing: AnyView? = nil,
+         @ViewBuilder content: () -> Content) {
         self.title = title
         self.bell = bell
         self.plus = plus
+        self.trailing = trailing
         self.content = content()
     }
 
@@ -33,6 +37,7 @@ struct DriverTabScreen<Content: View>: View {
                 if let plus {
                     RoundIconButton(.plus, label: plus.label, action: plus.action).accessibilityIdentifier("elchi.driver.plus")
                 }
+                if let trailing { trailing }
             }
             .frame(height: 64)
             .padding(.horizontal, 16)
@@ -91,6 +96,8 @@ struct DriverHomeView: View {
     var referralCode: String? = nil
     var applyingReferral = false
     var onReferral: () -> Void = {}
+    /// The referral row's X: forget the kept code (DESIGN06 1.1).
+    var onForgetReferral: () -> Void = {}
     let onBell: () -> Void
     let onProfile: () -> Void
     let onDocuments: () -> Void
@@ -100,6 +107,8 @@ struct DriverHomeView: View {
     var onProposals: () -> Void = {}
     /// Stage 09: "Komissiya balansi".
     var onWallet: () -> Void = {}
+    /// DESIGN07 1.1-1.3 (approved drivers): the work summary under the home's own blocks (DriverWorkSummary).
+    var work: AnyView? = nil
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
@@ -115,7 +124,9 @@ struct DriverHomeView: View {
                 Note(strings.errorText(error), tone: .err)
                 ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await driver.refresh() } }
             case .loaded(let profile):
-                content(DriverVerification(profile.verificationStatus))
+                let status = DriverVerification(profile.verificationStatus)
+                content(status, state: DriverHomeState.derive(status: status, vehicleLocked: driver.vehicleLocked,
+                                                              slots: driver.documents.value.map(DocumentSlots.derive)))
             }
         }
         .refreshable {
@@ -129,35 +140,71 @@ struct DriverHomeView: View {
     }
 
     @ViewBuilder
-    private func content(_ status: DriverVerification) -> some View {
+    private func content(_ status: DriverVerification, state: DriverHomeState) -> some View {
         ElchiList {
             ListRow(icon: .wallet, title: strings.t("driverHome.commissionBalance"), description: balance, first: true, action: onWallet)
         }
         .accessibilityIdentifier("elchi.driver.balance")
-        StatusCard(label: strings.t("driver.home.verificationLabel"), value: strings.verificationLabel(status), tone: status.tone,
-                   hint: strings.t(status.isApproved ? "driverHome.approvedHint" : "driverHome.onboardingHint"))
+        StatusCard(label: strings.t("driver.home.verificationLabel"), value: strings.t(state.labelKey), tone: state.tone,
+                   hint: strings.t(state.hintKey))
+        if !status.isApproved {
+            DriverChecklistCard(steps: DriverChecklist.steps(state: state, profile: driver.profile.value, slots: driver.slots)) { target in
+                switch target {
+                case .form: onProfile()
+                case .documents: onDocuments()
+                case .gate: onMatches()
+                }
+            }
+        }
         availability(status)
         if status.isApproved {
             ElchiButton(strings.t("driverHome.viewMatchingOrders"), variant: .soft, icon: .radar, action: onMatches)
             ElchiButton(strings.t("proposals.title"), variant: .outline, icon: .tag, action: onProposals)
                 .accessibilityIdentifier("elchi.driver.home.proposals")
         } else {
-            ElchiButton(strings.t("driverHome.completeProfile"), action: onProfile)
+            ElchiButton(strings.t(driver.vehicleLocked ? "driverHome.viewProfile" : "driverHome.completeProfile"), action: onProfile)
+                .accessibilityIdentifier("elchi.driver.home.profile")
             ElchiButton(strings.t("driverHome.uploadDocuments"), variant: .soft, action: onDocuments)
             if status.gate == .decided {
                 ElchiButton(strings.t("app.driverGate.support"), variant: .outline, icon: .head, action: onSupport)
             }
         }
+        if status.isApproved, let work { work }
     }
 
-    /// "Taklif kodi saqlandi: … — tasdiqlash uchun bosing" (the design's first row); the tap sends it as the driver's.
+    /// "Taklif kodi saqlandi: …" / "Tasdiqlash uchun bosing" (the design's first row); the tap sends it as the
+    /// driver's, the X forgets it.
     private func pendingReferral(_ code: String) -> some View {
-        ElchiList {
-            ListRow(icon: .tag, title: strings.t("driverHome.pendingReferral", ("code", code)),
-                    trailing: applyingReferral ? strings.t("common.loading") : nil, highlighted: true, first: true,
-                    action: applyingReferral ? nil : onReferral)
+        HStack(spacing: 10) {
+            Button(action: onReferral) {
+                HStack(spacing: 10) {
+                    ElchiIcon.tag.image(size: 18).foregroundStyle(c.accentText)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(strings.t("link.referralSaved", ("code", code))).font(ElchiFont.poppins(13, .semibold)).foregroundStyle(c.text)
+                        Text(strings.t(applyingReferral ? "common.loading" : "client.order.promoTap")).font(ElchiFont.poppins(12))
+                            .foregroundStyle(c.accentText)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressFade())
+            .disabled(applyingReferral)
+            .accessibilityIdentifier("elchi.driver.pendingReferral")
+            Button(action: onForgetReferral) {
+                ElchiIcon.x.image(size: 14).foregroundStyle(c.text)
+                    .frame(width: 30, height: 30)
+                    .background(c.card, in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(applyingReferral)
+            .accessibilityLabel(strings.t("common.close"))
+            .accessibilityIdentifier("elchi.driver.pendingReferral.close")
         }
-        .accessibilityIdentifier("elchi.driver.pendingReferral")
+        .padding(.leading, 14).padding(.trailing, 4).padding(.vertical, 3)
+        .background(c.isDark ? Color(hex: 0x0E2A45) : Color(hex: 0xEAF5FF), in: RoundedRectangle(cornerRadius: 18))
     }
 
     /// "—" while the balance loads or when it failed: never a zero nobody measured.
@@ -200,7 +247,73 @@ struct StatusCard: View {
     }
 }
 
+/// The three onboarding steps (DESIGN06 1.7): a numbered circle (green check when done, red cross when turned
+/// down), the title, the sub-line (red when documents were rejected) and a chevron; each row opens its step.
+struct DriverChecklistCard: View {
+    let steps: [ChecklistStep]
+    let onOpen: (ChecklistStep.Target) -> Void
+    @Environment(LocaleStore.self) private var strings
+    @Environment(\.elchi) private var c
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(steps, id: \.number) { step in
+                Button { onOpen(step.target) } label: { row(step) }
+                    .buttonStyle(PressFade())
+                    .accessibilityIdentifier("elchi.driver.checklist.\(step.number)")
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .background(c.card, in: RoundedRectangle(cornerRadius: ElchiShape.card))
+        .shadow(color: c.shadow.opacity(0.8), radius: 12, y: 6)
+    }
+
+    private func row(_ step: ChecklistStep) -> some View {
+        let ok = c.tone(.ok), err = c.tone(.err)
+        let detail = text(step.detail)
+        let redDetail = step.mark == .failed && step.target == .documents
+        return HStack(spacing: 12) {
+            Group {
+                switch step.mark {
+                case .done: ElchiIcon.check.image(size: 13)
+                case .failed: ElchiIcon.x.image(size: 12)
+                case .todo: Text("\(step.number)").font(ElchiFont.poppins(12, .bold))
+                }
+            }
+            .foregroundStyle(step.mark == .done ? ok.fg : step.mark == .failed ? err.fg : c.muted)
+            .frame(width: 26, height: 26)
+            .background(step.mark == .done ? ok.bg : step.mark == .failed ? err.bg : c.field, in: Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(strings.t(step.titleKey)).font(ElchiFont.poppins(14, .semibold)).foregroundStyle(c.text)
+                Text(detail).font(ElchiFont.caption).foregroundStyle(redDetail ? err.fg : c.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            ElchiIcon.chevR.image(size: 16).foregroundStyle(c.placeholder)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { if step.number > 1 { Rectangle().fill(c.field).frame(height: 1) } }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(step.number). \(strings.t(step.titleKey)), \(detail)")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private func text(_ detail: ChecklistStep.Detail) -> String {
+        switch detail {
+        case .text(let value): return value
+        case .key(let key, let values):
+            // `disputeStatus.rejected` is lower-case ("rad etildi"); a sub-line starts with a capital.
+            let line = strings.t(key, values: values.map { ($0.key, $0.value as Any) })
+            return line.prefix(1).uppercased() + line.dropFirst()
+        }
+    }
+}
+
 extension LocaleStore {
+    /// The account state in words (DESIGN06 1.5): "To'ldirilmagan" / "Ko'rib chiqilmoqda" / … from what was sent.
+    func homeStateLabel(_ state: DriverHomeState) -> String { t(state.labelKey) }
+
     /// The verification status in words: `app.driverVerification.*` or `status.*`, never the raw code.
     func verificationLabel(_ status: DriverVerification) -> String {
         tOrNil(status.labelKey) ?? tOrNil("status.\(status.raw)") ?? t("app.driverVerification.pending")
@@ -213,6 +326,10 @@ extension LocaleStore {
 /// documents and profile; rejected / blocked were decided, so only support helps.
 struct VerificationGateView: View {
     let status: DriverVerification
+    /// The derived word for "Holat: …" (DESIGN06 4.1); the server's word when not known.
+    var state: DriverHomeState? = nil
+    /// "Profilni ko'rish" once the car is locked (4.2).
+    var vehicleLocked = false
     let onDocuments: () -> Void
     let onProfile: () -> Void
     let onSupport: () -> Void
@@ -220,7 +337,8 @@ struct VerificationGateView: View {
 
     var body: some View {
         let decided = status.gate == .decided
-        let text = strings.t("app.driverGate.status", ("status", strings.verificationLabel(status))) + ". "
+        let word = state.map(strings.homeStateLabel) ?? strings.verificationLabel(status)
+        let text = strings.t("app.driverGate.status", ("status", word)) + ". "
             + strings.t(decided ? "app.driverGate.decided" : "app.driverGate.pending")
         Note(text, tone: decided ? .err : .warn, title: strings.t("app.driverGate.title"))
             .accessibilityElement(children: .combine)
@@ -229,12 +347,12 @@ struct VerificationGateView: View {
             ElchiButton(strings.t("app.driverGate.support"), variant: .soft, icon: .head, action: onSupport)
         } else {
             ElchiButton(strings.t("app.driverGate.documents"), action: onDocuments)
-            ElchiButton(strings.t("app.driverGate.profile"), variant: .soft, action: onProfile)
+            ElchiButton(strings.t(vehicleLocked ? "driverHome.viewProfile" : "app.driverGate.profile"), variant: .soft, action: onProfile)
         }
     }
 }
 
-/// Routes / Matches / Orders in Stage 07: the gate until approved, then a calm "coming next" (Stage 08 fills them).
+/// Routes / Matches before approval (Orders stays open, DESIGN06 0.3): the gate until approved, then a calm "coming next" (Stage 08 fills them).
 struct DriverGatedTab: View {
     let tab: DriverTab
     let driver: DriverModel
@@ -254,14 +372,15 @@ struct DriverGatedTab: View {
             case .loaded(let profile):
                 let status = DriverVerification(profile.verificationStatus)
                 if status.gate != nil {
-                    VerificationGateView(status: status, onDocuments: onDocuments, onProfile: onProfile, onSupport: onSupport)
+                    VerificationGateView(status: status, state: driver.homeState, vehicleLocked: driver.vehicleLocked,
+                                         onDocuments: onDocuments, onProfile: onProfile, onSupport: onSupport)
                 } else {
                     EmptyState(icon: tab.icon, title: strings.t("driver.tab.nextStage"))
                 }
             }
         }
-        .refreshable { await driver.loadProfile() }
-        .task { await driver.loadProfile() }
+        .refreshable { await driver.refresh() }
+        .task { await driver.refresh() }
     }
 }
 

@@ -411,7 +411,17 @@ fun Note(text: String, modifier: Modifier = Modifier, tone: Tone = Tone.BLUE, ti
  * home). A pale-blue row with the brand outline; [loading] while the tap's request runs.
  */
 @Composable
-fun PendingReferralRow(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, loading: Boolean = false) {
+fun PendingReferralRow(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    loading: Boolean = false,
+    /** A second line under [text] ("Tasdiqlash uchun bosing"). */
+    sub: String? = null,
+    /** A round X on the right that hides the row; [dismissLabel] is its spoken name. */
+    onDismiss: (() -> Unit)? = null,
+    dismissLabel: String? = null,
+) {
     val c = Elchi.colors
     val shape = RoundedCornerShape(14.dp)
     Row(
@@ -419,17 +429,38 @@ fun PendingReferralRow(text: String, onClick: () -> Unit, modifier: Modifier = M
             .fillMaxWidth()
             .clip(shape)
             .background(c.highlight)
-            .border(1.dp, c.brand.copy(alpha = 0.3f), shape)
-            .clickable(enabled = !loading, role = Role.Button, onClick = onClick)
-            .heightIn(min = 48.dp)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .border(1.dp, c.brand.copy(alpha = 0.3f), shape),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        ElchiIconView(ElchiIcon.GIFT, c.accentText, size = 18.dp)
-        Text(text, Modifier.weight(1f), style = Elchi.type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = c.accentText)
-        if (loading) CircularProgressIndicator(Modifier.size(16.dp), color = c.brand, strokeWidth = 2.dp)
-        else ElchiIconView(ElchiIcon.CHEV_R, c.accentText, size = 16.dp)
+        Row(
+            Modifier
+                .weight(1f)
+                .clickable(enabled = !loading, role = Role.Button, onClick = onClick)
+                .heightIn(min = 48.dp)
+                .padding(start = 14.dp, end = if (onDismiss != null) 6.dp else 14.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            ElchiIconView(ElchiIcon.GIFT, c.accentText, size = 18.dp)
+            Column(Modifier.weight(1f)) {
+                Text(text, style = Elchi.type.label.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = c.accentText)
+                if (sub != null) Text(sub, style = Elchi.type.caption, color = c.brand)
+            }
+            if (loading) CircularProgressIndicator(Modifier.size(16.dp), color = c.brand, strokeWidth = 2.dp)
+            else if (onDismiss == null) ElchiIconView(ElchiIcon.CHEV_R, c.accentText, size = 16.dp)
+        }
+        if (onDismiss != null) {
+            Box(
+                Modifier
+                    .padding(end = 10.dp)
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(c.card)
+                    .clickable(enabled = !loading, role = Role.Button, onClick = onDismiss)
+                    .semantics { contentDescription = dismissLabel ?: "" },
+                contentAlignment = Alignment.Center,
+            ) { ElchiIconView(ElchiIcon.X, c.muted, size = 14.dp) }
+        }
     }
 }
 
@@ -1129,6 +1160,8 @@ fun ItemCard(
     highlighted: Boolean = false,
     underlined: Boolean = false,
     onClick: (() -> Unit)? = null,
+    /** A 2dp outline in this colour (a rejected document's red); [highlighted] wins. */
+    outline: Color? = null,
     footer: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val c = Elchi.colors
@@ -1139,7 +1172,7 @@ fun ItemCard(
             .shadow(12.dp, shape, ambientColor = c.shadow, spotColor = c.shadow)
             .clip(shape)
             .background(c.card)
-            .then(if (highlighted) Modifier.border(2.dp, c.brand, shape) else Modifier)
+            .then(if (highlighted) Modifier.border(2.dp, c.brand, shape) else if (outline != null) Modifier.border(2.dp, outline, shape) else Modifier)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),

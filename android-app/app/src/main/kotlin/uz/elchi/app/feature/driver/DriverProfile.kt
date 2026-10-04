@@ -137,7 +137,7 @@ internal fun DriverProfileBody(driver: DriverViewModel, stats: DriverStatsViewMo
     run {
         val profile = s.loaded
         val name = profile?.fullName ?: profile?.user?.fullName ?: session.user.fullName
-        Avatar(name, session.user.phone, profile)
+        Avatar(name, session.user.phone, profile, s.verify)
         if (s.profile is Load.Failed && profile == null) LoadFailed(t(R.string.driverProfileForm_title), (s.profile as Load.Failed).error, driver::refresh)
 
         val locale = Locale.forLanguageTag(languageTag())
@@ -172,7 +172,7 @@ internal fun DriverProfileBody(driver: DriverViewModel, stats: DriverStatsViewMo
         val complaints = (st.complaints as? Load.Ready)?.value?.let { (count, more) -> DriverProfileRules.complaintsText(count, more) } ?: "—"
         StatTiles(
             listOf(
-                Triple(0, t(R.string.driverProfile_status), s.status?.let { statusText(it) } ?: "—"),
+                Triple(0, t(R.string.driverProfile_status), s.verify?.let { uz.elchi.app.i18n.tOrNull(it.labelKey) } ?: "—"),
                 Triple(1, t(R.string.driverProfile_routes), routes),
                 Triple(2, t(R.string.driver_profile_complaints), complaints),
             ),
@@ -182,7 +182,7 @@ internal fun DriverProfileBody(driver: DriverViewModel, stats: DriverStatsViewMo
         SectionTitle(t(R.string.driverProfile_quickActions))
         ListCard {
             DriverProfileRules.MENU.forEachIndexed { i, action ->
-                val (title, description) = actionText(action)
+                val (title, description) = actionText(action, s.profileDone, s.documents?.let(DriverRules::submitted))
                 ListRow(
                     title,
                     icon = action.icon,
@@ -213,9 +213,11 @@ internal fun DriverProfileBody(driver: DriverViewModel, stats: DriverStatsViewMo
 }
 
 @Composable
-private fun actionText(action: ProfileAction): Pair<String, String> = when (action) {
-    ProfileAction.PROFILE -> t(R.string.driverProfileForm_title) to t(R.string.driver_profile_editHint)
-    ProfileAction.DOCUMENTS -> t(R.string.driverProfile_action_documents) to t(R.string.driverProfile_action_documentsHint)
+private fun actionText(action: ProfileAction, profileDone: Boolean = false, documentsSent: Int? = null): Pair<String, String> = when (action) {
+    // "Profil va avtomobil": "locked, ask an operator" only once the car is stored (design 06 §6.3).
+    ProfileAction.PROFILE -> t(R.string.driver_checklist_profileTitle) to t(if (profileDone) R.string.driver_profile_editHint else R.string.driver_profile_formHintOpen)
+    ProfileAction.DOCUMENTS -> t(R.string.driverProfile_action_documents) to
+        (t(R.string.driverProfile_action_documentsHint) + (documentsSent?.let { " · $it / ${DocType.entries.size}" } ?: ""))
     ProfileAction.ROUTES -> t(R.string.driverProfile_action_routes) to t(R.string.driverProfile_action_routesHint)
     ProfileAction.PROPOSALS -> t(R.string.driverProfile_action_proposals) to t(R.string.driverProfile_action_proposalsHint)
     ProfileAction.BONUS -> t(R.string.driverProfile_action_bonus) to t(R.string.driverProfile_action_bonusHint)
@@ -230,7 +232,7 @@ private fun actionText(action: ProfileAction): Pair<String, String> = when (acti
 
 /** Initials, name (or the phone), phone, the verification badge and the availability badge. */
 @Composable
-private fun Avatar(name: String?, phone: String, profile: DriverProfileDTO?) {
+private fun Avatar(name: String?, phone: String, profile: DriverProfileDTO?, verify: VerifyState?) {
     val c = Elchi.colors
     ElchiCard(padding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -245,7 +247,9 @@ private fun Avatar(name: String?, phone: String, profile: DriverProfileDTO?) {
                 if (profile != null) {
                     val status = DriverStatus.from(profile.verificationStatus)
                     Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Badge(statusText(status), DriverRules.statusTone(status))
+                        // The derived word (design 06 §6.1); the server's until the record is fully read.
+                        if (verify != null) Badge(uz.elchi.app.i18n.tOrNull(verify.labelKey) ?: statusText(status), verify.tone)
+                        else Badge(statusText(status), DriverRules.statusTone(status))
                         Badge(t(if (profile.isAvailable) R.string.driverProfile_active else R.string.driverProfile_inactive), if (profile.isAvailable) Tone.BLUE else Tone.GRAY)
                     }
                 }

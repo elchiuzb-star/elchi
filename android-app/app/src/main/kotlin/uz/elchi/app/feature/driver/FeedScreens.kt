@@ -73,16 +73,35 @@ import uz.elchi.app.ui.components.Segmented
 import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.theme.Elchi
 import uz.elchi.app.ui.theme.Tone
+import uz.elchi.app.ui.theme.tone
 
 // -- driver-feed ------------------------------------------------------------------------------------------------
 
 /** The Matches tab body (the gate is the caller's): mode, direction, dates, notes, primary then alternatives. */
 @Composable
-internal fun ColumnScope.FeedBody(vm: FeedViewModel, onSaved: () -> Unit, onOffer: (FeedItemDTO) -> Unit) {
+internal fun ColumnScope.FeedBody(
+    vm: FeedViewModel,
+    onSaved: () -> Unit,
+    onOffer: (FeedItemDTO) -> Unit,
+    /** The driver's own threads (design 07 §5.7): a card already offered on says so and opens the thread. */
+    proposals: ProposalsViewModel? = null,
+    onThread: (String) -> Unit = {},
+    /** Q148 on this tab root too (design 07 §4.9): the running trip's GPS bar. */
+    trips: TripsViewModel? = null,
+    tracker: uz.elchi.app.gps.DriverTracker? = null,
+) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Elchi.colors
     var picking by remember { mutableStateOf<Boolean?>(null) }
     val f = s.filter
+    if (trips != null && tracker != null) {
+        val ts by trips.state.collectAsStateWithLifecycle()
+        TripRules.trackable(ts.list)?.let { running -> uz.elchi.app.gps.DriverTrackingBar(tracker, running.id, inset = 0.dp) }
+    }
+    val mine: Map<String, MyFeedOffer> = proposals?.let { p ->
+        val ps by p.state.collectAsStateWithLifecycle()
+        Design07Rules.myFeedOffers(ps.open, (ps.lists[ProposalTab.ACCEPTED] as? Load.Ready)?.value.orEmpty(), ps.mine)
+    }.orEmpty()
     if (s.passengerEnabled) {
         Segmented(
             listOf(ServiceType.PASSENGER to t(R.string.driverFeed_modeTaxi), ServiceType.PARCEL to t(R.string.driverFeed_modeParcel)),
@@ -107,7 +126,11 @@ internal fun ColumnScope.FeedBody(vm: FeedViewModel, onSaved: () -> Unit, onOffe
         }
     }
     Text(t(R.string.driverFeed_districtHint), style = Elchi.type.caption.copy(fontSize = 12.sp), color = c.muted)
-    ElchiButton(t(R.string.driverFeed_savedSearches), onSaved, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM)
+    // Design 07 §5.4: the count on the button ("Saqlangan yo'nalishlar (2)").
+    ElchiButton(
+        s.savedCount?.let { t(R.string.driver_feed_savedCount, "count" to it) } ?: t(R.string.driverFeed_savedSearches),
+        onSaved, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.ARCHIVE,
+    )
     Note(t(R.string.driver_feed_stopsNote), tone = Tone.WARN)
     s.degraded.forEach { code -> tOrNull("warning.$code")?.let { Note(it, tone = Tone.GRAY) } }
 
@@ -116,13 +139,13 @@ internal fun ColumnScope.FeedBody(vm: FeedViewModel, onSaved: () -> Unit, onOffe
         query == null -> EmptyState(ElchiIcon.RADAR, t(R.string.driverFeed_emptyTitle), description = t(R.string.driverFeed_emptyPickFirst))
         s.loading && s.items.isEmpty() -> LoadingState(count = 2)
         s.error != null && s.items.isEmpty() -> LoadFailed(t(R.string.driverFeed_title), s.error!!, vm::refresh)
-        s.loaded && s.items.isEmpty() -> EmptyState(ElchiIcon.RADAR, t(R.string.driverFeed_emptyTitle), description = t(R.string.driverFeed_emptyTryOther))
+        s.loaded && s.items.isEmpty() -> EmptyState(ElchiIcon.RADAR, t(R.string.driverFeed_emptyTitle), description = t(R.string.driver_feed_emptyHint))
         else -> {
             val groups = s.groups
-            groups.primary.forEach { item -> FeedCard(item, alternative = false, onOffer = { onOffer(item) }) }
+            groups.primary.forEach { item -> FeedCard(item, alternative = false, mine = mine[item.listing.id], onOffer = { onOffer(item) }, onThread = onThread) }
             if (groups.alternative.isNotEmpty()) {
                 SectionTitle(t(R.string.match_alternativesTitle), Modifier.padding(top = 6.dp), description = t(R.string.match_alternativesNote))
-                groups.alternative.forEach { item -> FeedCard(item, alternative = true, onOffer = { onOffer(item) }) }
+                groups.alternative.forEach { item -> FeedCard(item, alternative = true, mine = mine[item.listing.id], onOffer = { onOffer(item) }, onThread = onThread) }
             }
             if (s.next != null) {
                 ElchiButton(t(R.string.blockReport_loadMore), vm::loadMore, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, loading = s.loadingMore)
@@ -150,7 +173,7 @@ internal fun ColumnScope.FeedBody(vm: FeedViewModel, onSaved: () -> Unit, onOffe
  * the window, what is carried, the client's total and "Taklif yuborish". Alternatives get a dashed frame.
  */
 @Composable
-private fun FeedCard(item: FeedItemDTO, alternative: Boolean, onOffer: () -> Unit) {
+private fun FeedCard(item: FeedItemDTO, alternative: Boolean, mine: MyFeedOffer? = null, onOffer: () -> Unit, onThread: (String) -> Unit = {}) {
     val c = Elchi.colors
     val ru = appRu()
     val l = item.listing
@@ -201,13 +224,24 @@ private fun FeedCard(item: FeedItemDTO, alternative: Boolean, onOffer: () -> Uni
         }
         window?.let { Text(it, style = Elchi.type.caption, color = c.muted) }
         what?.let { Text(it, style = Elchi.type.caption, color = c.muted) }
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(soum(l.totalMinor), Modifier.weight(1f), style = Elchi.type.section.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+        // Design 07 §5.6 / §5.7: the meta on the left (my offer, or the client's yes), the client's total on the right.
+        val meta = when (mine) {
+            is MyFeedOffer.Sent -> t(R.string.driver_feed_myOffer, "price" to soum(mine.totalMinor))
+            is MyFeedOffer.Accepted -> t(R.string.driver_feed_clientAccepted)
+            null -> null
         }
-        ElchiButton(
-            t(R.string.driverFeed_sendOffer), onOffer, Modifier.fillMaxWidth().height(46.dp),
-            if (alternative) ButtonVariant.OUTLINE else ButtonVariant.PRIMARY, ButtonSize.MEDIUM,
-        )
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(meta.orEmpty(), Modifier.weight(1f), style = Elchi.type.caption.copy(fontWeight = FontWeight.SemiBold), color = if (mine is MyFeedOffer.Accepted) c.tone(Tone.OK).fg else c.accentText)
+            Text(soum(l.totalMinor), style = Elchi.type.section.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+        }
+        if (mine != null) {
+            ElchiButton(t(R.string.driver_feed_viewOffer), { onThread(mine.threadId) }, Modifier.fillMaxWidth().height(46.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM)
+        } else {
+            ElchiButton(
+                t(R.string.driverFeed_sendOffer), onOffer, Modifier.fillMaxWidth().height(46.dp),
+                if (alternative) ButtonVariant.OUTLINE else ButtonVariant.PRIMARY, ButtonSize.MEDIUM,
+            )
+        }
     }
 }
 
@@ -270,7 +304,7 @@ private fun EndPickerDialog(
 
 /** `driver-saved-searches`: what saving does, the current direction, save it, the list with delete. */
 @Composable
-fun SavedSearchesScreen(vm: SavedSearchesViewModel, feed: FeedViewModel, onBack: () -> Unit) {
+fun SavedSearchesScreen(vm: SavedSearchesViewModel, feed: FeedViewModel, onBack: () -> Unit, onOpenedInFeed: () -> Unit = onBack) {
     val s by vm.state.collectAsStateWithLifecycle()
     val fs by feed.state.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf<SavedSearchDTO?>(null) }
@@ -285,7 +319,14 @@ fun SavedSearchesScreen(vm: SavedSearchesViewModel, feed: FeedViewModel, onBack:
                 muted = query == null,
             )
         }
-        ElchiButton(t(R.string.savedSearches_save), vm::saveCurrent, Modifier.fillMaxWidth(), enabled = query != null, loading = s.saving)
+        // Design 07 §6.2 / §6.3: grey "Allaqachon saqlangan" for the current ends, and no save past the limit.
+        val list = (s.saved as? Load.Ready)?.value.orEmpty()
+        val already = Design07Rules.alreadySaved(list, query)
+        val full = Design07Rules.atLimit(list)
+        ElchiButton(
+            t(if (already) R.string.driver_routes_alreadySaved else R.string.savedSearches_save), vm::saveCurrent, Modifier.fillMaxWidth(),
+            enabled = query != null && s.saved is Load.Ready, loading = s.saving, dimmed = already || full,
+        )
         when (val saved = s.saved) {
             Load.Loading -> LoadingState(count = 2)
             is Load.Failed -> LoadFailed(t(R.string.savedSearches_title), saved.error, vm::refresh)
@@ -294,21 +335,32 @@ fun SavedSearchesScreen(vm: SavedSearchesViewModel, feed: FeedViewModel, onBack:
             } else {
                 saved.value.forEach { item ->
                     val range = OrderRules.dayRange(item.timeWindowStart, item.timeWindowEnd).orEmpty()
+                    val title = FeedRules.savedRouteTitle(item, fs.names(appRu()), stopLabel = "•")
+                    val regions = (fs.regions as? Load.Ready)?.value.orEmpty()
+                    val openable = Design07Rules.filterFor(item, fs.filter, regions, fs.allDistricts) != null
                     ItemCard(
-                        title = FeedRules.savedRouteTitle(item, fs.names(appRu()), stopLabel = "•"),
+                        title = title,
                         icon = ElchiIcon.ROUTE,
                         sub = "$range · ${t(if (item.notify) R.string.savedSearches_notifyOn else R.string.savedSearches_notifyOff)}",
                         footer = {
-                            ElchiButton(
-                                t(R.string.common_delete), { deleting = item }, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.DANGER_SOFT, ButtonSize.MEDIUM,
-                                loading = item.id in s.deleting,
-                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                // Design 07 §6.5: the saved ends become the feed's filter.
+                                ElchiButton(
+                                    t(R.string.driver_routes_openInFeed), { if (vm.openInFeed(item, title.substringAfter("→ "))) onOpenedInFeed() },
+                                    Modifier.weight(1f).height(44.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, enabled = openable, horizontalPadding = 10.dp, maxLines = 2,
+                                )
+                                ElchiButton(
+                                    t(R.string.common_delete), { deleting = item }, Modifier.weight(1f).height(44.dp), ButtonVariant.DANGER_SOFT, ButtonSize.MEDIUM,
+                                    loading = item.id in s.deleting, horizontalPadding = 10.dp,
+                                )
+                            }
                         },
                     )
                 }
             }
         }
-        Text(t(R.string.driver_saved_limitHint, "limit" to FeedRules.SAVED_LIMIT), style = Elchi.type.caption.copy(fontSize = 11.sp), color = Elchi.colors.muted)
+        val count = (s.saved as? Load.Ready)?.value?.size
+        Text(count?.let { t(R.string.driver_routes_limitCount, "limit" to FeedRules.SAVED_LIMIT, "count" to it) } ?: t(R.string.driver_saved_limitHint, "limit" to FeedRules.SAVED_LIMIT), style = Elchi.type.caption.copy(fontSize = 11.sp), color = Elchi.colors.muted)
         Text(t(R.string.driver_saved_notifyNote), style = Elchi.type.caption.copy(fontSize = 11.sp), color = Elchi.colors.muted)
     }
     deleting?.let { item ->

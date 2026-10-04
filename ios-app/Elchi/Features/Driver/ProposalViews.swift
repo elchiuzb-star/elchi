@@ -9,10 +9,20 @@ struct DriverProposalsView: View {
     let onBack: () -> Void
     let onOpen: (ProposalThreadDTO) -> Void
     @Environment(LocaleStore.self) private var strings
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
     @State private var now = Date()
+    @State private var refreshing = false
 
     var body: some View {
-        ScreenScaffold(title: strings.t("proposals.title"), backLabel: strings.t("common.back"), onBack: onBack) {
+        ScreenScaffold(title: strings.t("proposals.title"), backLabel: strings.t("common.back"), onBack: onBack,
+                       actions: [BarAction(id: "refresh", icon: .refresh, label: strings.t("proposal.refresh"), loading: refreshing) {
+                           Task {
+                               refreshing = true
+                               await model.load()
+                               refreshing = false
+                               banners?.ok("client.booking.refreshed")
+                           }
+                       }]) {
             Segmented(ProposalTab.allCases.map { ($0, strings.t($0.labelKey)) }, selected: model.tab) { tab in
                 model.tab = tab
                 Task { await model.load(tab) }
@@ -27,7 +37,7 @@ struct DriverProposalsView: View {
                 EmptyState(icon: .tag, title: strings.t("proposals.empty"), description: strings.t("proposals.emptyDriver"))
             case .loaded(let list):
                 ForEach(list, id: \.id) { thread in
-                    ProposalCard(thread: thread, now: now) { onOpen(thread) }
+                    ProposalCard(thread: thread, versions: model.versions(thread.id), now: now) { onOpen(thread) }
                 }
             }
         } footer: {
@@ -53,23 +63,41 @@ struct DriverProposalsView: View {
     }
 }
 
+/// DESIGN07 8.1 / 8.2: route, window, the current price and a status badge; then the status sentence (the client's
+/// counter with both prices when the history is known) and the countdown while open. Countered cards are outlined,
+/// withdrawn / run-out ones faded.
 struct ProposalCard: View {
     let thread: ProposalThreadDTO
+    var versions: [ProposalVersionDTO]? = nil
     let now: Date
     let onOpen: () -> Void
     @Environment(LocaleStore.self) private var strings
 
     var body: some View {
         let version = thread.currentVersion
-        let status = ProposalStatusLine.of(thread, now: now)
+        let badge = ProposalBadge.of(thread, now: now)
         let actions = DriverNegotiation.of(thread, now: now)
-        var lines = [ItemLine(strings.tOrNil(status.key) ?? status.key, tone: status.tone)]
+        var lines: [ItemLine] = []
+        if let line = ProposalLine.of(thread, versions: versions, now: now) {
+            lines.append(ItemLine(strings.proposalLine(line), tone: badge == .countered ? .warn : nil))
+        }
         if actions.open, let version, let left = strings.driverExpiresIn(version, now: now) { lines.append(ItemLine(left, tone: .warn)) }
-        return ItemCard(title: version.map(strings.route) ?? thread.listingId, icon: .pin,
+        return ItemCard(title: version.map(strings.route) ?? thread.listingId, icon: .pin, badge: (strings.t(badge.key), badge.tone),
                         sub: version.map { strings.span($0.pickupWindowStart, $0.pickupWindowEnd) }, lines: lines,
-                        right: version.map { strings.money($0.totalMinor) }, highlighted: actions.driversTurn, muted: !actions.open && thread.state != "accepted",
+                        right: version.map { strings.money($0.totalMinor) }, highlighted: badge.outlined, muted: badge.faded,
                         action: onOpen)
+            .opacity(badge.faded ? 0.7 : 1)
             .accessibilityIdentifier("elchi.proposal.\(thread.id)")
+    }
+}
+
+extension LocaleStore {
+    func proposalLine(_ line: ProposalLine) -> String {
+        switch line {
+        case .key(let key): t(key)
+        case .clientCounter(let price, let mine): t("driver.offer.clientCounterLine", ("price", money(price)), ("mine", money(mine)))
+        case .myCounter(let price): t("driver.offer.myCounterLine", ("price", money(price)))
+        }
     }
 }
 
@@ -82,8 +110,14 @@ struct DriverThreadView: View {
     let onBack: () -> Void
     /// Stage 09: the booking an accepted thread became.
     var onOpenBooking: ((String) -> Void)? = nil
+    /// Q100 / DESIGN07 8.7: the driver accepted the client's price - the booking's chat opens.
+    var onAccepted: (String) -> Void = { _ in }
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
+    @State private var refreshing = false
+    /// The counter's price was empty or the client's own (DESIGN07 8.5).
+    @State private var counterProblem: String?
     @State private var now = Date()
     @State private var countering = false
     @State private var priceText = ""
@@ -93,7 +127,15 @@ struct DriverThreadView: View {
     @State private var bookingId: String?
 
     var body: some View {
-        ScreenScaffold(title: strings.t("proposals.title"), backLabel: strings.t("common.back"), onBack: onBack) {
+        ScreenScaffold(title: strings.t("proposals.title"), backLabel: strings.t("common.back"), onBack: onBack,
+                       actions: [BarAction(id: "refresh", icon: .refresh, label: strings.t("proposal.refresh"), loading: refreshing) {
+                           Task {
+                               refreshing = true
+                               await model.load()
+                               refreshing = false
+                               banners?.ok("client.booking.refreshed")
+                           }
+                       }]) {
             switch model.thread {
             case .loading:
                 SkeletonCards(count: 2)
@@ -125,13 +167,14 @@ struct DriverThreadView: View {
     @ViewBuilder
     private func content(_ thread: ProposalThreadDTO) -> some View {
         let actions = DriverNegotiation.of(thread, now: now)
-        let status = ProposalStatusLine.of(thread, now: now)
+        let badge = ProposalBadge.of(thread, now: now)
         if let version = thread.currentVersion {
-            ItemCard(title: strings.route(version), icon: .pin, badge: (strings.tOrNil(status.key) ?? status.key, status.tone ?? .gray),
+            ItemCard(title: strings.route(version), icon: .pin, badge: (strings.t(badge.key), badge.tone),
                      sub: strings.span(version.pickupWindowStart, version.pickupWindowEnd),
-                     lines: [actions.open ? strings.driverExpiresIn(version, now: now).map { ItemLine($0, tone: .warn) } : nil,
+                     lines: [badge == .accepted ? nil : ProposalLine.of(thread, now: now).map { ItemLine(strings.proposalLine($0), tone: badge == .countered ? .warn : nil) },
+                             actions.open ? strings.driverExpiresIn(version, now: now).map { ItemLine($0, tone: .warn) } : nil,
                              version.message.flatMap { $0.isEmpty ? nil : ItemLine($0) }].compactMap { $0 },
-                     right: strings.money(version.totalMinor), highlighted: actions.driversTurn)
+                     right: strings.money(version.totalMinor), highlighted: badge.outlined)
                 .accessibilityIdentifier("elchi.thread.current")
             // The money only while it can still happen (or did): a withdrawn or expired offer costs nothing.
             if actions.open || thread.state == "accepted" { money(version) }
@@ -142,14 +185,12 @@ struct DriverThreadView: View {
         }
         ForEach(model.warnings, id: \.code) { Note(strings.priceWarningText($0), tone: .warn) }
         if thread.state == "accepted" || thread.bookingId != nil {
+            // The booking exists (Stage 09): its screen and chat are one tap away; never the old "next stage" text.
+            Note(strings.t("driver.offer.acceptedLine"), tone: .ok)
+                .accessibilityIdentifier("elchi.thread.booked")
             if let id = bookingId ?? thread.bookingId, let onOpenBooking {
-                Note(strings.t("driver.proposals.bookingReady"), tone: .ok)
-                    .accessibilityIdentifier("elchi.thread.booked")
                 ElchiButton(strings.t("driverBooking.title"), variant: .soft, icon: .clip) { onOpenBooking(id) }
                     .accessibilityIdentifier("elchi.thread.openBooking")
-            } else {
-                Note(strings.t("driver.proposals.bookingCreated", ("id", bookingId ?? thread.bookingId ?? "—")), tone: .ok)
-                    .accessibilityIdentifier("elchi.thread.booked")
             }
         }
         if actions.open { answers(actions, thread) }
@@ -170,6 +211,7 @@ struct DriverThreadView: View {
                 MoneyLines.Row(strings.t("promo.line.chargedFromBalance"), strings.money(quote.commissionChargedMinor)),
                 MoneyLines.Row(strings.t("promo.line.youKeep"), strings.money(quote.driverKeepsMinor), emphasis: true),
             ])
+            Text(strings.t("promoScreen.driverCovers")).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
         } else if let fee = version.feeQuote {
             ElchiCard {
                 CardRow(strings.t("commissionPreview.title"),
@@ -185,17 +227,25 @@ struct DriverThreadView: View {
         let busy = model.busy
         if actions.driversTurn {
             if countering {
-                ElchiField(text: $priceText, label: strings.t("proposals.newPrice"), keyboard: .numberPad)
+                ElchiField(text: $priceText, label: strings.t("proposals.newPrice"),
+                           placeholder: thread.currentVersion.map { Money.grouped(String($0.unitPriceMinor / 100)) }, error: counterProblem.map { strings.t($0) },
+                           keyboard: .numberPad)
                     .onChange(of: priceText) { _, typed in
+                        counterProblem = nil
                         priceDigits = Money.soumDigits(typed)
                         let formatted = Money.grouped(priceDigits)
                         if priceText != formatted { priceText = formatted }
                     }
                 HStack(spacing: 8) {
                     ElchiButton(strings.t("common.send"), size: .pair, loading: busy == "counter") {
-                        Task { if await model.counter(priceMinor: Money.minor(fromSoum: priceDigits)) { countering = false } }
+                        let price = Money.minor(fromSoum: priceDigits)
+                        if let problem = DriverCounterCheck.problemKey(priceMinor: price, clientUnitMinor: thread.currentVersion?.unitPriceMinor ?? 0) {
+                            counterProblem = problem
+                            return
+                        }
+                        Task { if await model.counter(priceMinor: price) { countering = false } }
                     }
-                    .disabled(Money.minor(fromSoum: priceDigits) <= 0 || busy != nil)
+                    .disabled(busy != nil)
                     .accessibilityIdentifier("elchi.thread.counterSend")
                     ElchiButton(strings.t("common.cancel"), variant: .neutral, size: .pair) { countering = false }
                 }
@@ -214,8 +264,10 @@ struct DriverThreadView: View {
                     if actions.canCounter {
                         ElchiButton(strings.t("client.listingBids.counterShort", ("count", actions.revisionsLeft)), variant: .neutral, size: .pair) {
                             model.clear()
-                            priceDigits = String((thread.currentVersion?.unitPriceMinor ?? 0) / 100)
-                            priceText = Money.grouped(priceDigits)
+                            // Empty, the client's price as the placeholder-like hint: the same price would only spend a revision.
+                            priceDigits = ""
+                            priceText = ""
+                            counterProblem = nil
                             countering = true
                         }
                         .accessibilityIdentifier("elchi.thread.counter")
@@ -279,6 +331,11 @@ struct DriverThreadView: View {
                 Task {
                     bookingId = await model.accept()
                     confirmAccept = false
+                    // Q100: the booking's chat opens straight away.
+                    if case .bookingChat(let id) = AcceptNext.after(bookingId: bookingId) {
+                        banners?.ok("driver.offer.clientPriceAccepted")
+                        onAccepted(id)
+                    }
                 }
             }
             .accessibilityIdentifier("elchi.thread.acceptConfirm")

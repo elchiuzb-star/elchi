@@ -58,9 +58,19 @@ class DriverViewModel(
         val wallet: Load<Long> = Load.Loading,
         val refreshing: Boolean = false,
         val availabilityBusy: Boolean = false,
+        /** The five document rows (home's checklist and the derived status); null = not read (yet). */
+        val documents: List<DocRow>? = null,
+        /** The v2 vehicles (step 1 is done once the car is there too); null = not read (yet). */
+        val vehicles: List<VehicleDTO>? = null,
     ) {
         val loaded: DriverProfileDTO? get() = (profile as? Load.Ready)?.value
         val status: DriverStatus? get() = loaded?.let { DriverStatus.from(it.verificationStatus) }
+
+        /** The car is stored (v1 lock and the v2 vehicle): "Profilni ko'rish", checklist step 1 ticked. */
+        val profileDone: Boolean get() = DriverRules.profileDone(loaded, vehicles)
+
+        /** The status as the driver reads it (design 06 §1.5), not the raw server word. */
+        val verify: VerifyState? get() = status?.let { DriverRules.verifyState(it, profileDone, documents) }
     }
 
     private val _state = MutableStateFlow(State())
@@ -103,12 +113,20 @@ class DriverViewModel(
         }
     }
 
+    /** The row's X: the code is forgotten on this phone, nothing is sent (design 06 §1.1). */
+    fun forgetReferral() {
+        if (_state.value.referralBusy) return
+        referral?.forget()
+    }
+
     fun refresh() {
         if (_state.value.refreshing) return
         _state.update { it.copy(refreshing = true) }
         viewModelScope.launch {
             val profile = async { attempt { driver.profile() } }
             val wallet = async { attempt { api.getMyWallet().data.availableMinor } }
+            val documents = async { attempt { DriverRules.docRows(driver.documents()) } }
+            val vehicles = async { attempt { api.listMyVehicles().data } }
             profile.await()
                 .onSuccess { p -> _state.update { it.copy(profile = Load.Ready(p)) } }
                 // A failed re-read keeps what is on screen; only the first read shows the error.
@@ -116,6 +134,9 @@ class DriverViewModel(
             wallet.await()
                 .onSuccess { minor -> _state.update { it.copy(wallet = Load.Ready(minor)) } }
                 .onFailure { e -> _state.update { if (it.wallet is Load.Ready) it else it.copy(wallet = Load.Failed(e)) } }
+            // A failed re-read keeps the last rows; never read = null (the server's word decides the status).
+            documents.await().onSuccess { rows -> _state.update { it.copy(documents = rows) } }
+            vehicles.await().onSuccess { list -> _state.update { it.copy(vehicles = list) } }
             _state.update { it.copy(refreshing = false) }
         }
     }
@@ -131,7 +152,7 @@ class DriverViewModel(
             attempt { driver.setAvailability(on) }
                 .onSuccess { stored ->
                     _state.update { st -> st.copy(profile = (st.profile as? Load.Ready)?.let { Load.Ready(it.value.copy(isAvailable = stored)) } ?: st.profile) }
-                    banners.show(BannerTone.OK, BannerText.Key("driverHome.availabilityUpdated"))
+                    banners.show(BannerTone.OK, BannerText.Key(DriverRules.availabilityDoneKey(stored)))
                 }
                 .onFailure { e ->
                     _state.update { st -> st.copy(profile = (st.profile as? Load.Ready)?.let { Load.Ready(it.value.copy(isAvailable = profile.isAvailable)) } ?: st.profile) }
@@ -162,11 +183,15 @@ class DriverProfileFormViewModel(
         val load: Load<Unit> = Load.Loading,
         val profile: DriverProfileDTO? = null,
         val vehicles: List<VehicleDTO> = emptyList(),
-        val form: DriverForm = DriverForm(seats = DEFAULT_SEATS),
+        val form: DriverForm = DriverForm(),
         val saving: Boolean = false,
         val error: Throwable? = null,
         /** Validation marks show after the first save attempt, not while typing the first letters. */
         val showIssues: Boolean = false,
+        /** The Q94 lock dialog is open: the save waits for "Ha, saqlash". */
+        val confirmingLock: Boolean = false,
+        /** A save went through: the screen goes back (design 06 §2.12). */
+        val finished: Boolean = false,
     ) {
         val locked: Boolean get() = DriverRules.vehicleLocked(profile)
         val capacityLocked: Boolean get() = DriverRules.capacityLocked(vehicles)
@@ -205,6 +230,7 @@ class DriverProfileFormViewModel(
 
     fun edit(change: (DriverForm) -> DriverForm) = _state.update { it.copy(form = change(it.form), error = null) }
 
+    /** "Saqlash": checks the form, then asks before the save that locks the car (Q94), else saves at once. */
     fun save() {
         val s = _state.value
         val profile = s.profile ?: return
@@ -213,7 +239,29 @@ class DriverProfileFormViewModel(
             _state.update { it.copy(showIssues = true) }
             return
         }
+        if (DriverRules.locksCar(DriverRules.savePlan(s.form, profile, s.vehicles))) {
+            _state.update { it.copy(confirmingLock = true, showIssues = true) }
+            return
+        }
+        send()
+    }
+
+    /** "Ha, saqlash" in the lock dialog. */
+    fun confirmLock() {
+        if (!_state.value.confirmingLock) return
+        _state.update { it.copy(confirmingLock = false) }
+        send()
+    }
+
+    /** "Tekshirib chiqaman": back to the form, nothing sent. */
+    fun cancelLock() = _state.update { it.copy(confirmingLock = false) }
+
+    private fun send() {
+        val s = _state.value
+        val profile = s.profile ?: return
+        if (s.saving || s.issues.isNotEmpty()) return
         val plan = DriverRules.savePlan(s.form, profile, s.vehicles)
+        val locking = DriverRules.locksCar(plan)
         _state.update { it.copy(saving = true, error = null, showIssues = true) }
         banners.startAction()
         viewModelScope.launch {
@@ -230,16 +278,15 @@ class DriverProfileFormViewModel(
             // Read both back whatever happened: after a v1 success the form is locked even if v2 failed.
             reload()
             val error = failure
-            _state.update { it.copy(saving = false, error = error) }
+            _state.update { it.copy(saving = false, error = error, finished = error == null) }
             banners.endAction()
-            if (error == null) banners.show(BannerTone.OK, BannerText.Key("driverProfileForm.saved"))
+            if (error == null) banners.show(BannerTone.OK, BannerText.Key(if (locking) "driver.form.savedLocked" else "driverProfileForm.saved"))
             onChanged()
         }
     }
 
     private companion object {
         const val VEHICLE = "vehicle"
-        const val DEFAULT_SEATS = "4"
     }
 }
 

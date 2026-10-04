@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.KeyboardType
@@ -51,12 +52,12 @@ import uz.elchi.app.ui.components.EmptyState
 import uz.elchi.app.ui.components.ItemCard
 import uz.elchi.app.ui.components.ItemLine
 import uz.elchi.app.ui.components.LadderRow
-import uz.elchi.app.ui.components.LadderState
 import uz.elchi.app.ui.components.ListCard
 import uz.elchi.app.ui.components.ListRow
 import uz.elchi.app.ui.components.LoadingState
 import uz.elchi.app.ui.components.Note
 import uz.elchi.app.ui.components.PickerField
+import uz.elchi.app.ui.components.RoundIconButton
 import uz.elchi.app.ui.components.SelectField
 import uz.elchi.app.ui.components.StatusLadder
 import uz.elchi.app.ui.icons.ElchiIcon
@@ -108,19 +109,21 @@ private fun TripCard(trip: TripDTO, busy: Boolean, opensAt: Instant?, onClick: (
     val start = OrderRules.parseInstant(trip.plannedStartAt)
     val date = listOfNotNull(OrderRules.dayMonth(trip.plannedStartAt, languageTag()), start?.let(DriverTime::clock)).joinToString(", ")
     val lines = buildList {
-        add(ItemLine(t(R.string.driverRoutes_status, "status" to tripStatusText(trip.status)), c.tone(TripRules.statusTone(trip.status)).fg))
         if (trip.status == TripStatus.PLANNED) add(ItemLine(t(R.string.driverRoutes_boardingWindowHint)))
         if (opensAt != null) add(ItemLine(t(R.string.driver_trip_windowOpensAt, "time" to DriverTime.clockOrDay(opensAt, Instant.now())), c.tone(Tone.WARN).fg))
     }
     val next = TripRules.nextAction(trip.status)
+    // Design 07 §2.1-2.3: the status as a toned badge, the next step as the primary button, history faded.
     ItemCard(
         title = TripRules.routeTitle(trip, ru),
+        modifier = if (TripRules.isActive(trip.status)) Modifier else Modifier.alpha(0.7f),
         icon = ElchiIcon.ROUTE,
+        badge = tripStatusText(trip.status) to TripRules.statusTone(trip.status),
         sub = t(R.string.driverRoutes_tripMeta, "date" to date, "stops" to trip.stops.size, "seats" to trip.seatCapacity),
         lines = lines,
         onClick = onClick,
         footer = next?.let { command ->
-            { ElchiButton(commandLabel(command), { onAction(command) }, Modifier.fillMaxWidth().height(46.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, loading = busy) }
+            { ElchiButton(commandLabel(command), { onAction(command) }, Modifier.fillMaxWidth().height(46.dp), ButtonVariant.PRIMARY, ButtonSize.MEDIUM, loading = busy) }
         },
     )
 }
@@ -163,6 +166,16 @@ fun AddTripScreen(vm: AddTripViewModel, onBack: () -> Unit, onCreated: (String) 
                         CardRow(t(R.string.addRoute_vehicle), "${v.makeModel} · ${v.plateMasked}", first = true, detail = tOrNull("vehicleStatus.${v.verificationStatus}") ?: v.verificationStatus)
                     }
                 }
+            } else if (s.approved.size == 1) {
+                // Design 07 §3.1: the one approved car is fixed (Q94) - a read-only row, not a one-option picker.
+                val v = s.approved.first()
+                ElchiField(
+                    t(R.string.addRoute_vehicleOption, "model" to v.makeModel, "plate" to v.plateMasked, "seats" to v.seatCapacity), {},
+                    label = t(R.string.addRoute_vehicle),
+                    hint = t(R.string.driver_trip_vehicleLocked),
+                    enabled = false,
+                    locked = true,
+                )
             } else {
                 SelectField(
                     label = t(R.string.addRoute_vehicle),
@@ -193,19 +206,18 @@ fun AddTripScreen(vm: AddTripViewModel, onBack: () -> Unit, onCreated: (String) 
                 placeholder = "--.--.----, --:--",
                 onClick = { picking = true },
                 error = TripFormIssue.DEPARTURE in issues || TripFormIssue.DEPARTURE_PAST in issues,
-                hint = when {
-                    TripFormIssue.DEPARTURE in issues -> required
-                    TripFormIssue.DEPARTURE_PAST in issues -> t(R.string.tripIntent_problem_past)
-                    else -> null
-                },
+                // Design 07 §3.4: one pair of sentences on both apps.
+                hint = Design07Rules.departureErrorKey(issues)?.let { tOrNull(it) },
             )
-            ElchiField(
-                s.form.seats, { v -> vm.edit { it.copy(seats = v.filter(Char::isDigit).take(2)) } },
-                label = t(R.string.addRoute_freeSeats),
-                error = fieldError(TripFormIssue.SEATS, t(R.string.driver_form_positiveNumber)),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Design 07 §3.5: the three numbers in one row.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ElchiField(
+                    s.form.seats, { v -> vm.edit { it.copy(seats = v.filter(Char::isDigit).take(2)) } },
+                    Modifier.weight(1f),
+                    label = t(R.string.addRoute_freeSeats),
+                    error = fieldError(TripFormIssue.SEATS, t(R.string.driver_form_positiveNumber)),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
                 ElchiField(
                     s.form.cargoKg, { v -> vm.edit { it.copy(cargoKg = v.filter(Char::isDigit).take(5)) } },
                     Modifier.weight(1f),
@@ -221,7 +233,9 @@ fun AddTripScreen(vm: AddTripViewModel, onBack: () -> Unit, onCreated: (String) 
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
-            Text(t(R.string.addRoute_plannedOnApprovedRoute), style = Elchi.type.caption.copy(fontSize = 12.sp), color = c.muted)
+            // Design 07 §3.6: the seat ceiling from the chosen car.
+            val seatsNote = s.vehicle?.let { " " + t(R.string.driver_trip_seatsMaxNote, "count" to it.seatCapacity) }.orEmpty()
+            Text(t(R.string.addRoute_plannedOnApprovedRoute) + seatsNote, style = Elchi.type.caption.copy(fontSize = 12.sp), color = c.muted)
         }
     }
     if (picking) {
@@ -296,23 +310,26 @@ private fun RoutePicker(s: AddTripViewModel.State, vm: AddTripViewModel, ru: Boo
 fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.elchi.app.gps.DriverTracker? = null, onBooking: (String) -> Unit = {}) {
     val s by vm.state.collectAsStateWithLifecycle()
     var reasonFor by remember { mutableStateOf<TripCommand?>(null) }
+    // Design 07 §4.7: a cancelled trip goes back to the list (the banner says the open offers were closed).
+    LaunchedEffect(s.cancelled) { if (s.cancelled) onBack() }
     val running = (s.trip as? Load.Ready)?.value?.takeIf { TripRules.publishable(it.status) }?.id
     StepScaffold(
         title = t(R.string.trip_detailsTitle),
         onBack = onBack,
         banner = if (tracker != null) ({ uz.elchi.app.gps.DriverTrackingBar(tracker, running) }) else null,
-        onRefresh = vm::refresh,
+        onRefresh = { vm.refresh() },
         refreshing = s.refreshing && s.trip is Load.Ready,
+        actions = { RoundIconButton(ElchiIcon.REFRESH, t(R.string.proposal_refresh), { vm.refresh(manual = true) }, loading = s.refreshing) },
     ) {
         when (val trip = s.trip) {
             Load.Loading -> LoadingState(count = 3)
-            is Load.Failed -> LoadFailed(t(R.string.trip_detailsTitle), trip.error, vm::refresh)
+            is Load.Failed -> LoadFailed(t(R.string.trip_detailsTitle), trip.error) { vm.refresh() }
             is Load.Ready -> {
                 TripHeader(trip.value)
                 TripStops(trip.value)
                 Availability(s, trip.value)
                 Manifest(s, onBooking)
-                TripCommands(trip.value, s.busy, s.opensAt, onCommand = { command -> if (command.needsReason) reasonFor = command else vm.act(command) }, onRefresh = vm::refresh)
+                TripCommands(trip.value, s.busy, s.opensAt, onCommand = { command -> if (command.needsReason) reasonFor = command else vm.act(command) })
             }
         }
     }
@@ -349,7 +366,8 @@ private fun TripHeader(trip: TripDTO) {
 private fun TripStops(trip: TripDTO) {
     val ru = appRu()
     val stops = trip.stops.sortedBy { it.seq }
-    val done = trip.status == TripStatus.COMPLETED
+    // Design 07 §4.2: the dots follow the trip status (the server sends no per-stop passage).
+    val states = Design07Rules.ladder(trip.status, stops.size)
     StatusLadder(
         stops.mapIndexed { i, stop ->
             val planned = OrderRules.parseInstant(stop.plannedArrivalAt)?.let(DriverTime::clock)
@@ -357,12 +375,7 @@ private fun TripStops(trip: TripDTO) {
             LadderRow(
                 title = if (ru) stop.stop.nameRu ?: stop.stop.nameUz else stop.stop.nameUz,
                 time = listOfNotNull(planned, eta?.let { "ETA $it" }).joinToString(" · ").ifEmpty { null },
-                // No position is published in this stage (GPS is Stage 09): the ladder only marks the start.
-                state = when {
-                    done -> LadderState.DONE
-                    i == 0 -> LadderState.CURRENT
-                    else -> LadderState.TODO
-                },
+                state = states[i],
             )
         },
     )
@@ -417,7 +430,7 @@ private fun Manifest(s: TripDetailViewModel.State, onBooking: (String) -> Unit) 
                         stop.dropoffs.map { Triple("$place · $time · ${t(R.string.tripDetail_dropoffs)}", it, false) }
                 }
                 if (rows.isEmpty()) {
-                    Text(t(R.string.tripDetail_manifestEmpty), Modifier.padding(vertical = 10.dp), style = Elchi.type.label, color = Elchi.colors.muted)
+                    Text(t(R.string.driver_trip_manifestEmpty), Modifier.padding(vertical = 10.dp), style = Elchi.type.label, color = Elchi.colors.muted)
                 } else {
                     rows.forEachIndexed { i, (key, item, pickup) -> ManifestRow(key, item, pickup, first = i == 0, onOpen = { onBooking(item.bookingId) }) }
                 }
@@ -433,32 +446,27 @@ private fun ManifestRow(key: String, item: ManifestItemDTO, pickup: Boolean, fir
         else -> t(R.string.tripDetail_seats, "count" to (item.seats ?: 1))
     }
     val status = tOrNull("tripDetail.service.${item.serviceStatus}")
-    // The phone only when the server sends it (parcel receiver: after departure, Q142); otherwise say when it opens.
-    val phone = item.contactPhone ?: if (pickup) {
-        t(if (item.serviceType == ServiceType.PARCEL) R.string.tripDetail_phoneAfterPickup else R.string.tripDetail_phoneAfterStart)
-    } else {
-        null
-    }
+    // The phone only when the server sends it; otherwise say when it opens (Q142: a parcel's receiver at departure,
+    // a passenger once on board).
+    val phone = item.contactPhone ?: if (pickup) tOrNull(Design07Rules.phoneNoteKey(item.serviceType)) else null
     // Stage 09: the booking (its chat, "Keldim", support) opens from its manifest row.
     CardRow(key, listOfNotNull("${item.clientFirstName} — $what", status).joinToString(" · "), first = first, detail = phone, trailing = t(R.string.driverBooking_messages), onTrailing = onOpen)
 }
 
 @Composable
-private fun TripCommands(trip: TripDTO, busy: TripCommand?, opensAt: Instant?, onCommand: (TripCommand) -> Unit, onRefresh: () -> Unit) {
+private fun TripCommands(trip: TripDTO, busy: TripCommand?, opensAt: Instant?, onCommand: (TripCommand) -> Unit) {
     val commands = TripRules.detailCommands(trip.status)
     val next = TripRules.nextAction(trip.status)
     if (trip.status == TripStatus.PLANNED) Text(t(R.string.driverRoutes_boardingWindowHint), style = Elchi.type.caption, color = Elchi.colors.muted)
     if (opensAt != null) Note(t(R.string.driver_trip_windowOpensAt, "time" to DriverTime.clockOrDay(opensAt, Instant.now())), tone = Tone.WARN)
     next?.let { ElchiButton(commandLabel(it), { onCommand(it) }, Modifier.fillMaxWidth(), loading = busy == it, enabled = busy == null) }
+    // Refresh is the bar's icon now (design 07 §0.3).
     val pauseOrResume = commands.firstOrNull { it == TripCommand.INTERRUPT || it == TripCommand.RESUME }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (pauseOrResume != null) {
-            ElchiButton(
-                commandLabel(pauseOrResume), { onCommand(pauseOrResume) }, Modifier.weight(1f).height(48.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM,
-                loading = busy == pauseOrResume, enabled = busy == null, horizontalPadding = 10.dp, maxLines = 2,
-            )
-        }
-        ElchiButton(t(R.string.tripDetail_refresh), onRefresh, Modifier.weight(1f).height(48.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.REFRESH, horizontalPadding = 10.dp)
+    if (pauseOrResume != null) {
+        ElchiButton(
+            commandLabel(pauseOrResume), { onCommand(pauseOrResume) }, Modifier.fillMaxWidth().height(48.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM,
+            loading = busy == pauseOrResume, enabled = busy == null, horizontalPadding = 10.dp, maxLines = 2,
+        )
     }
     if (TripCommand.CANCEL in commands) {
         ElchiButton(commandLabel(TripCommand.CANCEL), { onCommand(TripCommand.CANCEL) }, Modifier.fillMaxWidth().height(48.dp), ButtonVariant.DANGER_SOFT, ButtonSize.MEDIUM, loading = busy == TripCommand.CANCEL, enabled = busy == null)

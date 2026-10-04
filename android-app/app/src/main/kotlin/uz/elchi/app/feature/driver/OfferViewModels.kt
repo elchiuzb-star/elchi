@@ -44,11 +44,16 @@ data class SentOffer(val threadId: String, val warnings: List<ApiWarning>)
  * The driver's offers (`GET /me/proposals?state=`), the counts the Orders tab and home show, and the shared notes
  * between the offer screen and a thread. One per driver flow.
  */
-class ProposalsViewModel(private val api: ElchiApi) : ViewModel() {
+class ProposalsViewModel(private val api: ElchiApi, private val banners: BannerCenter? = null) : ViewModel() {
     data class State(
         val tab: ProposalTab = ProposalTab.OPEN,
         val lists: Map<ProposalTab, Load<List<ProposalThreadDTO>>> = emptyMap(),
         val refreshing: Boolean = false,
+        /**
+         * Thread id → the driver's previous total under the client's counter (design 07 §8.2). The list carries no
+         * versions, so each countered thread is read once (`GET /proposals/{id}`).
+         */
+        val mine: Map<String, Long> = emptyMap(),
     ) {
         val current: Load<List<ProposalThreadDTO>> get() = lists[tab] ?: Load.Loading
         val open: List<ProposalThreadDTO> get() = (lists[ProposalTab.OPEN] as? Load.Ready)?.value.orEmpty()
@@ -60,6 +65,9 @@ class ProposalsViewModel(private val api: ElchiApi) : ViewModel() {
     /** Set by the offer screen right before it opens the thread. */
     var lastSent: SentOffer? = null
 
+    /** Countered thread revisions whose history was asked for (each read once). */
+    private val asked = mutableSetOf<String>()
+
     init {
         refresh(ProposalTab.OPEN)
     }
@@ -69,13 +77,32 @@ class ProposalsViewModel(private val api: ElchiApi) : ViewModel() {
         refresh(tab)
     }
 
-    fun refresh(tab: ProposalTab = _state.value.tab) {
+    /** [manual] = the bar's refresh icon: "Yangilandi" once read (design 07 §0.3). */
+    fun refresh(tab: ProposalTab = _state.value.tab, manual: Boolean = false) {
         _state.update { it.copy(refreshing = true) }
         viewModelScope.launch {
-            tryCall { api.listMyProposals(state = tab.state, limit = PAGE).data }
+            val result = tryCall { api.listMyProposals(state = tab.state, limit = PAGE).data }
+            result
                 .onSuccess { list -> _state.update { it.copy(lists = it.lists + (tab to Load.Ready(list))) } }
                 .onFailure { e -> _state.update { s -> if (s.lists[tab] is Load.Ready) s else s.copy(lists = s.lists + (tab to Load.Failed(e))) } }
             _state.update { it.copy(refreshing = false) }
+            if (manual && result.isSuccess) banners?.show(BannerTone.OK, BannerText.Key("client.booking.refreshed"))
+            result.getOrNull()?.let(::readMine)
+        }
+    }
+
+    /** The driver's own earlier price on each countered thread not read yet (the counter line's "siz … taklif qilgansiz"). */
+    private fun readMine(list: List<ProposalThreadDTO>) {
+        val now = Instant.now()
+        list.filter { OfferRules.line(it, now) == ThreadLine.Countered }.forEach { thread ->
+            val key = "${thread.id}:${thread.currentVersion?.revision}"
+            if (key in asked) return@forEach
+            asked += key
+            viewModelScope.launch {
+                tryCall { api.getProposal(thread.id).data }
+                    .onSuccess { full -> Design07Rules.previousDriverTotal(full)?.let { total -> _state.update { it.copy(mine = it.mine + (thread.id to total)) } } }
+                    .onFailure { asked -= key }
+            }
         }
     }
 
@@ -109,6 +136,8 @@ class BidViewModel(
         val error: Throwable? = null,
         /** Set once: the thread to open (sent, or the one that already existed). */
         val openThread: String? = null,
+        /** "Taklif narxini kiriting" under the field after a tap with no price (design 07 §7.11). */
+        val priceMissing: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State(listing = initial?.let { Load.Ready(it.listing) } ?: Load.Loading))
@@ -157,7 +186,7 @@ class BidViewModel(
 
     fun setPrice(text: String) {
         val digits = text.filter(Char::isDigit).take(MAX_DIGITS)
-        _state.update { it.copy(price = digits, error = null) }
+        _state.update { it.copy(price = digits, error = null, priceMissing = false) }
         quoteFee()
     }
 
@@ -187,9 +216,15 @@ class BidViewModel(
     fun send(trip: TripDTO?, clientPrice: Boolean = false) {
         val s = _state.value
         val listing = (s.listing as? Load.Ready)?.value ?: return
-        if (s.sending || trip == null) return
+        if (s.sending) return
+        val typed = ParcelRules.soumToMinor(s.price)?.takeIf { it > 0 }
+        if (!clientPrice && typed == null) {
+            _state.update { it.copy(priceMissing = true) }
+            return
+        }
+        if (trip == null) return
         val window = OfferRules.pickupWindow(trip, listing) ?: return
-        val unit = if (clientPrice) listing.unitPriceMinor else ParcelRules.soumToMinor(s.price)?.takeIf { it > 0 } ?: return
+        val unit = if (clientPrice) listing.unitPriceMinor else typed ?: return
         val body = OfferRules.proposalBody(listing, trip.id, window, unit)
         val scope = "offer:$listingId:${trip.id}:$unit"
         _state.update { it.copy(sending = true, error = null, tripId = trip.id) }
@@ -203,7 +238,7 @@ class BidViewModel(
                     proposals.lastSent = SentOffer(r.data.id, r.warnings)
                     val warn = r.warnings.firstOrNull()
                     if (warn != null) banners.show(BannerTone.WARN, BannerText.Key("warning.${warn.code}", fallback = warn.message))
-                    else banners.show(BannerTone.OK, BannerText.Key("driverBid.sent"))
+                    else banners.show(BannerTone.OK, soumBanner("driver.offer.sentPrice", "price", r.data.currentVersion?.totalMinor ?: totalMinor(listing, unit)))
                     proposals.refresh(ProposalTab.OPEN)
                     _state.update { it.copy(sending = false, openThread = r.data.id) }
                 }
@@ -247,6 +282,10 @@ class ProposalThreadViewModel(
         val bookingId: String? = null,
         /** The accept must be confirmed again (the listing's terms version moved). */
         val reconfirm: Boolean = false,
+        /** The counter field's refusal (empty, or the client's own price - design 07 §8.5). */
+        val counterIssue: CounterIssue? = null,
+        /** Set once after an accept: open this booking's chat (Q100, design 07 §8.7). */
+        val openChat: String? = null,
     )
 
     private val _state = MutableStateFlow(State())
@@ -260,13 +299,15 @@ class ProposalThreadViewModel(
         refresh()
     }
 
-    fun refresh() {
+    /** [manual] = the bar's refresh icon: "Yangilandi" once read. */
+    fun refresh(manual: Boolean = false) {
         _state.update { it.copy(refreshing = true) }
         viewModelScope.launch {
             tryCall { api.getProposal(threadId).data }
                 .onSuccess { t ->
                     _state.update { it.copy(thread = Load.Ready(t), bookingId = it.bookingId ?: t.bookingId) }
                     quoteFee(t)
+                    if (manual) banners.show(BannerTone.OK, BannerText.Key("client.booking.refreshed"))
                 }
                 .onFailure { e -> _state.update { if (it.thread is Load.Ready) it else it.copy(thread = Load.Failed(e)) } }
             _state.update { it.copy(refreshing = false) }
@@ -292,7 +333,7 @@ class ProposalThreadViewModel(
         else uz.elchi.app.api.generated.ServiceType.PASSENGER
     }
 
-    fun setCounterPrice(text: String) = _state.update { it.copy(counterPrice = text.filter(Char::isDigit).take(11)) }
+    fun setCounterPrice(text: String) = _state.update { it.copy(counterPrice = text.filter(Char::isDigit).take(11), counterIssue = null) }
 
     private fun current(): ProposalThreadDTO? = (_state.value.thread as? Load.Ready)?.value
 
@@ -319,18 +360,24 @@ class ProposalThreadViewModel(
         }
     }
 
-    fun counter() {
-        val t = current() ?: return
-        val v = t.currentVersion ?: return
-        val unit = ParcelRules.soumToMinor(_state.value.counterPrice)?.takeIf { it > 0 } ?: return
+    /** False when the price was refused on the client (the field says why). */
+    fun counter(): Boolean {
+        val t = current() ?: return false
+        val v = t.currentVersion ?: return false
+        Design07Rules.counterIssue(_state.value.counterPrice, v.unitPriceMinor)?.let { issue ->
+            _state.update { it.copy(counterIssue = issue) }
+            return false
+        }
+        val unit = ParcelRules.soumToMinor(_state.value.counterPrice)?.takeIf { it > 0 } ?: return false
         command("counter:${v.revision}:$unit", ThreadNotice.COUNTERED, "proposals.counterSent") { key ->
             api.counterProposal(threadId, OfferRules.counterBody(v, unit), key).data
         }
+        return true
     }
 
     fun reject() {
         val v = current()?.currentVersion ?: return
-        command("reject:${v.revision}", ThreadNotice.REJECTED, "proposal.rejected") { key ->
+        command("reject:${v.revision}", ThreadNotice.REJECTED, "driver.offer.counterRejected") { key ->
             api.rejectProposal(threadId, ProposalDecision(expectedRevision = v.revision), key).data
         }
     }
@@ -361,8 +408,10 @@ class ProposalThreadViewModel(
             result
                 .onSuccess { booking ->
                     val id = OfferRules.bookingId(booking)
-                    _state.update { it.copy(notice = ThreadNotice.ACCEPTED, bookingId = id) }
-                    banners.show(BannerTone.OK, BannerText.Key("driver.proposals.bookingCreated", params = mapOf("id" to (id ?: "—"))))
+                    // Q100 / design 07 §8.7: the booking's chat opens right away (the meeting point is agreed there).
+                    val chat = (Design07Rules.afterAccept(id) as? AcceptNav.BookingChat)?.bookingId
+                    _state.update { it.copy(notice = ThreadNotice.ACCEPTED, bookingId = id, openChat = chat) }
+                    banners.show(BannerTone.OK, BannerText.Key("driver.offer.clientPriceAccepted"))
                     proposals.refresh(ProposalTab.OPEN)
                     proposals.refresh(ProposalTab.ACCEPTED)
                     refresh()
@@ -381,4 +430,14 @@ class ProposalThreadViewModel(
     }
 
     fun reconfirmShown() = _state.update { it.copy(reconfirm = false) }
+
+    fun chatOpened() = _state.update { it.copy(openChat = null) }
 }
+
+/** A banner whose `{param}` is a so'm amount in the reader's language ("120 000 so'm" / "120 000 сум"). */
+internal fun soumBanner(key: String, param: String, minor: Long): BannerText.Key = BannerText.Key(
+    key,
+    // `{param}` becomes "120 000 {soumUnit}", then the unit key fills the rest (params go in before keyParams).
+    params = mapOf(param to "${ParcelRules.groupThousands(ParcelRules.minorToSoum(minor))}\u00A0{soumUnit}"),
+    keyParams = mapOf("soumUnit" to "common.soum"),
+)

@@ -38,6 +38,7 @@
 		2EE9361493EBF0EE092CD319 /* BookingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87EA31F8CE0EA13DE5C57F5 /* BookingViews.swift */; };
 		2F334E68CE593793D8169447 /* PointPickerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */; };
 		3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */; };
+		321DE2394D6D9E52522D9695 /* DriverDesign07UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD45F7CA67CBDB3A7D203796 /* DriverDesign07UITests.swift */; };
 		354FF9D10BA0F9E29B09A7B6 /* TaxiViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 783733336FB122507D85F109 /* TaxiViews.swift */; };
 		363174F9C92A4C5654243323 /* OrderFlowLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11F9AE5F3325BBB21576CC0 /* OrderFlowLogicTests.swift */; };
 		38E28AADEA9D73BC78B9C945 /* ElchiMapEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */; };
@@ -51,6 +52,7 @@
 		45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */; };
 		485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD96CB85D338794F3AD1FF7 /* MarketModels.swift */; };
 		48962C87ADECC021F90F4C4B /* OrdersAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC50CE982A2746D3110960D /* OrdersAPI.swift */; };
+		4A50304D0DAA601C65A4BB88 /* DriverDesign06UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD64364E954001266CDDB258 /* DriverDesign06UITests.swift */; };
 		4B5647F4AABE57D928028C3D /* MyLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DA8DCF66F9980504D3D867 /* MyLocation.swift */; };
 		4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */; };
 		50B2F99841F6F5B65F94E8D2 /* ElchiIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AA28EAF962F62889B19611 /* ElchiIcon.swift */; };
@@ -94,6 +96,7 @@
 		9E0B75BF206ED89E08B0EA38 /* OrderFlowLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = A373F464132DD73128A90D60 /* OrderFlowLogic.swift */; };
 		A06862743976E57BB2A54C4B /* OrdersModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5187A5C380B98BE157A1B9B7 /* OrdersModel.swift */; };
 		A1C1F6F8B8F3DEECE48FCEC4 /* LocationViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCEDCEFD444CC97A5325ED0F /* LocationViews.swift */; };
+		A30E76298E9B1D6F7FA351DD /* Design06Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B7B654DD2671302E7FE66E6 /* Design06Tests.swift */; };
 		A37637F2D903F19C2D385DED /* ProfileAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E573D36C73DF08EB376290B /* ProfileAPI.swift */; };
 		A4CBDBCE32C986316189D94A /* Poppins-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = FB09FB483669F7C8AC86DEA3 /* Poppins-Regular.ttf */; };
 		A72D42C24DE898896AB96E17 /* OrdersLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFC26087742FF883E6A6FA6 /* OrdersLogic.swift */; };
@@ -123,6 +126,7 @@
 		C52BBC92759016BAA554FEC3 /* Poppins-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 31AC3EF77268DC310A40A626 /* Poppins-Medium.ttf */; };
 		C634812579808489491BC847 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA17164718156721D6DFFECE /* JSONValue.swift */; };
 		C778706AB0715C2A921B1F2A /* DriverModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0466319AC1B19AAED64787DD /* DriverModels.swift */; };
+		CBA000A22EDD0BAB37FE192B /* Design07Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF62192F3C8768A3E34AE68 /* Design07Tests.swift */; };
 		CC3D4E19F04823C0812C6207 /* ErrorText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CCE177C989B996DB4ACC0E5 /* ErrorText.swift */; };
 		CDD6F1E8AAD07062CA19987B /* TripViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E3829D24D17A5C141EDF00D /* TripViews.swift */; };
 		D0A51D3A01375760DA1A9EAD /* DriverStage09UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEF518C44CC1D2EF0004AE1A /* DriverStage09UITests.swift */; };
@@ -232,6 +236,7 @@
 		77BC6C1EA4072D484C16CF07 /* ClientDesign05UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientDesign05UITests.swift; sourceTree = "<group>"; };
 		783733336FB122507D85F109 /* TaxiViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiViews.swift; sourceTree = "<group>"; };
 		7A61A05C9B058156AB0D42B0 /* FeedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViews.swift; sourceTree = "<group>"; };
+		7B7B654DD2671302E7FE66E6 /* Design06Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design06Tests.swift; sourceTree = "<group>"; };
 		7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyOrderModel.swift; sourceTree = "<group>"; };
 		82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientProfileUITests.swift; sourceTree = "<group>"; };
 		84C0FF664AD5ECD97C0FA11E /* BookingFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingFormatting.swift; sourceTree = "<group>"; };
@@ -253,6 +258,8 @@
 		A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointPickerModel.swift; sourceTree = "<group>"; };
 		AA31EFFA4B516438A1829CD7 /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
 		AB6B48A7D779235C4709B054 /* DriverGpsBars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverGpsBars.swift; sourceTree = "<group>"; };
+		AD45F7CA67CBDB3A7D203796 /* DriverDesign07UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverDesign07UITests.swift; sourceTree = "<group>"; };
+		AD64364E954001266CDDB258 /* DriverDesign06UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverDesign06UITests.swift; sourceTree = "<group>"; };
 		AEF518C44CC1D2EF0004AE1A /* DriverStage09UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverStage09UITests.swift; sourceTree = "<group>"; };
 		AEFC26087742FF883E6A6FA6 /* OrdersLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersLogic.swift; sourceTree = "<group>"; };
 		B20558F406539BB7C97D53D6 /* Banners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Banners.swift; sourceTree = "<group>"; };
@@ -298,6 +305,7 @@
 		E8DA8DCF66F9980504D3D867 /* MyLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyLocation.swift; sourceTree = "<group>"; };
 		E9078590EA61C4DFBD7FCE59 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingOffersLogicTests.swift; sourceTree = "<group>"; };
+		ECF62192F3C8768A3E34AE68 /* Design07Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design07Tests.swift; sourceTree = "<group>"; };
 		F129D51A637BCF9404EF251D /* MarketAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketAPI.swift; sourceTree = "<group>"; };
 		F1512BCC8B0C467AC0347376 /* SignInModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInModel.swift; sourceTree = "<group>"; };
 		FB09FB483669F7C8AC86DEA3 /* Poppins-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Regular.ttf"; sourceTree = "<group>"; };
@@ -334,6 +342,8 @@
 				82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */,
 				014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */,
 				D536A13BAF79C8A62685B779 /* DeepLinkUITests.swift */,
+				AD64364E954001266CDDB258 /* DriverDesign06UITests.swift */,
+				AD45F7CA67CBDB3A7D203796 /* DriverDesign07UITests.swift */,
 				D95D7506CA7B2EA68859F3A7 /* DriverFollowUpUITests.swift */,
 				B2160348ED04BD003F9E3DB5 /* DriverMarketUITests.swift */,
 				AEF518C44CC1D2EF0004AE1A /* DriverStage09UITests.swift */,
@@ -633,6 +643,8 @@
 				325E8FEBC1D5E3466DFFE70F /* Design03Tests.swift */,
 				CEF5996AD4AED177C5F311FC /* Design04Tests.swift */,
 				B2E8C396C9DAE29876250DB5 /* Design05Tests.swift */,
+				7B7B654DD2671302E7FE66E6 /* Design06Tests.swift */,
+				ECF62192F3C8768A3E34AE68 /* Design07Tests.swift */,
 				39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */,
 				A14CCE13A35C7D26BBC2736D /* DriverStage09Tests.swift */,
 				FB254F9C42D41CE8DDC8E3B1 /* GpsTests.swift */,
@@ -925,6 +937,8 @@
 				6DCEB26277DF8AEDB50119B8 /* Design03Tests.swift in Sources */,
 				EA47B5CF0002E97E9A16DE0B /* Design04Tests.swift in Sources */,
 				C4BA33D14FA7E39870BB8F60 /* Design05Tests.swift in Sources */,
+				A30E76298E9B1D6F7FA351DD /* Design06Tests.swift in Sources */,
+				CBA000A22EDD0BAB37FE192B /* Design07Tests.swift in Sources */,
 				8B153DC9951BE2E3408FB121 /* DriverLogicTests.swift in Sources */,
 				F1C4BB9EB0C0CE5D084FE5A4 /* DriverStage09Tests.swift in Sources */,
 				5A0D0A4C44224BB5BADBAEDE /* GpsTests.swift in Sources */,
@@ -957,6 +971,8 @@
 				83F9D384A561FA388327AF8B /* ClientProfileUITests.swift in Sources */,
 				3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */,
 				576267B94BCD44FF6630D0FE /* DeepLinkUITests.swift in Sources */,
+				4A50304D0DAA601C65A4BB88 /* DriverDesign06UITests.swift in Sources */,
+				321DE2394D6D9E52522D9695 /* DriverDesign07UITests.swift in Sources */,
 				0D0F8636B54D7904AC144FE4 /* DriverFollowUpUITests.swift in Sources */,
 				1892199932721362DD3ED2A3 /* DriverMarketUITests.swift in Sources */,
 				D0A51D3A01375760DA1A9EAD /* DriverStage09UITests.swift in Sources */,

@@ -86,7 +86,7 @@ struct DriverAvailabilityTests {
     @Test func subtitles() {
         #expect(DriverAvailability.subtitleKey(status: .pending, isOn: false) == "driverHome.availabilityLocked")
         #expect(DriverAvailability.subtitleKey(status: .approved, isOn: true) == "driver.home.availableOn")
-        #expect(DriverAvailability.subtitleKey(status: .approved, isOn: false) == "driverProfile.availabilityOff")
+        #expect(DriverAvailability.subtitleKey(status: .approved, isOn: false) == "driver.home.availableOff")
     }
 }
 
@@ -179,26 +179,27 @@ struct DriverSavePlanTests {
 }
 
 struct DriverFormRulesTests {
-    @Test func firstTimeNeedsEverythingButCargo() {
+    @Test func firstTimeNeedsEverythingCargoIncluded() {
         let empty = DriverFormRules.problems(DriverForm(), vehicleLocked: false, hasVehicle: false)
         #expect(empty[.fullName] == .required)
         #expect(empty[.carModel] == .required)
         #expect(empty[.carColor] == .required)
         #expect(empty[.plate] == .required)
         #expect(empty[.seats] == .required)
-        #expect(empty[.cargoKg] == nil && empty[.cargoLitres] == nil)
+        // DESIGN06 2.6: both cargo figures are required (0 allowed).
+        #expect(empty[.cargoKg] == .required && empty[.cargoLitres] == .required)
         #expect(DriverFormRules.problems(DriverFixture.fullForm, vehicleLocked: false, hasVehicle: false).isEmpty)
     }
 
-    @Test func numbersMustBePositiveAndSeatsInRange() {
+    @Test func seatsInRangeAndCargoAWholeNumberZeroIncluded() {
         var form = DriverFixture.fullForm
         form.seats = "9"
         form.cargoKg = "0"
         form.cargoLitres = "-5"
         let problems = DriverFormRules.problems(form, vehicleLocked: false, hasVehicle: false)
         #expect(problems[.seats] == .seatsRange)
-        #expect(problems[.cargoKg] == .positive)
-        #expect(problems[.cargoLitres] == .positive)
+        #expect(problems[.cargoKg] == nil)
+        #expect(problems[.cargoLitres] == .notNumber)
         #expect(DriverFormRules.positiveInt("12") == 12)
         #expect(DriverFormRules.positiveInt("2.5") == nil)
     }

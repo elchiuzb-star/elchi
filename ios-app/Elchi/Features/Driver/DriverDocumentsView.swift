@@ -31,11 +31,22 @@ struct DriverDocumentsView: View {
                 ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await driver.loadDocuments() } }
             case .loaded:
                 let slots = driver.slots
+                let submitted = DocumentSlots.submitted(slots)
+                let total = DriverDocumentType.allCases.count
                 ElchiCard(padding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(strings.t("driverDocs.submittedCount", ("submitted", DocumentSlots.submitted(slots)),
-                                       ("total", DriverDocumentType.allCases.count)))
+                        Text(strings.t("driverDocs.submittedCount", ("submitted", submitted), ("total", total)))
                             .font(ElchiFont.poppins(15, .semibold)).foregroundStyle(c.text)
+                        // DESIGN06 3.1: the n / 5 bar.
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(c.field)
+                                Capsule().fill(c.brand).frame(width: geo.size.width * CGFloat(submitted) / CGFloat(total))
+                            }
+                        }
+                        .frame(height: 6)
+                        .padding(.vertical, 4)
+                        .accessibilityHidden(true)
                         Text(strings.t("driverDocs.intro")).font(ElchiFont.caption).foregroundStyle(c.muted).lineSpacing(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -92,6 +103,7 @@ struct DriverDocumentsView: View {
 
     private func row(_ slot: DocumentSlot) -> some View {
         let uploading = driver.uploading == slot.type
+        let canUpload = slot.canUpload(account: driver.status)
         var lines: [ItemLine] = []
         if let reason = slot.rejectionReason {
             lines.append(ItemLine(strings.t("driverDocs.rejectionReason", ("reason", reason)), tone: .err))
@@ -106,10 +118,15 @@ struct DriverDocumentsView: View {
                     Text(strings.t("driver.docs.uploading")).font(ElchiFont.poppins(13, .medium)).foregroundStyle(c.muted)
                     Spacer(minLength: 0)
                 } else {
-                    ElchiButton(strings.t(slot.state == .missing ? "driverDocs.upload" : "driverDocs.reupload"),
-                                variant: slot.state == .rejected ? .primary : .soft, size: .medium, icon: .upload) { pick(slot.type) }
-                        .disabled(driver.uploading != nil)
-                        .accessibilityIdentifier("elchi.driver.docs.\(slot.type.rawValue)")
+                    // DESIGN06 3.5 / 3.6: no upload on an approved row, none at all once the account was decided.
+                    if canUpload {
+                        ElchiButton(strings.t(slot.uploadLabelKey), variant: slot.uploadIsPrimary ? .primary : .soft, size: .medium,
+                                    icon: .upload) { pick(slot.type) }
+                            .disabled(driver.uploading != nil)
+                            .accessibilityIdentifier("elchi.driver.docs.\(slot.type.rawValue)")
+                    } else {
+                        Spacer(minLength: 0)
+                    }
                     if let link = slot.document?.fileUrl, let url = mediaURL(link) {
                         // The signed file as it was sent (a picture or the PDF), in the browser.
                         Button { openURL(url) } label: {
@@ -123,6 +140,11 @@ struct DriverDocumentsView: View {
                 }
             }
             .padding(.top, 4)
+        }
+        .overlay {
+            if slot.state == .rejected {
+                RoundedRectangle(cornerRadius: ElchiShape.card).strokeBorder(c.tone(.err).fg, lineWidth: 2).allowsHitTesting(false)
+            }
         }
     }
 
