@@ -147,7 +147,8 @@ struct OrderWordingTests {
         var stop = sam
         stop.stop = PlaceStop(id: "stp_1", nameUz: "Registon bekati", nameRu: "Регистан")
         #expect(strings.place(stop) == "Registon bekati")
-        #expect(strings.areaDetail(stop) == "Tasdiqlangan bekat · Samarqand, Samarqand viloyati")
+        // The regenerated dictionary (Q158) says "Belgilangan joy", never "bekat".
+        #expect(strings.areaDetail(stop) == "Belgilangan joy · Samarqand, Samarqand viloyati")
         var here = sam
         here.currentLocation = true
         #expect(strings.place(here) == "Joriy joylashuv")

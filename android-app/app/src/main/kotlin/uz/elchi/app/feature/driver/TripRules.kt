@@ -116,8 +116,20 @@ object TripRules {
     fun routeTitle(trip: TripDTO, ru: Boolean): String {
         val first = trip.stops.minByOrNull { it.seq }?.stop
         val last = trip.stops.maxByOrNull { it.seq }?.stop
-        fun name(stop: uz.elchi.app.api.generated.StopRefDTO?) = stop?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz } ?: "?"
-        return "${name(first)} → ${name(last)}"
+        return "${placeName(first, ru)} → ${placeName(last, ru)}"
+    }
+
+    /**
+     * Q158 (ADR-0027): a route node is internal - the driver reads it as the district it is in. The node's own name
+     * only when the server sends no district (an older node).
+     */
+    fun placeName(stop: uz.elchi.app.api.generated.StopRefDTO?, ru: Boolean): String =
+        stop?.districtNameUz?.takeIf { it.isNotBlank() } ?: stop?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz } ?: "?"
+
+    /** Q158: the trip's nodes read by district, a run of nodes in one district shown once (web `alongTheRoad`). */
+    fun alongTheRoad(stops: List<uz.elchi.app.api.generated.TripStopDTO>, ru: Boolean): List<Int> {
+        val ordered = stops.sortedBy { it.seq }
+        return ordered.indices.filter { i -> i == 0 || placeName(ordered[i].stop, ru) != placeName(ordered[i - 1].stop, ru) }
     }
 
     /** Planned and not yet past its booking cutoff: a trip an offer can be made from. */

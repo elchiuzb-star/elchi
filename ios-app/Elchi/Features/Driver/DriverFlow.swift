@@ -32,6 +32,9 @@ enum DriverRoute: Hashable {
     // Stage 08: trips, feed, offers.
     case trip(String)
     case addTrip
+    // ADR-0027: directions.
+    case addDirection
+    case directionOffer(String)
     case feedEnd(origin: Bool)
     case savedRoutes
     case offer(String)
@@ -68,6 +71,7 @@ struct DriverFlow: View {
     @State private var trips: TripsModel
     @State private var addTrip: AddTripModel
     @State private var feed: FeedModel
+    @State private var directions: DirectionsModel
     @State private var saved: SavedRoutesModel
     @State private var proposals: DriverProposalsModel
     @State private var bookings: DriverBookingsModel
@@ -102,6 +106,7 @@ struct DriverFlow: View {
         _addTrip = State(initialValue: AddTripModel(api: api, keys: keys))
         _feed = State(initialValue: FeedModel(api: api, market: MarketAPI(transport: container.transport), userId: session.user.id))
         _saved = State(initialValue: SavedRoutesModel(api: api, banners: banners, keys: keys))
+        _directions = State(initialValue: DirectionsModel(api: api, banners: banners, keys: keys))
         _proposals = State(initialValue: DriverProposalsModel(api: api, banners: banners, keys: keys))
         let transport = container.transport
         let sessions = container.sessions
@@ -166,6 +171,7 @@ struct DriverFlow: View {
             case "wallet": path = [.wallet]
             case "bonus": path = [.bonus]
             case "notifications": path = [.notifications]
+            case "addDirection": path = [.addDirection]
             default: break
             }
             // Screenshots / UI tests: `-uiTestDriverBooking bkg_…` opens a booking (`-uiTestDriverBookingScreen chat`).
@@ -232,12 +238,32 @@ struct DriverFlow: View {
     private var work: some View {
         switch tab {
         case .routes:
-            TripsTabView(trips: trips, onAdd: openAddTrip) { path.append(.trip($0)) }
+            // ADR-0027: the Routes tab is the driver's directions; the trips the system made stay under them.
+            DirectionsTabView(model: directions, trips: trips, onAdd: openAddDirection,
+                              onOpenRequests: { id in
+                                  directions.activeId = id
+                                  tab = .matches
+                              },
+                              onOpenTrip: { path.append(.trip($0)) }, onPlanTrip: openAddTrip)
                 .environment(\.screenAccessory, AnyView(gps.tracker.map { TripsGpsBar(tracker: $0, trips: trips) }))
         case .matches:
             FeedTabView(feed: feed, proposals: proposals, saved: saved, onPickEnd: { path.append(.feedEnd(origin: $0)) },
                         onSaved: { path.append(.savedRoutes) }, onProposals: { path.append(.proposals) },
-                        onThread: { path.append(.thread($0)) }) { item in
+                        onThread: { path.append(.thread($0)) },
+                        directions: AnyView(DirectionFeedSection(model: directions,
+                                                                 service: DirectionFeed.service(passengerAllowed: feed.passengerAllowed,
+                                                                                                passenger: feed.filter.passenger),
+                                                                 onAdd: openAddDirection,
+                                                                 onOffer: { item in
+                                                                     directions.forgetOffer(item.listing.id)
+                                                                     path.append(.directionOffer(item.listing.id))
+                                                                 },
+                                                                 onThread: { path.append(.thread($0)) })),
+                        onRefresh: {
+                            await directions.load()
+                            await directions.loadFeed(service: DirectionFeed.service(passengerAllowed: feed.passengerAllowed,
+                                                                                     passenger: feed.filter.passenger))
+                        }) { item in
                 feed.forgetOffer(item.listing.id)
                 path.append(.offer(item.listing.id))
             }
@@ -245,6 +271,34 @@ struct DriverFlow: View {
         default:
             DriverOrdersTab(proposals: proposals, bookings: bookings, onProposals: { path.append(.proposals) }) { path.append(.booking($0)) }
                 .environment(\.screenAccessory, AnyView(gps.tracker.map { TripsGpsBar(tracker: $0, trips: trips) }))
+        }
+    }
+
+    private func openAddDirection() {
+        directions.resetForm()
+        path.append(.addDirection)
+    }
+
+    /// ADR-0027 (Q152): an offer from a direction - the toast names the trip the system planned or moved.
+    private func directionOfferSent(_ result: DirectionOfferDTO) {
+        let message = DirectionOffer.sentMessage(result)
+        if let time = message.time {
+            container.banners.show(.template(message.key, values: ["time": time]), tone: .ok)
+        } else {
+            container.banners.ok(message.key)
+        }
+        directions.forgetOffer(result.thread.listingId)
+        // Like the trip offer (design 07): the thread replaces the offer screen; the feed is read again under it.
+        _ = proposals.thread(result.thread.id, initial: result.thread)
+        if !path.isEmpty { path.removeLast() }
+        path.append(.thread(result.thread.id))
+        let service = DirectionFeed.service(passengerAllowed: feed.passengerAllowed, passenger: feed.filter.passenger)
+        Task {
+            async let list: Void = directions.load()
+            async let page: Void = directions.loadFeed(service: service)
+            async let offers: Void = proposals.load(.open)
+            async let trips: Void = self.trips.load()
+            _ = await (list, page, offers, trips)
         }
     }
 
@@ -315,6 +369,16 @@ struct DriverFlow: View {
                 .environment(\.screenAccessory, AnyView(gps.tracker.map { TripGpsBar(tracker: $0, trip: trips.detail(id)) }))
         case .addTrip:
             AddTripView(model: addTrip, driver: driver, onBack: back, onSaved: tripSaved)
+        case .addDirection:
+            // Reached from the Routes / Moslar tabs, which are gated until approval (Q96).
+            AddDirectionView(model: directions, geo: feed, onBack: back) {
+                back()
+                tab = .routes
+            }
+        case .directionOffer(let id):
+            if let model = directions.offer(id) {
+                DirectionOfferView(model: model, onBack: back, onSent: directionOfferSent)
+            }
         case .feedEnd(let origin):
             FeedEndPickerView(feed: feed, origin: origin, onDone: back)
         case .savedRoutes:

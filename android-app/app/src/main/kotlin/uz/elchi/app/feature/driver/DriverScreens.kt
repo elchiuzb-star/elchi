@@ -109,9 +109,13 @@ fun DriverShell(
     // Back on a tab (or onto another one): its list may have changed on another screen.
     LaunchedEffect(tab) {
         when (tab) {
-            DriverTab.ROUTES -> work.trips.refresh()
+            DriverTab.ROUTES -> {
+                work.trips.refresh()
+                work.directions.refresh()
+            }
             DriverTab.MATCHES -> {
                 work.feed.refresh()
+                work.directions.refresh()
                 // Design 07 §5.7 / §0.2: "already offered" on the cards and the pill's counter count.
                 work.proposals.refresh(ProposalTab.OPEN)
                 work.proposals.refresh(ProposalTab.ACCEPTED)
@@ -132,15 +136,20 @@ fun DriverShell(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 DriverTab.HOME -> DriverHomeTab(driver, inbox, work, nav, onMatches = { onTab(DriverTab.MATCHES) })
-                DriverTab.ROUTES -> GatedTab(driver, t(R.string.driverRoutes_title), nav, onPlus = nav.onAddTrip, onRefresh = work.trips::refresh) {
-                    TripsList(work.trips, onAdd = nav.onAddTrip, onTrip = nav.onTrip, tracker = work.tracker)
+                // ADR-0027 (Q150): the driver's directions first; the trips the system made from them below (Q148).
+                DriverTab.ROUTES -> GatedTab(driver, t(R.string.driverRoutes_title), nav, onPlus = nav.onAddDirection, onRefresh = { work.trips.refresh(); work.directions.refresh() }) {
+                    DirectionsBody(
+                        work.directions, work.trips, work.tracker,
+                        onAdd = nav.onAddDirection, onFeed = nav.onDirectionFeed, onTrip = nav.onTrip, onAddTrip = nav.onAddTrip,
+                    )
                 }
                 DriverTab.MATCHES -> GatedTab(
-                    driver, t(R.string.driverFeed_title), nav, onRefresh = work.feed::refresh,
+                    driver, t(R.string.driverFeed_title), nav, onRefresh = { work.feed.refresh(); work.directions.refresh() },
                     // Design 07 §0.2: the "Takliflarim" pill with the client-countered count.
                     action = { ProposalsPill(work.proposals, nav.onProposals) },
                 ) {
-                    FeedBody(work.feed, onSaved = nav.onSavedSearches, onOffer = nav.onOffer, proposals = work.proposals, onThread = nav.onThread, trips = work.trips, tracker = work.tracker)
+                    // ADR-0027 (Q151): the direction's requests first, the corridor search as the secondary view.
+                    MatchesBody(work, nav)
                 }
                 // Not gated (design 06 §0.3, D16): a driver blocked while holding bookings still sees and serves them.
                 DriverTab.ORDERS -> OrdersTab(driver, work, nav)
@@ -181,6 +190,8 @@ class DriverWork(
     val bookings: DriverBookingsViewModel,
     val stats: DriverStatsViewModel,
     val tracker: uz.elchi.app.gps.DriverTracker,
+    /** ADR-0027: the driver's directions and the chosen one's requests. */
+    val directions: DirectionsViewModel,
 )
 
 /** 70dp bar, rounded top, the current tab in brand blue with a heavier label. */

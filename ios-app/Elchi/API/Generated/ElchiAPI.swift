@@ -482,6 +482,77 @@ public struct ElchiAPI: Sendable {
         )
     }
 
+    /// Create Driver Direction
+    ///
+    /// Q150: the driver names only "where from -> where to"; the server finds the road and keeps the direction.
+    ///
+    /// ``409 ROUTE_MISMATCH`` (``no_corridor_serves_direction``) is the product's "no ELCHI road here yet" answer.
+    public func createDriverDirection(body: DriverDirectionCreate, idempotencyKey: String) async throws -> APIResult<DriverDirectionDTO> {
+        try await transport.send(
+            method: "POST",
+            path: "/driver-directions",
+            query: [],
+            body: body,
+            idempotencyKey: idempotencyKey,
+            as: DriverDirectionDTO.self
+        )
+    }
+
+    /// Get Driver Direction
+    public func getDriverDirection(directionId: String) async throws -> APIResult<DriverDirectionDTO> {
+        try await transport.send(
+            method: "GET",
+            path: "/driver-directions/\(directionId)",
+            query: [],
+            body: Optional<JSONValue>.none,
+            idempotencyKey: nil,
+            as: DriverDirectionDTO.self
+        )
+    }
+
+    /// Patch Driver Direction
+    public func patchDriverDirection(directionId: String, body: DriverDirectionPatch) async throws -> APIResult<DriverDirectionDTO> {
+        try await transport.send(
+            method: "PATCH",
+            path: "/driver-directions/\(directionId)",
+            query: [],
+            body: body,
+            idempotencyKey: nil,
+            as: DriverDirectionDTO.self
+        )
+    }
+
+    /// Offer From Direction
+    ///
+    /// Q152: offer on a request from a direction - the system takes, re-times or plans the trip, then proposes.
+    ///
+    /// ``409 TIME_WINDOW_CONFLICT`` with ``details.eta`` means the car would be there at another time; resend with
+    /// ``pickup_at`` to make it a time proposal (Q153), which the client accepts or not.
+    public func offerFromDirection(directionId: String, body: DirectionOfferCreate, idempotencyKey: String) async throws -> APIResult<DirectionOfferDTO> {
+        try await transport.send(
+            method: "POST",
+            path: "/driver-directions/\(directionId)/offers",
+            query: [],
+            body: body,
+            idempotencyKey: idempotencyKey,
+            as: DirectionOfferDTO.self
+        )
+    }
+
+    /// List Direction Requests
+    ///
+    /// Q151: client requests along the driver's direction - on the active trip's time, or planned around the client.
+    public func listDirectionRequests(directionId: String, serviceType: ServiceType, dateFrom: String, dateTo: String) async throws -> APIResult<DirectionRequestsDTO> {
+        try await transport.send(
+            method: "GET",
+            path: "/driver-directions/\(directionId)/requests",
+            query: [("service_type", serviceType), ("date_from", dateFrom), ("date_to", dateTo)],
+            body: Optional<JSONValue>.none,
+            idempotencyKey: nil,
+            as: DirectionRequestsDTO.self
+        )
+    }
+
     /// List Events
     public func listEvents(after: String? = nil, limit: Int? = nil) async throws -> APIResult<[EventDTO]> {
         try await transport.send(
@@ -715,6 +786,18 @@ public struct ElchiAPI: Sendable {
             body: Optional<JSONValue>.none,
             idempotencyKey: nil,
             as: CapabilitiesDTO.self
+        )
+    }
+
+    /// List My Driver Directions
+    public func listMyDriverDirections(includeArchived: Bool? = nil) async throws -> APIResult<[DriverDirectionDTO]> {
+        try await transport.send(
+            method: "GET",
+            path: "/me/driver-directions",
+            query: [("include_archived", includeArchived)],
+            body: Optional<JSONValue>.none,
+            idempotencyKey: nil,
+            as: [DriverDirectionDTO].self
         )
     }
 

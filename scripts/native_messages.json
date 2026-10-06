@@ -2309,5 +2309,10 @@
     "uz": "Qarshi taklif rad etildi",
     "ru": "Встречное предложение отклонено",
     "_why": "BOSQICH 07 design (Haydovchi Safar), DESIGN07-DIFF.md."
+  },
+  "dir.archiveConfirm": {
+    "uz": "{title} yo'nalishini o'chirasizmi?",
+    "ru": "Удалить направление {title}?",
+    "_why": "ADR-0027 native: confirm before archiving a direction (the web archives without a dialog)."
   }
 }

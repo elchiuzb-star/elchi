@@ -177,13 +177,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановок: {stops} · {km} км · {hours} ч"
+            "value": "{km} км · {hours} ч"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "{stops} bekat · {km} km · {hours} soat"
+            "value": "{km} km · {hours} soat"
           }
         }
       }
@@ -269,6 +269,176 @@
           "stringUnit": {
             "state": "translated",
             "value": "Avtomobilni tanlang"
+          }
+        }
+      }
+    },
+    "admin.dir.archivedStatus": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O'chirilgan"
+          }
+        }
+      }
+    },
+    "admin.dir.driver": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Водитель"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi"
+          }
+        }
+      }
+    },
+    "admin.dir.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направлений нет"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish yo'q"
+          }
+        }
+      }
+    },
+    "admin.dir.ends": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish"
+          }
+        }
+      }
+    },
+    "admin.dir.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направления, указанные водителями. Поездки система составляет из предложений клиентам (ADR-0027)."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchilar kiritgan yo'nalishlar. Safarni tizim mijozlarga berilgan takliflardan tuzadi (ADR-0027)."
+          }
+        }
+      }
+    },
+    "admin.dir.refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yangilash"
+          }
+        }
+      }
+    },
+    "admin.dir.status": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Статус"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Holat"
+          }
+        }
+      }
+    },
+    "admin.dir.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направления водителей"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi yo'nalishlari"
+          }
+        }
+      }
+    },
+    "admin.dir.trip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текущая поездка"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joriy safar"
+          }
+        }
+      }
+    },
+    "admin.nav.driverDirections": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направления"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalishlar"
           }
         }
       }
@@ -1894,13 +2064,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Водитель на остановке"
+            "value": "Водитель на месте"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Haydovchi bekatda"
+            "value": "Haydovchi yetib keldi"
           }
         }
       }
@@ -2115,13 +2285,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Выбранная остановка"
+            "value": "Выбранное место"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tanlangan bekat"
+            "value": "Belgilangan joy"
           }
         }
       }
@@ -11425,6 +11595,924 @@
         }
       }
     },
+    "dir.added": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направление добавлено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish qo'shildi"
+          }
+        }
+      }
+    },
+    "dir.archive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O'chirish"
+          }
+        }
+      }
+    },
+    "dir.archiveConfirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить направление {title}?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{title} yo'nalishini o'chirasizmi?"
+          }
+        }
+      }
+    },
+    "dir.archived": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направление удалено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish o'chirildi"
+          }
+        }
+      }
+    },
+    "dir.bid.planned": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Система запланирует выезд на {time}."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tizim safarni {time} da jo'nashga rejalashtiradi."
+          }
+        }
+      }
+    },
+    "dir.bid.proposeTime": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложить {time}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{time} ni taklif qilish"
+          }
+        }
+      }
+    },
+    "dir.bid.timeProposal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Машина будет в {time}. Клиент просил {start} – {end} — это будет предложение времени."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mashina {time} da yetadi. Mijoz {start} – {end} so'ragan — bu vaqt taklifi bo'ladi."
+          }
+        }
+      }
+    },
+    "dir.bid.tooFar": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Машина будет у клиента слишком далеко от запрошенного времени. Предложить время можно не более чем на {early} ч раньше или {late} ч позже."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mashina bu mijozga u so'ragan vaqtdan juda uzoqda yetadi. Vaqt taklifi ko'pi bilan {early} soat oldin yoki {late} soat keyin bo'lishi mumkin."
+          }
+        }
+      }
+    },
+    "dir.bid.tripCreated": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложение отправлено. Выезд запланирован на {time}."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklif yuborildi. Safar {time} da jo'nashga rejalashtirildi."
+          }
+        }
+      }
+    },
+    "dir.bid.tripRetimed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложение отправлено. Время поездки изменено на {time}."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklif yuborildi. Safar vaqti {time} ga o'zgartirildi."
+          }
+        }
+      }
+    },
+    "dir.capacity": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Мест: {seats} · груз до {kg} кг"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{seats} o'rin · {kg} kg yuk"
+          }
+        }
+      }
+    },
+    "dir.card.asked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент просил: {start} – {end}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz so'ragan: {start} – {end}"
+          }
+        }
+      }
+    },
+    "dir.card.departure": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выезд: {time}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jo'nash: {time}"
+          }
+        }
+      }
+    },
+    "dir.card.eta": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Машина будет: {time}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mashina yetadi: {time}"
+          }
+        }
+      }
+    },
+    "dir.card.myOffer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше предложение отправлено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklifingiz yuborilgan"
+          }
+        }
+      }
+    },
+    "dir.day.today": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сегодня"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bugun"
+          }
+        }
+      }
+    },
+    "dir.day.tomorrow": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Завтра"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ertaga"
+          }
+        }
+      }
+    },
+    "dir.day.week": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 дней"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 kun"
+          }
+        }
+      }
+    },
+    "dir.district": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Район"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tuman"
+          }
+        }
+      }
+    },
+    "dir.districtPlaceholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите район"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tumanni tanlang"
+          }
+        }
+      }
+    },
+    "dir.districtSearch": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск по районам"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tuman bo'yicha qidirish"
+          }
+        }
+      }
+    },
+    "dir.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направлений пока нет"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hali yo'nalish yo'q"
+          }
+        }
+      }
+    },
+    "dir.emptyHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Например: Ташкент → Карши. Заказы по пути тоже будут видны."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masalan: Toshkent → Qarshi. Yo'l bo'yidagi buyurtmalar ham ko'rinadi."
+          }
+        }
+      }
+    },
+    "dir.exists": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это направление уже добавлено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu yo'nalish allaqachon qo'shilgan"
+          }
+        }
+      }
+    },
+    "dir.feedEmpty": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На эти дни подходящих заказов нет"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu kunlarda mos buyurtma yo'q"
+          }
+        }
+      }
+    },
+    "dir.feedPick": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish"
+          }
+        }
+      }
+    },
+    "dir.formHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите только направление. Поездку и время выезда система составит сама по заявкам клиентов."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faqat yo'nalishni kiriting. Safar va jo'nash vaqtini tizim mijozlar so'roviga qarab o'zi tuzadi."
+          }
+        }
+      }
+    },
+    "dir.group.fits": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подходит к вашей поездке"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safaringizga mos"
+          }
+        }
+      }
+    },
+    "dir.group.fitsNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Машина будет у клиента в запрошенное время."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mashina mijozga u so'ragan vaqtda yetadi."
+          }
+        }
+      }
+    },
+    "dir.group.new": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для новой поездки"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yangi safar uchun"
+          }
+        }
+      }
+    },
+    "dir.group.newNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Первое предложение запланирует поездку под время этого клиента."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Birinchi taklif safarni shu mijoz vaqtiga rejalashtiradi."
+          }
+        }
+      }
+    },
+    "dir.group.time": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Другое время"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vaqti boshqa"
+          }
+        }
+      }
+    },
+    "dir.group.timeNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент просил другое время. Ваше предложение будет предложением времени — бронь только с согласия клиента."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz boshqa vaqt so'ragan. Taklifingiz vaqt taklifi bo'ladi — mijoz rozi bo'lsagina bron qilinadi."
+          }
+        }
+      }
+    },
+    "dir.noDirections": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала добавьте направление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avval yo'nalish qo'shing"
+          }
+        }
+      }
+    },
+    "dir.noDirectionsHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавьте направление — заказы по пути появятся здесь, а поездку система составит сама."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish qo'shsangiz, yo'l bo'yidagi buyurtmalar shu yerda chiqadi va safarni tizim o'zi tuzadi."
+          }
+        }
+      }
+    },
+    "dir.noRoad": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом направлении пока нет маршрута ELCHI. Попробуйте другой район."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu yo'nalishda hali ELCHI yo'li yo'q. Boshqa tumanni tanlab ko'ring."
+          }
+        }
+      }
+    },
+    "dir.noTrip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поездки пока нет — ваше первое предложение запланирует её"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar hali yo'q — birinchi taklifingiz safarni rejalashtiradi"
+          }
+        }
+      }
+    },
+    "dir.openRequests": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подходящие заказы"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mos buyurtmalar"
+          }
+        }
+      }
+    },
+    "dir.passed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы уже проехали это место"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu joydan o'tib ketdingiz"
+          }
+        }
+      }
+    },
+    "dir.pause": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приостановить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To'xtatish"
+          }
+        }
+      }
+    },
+    "dir.paused": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направление приостановлено — заказы не показываются."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu yo'nalish to'xtatilgan — buyurtmalar ko'rsatilmaydi."
+          }
+        }
+      }
+    },
+    "dir.region": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Область"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viloyat"
+          }
+        }
+      }
+    },
+    "dir.regionPlaceholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите область"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viloyatni tanlang"
+          }
+        }
+      }
+    },
+    "dir.resume": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Возобновить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faollashtirish"
+          }
+        }
+      }
+    },
+    "dir.save": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить направление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalishni saqlash"
+          }
+        }
+      }
+    },
+    "dir.seatsBooked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "занято мест: {seats}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{seats} o'rin band"
+          }
+        }
+      }
+    },
+    "dir.statusActive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Активно"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faol"
+          }
+        }
+      }
+    },
+    "dir.statusPaused": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приостановлено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To'xtatilgan"
+          }
+        }
+      }
+    },
+    "dir.trip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поездка: {date} · {status} · занято мест: {seats}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar: {date} · {status} · {seats} o'rin band"
+          }
+        }
+      }
+    },
+    "dir.tripsHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поездки система составляет из ваших предложений. Посадка, выезд и завершение — здесь."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safarlarni tizim takliflaringizdan tuzadi. Bort, jo'nash va yakunlash shu yerda."
+          }
+        }
+      }
+    },
+    "dir.tripsTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Мои поездки"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safarlarim"
+          }
+        }
+      }
+    },
+    "dir.updated": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Направление обновлено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish yangilandi"
+          }
+        }
+      }
+    },
+    "dir.via": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "через {names}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{names} orqali"
+          }
+        }
+      }
+    },
+    "dir.wholeCity": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Весь город"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Butun shahar"
+          }
+        }
+      }
+    },
     "direction.from": {
       "extractionState": "manual",
       "localizations": {
@@ -15562,13 +16650,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановка высадки"
+            "value": "Место высадки"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Yetkazish bekati"
+            "value": "Tushirish joyi"
           }
         }
       }
@@ -15715,13 +16803,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановка посадки"
+            "value": "Место посадки"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Olib ketish bekati"
+            "value": "Olib ketish joyi"
           }
         }
       }
@@ -15953,13 +17041,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Если выбрать район, будут видны объявления со всех подтверждённых остановок этого района."
+            "value": "Если выбрать район, будут видны все объявления из этого района."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tuman tanlansa, shu tumandagi barcha tasdiqlangan bekatlarning e'lonlari ko'rinadi."
+            "value": "Tuman tanlansa, shu tumandan chiqadigan barcha e'lonlar ko'rinadi."
           }
         }
       }
@@ -17619,13 +18707,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "{date} · Остановок: {stops} · Мест: {seats}"
+            "value": "{date} · Мест: {seats}"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "{date} · {stops} bekat · {seats} o'rin"
+            "value": "{date} · {seats} o'rin"
           }
         }
       }
@@ -19483,6 +20571,23 @@
         }
       }
     },
+    "error.ROUTE_CHANGED": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Маршрут или время поездки изменились. Обновите предложение."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safar marshruti yoki vaqti o'zgardi. Taklifni yangilang."
+          }
+        }
+      }
+    },
     "error.ROUTE_MISMATCH": {
       "extractionState": "manual",
       "localizations": {
@@ -19540,13 +20645,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Маршрут не рассчитан — показаны только подтверждённые остановки"
+            "value": "Маршрут не рассчитан — показаны только места на утверждённых направлениях"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Marshrut hisoblanmadi — faqat tasdiqlangan bekatlar ko'rsatilmoqda"
+            "value": "Marshrut hisoblanmadi — faqat tasdiqlangan yo'nalishlardagi joylar ko'rsatilmoqda"
           }
         }
       }
@@ -19812,13 +20917,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Есть брони — остановки изменить нельзя"
+            "value": "Есть брони — маршрут поездки изменить нельзя"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bronlar bor — bekatlarni o'zgartirib bo'lmaydi"
+            "value": "Bronlar bor — safar yo'nalishini o'zgartirib bo'lmaydi"
           }
         }
       }
@@ -20084,13 +21189,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Между этими остановками нет утверждённого направления."
+            "value": "Между этими местами нет утверждённого направления."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bu ikki bekat orasida tasdiqlangan yo'nalish yo'q."
+            "value": "Bu ikki joy orasida tasdiqlangan yo'nalish yo'q."
           }
         }
       }
@@ -20186,13 +21291,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановки отправления и доставки не могут совпадать."
+            "value": "Места отправления и доставки не могут совпадать."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Olib ketish va yetkazish bekati bir xil bo'lishi mumkin emas."
+            "value": "Olib ketish va yetkazish joyi bir xil bo'lishi mumkin emas."
           }
         }
       }
@@ -20577,13 +21682,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Место высадки в том же районе, но на другой остановке."
+            "value": "Место высадки в том же районе, но в другой точке."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tushirish joyi shu tumanda, lekin boshqa bekatda."
+            "value": "Tushirish joyi shu tumanda, lekin boshqa nuqtada."
           }
         }
       }
@@ -20747,13 +21852,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Место посадки в том же районе, но на другой остановке."
+            "value": "Место посадки в том же районе, но в другой точке."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Olib ketish joyi shu tumanda, lekin boshqa bekatda."
+            "value": "Olib ketish joyi shu tumanda, lekin boshqa nuqtada."
           }
         }
       }
@@ -21614,13 +22719,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановка доставки"
+            "value": "Место доставки"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Yetkazish bekati"
+            "value": "Yetkazish joyi"
           }
         }
       }
@@ -21699,13 +22804,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановка отправления"
+            "value": "Место отправления"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Olib ketish bekati"
+            "value": "Olib ketish joyi"
           }
         }
       }
@@ -22940,13 +24045,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сначала выберите регион, затем укажете район и остановку."
+            "value": "Сначала выберите регион, затем район и отметите место на карте."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avval hududni tanlang, keyin tuman va bekatni belgilaysiz."
+            "value": "Avval hududni tanlang, keyin tumanni va xaritada joyni belgilaysiz."
           }
         }
       }
@@ -23756,13 +24861,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Совпадения рассчитаны по подтверждённым остановкам. Заезд водителя в сторону не рассчитывался — точное место встречи вы согласуете в переписке по предложению."
+            "value": "Совпадения рассчитаны по утверждённому направлению. Точное место встречи вы согласуете в чате брони."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mosliklar tasdiqlangan bekatlar bo'yicha hisoblangan. Haydovchining yo'ldan chetga chiqishi hisoblanmagan — aniq uchrashuv joyini taklif yozishmasida kelishasiz."
+            "value": "Mosliklar tasdiqlangan yo'nalish bo'yicha hisoblangan. Aniq uchrashuv joyini bron chatida kelishasiz."
           }
         }
       }
@@ -23790,13 +24895,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановка совпадает"
+            "value": "Точное направление"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bekat mos"
+            "value": "Aniq yo'nalish"
           }
         }
       }
@@ -23824,13 +24929,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ближайшая остановка"
+            "value": "Рядом"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Yaqin bekat"
+            "value": "Yaqin joy"
           }
         }
       }
@@ -25042,6 +26147,23 @@
         }
       }
     },
+    "offer.timeProposal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Водитель предлагает забрать в {time} (вы просили {start} – {end})"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haydovchi {time} da olishni taklif qilmoqda (siz {start} – {end} so'ragansiz)"
+          }
+        }
+      }
+    },
     "offerBid.departure": {
       "extractionState": "manual",
       "localizations": {
@@ -25677,13 +26799,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановки не могут совпадать."
+            "value": "Места не могут совпадать."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ikki bekat bir xil bo'lishi mumkin emas."
+            "value": "Ikki joy bir xil bo'lishi mumkin emas."
           }
         }
       }
@@ -25779,13 +26901,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Выберите остановку"
+            "value": "Выберите место"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bekatni tanlang"
+            "value": "Joyni tanlang"
           }
         }
       }
@@ -25881,13 +27003,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Окно вокруг запланированного времени прибытия на эту остановку. Клиент отправляет предложение в рамках этого окна."
+            "value": "Окно вокруг запланированного времени прибытия в это место. Клиент отправляет предложение в рамках этого окна."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Safar shu bekatga rejalashtirilgan vaqt atrofida. Mijoz shu oynada taklif yuboradi."
+            "value": "Safar shu joyga rejalashtirilgan vaqt atrofida. Mijoz shu oynada taklif yuboradi."
           }
         }
       }
@@ -26918,13 +28040,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Подтверждённая остановка · {where}"
+            "value": "Отмеченное место · {where}"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tasdiqlangan bekat · {where}"
+            "value": "Belgilangan joy · {where}"
           }
         }
       }
@@ -31055,7 +32177,7 @@
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bekatdaman"
+            "value": "Keldim, joydaman"
           }
         }
       }
@@ -31072,7 +32194,7 @@
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bekatni aniqlashtiraylik"
+            "value": "Joyni aniqlashtiraylik"
           }
         }
       }
@@ -31474,13 +32596,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Карта не загрузилась — направление показано списком остановок."
+            "value": "Карта не загрузилась — направление показано текстом."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Xarita yuklanmadi — yo'nalish bekatlar ro'yxati bilan ko'rsatilmoqda."
+            "value": "Xarita yuklanmadi — yo'nalish matn bilan ko'rsatilmoqda."
           }
         }
       }
@@ -31508,13 +32630,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ключ карты не указан — направление показано списком остановок."
+            "value": "Ключ карты не указан — направление показано текстом."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Xarita kaliti kiritilmagan — yo'nalish bekatlar ro'yxati bilan ko'rsatilmoqda."
+            "value": "Xarita kaliti kiritilmagan — yo'nalish matn bilan ko'rsatilmoqda."
           }
         }
       }
@@ -31661,13 +32783,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Подтверждённое направление и его остановки."
+            "value": "Утверждённое направление и отмеченные вами точки A и B."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tasdiqlangan yo'nalish va uning bekatlari."
+            "value": "Tasdiqlangan yo'nalish va siz belgilagan A va B nuqtalar."
           }
         }
       }
@@ -32902,13 +34024,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Подтверждённая остановка не найдена. Попробуйте другое название."
+            "value": "Место не найдено. Попробуйте другое название."
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tasdiqlangan bekat topilmadi. Boshqa nom bilan qidiring."
+            "value": "Joy topilmadi. Boshqa nom bilan qidiring."
           }
         }
       }
@@ -32936,13 +34058,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Поиск остановки"
+            "value": "Поиск места"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bekat qidirish"
+            "value": "Joy qidirish"
           }
         }
       }
@@ -34290,6 +35412,23 @@
         }
       }
     },
+    "tripDetail.alongTheRoad": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "По пути и примерное время"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'l bo'yi va taxminiy vaqt"
+          }
+        }
+      }
+    },
     "tripDetail.arrival": {
       "extractionState": "manual",
       "localizations": {
@@ -34806,13 +35945,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Остановка {seq}"
+            "value": "Точка {seq}"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "{seq}-bekat"
+            "value": "{seq}-nuqta"
           }
         }
       }
@@ -35571,13 +36710,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Найти маршрут по названию остановки"
+            "value": "Найти маршрут по названию места"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bekat nomi bo'yicha marshrut topish"
+            "value": "Joy nomi bo'yicha marshrut topish"
           }
         }
       }
@@ -36064,13 +37203,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Маршрут не измерен — только подтверждённые остановки"
+            "value": "Маршрут не измерен — только утверждённые направления"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "Marshrut o'lchanmadi — faqat tasdiqlangan bekatlar"
+            "value": "Marshrut o'lchanmadi — faqat tasdiqlangan yo'nalishlar"
           }
         }
       }

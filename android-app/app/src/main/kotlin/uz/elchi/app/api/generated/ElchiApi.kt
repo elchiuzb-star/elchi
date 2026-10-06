@@ -520,6 +520,82 @@ class ElchiApi(private val transport: ApiTransport) {
         )
 
     /**
+     * Create Driver Direction
+     *
+     * Q150: the driver names only "where from -> where to"; the server finds the road and keeps the direction.
+     *
+     * ``409 ROUTE_MISMATCH`` (``no_corridor_serves_direction``) is the product's "no ELCHI road here yet" answer.
+     */
+    suspend fun createDriverDirection(body: DriverDirectionCreate, idempotencyKey: String): ApiResult<DriverDirectionDTO> =
+        transport.send(
+            method = "POST",
+            path = "/driver-directions",
+            query = listOf(),
+            body = transport.encode(DriverDirectionCreate.serializer(), body),
+            idempotencyKey = idempotencyKey,
+            result = DriverDirectionDTO.serializer(),
+        )
+
+    /**
+     * Get Driver Direction
+     */
+    suspend fun getDriverDirection(directionId: String): ApiResult<DriverDirectionDTO> =
+        transport.send(
+            method = "GET",
+            path = "/driver-directions/${directionId}",
+            query = listOf(),
+            body = null,
+            idempotencyKey = null,
+            result = DriverDirectionDTO.serializer(),
+        )
+
+    /**
+     * Patch Driver Direction
+     */
+    suspend fun patchDriverDirection(directionId: String, body: DriverDirectionPatch): ApiResult<DriverDirectionDTO> =
+        transport.send(
+            method = "PATCH",
+            path = "/driver-directions/${directionId}",
+            query = listOf(),
+            body = transport.encode(DriverDirectionPatch.serializer(), body),
+            idempotencyKey = null,
+            result = DriverDirectionDTO.serializer(),
+        )
+
+    /**
+     * Offer From Direction
+     *
+     * Q152: offer on a request from a direction - the system takes, re-times or plans the trip, then proposes.
+     *
+     * ``409 TIME_WINDOW_CONFLICT`` with ``details.eta`` means the car would be there at another time; resend with
+     * ``pickup_at`` to make it a time proposal (Q153), which the client accepts or not.
+     */
+    suspend fun offerFromDirection(directionId: String, body: DirectionOfferCreate, idempotencyKey: String): ApiResult<DirectionOfferDTO> =
+        transport.send(
+            method = "POST",
+            path = "/driver-directions/${directionId}/offers",
+            query = listOf(),
+            body = transport.encode(DirectionOfferCreate.serializer(), body),
+            idempotencyKey = idempotencyKey,
+            result = DirectionOfferDTO.serializer(),
+        )
+
+    /**
+     * List Direction Requests
+     *
+     * Q151: client requests along the driver's direction - on the active trip's time, or planned around the client.
+     */
+    suspend fun listDirectionRequests(directionId: String, serviceType: ServiceType, dateFrom: String, dateTo: String): ApiResult<DirectionRequestsDTO> =
+        transport.send(
+            method = "GET",
+            path = "/driver-directions/${directionId}/requests",
+            query = listOf("service_type" to serviceType, "date_from" to dateFrom, "date_to" to dateTo),
+            body = null,
+            idempotencyKey = null,
+            result = DirectionRequestsDTO.serializer(),
+        )
+
+    /**
      * List Events
      */
     suspend fun listEvents(after: String? = null, limit: Long? = null): ApiResult<List<EventDTO>> =
@@ -772,6 +848,19 @@ class ElchiApi(private val transport: ApiTransport) {
             body = null,
             idempotencyKey = null,
             result = CapabilitiesDTO.serializer(),
+        )
+
+    /**
+     * List My Driver Directions
+     */
+    suspend fun listMyDriverDirections(includeArchived: Boolean? = null): ApiResult<List<DriverDirectionDTO>> =
+        transport.send(
+            method = "GET",
+            path = "/me/driver-directions",
+            query = listOf("include_archived" to includeArchived),
+            body = null,
+            idempotencyKey = null,
+            result = ListSerializer(DriverDirectionDTO.serializer()),
         )
 
     /**

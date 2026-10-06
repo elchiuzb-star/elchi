@@ -257,6 +257,7 @@ fun ProposalsScreen(vm: OrdersViewModel, ru: Boolean, onBack: () -> Unit, onAcce
                                 thread, b, handlers, now, ru,
                                 previousTotal = s.previousTotals[thread.id],
                                 route = thread.currentVersion?.let { "${OrderRules.shortEnd(it.pickupStop, it.pickupPoint, ru)} → ${OrderRules.shortEnd(it.dropoffStop, it.dropoffPoint, ru)}" },
+                                requestWindow = s.listings.items.firstOrNull { it.id == thread.listingId }?.let { it.departureWindowStart to it.departureWindowEnd },
                             )
                         }
                         item { Note(t(R.string.listingBids_identityHidden), tone = Tone.BLUE) }
@@ -267,5 +268,8 @@ fun ProposalsScreen(vm: OrdersViewModel, ru: Boolean, onBack: () -> Unit, onAcce
         }
     }
     val confirming = (s.proposals as? Load.Ready)?.value?.firstOrNull { it.id == b.confirming }
-    if (confirming != null) AcceptDialogFor(confirming, b, onConfirm = { vm.board.accept(confirming) }, onDismiss = vm.board::dismissAccept)
+    if (confirming != null) AcceptDialogFor(
+        confirming, b, onConfirm = { vm.board.accept(confirming) }, onDismiss = vm.board::dismissAccept,
+        requestWindow = s.listings.items.firstOrNull { it.id == confirming.listingId }?.let { it.departureWindowStart to it.departureWindowEnd },
+    )
 }

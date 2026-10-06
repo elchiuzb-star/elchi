@@ -179,7 +179,7 @@ struct ProposalsView: View {
         .task { await tick() }
         .overlay {
             if let thread = accepting {
-                AcceptDialog(thread: thread, offers: model.offers, onClose: { accepting = nil }) { onAccepted(thread.listingId, $0) }
+                AcceptDialog(thread: thread, listing: model.listings[thread.listingId], offers: model.offers, onClose: { accepting = nil }) { onAccepted(thread.listingId, $0) }
             }
         }
     }

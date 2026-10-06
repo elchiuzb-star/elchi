@@ -89,6 +89,8 @@ internal fun OfferCard(
     route: String? = null,
     listingDay: String? = null,
     paused: Boolean = false,
+    /** The client's own window (start, end): a driver's time proposal is read against it (ADR-0027, Q153). */
+    requestWindow: Pair<String?, String?>? = null,
 ) {
     val c = Elchi.colors
     val version = thread.currentVersion
@@ -131,7 +133,7 @@ internal fun OfferCard(
                 )
             }
         }
-        OfferFacts(thread, actions, now, ru, closed, driverCountered, previousTotal, route, listingDay)
+        OfferFacts(thread, actions, now, ru, closed, driverCountered, previousTotal, route, listingDay, requestWindow)
         if (version == null || closed) return@Column
         val busy = board.busyThread == thread.id
         val otherBusy = board.busyThread != null && !busy
@@ -204,10 +206,12 @@ private fun OfferFacts(
     previousTotal: Long?,
     route: String?,
     listingDay: String?,
+    requestWindow: Pair<String?, String?>?,
 ) {
     val c = Elchi.colors
     val version = thread.currentVersion
     val warn = c.tone(Tone.WARN).fg
+    val proposal = timeProposalText(version, requestWindow)
     val body = if (c.isDark) c.text.copy(alpha = 0.82f) else Color(0xFF3A4556)
     val lines = buildList {
         route?.let { add(it to c.text) }
@@ -215,6 +219,8 @@ private fun OfferFacts(
             val window = OrderRules.offerWindow(version.pickupWindowStart, version.pickupWindowEnd, listingDay)
             val summary = thread.driverSummary?.let { driverSummary(it) }
             listOfNotNull(window, summary).joinToString(" · ").takeIf { it.isNotEmpty() }?.let { add(it to body) }
+            // Q153: the driver offers another pickup time than the client asked for.
+            proposal?.let { add(it to warn) }
             // Taksi: the offer is per person - "2 × 160 000 so'm" under the total.
             if (version.priceBasis == PriceBasis.PER_SEAT) add(seatsPrice(version.quantity, version.unitPriceMinor) to body)
             version.message?.takeIf { it.isNotBlank() }?.let { add("“${it.trim()}”" to c.text) }

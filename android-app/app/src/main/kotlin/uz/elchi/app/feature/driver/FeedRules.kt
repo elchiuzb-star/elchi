@@ -127,9 +127,10 @@ object FeedRules {
         else -> null
     }
 
-    /** A card's end: the stop, else the district of the map point - never the street address (Q43 spirit). */
+    /** A card's end: the stop's district, else the district of the map point - never the street address (Q43 spirit). */
     fun endName(stop: StopRefDTO?, point: PointEndDTO?, ru: Boolean): String =
-        stop?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz } ?: point?.district?.nameUz ?: "?"
+        // Q158 (ADR-0027): a legacy stop end reads as its district, not as a stop.
+        stop?.let { TripRules.placeName(it, ru) } ?: point?.district?.nameUz ?: "?"
 
     // -- saved routes -------------------------------------------------------------------------------------------
 

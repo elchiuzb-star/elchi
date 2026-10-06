@@ -4,17 +4,21 @@ import Foundation
 extension LocaleStore {
     func stopName(_ stop: StopRefDTO) -> String { locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz }
 
-    /// `Toshkent → Samarqand`: a trip's first and last stops.
+    /// Q158 (ADR-0027): no "stop" on screen - an internal route node is named by its district (the server sends
+    /// `district_name_uz`); an older answer without it keeps the node's own name.
+    func placeName(_ stop: StopRefDTO) -> String { stop.districtNameUz ?? stopName(stop) }
+
+    /// `Chilonzor → Qarshi`: a trip's first and last places, by district (Q158).
     func route(_ trip: TripDTO) -> String {
         let stops = trip.stops.sorted { $0.seq < $1.seq }
         guard let first = stops.first, let last = stops.last else { return "?" }
-        return "\(stopName(first.stop)) → \(stopName(last.stop))"
+        return "\(placeName(first.stop)) → \(placeName(last.stop))"
     }
 
-    /// One end of a request as the feed says it: the stop, else the district of the marked place - never a street
-    /// address (the exact place is agreed in the booking chat, Q100).
+    /// One end of a request as the feed says it: the district of the stop or of the marked place - never a street
+    /// address (the exact place is agreed in the booking chat, Q100) and never a stop's name (Q158).
     func feedEnd(stop: StopRefDTO?, point: PointEndDTO?) -> String {
-        if let stop { return stopName(stop) }
+        if let stop { return placeName(stop) }
         if let district = point?.district { return district.nameUz }
         return t("app.endLabel.mapPlace")
     }

@@ -548,7 +548,7 @@ object OrderRules {
      * marked in, else its address, else - honestly - the coordinates.
      */
     fun shortEnd(stop: StopRefDTO?, point: PointEndDTO?, ru: Boolean): String =
-        stop?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz }
+        stopPlace(stop, ru)
             ?: point?.district?.nameUz
             ?: point?.address?.let(ParcelRules::withoutCountry)?.takeIf { it.isNotBlank() }
             ?: point?.let { ParcelRules.coordinates(it.lat, it.lng) }
@@ -556,11 +556,15 @@ object OrderRules {
 
     /** The full name for a detail row: the stop, the address, else the district or coordinates. */
     fun fullEnd(stop: StopRefDTO?, point: PointEndDTO?, ru: Boolean): String =
-        stop?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz }
+        stopPlace(stop, ru)
             ?: point?.address?.let(ParcelRules::withoutCountry)?.takeIf { it.isNotBlank() }
             ?: point?.district?.nameUz
             ?: point?.let { ParcelRules.coordinates(it.lat, it.lng) }
             ?: "?"
+
+    /** Q158 (ADR-0027): a legacy stop end is named by its district (no "bekat" on screen); its name only without one. */
+    private fun stopPlace(stop: StopRefDTO?, ru: Boolean): String? =
+        stop?.let { it.districtNameUz?.takeIf { d -> d.isNotBlank() } ?: if (ru) it.nameRu ?: it.nameUz else it.nameUz }
 
     fun parseInstant(value: String?): Instant? = value?.let { runCatching { Instant.parse(it) }.getOrNull() ?: runCatching { java.time.OffsetDateTime.parse(it).toInstant() }.getOrNull() }
 

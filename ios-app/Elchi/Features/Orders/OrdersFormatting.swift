@@ -2,9 +2,10 @@ import Foundation
 
 /// How the orders and offers screens say places, dates, drivers and statuses in the active language.
 extension LocaleStore {
-    /// One end of a listing, offer or booking: the stop's name, else the marked place's district, else its address.
+    /// One end of a listing, offer or booking: the stop's district (Q158), else the marked place's district, else its address.
     func endName(stop: StopRefDTO?, point: PointEndDTO?) -> String {
-        if let stop { return locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz }
+        // Q158: a legacy stop end is named by its district - ELCHI works point A -> point B, no stops on screen.
+        if let stop { return stop.districtNameUz ?? (locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz) }
         if let point { return point.district?.nameUz ?? point.address ?? GeoPoint(lat: point.lat, lng: point.lng).text }
         return "?"
     }

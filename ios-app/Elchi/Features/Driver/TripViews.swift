@@ -367,27 +367,27 @@ struct TripDetailView: View {
         .accessibilityIdentifier("elchi.trip.header")
     }
 
-    /// The stops in order with their planned time (and the ETA when the server has one).
+    /// Q158 (ADR-0027): the road as districts with the estimated time (the ETA when the server has one, else the
+    /// planned one) - never the internal route nodes. Consecutive nodes in one district read as one place.
+    @ViewBuilder
     private func stops(_ trip: TripDTO) -> some View {
-        let sorted = trip.stops.sorted { $0.seq < $1.seq }
-        return StepLadder(sorted.enumerated().map { index, stop in
-            let planned = ServerTime.parse(stop.plannedArrivalAt)
-            let eta = ServerTime.parse(stop.etaArrivalAt)
+        let places = TripPlaces.alongTheRoad(trip.stops.sorted { $0.seq < $1.seq }) { strings.placeName($0.stop) }
+        SectionTitle(strings.t("tripDetail.alongTheRoad")).accessibilityIdentifier("elchi.trip.alongTheRoad")
+        StepLadder(places.enumerated().map { index, place in
             // DESIGN07 4.2: the dots follow the trip status (the DTO has no per-stop passage).
             let state: StepLadder.Step.State = switch TripStopDot.of(index: index, status: trip.status) {
             case .done: .done
             case .current: .current
             case .ahead: .ahead
             }
-            var detail = [strings.t("tripDetail.stopSeq", ("seq", stop.seq)), planned.map(DepartureWindow.shortText)].compactMap { $0 }
-            if let eta { detail.append("ETA \(strings.clock(eta))") }
-            return StepLadder.Step(strings.stopName(stop.stop), detail: detail.joined(separator: " · "), state: state)
+            let when = ServerTime.parse(place.stop.etaArrivalAt) ?? ServerTime.parse(place.stop.plannedArrivalAt)
+            return StepLadder.Step(place.name, detail: when.map(DepartureWindow.shortText) ?? "", state: state)
         }, doneLabel: strings.t("client.tracking.stepDone"), currentLabel: strings.t("client.tracking.stepCurrent"))
     }
 
     @ViewBuilder
     private var availability: some View {
-        let names = Dictionary((model.trip.value?.stops ?? []).map { ($0.stop.id, strings.stopName($0.stop)) }, uniquingKeysWith: { a, _ in a })
+        let names = Dictionary((model.trip.value?.stops ?? []).map { ($0.stop.id, strings.placeName($0.stop)) }, uniquingKeysWith: { a, _ in a })
         ElchiCard {
             CardTitle(strings.t("tripDetail.availabilityTitle"))
             switch model.availability {
@@ -430,7 +430,9 @@ struct TripDetailView: View {
                 } else {
                     ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                         let (stop, item, pickup) = row
-                        let place = stop.stop.map(strings.stopName) ?? stop.point.map { strings.feedEnd(stop: nil, point: $0) } ?? "#\(stop.seq)"
+                        // Q158: the agreed place's address or district, else the node's district.
+                        let place = stop.point.map { $0.address?.isEmpty == false ? $0.address! : strings.feedEnd(stop: nil, point: $0) }
+                            ?? stop.stop.map(strings.placeName) ?? "#\(stop.seq)"
                         let when = ServerTime.parse(stop.plannedArrivalAt).map(strings.clock) ?? ""
                         let what = item.parcelSummary.map { "\(strings.t("tripDetail.parcel")): \($0)" }
                             ?? item.seats.map { strings.t("tripDetail.seats", ("count", $0)) } ?? ""

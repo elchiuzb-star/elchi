@@ -250,7 +250,7 @@ private fun RequestSummary(listing: ListingPublicDTO) {
 
 /** Q40/Q95: the anonymous current offers; the endpoint closed (404) → nothing shown, offering still works. */
 @Composable
-private fun RivalBoard(board: Load<BoardSummary>?, onRetry: () -> Unit) {
+internal fun RivalBoard(board: Load<BoardSummary>?, onRetry: () -> Unit) {
     val c = Elchi.colors
     when (board) {
         null -> Unit

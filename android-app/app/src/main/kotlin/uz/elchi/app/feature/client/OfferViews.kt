@@ -204,14 +204,15 @@ internal fun AcceptDialog(
 
 /** The dialog for [thread]: agreed total (never recomputed, Q90) and, with a ticked bonus, the cash to the driver. */
 @Composable
-internal fun AcceptDialogFor(thread: ProposalThreadDTO, board: OfferBoard.State, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+internal fun AcceptDialogFor(thread: ProposalThreadDTO, board: OfferBoard.State, onConfirm: () -> Unit, onDismiss: () -> Unit, requestWindow: Pair<String?, String?>? = null) {
     val version = thread.currentVersion ?: return
     val quote = version.promoQuote as? ProposalPromoClientDTO
     val rows = if (quote != null) promoRows(version.totalMinor, quote, thread.id in board.acceptBonus, offer = false)
     else listOf(MoneyRow(t(R.string.promo_line_agreedPrice), soum(version.totalMinor), strong = true))
     AcceptDialog(
         title = driverNumber(thread)?.let { t(R.string.client_accept_title, "number" to it) } ?: t(R.string.confirmDialog_selectDriver_title),
-        text = t(R.string.client_accept_text),
+        // Q153: accepting a time proposal is the consent - the confirm says which time is being agreed to.
+        text = listOfNotNull(timeProposalText(version, requestWindow), t(R.string.client_accept_text)).joinToString("\n\n"),
         rows = rows,
         confirm = t(R.string.client_accept_confirm),
         back = t(R.string.confirmDialog_back),

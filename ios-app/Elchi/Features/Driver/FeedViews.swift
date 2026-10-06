@@ -17,6 +17,10 @@ struct FeedTabView: View {
     var onProposals: () -> Void = {}
     /// "Taklifni ko'rish": the driver's thread on that request.
     var onThread: (String) -> Void = { _ in }
+    /// ADR-0027: the direction feed - the main answer, above the district search (which stays as "all requests").
+    var directions: AnyView?
+    /// Pull-to-refresh also reads the direction feed again.
+    var onRefresh: (() async -> Void)?
     let onOffer: (FeedItemDTO) -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
@@ -31,6 +35,11 @@ struct FeedTabView: View {
             if feed.passengerAllowed {
                 Segmented([(false, strings.t("driverFeed.modeParcel")), (true, strings.t("driverFeed.modeTaxi"))],
                           selected: feed.filter.passenger) { feed.filter.passenger = $0 }
+            }
+            if let directions {
+                directions
+                SectionTitle(strings.t("dir.districtSearch")).padding(.top, 6)
+                    .accessibilityIdentifier("elchi.feed.districtSearch")
             }
             RouteCard(from: end(feed.filter.origin, question: "driverFeed.from", origin: true),
                       to: end(feed.filter.destination, question: "driverFeed.to", origin: false))
@@ -51,6 +60,7 @@ struct FeedTabView: View {
         .refreshable {
             async let list: Void = self.feed.load()
             async let offers: Void = loadOffers()
+            await onRefresh?()
             _ = await (list, offers)
         }
         .task {
@@ -95,7 +105,7 @@ struct FeedTabView: View {
             Note(strings.errorText(error), tone: .err)
             ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await feed.load() } }
         case .loaded(let items)?:
-            Note(strings.t("driver.feed.stopsNote"), tone: .warn)
+            Note(strings.t("match.confirmedStopsNote"), tone: .warn)
             ForEach(feed.degraded, id: \.self) { code in
                 Text(strings.tOrNil("warning.\(code)") ?? code).font(ElchiFont.caption).foregroundStyle(c.muted)
             }
@@ -495,9 +505,44 @@ struct OfferView: View {
 
     // MARK: Blocks
 
+    private var board: some View { RivalBoardCard(board: model.board) }
+
     @ViewBuilder
-    private var board: some View {
-        if let board = model.board {
+    private var tripField: some View {
+        switch model.trips {
+        case .loading:
+            SkeletonCards(count: 1)
+        case .failed(let error):
+            Note(strings.errorText(error), tone: .err)
+        case .loaded(let list) where list.isEmpty:
+            SelectField(label: strings.t("driverBid.trip"), options: [(String, String)](), selected: nil, placeholder: strings.t("driverBid.noPlannedTrips")) { _ in }
+            Note(strings.t("driverBid.planTripFirst"), tone: .err).accessibilityIdentifier("elchi.offer.planTripFirst")
+            ElchiButton(strings.t("driver.offer.planTrip"), variant: .soft, size: .medium, icon: .plus, action: onAddTrip)
+        case .loaded(let list):
+            SelectField(label: strings.t("driverBid.trip"), options: list.map { ($0.id, "\(strings.route($0)) · \(strings.tripMeta($0))") },
+                        selected: model.tripId, placeholder: strings.t("driverBid.tripPlaceholder")) { model.choose($0) }
+            if model.tripId != nil && model.window == nil {
+                Note(strings.t("driverBid.tripWindowMismatch"), tone: .err)
+            }
+        }
+    }
+
+    private var commission: some View { CommissionCard(quote: model.quote, totalMinor: model.totalMinor) }
+
+    private func time(_ text: String) -> String { ServerTime.parse(text).map(DepartureWindow.shortText) ?? "?" }
+}
+
+
+// MARK: - Shared offer-screen blocks (the trip offer and the ADR-0027 direction offer)
+
+/// The anonymous rival board (Q40 / Q95): hidden when the endpoint is closed (nil).
+struct RivalBoardCard: View {
+    let board: Loadable<RivalBoard>?
+    @Environment(LocaleStore.self) private var strings
+    @Environment(\.elchi) private var c
+
+    var body: some View {
+        if let board {
             ElchiCard {
                 switch board {
                 case .loading:
@@ -544,30 +589,16 @@ struct OfferView: View {
         guard let count = offer.ratingCount, count > 0 else { return text }
         return strings.t("app.rivalBoard.ratings", ("bucket", text), ("count", count))
     }
+}
 
-    @ViewBuilder
-    private var tripField: some View {
-        switch model.trips {
-        case .loading:
-            SkeletonCards(count: 1)
-        case .failed(let error):
-            Note(strings.errorText(error), tone: .err)
-        case .loaded(let list) where list.isEmpty:
-            SelectField(label: strings.t("driverBid.trip"), options: [(String, String)](), selected: nil, placeholder: strings.t("driverBid.noPlannedTrips")) { _ in }
-            Note(strings.t("driverBid.planTripFirst"), tone: .err).accessibilityIdentifier("elchi.offer.planTripFirst")
-            ElchiButton(strings.t("driver.offer.planTrip"), variant: .soft, size: .medium, icon: .plus, action: onAddTrip)
-        case .loaded(let list):
-            SelectField(label: strings.t("driverBid.trip"), options: list.map { ($0.id, "\(strings.route($0)) · \(strings.tripMeta($0))") },
-                        selected: model.tripId, placeholder: strings.t("driverBid.tripPlaceholder")) { model.choose($0) }
-            if model.tripId != nil && model.window == nil {
-                Note(strings.t("driverBid.tripWindowMismatch"), tone: .err)
-            }
-        }
-    }
+/// The commission estimate for the typed total (W11): a prompt before a price, never blocking when unavailable.
+struct CommissionCard: View {
+    let quote: Loadable<app__modules__wallet__schemas__FeeQuoteDTO>?
+    let totalMinor: Int
+    @Environment(LocaleStore.self) private var strings
 
-    @ViewBuilder
-    private var commission: some View {
-        switch model.quote {
+    var body: some View {
+        switch quote {
         case nil:
             // DESIGN07 7.8: before a price, what the card will show.
             ElchiCard { CardRow(strings.t("commissionPreview.title"), strings.t("driver.offer.commissionPrompt"), first: true, placeholder: true) }
@@ -580,14 +611,12 @@ struct OfferView: View {
             ElchiCard {
                 CardRow(strings.t("commissionPreview.title"),
                         strings.t("commissionPreview.line", ("amount", strings.money(quote.commissionMinor)), ("percent", OfferBody.percent(bps: quote.feeBps)),
-                                  ("total", strings.money(model.totalMinor))),
+                                  ("total", strings.money(totalMinor))),
                         first: true, detail: strings.t("commissionPreview.note"))
             }
             .accessibilityIdentifier("elchi.offer.commission")
         }
     }
-
-    private func time(_ text: String) -> String { ServerTime.parse(text).map(DepartureWindow.shortText) ?? "?" }
 }
 
 /// A bar pill with an icon, a word and a red count (DESIGN07 0.2: "Takliflarim" on the Moslar bar).

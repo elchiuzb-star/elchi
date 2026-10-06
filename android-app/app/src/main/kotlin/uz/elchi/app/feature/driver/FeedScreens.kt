@@ -89,6 +89,8 @@ internal fun ColumnScope.FeedBody(
     /** Q148 on this tab root too (design 07 §4.9): the running trip's GPS bar. */
     trips: TripsViewModel? = null,
     tracker: uz.elchi.app.gps.DriverTracker? = null,
+    /** False when the caller draws the Taksi/Pochta toggle itself (ADR-0027: shared with the direction feed). */
+    showService: Boolean = true,
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Elchi.colors
@@ -102,7 +104,7 @@ internal fun ColumnScope.FeedBody(
         val ps by p.state.collectAsStateWithLifecycle()
         Design07Rules.myFeedOffers(ps.open, (ps.lists[ProposalTab.ACCEPTED] as? Load.Ready)?.value.orEmpty(), ps.mine)
     }.orEmpty()
-    if (s.passengerEnabled) {
+    if (showService && s.passengerEnabled) {
         Segmented(
             listOf(ServiceType.PASSENGER to t(R.string.driverFeed_modeTaxi), ServiceType.PARCEL to t(R.string.driverFeed_modeParcel)),
             f.serviceType,
@@ -131,7 +133,8 @@ internal fun ColumnScope.FeedBody(
         s.savedCount?.let { t(R.string.driver_feed_savedCount, "count" to it) } ?: t(R.string.driverFeed_savedSearches),
         onSaved, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.ARCHIVE,
     )
-    Note(t(R.string.driver_feed_stopsNote), tone = Tone.WARN)
+    // Q158: no "bekat" on screen - the matches follow the confirmed road, the meeting place is agreed in the chat.
+    Note(t(R.string.match_confirmedStopsNote), tone = Tone.WARN)
     s.degraded.forEach { code -> tOrNull("warning.$code")?.let { Note(it, tone = Tone.GRAY) } }
 
     val query = FeedRules.query(f, java.time.Instant.now())

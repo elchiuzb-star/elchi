@@ -73,6 +73,8 @@ import uz.elchi.app.session.Session
 @Serializable private data object Settings
 @Serializable private data object AccountDelete
 @Serializable private data object AddTrip
+@Serializable private data object AddDirection
+@Serializable private data class DirectionBid(val directionId: String, val listingId: String)
 @Serializable private data class TripDetail(val id: String)
 @Serializable private data object SavedSearches
 @Serializable private data class Bid(val listingId: String)
@@ -133,7 +135,12 @@ fun DriverFlow(container: AppContainer, session: Session) {
         key = "driver-stats-${session.user.id}",
         factory = viewModelFactory { initializer { DriverStatsViewModel(container.api) } },
     )
-    val work = DriverWork(trips, feed, proposals, bookings, stats, container.tracker)
+    // ADR-0027: the directions ("Yo'nalishlarim") and the requests along them.
+    val directions: DirectionsViewModel = viewModel(
+        key = "driver-directions-${session.user.id}",
+        factory = viewModelFactory { initializer { DirectionsViewModel(container.api, container.banners) } },
+    )
+    val work = DriverWork(trips, feed, proposals, bookings, stats, container.tracker, directions)
     // Q148: a trip already running when the app starts publishes again without a tap where the permission is given.
     val tripList by trips.state.collectAsStateWithLifecycle()
     val running = TripRules.trackable(tripList.list)?.id
@@ -193,6 +200,12 @@ fun DriverFlow(container: AppContainer, session: Session) {
         onBonus = { nav.navigate(DriverBonus) { launchSingleTop = true } },
         onRoutes = { tab = DriverTab.ROUTES },
         onOrders = { tab = DriverTab.ORDERS },
+        onAddDirection = { nav.navigate(AddDirection) { launchSingleTop = true } },
+        onDirectionFeed = { id ->
+            directions.select(id)
+            tab = DriverTab.MATCHES
+        },
+        onDirectionOffer = { directionId, listingId -> nav.navigate(DirectionBid(directionId, listingId)) },
     )
 
     // A link from outside (cold or warm start, or kept through sign-in, a push or the GPS notification's tap): the
@@ -296,6 +309,31 @@ fun DriverFlow(container: AppContainer, session: Session) {
                 trips.refresh()
                 nav.navigate(TripDetail(id)) { popUpTo<AddTrip> { inclusive = true } }
             })
+        }
+        composable<AddDirection> {
+            val vm: AddDirectionViewModel = viewModel(factory = viewModelFactory {
+                initializer { AddDirectionViewModel(container.api, container.banners) { driver.state.value.vehicles } }
+            })
+            AddDirectionScreen(vm = vm, onBack = { nav.popBackStack() }, onCreated = { created ->
+                directions.added(created)
+                nav.popBackStack()
+            })
+        }
+        composable<DirectionBid> { entry ->
+            val route = entry.toRoute<DirectionBid>()
+            val vm: DirectionBidViewModel = viewModel(key = "direction-bid-${route.directionId}-${route.listingId}", factory = viewModelFactory {
+                initializer {
+                    DirectionBidViewModel(container.api, container.banners, route.directionId, directions.item(route.listingId), proposals) {
+                        directions.refresh()
+                        trips.refresh()
+                    }
+                }
+            })
+            DirectionBidScreen(
+                vm = vm, driver = driver, nav = routes,
+                onBack = { nav.popBackStack() },
+                onThread = { threadId -> nav.navigate(ProposalThread(threadId)) { popUpTo<DirectionBid> { inclusive = true } } },
+            )
         }
         composable<TripDetail> { entry ->
             val id = entry.toRoute<TripDetail>().id
@@ -437,6 +475,10 @@ data class DriverNav(
     val onBonus: () -> Unit = {},
     val onRoutes: () -> Unit = {},
     val onOrders: () -> Unit = {},
+    /** ADR-0027: the direction form, a direction's requests on the Moslar tab, and an offer from a direction. */
+    val onAddDirection: () -> Unit = {},
+    val onDirectionFeed: (String) -> Unit = {},
+    val onDirectionOffer: (directionId: String, listingId: String) -> Unit = { _, _ -> },
 )
 
 /** A driver booking's model lives on its detail entry; the amendment, rating, safety and chat screens borrow it. */

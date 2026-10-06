@@ -1204,6 +1204,97 @@ public struct DeviceDTO: Codable, Hashable, Sendable {
     }
 }
 
+public struct DirectionEndDTO: Codable, Hashable, Sendable {
+    public var districtId: String?
+    public var districtNameRu: String?
+    public var districtNameUz: String?
+    public var regionId: String
+    public var regionNameRu: String?
+    public var regionNameUz: String
+
+    public init(districtId: String? = nil, districtNameRu: String? = nil, districtNameUz: String? = nil, regionId: String, regionNameRu: String? = nil, regionNameUz: String) {
+        self.districtId = districtId
+        self.districtNameRu = districtNameRu
+        self.districtNameUz = districtNameUz
+        self.regionId = regionId
+        self.regionNameRu = regionNameRu
+        self.regionNameUz = regionNameUz
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case districtId = "district_id"
+        case districtNameRu = "district_name_ru"
+        case districtNameUz = "district_name_uz"
+        case regionId = "region_id"
+        case regionNameRu = "region_name_ru"
+        case regionNameUz = "region_name_uz"
+    }
+}
+
+/// One end of a driver direction: a region, and a district unless the region is a city without districts.
+public struct DirectionEndInput: Codable, Hashable, Sendable {
+    public var districtId: String?
+    public var regionId: String
+
+    public init(districtId: String? = nil, regionId: String) {
+        self.districtId = districtId
+        self.regionId = regionId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case districtId = "district_id"
+        case regionId = "region_id"
+    }
+}
+
+/// Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027).
+public struct DirectionOfferCreate: Codable, Hashable, Sendable {
+    public var listingId: String
+    public var message: String?
+    /// Q153: the time the driver would pick up, when it differs from the client's window. A new or empty trip is planned around it; on a trip with bookings it must be that trip's own ETA (±30 min).
+    public var pickupAt: String?
+    public var unitPriceMinor: Int
+
+    public init(listingId: String, message: String? = nil, pickupAt: String? = nil, unitPriceMinor: Int) {
+        self.listingId = listingId
+        self.message = message
+        self.pickupAt = pickupAt
+        self.unitPriceMinor = unitPriceMinor
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case listingId = "listing_id"
+        case message = "message"
+        case pickupAt = "pickup_at"
+        case unitPriceMinor = "unit_price_minor"
+    }
+}
+
+public struct DirectionOfferDTO: Codable, Hashable, Sendable {
+    public var thread: ProposalThreadDTO
+    /// The offer's pickup lies outside the client's window (Q153).
+    public var timeProposal: Bool
+    public var trip: DirectionTripRefDTO
+    public var tripCreated: Bool
+    public var tripRetimed: Bool
+
+    public init(thread: ProposalThreadDTO, timeProposal: Bool, trip: DirectionTripRefDTO, tripCreated: Bool, tripRetimed: Bool) {
+        self.thread = thread
+        self.timeProposal = timeProposal
+        self.trip = trip
+        self.tripCreated = tripCreated
+        self.tripRetimed = tripRetimed
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case thread = "thread"
+        case timeProposal = "time_proposal"
+        case trip = "trip"
+        case tripCreated = "trip_created"
+        case tripRetimed = "trip_retimed"
+    }
+}
+
 /// What the server can promise about two marked places, before anything is created (Q88).
 ///
 /// This exists so the client never has to guess. Which corridors exist, which of their routes are confirmed
@@ -1258,6 +1349,83 @@ public struct DirectionPreviewDTO: Codable, Hashable, Sendable {
         case origin = "origin"
         case routePolyline = "route_polyline"
         case routeVersionId = "route_version_id"
+    }
+}
+
+/// A client request along a driver direction, and how the driver's trip meets it.
+public struct DirectionRequestItemDTO: Codable, Hashable, Sendable {
+    /// fits_trip: the active trip reaches the pickup in the client's window; no_trip: no trip yet, the first offer plans one; time_differs: the car would be there at pickup_eta, outside the client's window - an offer is then a time proposal (Q153).
+    public var fit: String
+    public var listing: ListingPublicDTO
+    /// exact: both ends in the direction's areas; on_route: on the way.
+    public var matchType: MatchType
+    /// The driver's own open offer on this request, if any.
+    public var myThreadId: String?
+    /// When the car would be at the pickup.
+    public var pickupEta: String?
+    /// no_trip / an empty trip: when the system would plan the departure.
+    public var suggestedDepartureAt: String?
+
+    public init(fit: String, listing: ListingPublicDTO, matchType: MatchType, myThreadId: String? = nil, pickupEta: String? = nil, suggestedDepartureAt: String? = nil) {
+        self.fit = fit
+        self.listing = listing
+        self.matchType = matchType
+        self.myThreadId = myThreadId
+        self.pickupEta = pickupEta
+        self.suggestedDepartureAt = suggestedDepartureAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case fit = "fit"
+        case listing = "listing"
+        case matchType = "match_type"
+        case myThreadId = "my_thread_id"
+        case pickupEta = "pickup_eta"
+        case suggestedDepartureAt = "suggested_departure_at"
+    }
+}
+
+public struct DirectionRequestsDTO: Codable, Hashable, Sendable {
+    public var activeTrip: DirectionTripRefDTO?
+    public var directionId: String
+    public var items: [DirectionRequestItemDTO]
+
+    public init(activeTrip: DirectionTripRefDTO? = nil, directionId: String, items: [DirectionRequestItemDTO]) {
+        self.activeTrip = activeTrip
+        self.directionId = directionId
+        self.items = items
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case activeTrip = "active_trip"
+        case directionId = "direction_id"
+        case items = "items"
+    }
+}
+
+/// The direction's current trip, made by the system from the driver's first offer (Q152).
+public struct DirectionTripRefDTO: Codable, Hashable, Sendable {
+    public var id: String
+    public var plannedEndAt: String
+    public var plannedStartAt: String
+    /// Most seats taken on any segment of the trip.
+    public var seatsBooked: Int
+    public var status: TripStatus
+
+    public init(id: String, plannedEndAt: String, plannedStartAt: String, seatsBooked: Int, status: TripStatus) {
+        self.id = id
+        self.plannedEndAt = plannedEndAt
+        self.plannedStartAt = plannedStartAt
+        self.seatsBooked = seatsBooked
+        self.status = status
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id = "id"
+        case plannedEndAt = "planned_end_at"
+        case plannedStartAt = "planned_start_at"
+        case seatsBooked = "seats_booked"
+        case status = "status"
     }
 }
 
@@ -1324,6 +1492,111 @@ public struct DistrictRefDTO: Codable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id = "id"
         case nameUz = "name_uz"
+    }
+}
+
+/// Q150: "where from -> where to". No time, stop, corridor or route - the server resolves the road itself.
+public struct DriverDirectionCreate: Codable, Hashable, Sendable {
+    /// Default: the car's cargo limit.
+    public var cargoCapacityVolumeMl: Int?
+    /// Default: the car's cargo limit.
+    public var cargoCapacityWeightG: Int?
+    public var destination: DirectionEndInput
+    public var origin: DirectionEndInput
+    /// Default: the car's seats.
+    public var seatCapacity: Int?
+    /// Omit when the driver has exactly one approved car.
+    public var vehicleId: String?
+
+    public init(cargoCapacityVolumeMl: Int? = nil, cargoCapacityWeightG: Int? = nil, destination: DirectionEndInput, origin: DirectionEndInput, seatCapacity: Int? = nil, vehicleId: String? = nil) {
+        self.cargoCapacityVolumeMl = cargoCapacityVolumeMl
+        self.cargoCapacityWeightG = cargoCapacityWeightG
+        self.destination = destination
+        self.origin = origin
+        self.seatCapacity = seatCapacity
+        self.vehicleId = vehicleId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case cargoCapacityVolumeMl = "cargo_capacity_volume_ml"
+        case cargoCapacityWeightG = "cargo_capacity_weight_g"
+        case destination = "destination"
+        case origin = "origin"
+        case seatCapacity = "seat_capacity"
+        case vehicleId = "vehicle_id"
+    }
+}
+
+public struct DriverDirectionDTO: Codable, Hashable, Sendable {
+    public var activeTrip: DirectionTripRefDTO?
+    public var cargoCapacityVolumeMl: Int
+    public var cargoCapacityWeightG: Int
+    public var createdAt: String
+    public var destination: DirectionEndDTO
+    public var id: String
+    public var origin: DirectionEndDTO
+    public var seatCapacity: Int
+    public var status: String
+    public var updatedAt: String
+    public var vehicleId: String
+    public var version: Int
+    /// Districts the resolved road passes between the two ends, in travel order.
+    public var viaDistrictNames: [String]?
+
+    public init(activeTrip: DirectionTripRefDTO? = nil, cargoCapacityVolumeMl: Int, cargoCapacityWeightG: Int, createdAt: String, destination: DirectionEndDTO, id: String, origin: DirectionEndDTO, seatCapacity: Int, status: String, updatedAt: String, vehicleId: String, version: Int, viaDistrictNames: [String]? = nil) {
+        self.activeTrip = activeTrip
+        self.cargoCapacityVolumeMl = cargoCapacityVolumeMl
+        self.cargoCapacityWeightG = cargoCapacityWeightG
+        self.createdAt = createdAt
+        self.destination = destination
+        self.id = id
+        self.origin = origin
+        self.seatCapacity = seatCapacity
+        self.status = status
+        self.updatedAt = updatedAt
+        self.vehicleId = vehicleId
+        self.version = version
+        self.viaDistrictNames = viaDistrictNames
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case activeTrip = "active_trip"
+        case cargoCapacityVolumeMl = "cargo_capacity_volume_ml"
+        case cargoCapacityWeightG = "cargo_capacity_weight_g"
+        case createdAt = "created_at"
+        case destination = "destination"
+        case id = "id"
+        case origin = "origin"
+        case seatCapacity = "seat_capacity"
+        case status = "status"
+        case updatedAt = "updated_at"
+        case vehicleId = "vehicle_id"
+        case version = "version"
+        case viaDistrictNames = "via_district_names"
+    }
+}
+
+public struct DriverDirectionPatch: Codable, Hashable, Sendable {
+    public var cargoCapacityVolumeMl: Int?
+    public var cargoCapacityWeightG: Int?
+    public var expectedVersion: Int
+    public var seatCapacity: Int?
+    public var status: String?
+
+    public init(cargoCapacityVolumeMl: Int? = nil, cargoCapacityWeightG: Int? = nil, expectedVersion: Int, seatCapacity: Int? = nil, status: String? = nil) {
+        self.cargoCapacityVolumeMl = cargoCapacityVolumeMl
+        self.cargoCapacityWeightG = cargoCapacityWeightG
+        self.expectedVersion = expectedVersion
+        self.seatCapacity = seatCapacity
+        self.status = status
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case cargoCapacityVolumeMl = "cargo_capacity_volume_ml"
+        case cargoCapacityWeightG = "cargo_capacity_weight_g"
+        case expectedVersion = "expected_version"
+        case seatCapacity = "seat_capacity"
+        case status = "status"
     }
 }
 
@@ -3470,6 +3743,8 @@ public struct ProposalCounter: Codable, Hashable, Sendable {
     public var dropoffStopId: String?
     public var expectedRevision: Int
     public var message: String?
+    /// ADR-0027 Q153: a driver's counter may move the pickup outside the request window when true. A counter that keeps the current window keeps its time proposal; a client cannot move it outside.
+    public var outsideRequestWindow: Bool?
     public var parcel: ProposalParcel?
     public var pickupStopId: String?
     public var pickupWindowEnd: String?
@@ -3478,11 +3753,12 @@ public struct ProposalCounter: Codable, Hashable, Sendable {
     public var quantity: Int?
     public var unitPriceMinor: Int?
 
-    public init(baggage: ProposalBaggage? = nil, dropoffStopId: String? = nil, expectedRevision: Int, message: String? = nil, parcel: ProposalParcel? = nil, pickupStopId: String? = nil, pickupWindowEnd: String? = nil, pickupWindowStart: String? = nil, promoConsent: ProposalPromoConsent? = nil, quantity: Int? = nil, unitPriceMinor: Int? = nil) {
+    public init(baggage: ProposalBaggage? = nil, dropoffStopId: String? = nil, expectedRevision: Int, message: String? = nil, outsideRequestWindow: Bool? = nil, parcel: ProposalParcel? = nil, pickupStopId: String? = nil, pickupWindowEnd: String? = nil, pickupWindowStart: String? = nil, promoConsent: ProposalPromoConsent? = nil, quantity: Int? = nil, unitPriceMinor: Int? = nil) {
         self.baggage = baggage
         self.dropoffStopId = dropoffStopId
         self.expectedRevision = expectedRevision
         self.message = message
+        self.outsideRequestWindow = outsideRequestWindow
         self.parcel = parcel
         self.pickupStopId = pickupStopId
         self.pickupWindowEnd = pickupWindowEnd
@@ -3497,6 +3773,7 @@ public struct ProposalCounter: Codable, Hashable, Sendable {
         case dropoffStopId = "dropoff_stop_id"
         case expectedRevision = "expected_revision"
         case message = "message"
+        case outsideRequestWindow = "outside_request_window"
         case parcel = "parcel"
         case pickupStopId = "pickup_stop_id"
         case pickupWindowEnd = "pickup_window_end"
@@ -3511,6 +3788,8 @@ public struct ProposalCreate: Codable, Hashable, Sendable {
     public var baggage: ProposalBaggage?
     public var dropoffStopId: String?
     public var message: String?
+    /// ADR-0027 Q153: true - the driver proposes a pickup time outside the client's request window (at most 12 h away). Only a driver may; the client's own accept or counter is the consent. Omitted / false: the window must meet the request window, as before.
+    public var outsideRequestWindow: Bool?
     public var parcel: ProposalParcel?
     public var pickupStopId: String?
     public var pickupWindowEnd: String
@@ -3524,10 +3803,11 @@ public struct ProposalCreate: Codable, Hashable, Sendable {
     public var tripIntent: TripIntentRef?
     public var unitPriceMinor: Int
 
-    public init(baggage: ProposalBaggage? = nil, dropoffStopId: String? = nil, message: String? = nil, parcel: ProposalParcel? = nil, pickupStopId: String? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, promoConsent: ProposalPromoConsent? = nil, quantity: Int, tripId: String? = nil, tripIntent: TripIntentRef? = nil, unitPriceMinor: Int) {
+    public init(baggage: ProposalBaggage? = nil, dropoffStopId: String? = nil, message: String? = nil, outsideRequestWindow: Bool? = nil, parcel: ProposalParcel? = nil, pickupStopId: String? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, promoConsent: ProposalPromoConsent? = nil, quantity: Int, tripId: String? = nil, tripIntent: TripIntentRef? = nil, unitPriceMinor: Int) {
         self.baggage = baggage
         self.dropoffStopId = dropoffStopId
         self.message = message
+        self.outsideRequestWindow = outsideRequestWindow
         self.parcel = parcel
         self.pickupStopId = pickupStopId
         self.pickupWindowEnd = pickupWindowEnd
@@ -3544,6 +3824,7 @@ public struct ProposalCreate: Codable, Hashable, Sendable {
         case baggage = "baggage"
         case dropoffStopId = "dropoff_stop_id"
         case message = "message"
+        case outsideRequestWindow = "outside_request_window"
         case parcel = "parcel"
         case pickupStopId = "pickup_stop_id"
         case pickupWindowEnd = "pickup_window_end"
@@ -3898,6 +4179,8 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
     /// Q54: the listing terms version this version was made against. Accept succeeds only while it equals the thread's listing_terms_version.
     public var listingTermsVersion: Int
     public var message: String?
+    /// ADR-0027 Q153: the driver proposes a pickup outside the client's requested time; booking it needs the client's own accept (or the client's counter).
+    public var outsideRequestWindow: Bool?
     public var pickupPoint: PointEndDTO?
     public var pickupStop: StopRefDTO?
     public var pickupWindowEnd: String
@@ -3919,7 +4202,7 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
     public var totalMinor: Int
     public var unitPriceMinor: Int
 
-    public init(authorSide: ActorSide, createdAt: String, currency: Currency, demand: ProposalDemandDTO, dropoffPoint: PointEndDTO? = nil, dropoffStop: StopRefDTO? = nil, expiresAt: String, feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO? = nil, id: String, listingTermsVersion: Int, message: String? = nil, pickupPoint: PointEndDTO? = nil, pickupStop: StopRefDTO? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, priceRevisionsLeft: PriceRevisionsLeftDTO, promoConfirmation: String? = nil, promoQuote: ProposalPromo? = nil, promoUnavailableReason: String? = nil, quantity: Int, receiver: ContactDetails? = nil, revision: Int, status: ProposalStatus, statusReason: String? = nil, totalMinor: Int, unitPriceMinor: Int) {
+    public init(authorSide: ActorSide, createdAt: String, currency: Currency, demand: ProposalDemandDTO, dropoffPoint: PointEndDTO? = nil, dropoffStop: StopRefDTO? = nil, expiresAt: String, feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO? = nil, id: String, listingTermsVersion: Int, message: String? = nil, outsideRequestWindow: Bool? = nil, pickupPoint: PointEndDTO? = nil, pickupStop: StopRefDTO? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, priceRevisionsLeft: PriceRevisionsLeftDTO, promoConfirmation: String? = nil, promoQuote: ProposalPromo? = nil, promoUnavailableReason: String? = nil, quantity: Int, receiver: ContactDetails? = nil, revision: Int, status: ProposalStatus, statusReason: String? = nil, totalMinor: Int, unitPriceMinor: Int) {
         self.authorSide = authorSide
         self.createdAt = createdAt
         self.currency = currency
@@ -3931,6 +4214,7 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
         self.id = id
         self.listingTermsVersion = listingTermsVersion
         self.message = message
+        self.outsideRequestWindow = outsideRequestWindow
         self.pickupPoint = pickupPoint
         self.pickupStop = pickupStop
         self.pickupWindowEnd = pickupWindowEnd
@@ -3961,6 +4245,7 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
         case id = "id"
         case listingTermsVersion = "listing_terms_version"
         case message = "message"
+        case outsideRequestWindow = "outside_request_window"
         case pickupPoint = "pickup_point"
         case pickupStop = "pickup_stop"
         case pickupWindowEnd = "pickup_window_end"
@@ -5069,18 +5354,22 @@ public struct StopDTO: Codable, Hashable, Sendable {
 }
 
 public struct StopRefDTO: Codable, Hashable, Sendable {
+    /// Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, never by a stop name (ELCHI works point A -> point B).
+    public var districtNameUz: String?
     /// Opaque stop id (stp_...).
     public var id: String
     public var nameRu: String?
     public var nameUz: String
 
-    public init(id: String, nameRu: String? = nil, nameUz: String) {
+    public init(districtNameUz: String? = nil, id: String, nameRu: String? = nil, nameUz: String) {
+        self.districtNameUz = districtNameUz
         self.id = id
         self.nameRu = nameRu
         self.nameUz = nameUz
     }
 
     enum CodingKeys: String, CodingKey {
+        case districtNameUz = "district_name_uz"
         case id = "id"
         case nameRu = "name_ru"
         case nameUz = "name_uz"

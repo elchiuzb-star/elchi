@@ -49,7 +49,7 @@ struct ListingDetailView: View {
         }
         .overlay {
             if let thread = accepting {
-                AcceptDialog(thread: thread, offers: model.offers, onClose: { accepting = nil }) { onAccepted(thread.listingId, $0) }
+                AcceptDialog(thread: thread, listing: model.listing.value, offers: model.offers, onClose: { accepting = nil }) { onAccepted(thread.listingId, $0) }
             }
         }
     }
@@ -746,6 +746,10 @@ struct OfferCard: View {
         let summary = thread.driverSummary.map(strings.driverSummary)
         let first = [window, summary].compactMap { $0 }.joined(separator: " · ")
         if !first.isEmpty { out.append(.init(first)) }
+        // ADR-0027 (Q153): the driver proposes another pickup time; accepting (or countering the price) is the consent.
+        if let values = TimeProposalLine.values(version, listingStart: listing?.departureWindowStart, listingEnd: listing?.departureWindowEnd) {
+            out.append(.init(strings.t("offer.timeProposal", values: values), tone: .warn))
+        }
         // Taksi: the offer per seat, for the people asked for ("2 × 150 000 so'm").
         if PassengerMoney.perSeat(version.priceBasis) { out.append(.init(strings.peopleLine(version.quantity, unitMinor: version.unitPriceMinor))) }
         if actions.open, let message = version.message, !message.isEmpty { out.append(.init(message)) }
@@ -978,6 +982,8 @@ private struct CounterForm: View {
 /// recomputed); bonus lines only when the person ticked the server's bonus quote.
 struct AcceptDialog: View {
     let thread: ProposalThreadDTO
+    /// The listing, for the time-proposal sentence (Q153) when the driver offers another pickup time.
+    var listing: ListingDTO?
     let offers: OfferThreads
     let onClose: () -> Void
     let onAccepted: (ClientBookingDTO) -> Void
@@ -994,6 +1000,10 @@ struct AcceptDialog: View {
                     .font(ElchiFont.poppins(19, .medium, relativeTo: .title2)).foregroundStyle(c.text)
                     .accessibilityAddTraits(.isHeader)
                 Text(strings.t("client.accept.text")).font(ElchiFont.secondary).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            if let version, let values = TimeProposalLine.values(version, listingStart: listing?.departureWindowStart,
+                                                                 listingEnd: listing?.departureWindowEnd) {
+                Note(strings.t("offer.timeProposal", values: values), tone: .warn).accessibilityIdentifier("elchi.accept.timeProposal")
             }
             if let version {
                 MoneyLines(rows: quote.map { quote in

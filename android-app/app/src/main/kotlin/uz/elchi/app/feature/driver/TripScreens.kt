@@ -103,7 +103,7 @@ internal fun TripsList(vm: TripsViewModel, onAdd: () -> Unit, onTrip: (String) -
 }
 
 @Composable
-private fun TripCard(trip: TripDTO, busy: Boolean, opensAt: Instant?, onClick: () -> Unit, onAction: (TripCommand) -> Unit) {
+internal fun TripCard(trip: TripDTO, busy: Boolean, opensAt: Instant?, onClick: () -> Unit, onAction: (TripCommand) -> Unit) {
     val c = Elchi.colors
     val ru = appRu()
     val start = OrderRules.parseInstant(trip.plannedStartAt)
@@ -368,12 +368,15 @@ private fun TripStops(trip: TripDTO) {
     val stops = trip.stops.sortedBy { it.seq }
     // Design 07 §4.2: the dots follow the trip status (the server sends no per-stop passage).
     val states = Design07Rules.ladder(trip.status, stops.size)
+    // Q158 (ADR-0027): the road by its districts and estimated times - route nodes are internal.
+    Text(t(R.string.tripDetail_alongTheRoad), style = Elchi.type.caption.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = Elchi.colors.muted)
     StatusLadder(
-        stops.mapIndexed { i, stop ->
+        TripRules.alongTheRoad(stops, ru).map { i ->
+            val stop = stops[i]
             val planned = OrderRules.parseInstant(stop.plannedArrivalAt)?.let(DriverTime::clock)
             val eta = OrderRules.parseInstant(stop.etaArrivalAt)?.let(DriverTime::clock)?.takeIf { it != planned }
             LadderRow(
-                title = if (ru) stop.stop.nameRu ?: stop.stop.nameUz else stop.stop.nameUz,
+                title = TripRules.placeName(stop.stop, ru),
                 time = listOfNotNull(planned, eta?.let { "ETA $it" }).joinToString(" · ").ifEmpty { null },
                 state = states[i],
             )
@@ -384,7 +387,7 @@ private fun TripStops(trip: TripDTO) {
 @Composable
 private fun Availability(s: TripDetailViewModel.State, trip: TripDTO) {
     val ru = appRu()
-    val names = trip.stops.associate { it.stop.id to (if (ru) it.stop.nameRu ?: it.stop.nameUz else it.stop.nameUz) }
+    val names = trip.stops.associate { it.stop.id to TripRules.placeName(it.stop, ru) }
     ElchiCard {
         CardHeader(t(R.string.tripDetail_availabilityTitle))
         when (val a = s.availability) {
@@ -424,7 +427,8 @@ private fun Manifest(s: TripDetailViewModel.State, onBooking: (String) -> Unit) 
             is Load.Failed -> Note(uz.elchi.app.i18n.errorText(m.error), Modifier.padding(vertical = 8.dp), tone = Tone.ERR)
             is Load.Ready -> {
                 val rows = m.value.stops.sortedBy { it.seq }.flatMap { stop ->
-                    val place = stop.stop?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz } ?: stop.point?.district?.nameUz ?: "?"
+                    // Q158: the client's own place (address or district), a legacy node by its district.
+                    val place = stop.point?.address?.let(ParcelRules::withoutCountry)?.takeIf { it.isNotBlank() } ?: stop.point?.district?.nameUz ?: stop.stop?.let { TripRules.placeName(it, ru) } ?: "?"
                     val time = OrderRules.parseInstant(stop.plannedArrivalAt)?.let(DriverTime::clock).orEmpty()
                     stop.pickups.map { Triple("$place · $time · ${t(R.string.tripDetail_pickups)}", it, true) } +
                         stop.dropoffs.map { Triple("$place · $time · ${t(R.string.tripDetail_dropoffs)}", it, false) }

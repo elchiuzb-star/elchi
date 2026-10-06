@@ -109,8 +109,9 @@ final class DriverDesign07UITests: ClientUITestCase {
         settle()
         snap("\(prefix)-02-trips")
 
-        // 3. Add trip: the locked vehicle, save with gaps -> every field says what.
-        tapId("elchi.driver.plus")
+        // 3. Add trip: the locked vehicle, save with gaps -> every field says what. ADR-0027: the bar's "+" adds a
+        //    direction now; the manual trip form is the fallback under "Safarlarim".
+        tapId("elchi.directions.planTrip")
         byId("elchi.addTrip.vehicleLocked", timeout: 20)
         settle()
         snap("\(prefix)-03-addtrip")

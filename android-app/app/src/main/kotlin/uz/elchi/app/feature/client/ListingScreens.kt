@@ -187,7 +187,10 @@ fun ListingDetailScreen(
         )
     }
     val confirming = s.threadList.firstOrNull { it.id == b.confirming }
-    if (confirming != null) AcceptDialogFor(confirming, b, onConfirm = { vm.board.accept(confirming) }, onDismiss = vm.board::dismissAccept)
+    if (confirming != null) AcceptDialogFor(
+        confirming, b, onConfirm = { vm.board.accept(confirming) }, onDismiss = vm.board::dismissAccept,
+        requestWindow = listing?.let { it.departureWindowStart to it.departureWindowEnd },
+    )
 }
 
 /** "E'lon to'xtatildi", "Saqlandi · 2 ta ochiq taklif yopildi" ... as the design's toast. */
@@ -602,6 +605,7 @@ private fun OffersSection(
                     listingDay = listingDay,
                     route = offerRouteIfDifferent(thread, listing, ru),
                     paused = listing.status == ListingStatus.PAUSED,
+                    requestWindow = listing.departureWindowStart to listing.departureWindowEnd,
                 )
             }
             Note(t(R.string.listingBids_identityHidden), tone = Tone.BLUE)

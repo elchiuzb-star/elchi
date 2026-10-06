@@ -551,6 +551,51 @@ data class DeviceDTO(
     @SerialName("platform") val platform: ClientPlatform,
 )
 
+@Serializable
+data class DirectionEndDTO(
+    @SerialName("district_id") val districtId: String? = null,
+    @SerialName("district_name_ru") val districtNameRu: String? = null,
+    @SerialName("district_name_uz") val districtNameUz: String? = null,
+    @SerialName("region_id") val regionId: String,
+    @SerialName("region_name_ru") val regionNameRu: String? = null,
+    @SerialName("region_name_uz") val regionNameUz: String,
+)
+
+/**
+ * One end of a driver direction: a region, and a district unless the region is a city without districts.
+ */
+@Serializable
+data class DirectionEndInput(
+    @SerialName("district_id") val districtId: String? = null,
+    @SerialName("region_id") val regionId: String,
+)
+
+/**
+ * Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027).
+ */
+@Serializable
+data class DirectionOfferCreate(
+    @SerialName("listing_id") val listingId: String,
+    @SerialName("message") val message: String? = null,
+    /**
+     * Q153: the time the driver would pick up, when it differs from the client's window. A new or empty trip is planned around it; on a trip with bookings it must be that trip's own ETA (±30 min).
+     */
+    @SerialName("pickup_at") val pickupAt: String? = null,
+    @SerialName("unit_price_minor") val unitPriceMinor: Long,
+)
+
+@Serializable
+data class DirectionOfferDTO(
+    @SerialName("thread") val thread: ProposalThreadDTO,
+    /**
+     * The offer's pickup lies outside the client's window (Q153).
+     */
+    @SerialName("time_proposal") val timeProposal: Boolean,
+    @SerialName("trip") val trip: DirectionTripRefDTO,
+    @SerialName("trip_created") val tripCreated: Boolean,
+    @SerialName("trip_retimed") val tripRetimed: Boolean,
+)
+
 /**
  * What the server can promise about two marked places, before anything is created (Q88).
  *
@@ -596,6 +641,56 @@ data class DirectionPreviewDTO(
 )
 
 /**
+ * A client request along a driver direction, and how the driver's trip meets it.
+ */
+@Serializable
+data class DirectionRequestItemDTO(
+    /**
+     * fits_trip: the active trip reaches the pickup in the client's window; no_trip: no trip yet, the first offer plans one; time_differs: the car would be there at pickup_eta, outside the client's window - an offer is then a time proposal (Q153).
+     */
+    @SerialName("fit") val fit: String,
+    @SerialName("listing") val listing: ListingPublicDTO,
+    /**
+     * exact: both ends in the direction's areas; on_route: on the way.
+     */
+    @SerialName("match_type") val matchType: MatchType,
+    /**
+     * The driver's own open offer on this request, if any.
+     */
+    @SerialName("my_thread_id") val myThreadId: String? = null,
+    /**
+     * When the car would be at the pickup.
+     */
+    @SerialName("pickup_eta") val pickupEta: String? = null,
+    /**
+     * no_trip / an empty trip: when the system would plan the departure.
+     */
+    @SerialName("suggested_departure_at") val suggestedDepartureAt: String? = null,
+)
+
+@Serializable
+data class DirectionRequestsDTO(
+    @SerialName("active_trip") val activeTrip: DirectionTripRefDTO? = null,
+    @SerialName("direction_id") val directionId: String,
+    @SerialName("items") val items: List<DirectionRequestItemDTO>,
+)
+
+/**
+ * The direction's current trip, made by the system from the driver's first offer (Q152).
+ */
+@Serializable
+data class DirectionTripRefDTO(
+    @SerialName("id") val id: String,
+    @SerialName("planned_end_at") val plannedEndAt: String,
+    @SerialName("planned_start_at") val plannedStartAt: String,
+    /**
+     * Most seats taken on any segment of the trip.
+     */
+    @SerialName("seats_booked") val seatsBooked: Long,
+    @SerialName("status") val status: TripStatus,
+)
+
+/**
  * Conditions shown before joining (Q112). ``code`` is stable; the client renders the sentence.
  */
 @Serializable
@@ -626,6 +721,60 @@ data class DistrictDTO(
 data class DistrictRefDTO(
     @SerialName("id") val id: String,
     @SerialName("name_uz") val nameUz: String,
+)
+
+/**
+ * Q150: "where from -> where to". No time, stop, corridor or route - the server resolves the road itself.
+ */
+@Serializable
+data class DriverDirectionCreate(
+    /**
+     * Default: the car's cargo limit.
+     */
+    @SerialName("cargo_capacity_volume_ml") val cargoCapacityVolumeMl: Long? = null,
+    /**
+     * Default: the car's cargo limit.
+     */
+    @SerialName("cargo_capacity_weight_g") val cargoCapacityWeightG: Long? = null,
+    @SerialName("destination") val destination: DirectionEndInput,
+    @SerialName("origin") val origin: DirectionEndInput,
+    /**
+     * Default: the car's seats.
+     */
+    @SerialName("seat_capacity") val seatCapacity: Long? = null,
+    /**
+     * Omit when the driver has exactly one approved car.
+     */
+    @SerialName("vehicle_id") val vehicleId: String? = null,
+)
+
+@Serializable
+data class DriverDirectionDTO(
+    @SerialName("active_trip") val activeTrip: DirectionTripRefDTO? = null,
+    @SerialName("cargo_capacity_volume_ml") val cargoCapacityVolumeMl: Long,
+    @SerialName("cargo_capacity_weight_g") val cargoCapacityWeightG: Long,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("destination") val destination: DirectionEndDTO,
+    @SerialName("id") val id: String,
+    @SerialName("origin") val origin: DirectionEndDTO,
+    @SerialName("seat_capacity") val seatCapacity: Long,
+    @SerialName("status") val status: String,
+    @SerialName("updated_at") val updatedAt: String,
+    @SerialName("vehicle_id") val vehicleId: String,
+    @SerialName("version") val version: Long,
+    /**
+     * Districts the resolved road passes between the two ends, in travel order.
+     */
+    @SerialName("via_district_names") val viaDistrictNames: List<String>? = null,
+)
+
+@Serializable
+data class DriverDirectionPatch(
+    @SerialName("cargo_capacity_volume_ml") val cargoCapacityVolumeMl: Long? = null,
+    @SerialName("cargo_capacity_weight_g") val cargoCapacityWeightG: Long? = null,
+    @SerialName("expected_version") val expectedVersion: Long,
+    @SerialName("seat_capacity") val seatCapacity: Long? = null,
+    @SerialName("status") val status: String? = null,
 )
 
 @Serializable
@@ -1607,6 +1756,10 @@ data class ProposalCounter(
     @SerialName("dropoff_stop_id") val dropoffStopId: String? = null,
     @SerialName("expected_revision") val expectedRevision: Long,
     @SerialName("message") val message: String? = null,
+    /**
+     * ADR-0027 Q153: a driver's counter may move the pickup outside the request window when true. A counter that keeps the current window keeps its time proposal; a client cannot move it outside.
+     */
+    @SerialName("outside_request_window") val outsideRequestWindow: Boolean? = null,
     @SerialName("parcel") val parcel: ProposalParcel? = null,
     @SerialName("pickup_stop_id") val pickupStopId: String? = null,
     @SerialName("pickup_window_end") val pickupWindowEnd: String? = null,
@@ -1621,6 +1774,10 @@ data class ProposalCreate(
     @SerialName("baggage") val baggage: ProposalBaggage? = null,
     @SerialName("dropoff_stop_id") val dropoffStopId: String? = null,
     @SerialName("message") val message: String? = null,
+    /**
+     * ADR-0027 Q153: true - the driver proposes a pickup time outside the client's request window (at most 12 h away). Only a driver may; the client's own accept or counter is the consent. Omitted / false: the window must meet the request window, as before.
+     */
+    @SerialName("outside_request_window") val outsideRequestWindow: Boolean? = null,
     @SerialName("parcel") val parcel: ProposalParcel? = null,
     @SerialName("pickup_stop_id") val pickupStopId: String? = null,
     @SerialName("pickup_window_end") val pickupWindowEnd: String,
@@ -1830,6 +1987,10 @@ data class ProposalVersionDTO(
      */
     @SerialName("listing_terms_version") val listingTermsVersion: Long,
     @SerialName("message") val message: String? = null,
+    /**
+     * ADR-0027 Q153: the driver proposes a pickup outside the client's requested time; booking it needs the client's own accept (or the client's counter).
+     */
+    @SerialName("outside_request_window") val outsideRequestWindow: Boolean? = null,
     @SerialName("pickup_point") val pickupPoint: PointEndDTO? = null,
     @SerialName("pickup_stop") val pickupStop: StopRefDTO? = null,
     @SerialName("pickup_window_end") val pickupWindowEnd: String,
@@ -2352,6 +2513,10 @@ data class StopDTO(
 
 @Serializable
 data class StopRefDTO(
+    /**
+     * Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, never by a stop name (ELCHI works point A -> point B).
+     */
+    @SerialName("district_name_uz") val districtNameUz: String? = null,
     /**
      * Opaque stop id (stp_...).
      */
