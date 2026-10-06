@@ -140,7 +140,7 @@ def _owned_listing(session: Session, listing_public_id_value: str, actor_user_id
 
 
 def _stop_names(session: Session, listing: Listing) -> tuple[str, str]:
-    """Public names of both ends: the verified stop, or - for a Q88 map point - the district it was marked in.
+    """Public names of both ends: the district of the place (a stop end - the district of its internal node).
 
     The share text and the public page are read by anyone with the link, so a map point is named by its
     district only. ``origin_address`` / ``destination_address`` are street-level (reverse-geocoded) and would
@@ -165,7 +165,8 @@ def _stop_names(session: Session, listing: Listing) -> tuple[str, str]:
     def name(stop_id: int | None, district_id: int | None) -> str:
         stop = stops.get(stop_id) if stop_id else None
         if stop is not None:
-            return stop.name_uz
+            # Q158: a place is named by its district, never by an internal route node ("... bekati").
+            return stop.district_name_uz or stop.name_uz
         district = districts.get(district_id) if district_id else None
         return district.name_uz if district is not None else "?"
 

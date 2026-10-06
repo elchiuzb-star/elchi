@@ -9,7 +9,7 @@ export const orderFlowMessages = {
   "routeSummary.estimatedRoute": { uz: "Taxminiy yo'l", ru: "Примерный путь" },
   "routeSummary.driverProposesTimeLine1": { uz: "Haydovchi jo'nash", ru: "Время отправления" },
   "routeSummary.driverProposesTimeLine2": { uz: "vaqtini o'zi taklif qiladi", ru: "предложит водитель" },
-  "routeSummary.mapNote": { uz: "Tasdiqlangan yo'nalish va uning bekatlari.", ru: "Подтверждённое направление и его остановки." },
+  "routeSummary.mapNote": { uz: "Tasdiqlangan yo'nalish va siz belgilagan A va B nuqtalar.", ru: "Утверждённое направление и отмеченные вами точки A и B."},
   "routeSummary.districtsTitle": { uz: "Yo'nalishdagi tumanlar", ru: "Районы по пути" },
   "routeSummary.districtsHint": {
     uz: "Shu tumanlardagi haydovchilar ham e'loningizni tavsiya sifatida ko'radi.",
@@ -58,7 +58,7 @@ export const orderFlowMessages = {
 
   // --- client-order-review ---
   "orderForm.review.title": { uz: "Buyurtmani tekshiring", ru: "Проверьте заказ" },
-  "orderForm.review.verifiedStop": { uz: "Tasdiqlangan bekat · {where}", ru: "Подтверждённая остановка · {where}" },
+  "orderForm.review.verifiedStop": { uz: "Belgilangan joy · {where}", ru: "Отмеченное место · {where}"},
   "orderForm.review.pickupPlace": { uz: "Olib ketish joyi", ru: "Место отправления" },
   "orderForm.review.dropoffPlace": { uz: "Yetkazish joyi", ru: "Место назначения" },
   "orderForm.review.districtsDetail": {

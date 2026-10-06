@@ -22,11 +22,16 @@ from app.modules.identity.web import (
     run_versioned,
 )
 from app.modules.marketplace import service as marketplace_service
+from app.modules.trips import directions as trip_directions
 from app.modules.trips import service as trips_service
 from app.modules.trips.schemas import (
+    AdminDriverDirectionDTO,
     AdminTripSearchDTO,
     AdminVehicleDTO,
     AdminVehicleStatus,
+    DriverDirectionCreate,
+    DriverDirectionDTO,
+    DriverDirectionPatch,
     TripAvailabilityDTO,
     TripCreate,
     TripDTO,
@@ -36,7 +41,14 @@ from app.modules.trips.schemas import (
     VehicleDTO,
     VehicleVerifyRequest,
 )
-from app.modules.trips.views import admin_vehicle_dtos, availability_dto, trip_dto, trip_public_dto, vehicle_dto
+from app.modules.trips.views import (
+    admin_vehicle_dtos,
+    availability_dto,
+    direction_dto,
+    trip_dto,
+    trip_public_dto,
+    vehicle_dto,
+)
 
 router = APIRouter(tags=["v2 Trips"])
 
@@ -244,3 +256,81 @@ def get_trip_availability(
     ):
         raise DomainError(ErrorCode.NOT_FOUND)
     return Envelope[TripAvailabilityDTO](data=availability_dto(session, trip))
+
+
+# --- driver directions (ADR-0027, Q150) -----------------------------------------------------------------------
+
+
+@router.post("/driver-directions", response_model=Envelope[DriverDirectionDTO], status_code=201, responses=ERROR_RESPONSES)
+def create_driver_direction(
+    body: DriverDirectionCreate,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Q150: the driver names only "where from -> where to"; the server finds the road and keeps the direction.
+
+    ``409 ROUTE_MISMATCH`` (``no_corridor_serves_direction``) is the product's "no ELCHI road here yet" answer.
+    """
+    return run_command(
+        request,
+        session,
+        actor_user_id=user_id,
+        idempotency_key=idempotency_key,
+        body=body,
+        handler=lambda: direction_dto(
+            session, trip_directions.create_direction(session, driver_user_id=user_id, data=body)
+        ),
+        success_status=201,
+        resource_type="driver_direction",
+    )
+
+
+@router.get("/me/driver-directions", response_model=Envelope[list[DriverDirectionDTO]], responses=ERROR_RESPONSES)
+def list_my_driver_directions(
+    include_archived: bool = Query(default=False),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[list[DriverDirectionDTO]]:
+    if Role.DRIVER not in identity_service.get_capabilities(session, user_id).roles:
+        raise DomainError(ErrorCode.CAPABILITY_REQUIRED, details={"role": Role.DRIVER.value})
+    rows = trip_directions.list_directions(session, user_id, include_archived=include_archived)
+    return Envelope[list[DriverDirectionDTO]](data=[direction_dto(session, row) for row in rows])
+
+
+@router.get("/driver-directions/{direction_id}", response_model=Envelope[DriverDirectionDTO], responses=ERROR_RESPONSES)
+def get_driver_direction(
+    direction_id: str, user_id: int = Depends(current_user_id), session: Session = Depends(get_session)
+) -> Envelope[DriverDirectionDTO]:
+    return Envelope[DriverDirectionDTO](
+        data=direction_dto(session, trip_directions.get_owned_direction(session, direction_id, user_id))
+    )
+
+
+@router.patch("/driver-directions/{direction_id}", response_model=Envelope[DriverDirectionDTO], responses=ERROR_RESPONSES)
+def patch_driver_direction(
+    direction_id: str, body: DriverDirectionPatch, user_id: int = Depends(current_user_id), session: Session = Depends(get_session)
+) -> Envelope[DriverDirectionDTO]:
+    dto = run_versioned(
+        session,
+        lambda: direction_dto(
+            session,
+            trip_directions.patch_direction(session, direction_public_id_value=direction_id, actor_user_id=user_id, data=body),
+        ),
+    )
+    return Envelope[DriverDirectionDTO](data=dto)
+
+
+@router.get("/admin/driver-directions", response_model=Envelope[list[AdminDriverDirectionDTO]], responses=ERROR_RESPONSES)
+def list_admin_driver_directions(
+    driver_id: str | None = Query(default=None, max_length=64, description="usr_... - one driver's directions."),
+    limit: int = Query(default=50, ge=1, le=MAX_PAGE_LIMIT),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[list[AdminDriverDirectionDTO]]:
+    """ADR-0027: what a driver said they drive, for staff (read-only; ``ops.view``)."""
+    identity_service.require_capability(identity_service.get_capabilities(session, user_id), Capability.OPS_VIEW)
+    driver_user_id = identity_service.resolve_user_id(session, driver_id) if driver_id else None
+    rows = trip_directions.list_directions_for_admin(session, driver_user_id=driver_user_id, limit=limit)
+    return Envelope[list[AdminDriverDirectionDTO]](data=[direction_dto(session, row, admin=True) for row in rows])

@@ -54,9 +54,10 @@ import {
 import { newIdempotencyKey, type ApiWarning, type Schemas } from "../api/v2/http";
 import { capabilities, type CapabilitiesDTO } from "../api/v2/ops.api";
 import { parcelCategories, type ParcelCategoryDTO } from "../api/v2/marketplace.api";
-import type { StopDTO } from "../api/v2/safety.api";
+import { adminDistricts, adminRegions, type DistrictDTO, type RegionDTO } from "../api/v2/admin-platform.api";
 import { translate, translateDynamic, type MessageKey } from "../i18n";
 import { useT } from "../i18n/react";
+import { ApiError } from "../types/api";
 import { formatDateTime, formatMinor } from "../utils/v2Format";
 import { v2ErrorMessage, warningMessage } from "../utils/v2Errors";
 import {
@@ -82,7 +83,6 @@ import {
 import { RefreshCw, X } from "./ui/icons";
 import { isStepUpCancelled, useStepUp, type StepUpController } from "./useStepUp";
 import { VehicleMap } from "./v2/LiveTrackingMap";
-import { StopSearch } from "./v2/StopSearch";
 
 type FaultSide = Schemas["FaultSide"];
 type ProofKind = Schemas["ProofKind"];
@@ -214,7 +214,7 @@ async function lookupBookings(query: string): Promise<LookupOption[]> {
   const rows = await searchAdminBookings(query, 10);
   return rows.map((row) => ({
     id: row.id,
-    title: `${stopText(row.pickup)} → ${stopText(row.dropoff)}`,
+    title: `${placeText(row.pickup)} → ${placeText(row.dropoff)}`,
     sub: [serviceLabel(row.service_type), formatDateTime(row.created_at)].join(" · "),
   }));
 }
@@ -293,10 +293,16 @@ export function applicableCommands(booking: AdminBookingDTO): OperatorBookingCom
   return out;
 }
 
-export function stopText(stop: AdminBookingDTO["pickup"]): string {
-  const district = stop.point?.district;
+/**
+ * A booking end as a place (06.10.2026: ELCHI is point A -> point B, staff never see "stops"): the district and the
+ * address the person marked. An old row whose end is only a catalogue node has no district in its DTO, so its
+ * name is shown as a plain place name - the word "stop" is not put in front of it.
+ */
+export function placeText(end: AdminBookingDTO["pickup"]): string {
+  const district = end.point?.district;
   const districtName = typeof district === "string" ? district : district?.name_uz;
-  return stop.stop?.name_uz ?? stop.point?.address ?? districtName ?? "-";
+  const point = [districtName, end.point?.address].filter(Boolean).join(", ");
+  return point || end.stop?.name_uz || "-";
 }
 
 export function serviceLabel(service: string | null | undefined): string {
@@ -430,7 +436,8 @@ export function BookingFacts({ booking, compact = false }: { booking: AdminBooki
   const plate = booking.driver?.vehicle ? booking.driver.vehicle.plate_number ?? booking.driver.vehicle.plate_masked ?? null : null;
   const rows: Array<[string, string]> = [];
   if (!compact) {
-    rows.push([t("admin.mk.route"), `${stopText(booking.pickup)} → ${stopText(booking.dropoff)}`]);
+    rows.push([t("admin.mk.pickupPlace"), placeText(booking.pickup)]);
+    rows.push([t("admin.mk.dropoffPlace"), placeText(booking.dropoff)]);
     rows.push([t("admin.mk.trip"), booking.trip_id]);
   }
   rows.push([t("admin.mk.client"), partyText(booking.client)]);
@@ -648,7 +655,7 @@ export function AdminBookingDrawer(props: {
 
   const sub = data
     ? [
-        `${stopText(data.pickup)} → ${stopText(data.dropoff)}`,
+        `${placeText(data.pickup)} → ${placeText(data.dropoff)}`,
         props.summary || null,
         t("admin.trust.commissionLine", { status: commissionLabel(data.commission_status) }),
       ]
@@ -1257,8 +1264,13 @@ const EMPTY_FORM = {
   kind: "request" as const,  // Q138 (ADR-0026): drivers publish no listings - on-behalf is a client request only
   service: "passenger" as "passenger" | "parcel",
   tripId: "",
-  originStop: "",
-  destinationStop: "",
+  // 06.10.2026: an end is a place (region -> district, optional address), never a catalogue stop
+  originRegion: "",
+  originDistrict: "",
+  originAddress: "",
+  destRegion: "",
+  destDistrict: "",
+  destAddress: "",
   start: "",
   end: "",
   basis: "per_seat" as "per_seat" | "total",
@@ -1269,13 +1281,62 @@ const EMPTY_FORM = {
   comment: "",
 };
 
-export function onBehalfBody(form: typeof EMPTY_FORM): ListingOnBehalfBody | null {
+type PointEnd = NonNullable<ListingOnBehalfBody["origin_point"]>;
+
+/** Why an end cannot be sent yet: nothing chosen, or the catalogue has no coordinate / no district for it. */
+export type PlaceProblem = { problem: "incomplete" } | { problem: "no_centre" | "no_districts"; name: string };
+
+/**
+ * One end of the request as the Q88 `*_point` the server wants: the district centre (or the region centre where the
+ * region itself is the unit, `requires_district === false` - Tashkent city), the district id and the typed address.
+ *
+ * Nothing is guessed: a district without a centre in the catalogue is refused in words, not sent as 0,0. For a
+ * region that is its own unit the advisory `district_id` is the catalogue district nearest to the region centre,
+ * the same way the client app resolves it.
+ */
+export function placeEnd(
+  region: RegionDTO | undefined,
+  districts: DistrictDTO[] | undefined,
+  districtId: string,
+  address: string,
+): PointEnd | PlaceProblem {
+  if (!region) return { problem: "incomplete" };
+  const note = address.trim() || null;
+  if (region.requires_district !== false) {
+    if (!districts) return { problem: "incomplete" };
+    if (districts.length === 0) return { problem: "no_districts", name: region.name_uz };
+    const district = districts.find((item) => item.id === districtId);
+    if (!district) return { problem: "incomplete" };
+    if (district.center_lat == null || district.center_lng == null) return { problem: "no_centre", name: district.name_uz };
+    return { lat: district.center_lat, lng: district.center_lng, district_id: district.id, address: note };
+  }
+  if (region.center_lat == null || region.center_lng == null) return { problem: "no_centre", name: region.name_uz };
+  if (!districts) return { problem: "incomplete" };
+  if (districts.length === 0) return { problem: "no_districts", name: region.name_uz };
+  const lat = region.center_lat;
+  const lng = region.center_lng;
+  const distance = (item: DistrictDTO) =>
+    item.center_lat == null || item.center_lng == null ? Infinity : (item.center_lat - lat) ** 2 + (item.center_lng - lng) ** 2;
+  const nearest = [...districts].sort((a, b) => distance(a) - distance(b))[0];
+  return { lat, lng, district_id: nearest.id, address: note };
+}
+
+function isPoint(end: PointEnd | PlaceProblem): end is PointEnd {
+  return !("problem" in end);
+}
+
+export function onBehalfBody(
+  form: typeof EMPTY_FORM,
+  origin: PointEnd | PlaceProblem,
+  destination: PointEnd | PlaceProblem,
+): ListingOnBehalfBody | null {
   const start = tashkentIso(form.start);
   const end = tashkentIso(form.end);
   const price = Math.round(Number(form.price.replace(/\s/g, "")));
   const seats = Math.round(Number(form.seats));
   if (!form.owner.trim() || form.consent.trim().length < 3 || !start || !end || !(price > 0)) return null;
-  if (!form.originStop.trim() || !form.destinationStop.trim()) return null;
+  if (!isPoint(origin) || !isPoint(destination)) return null;
+  if (origin.lat === destination.lat && origin.lng === destination.lng) return null;  // the server refuses equal ends
   if (form.service === "passenger" && !(seats >= 1 && seats <= 8)) return null;
   if (form.service === "parcel" && !form.categoryId.trim()) return null;  // Q140: a size category, no typed weight
   return {
@@ -1284,8 +1345,8 @@ export function onBehalfBody(form: typeof EMPTY_FORM): ListingOnBehalfBody | nul
     kind: form.kind,
     service_type: form.service,
     trip_id: null,
-    origin_stop_id: form.originStop.trim(),
-    destination_stop_id: form.destinationStop.trim(),
+    origin_point: origin,
+    destination_point: destination,
     departure_window_start: start,
     departure_window_end: end,
     price_basis: form.service === "parcel" ? "total" : form.basis,
@@ -1305,39 +1366,79 @@ export function onBehalfBody(form: typeof EMPTY_FORM): ListingOnBehalfBody | nul
   };
 }
 
-/** A stop field: search by name (`GET /stops/search`, 5g.2) or type the `stp_...` id directly. */
-function StopField(props: { label: string; ariaLabel: string; value: string; onChange: (id: string) => void }) {
+/** `409 ROUTE_MISMATCH`: no ELCHI road joins the two places yet - a product answer, said as such. */
+function explainOnBehalfError(cause: unknown): unknown {
+  return cause instanceof ApiError && cause.code === "ROUTE_MISMATCH" ? translate("admin.trust.noRoute") : cause;
+}
+
+/** One end: region, then district (skipped where the region is its own unit), then an optional address line. */
+function PlaceField(props: {
+  label: string;
+  regions: RegionDTO[];
+  districts: DistrictDTO[] | undefined;
+  regionId: string;
+  districtId: string;
+  address: string;
+  resolved: PointEnd | PlaceProblem;
+  onRegion: (id: string) => void;
+  onDistrict: (id: string) => void;
+  onAddress: (value: string) => void;
+}) {
   const t = useT();
-  const [picked, setPicked] = useState<StopDTO | null>(null);
+  const region = props.regions.find((item) => item.id === props.regionId);
+  const needsDistrict = region?.requires_district !== false;
+  const problem = isPoint(props.resolved) ? null : props.resolved;
   return (
-    <div className="grid gap-1">
-      <Field label={props.label}>
+    <fieldset className="grid gap-2 rounded-[10px] border border-border p-2 sm:col-span-2 sm:grid-cols-3">
+      <legend className="px-1 text-sm font-medium text-secondary-foreground">{props.label}</legend>
+      <Field label={t("admin.trust.placeRegion")}>
+        <select
+          aria-label={t("admin.trust.placeRegionAria", { end: props.label })}
+          value={props.regionId}
+          onChange={(event) => props.onRegion(event.target.value)}
+          className={INPUT}
+        >
+          <option value="">{t("admin.trust.choose")}</option>
+          {props.regions.map((item) => (
+            <option key={item.id} value={item.id}>{item.name_uz}</option>
+          ))}
+        </select>
+      </Field>
+      {needsDistrict ? (
+        <Field label={t("admin.trust.placeDistrict")}>
+          <select
+            aria-label={t("admin.trust.placeDistrictAria", { end: props.label })}
+            value={props.districtId}
+            disabled={!region || !props.districts}
+            onChange={(event) => props.onDistrict(event.target.value)}
+            className={INPUT}
+          >
+            <option value="">{t("admin.trust.choose")}</option>
+            {(props.districts ?? []).map((item) => (
+              <option key={item.id} value={item.id}>{item.name_uz}</option>
+            ))}
+          </select>
+        </Field>
+      ) : (
+        <p className="self-end pb-2 text-xs text-muted-foreground">{t("admin.trust.placeCityUnit")}</p>
+      )}
+      <Field label={t("admin.trust.placeAddress")}>
         <input
-          aria-label={props.ariaLabel}
-          value={props.value}
-          onChange={(event) => {
-            setPicked(null);
-            props.onChange(event.target.value);
-          }}
-          placeholder="stp_..."
+          aria-label={t("admin.trust.placeAddressAria", { end: props.label })}
+          value={props.address}
+          maxLength={500}
+          onChange={(event) => props.onAddress(event.target.value)}
           className={INPUT}
         />
       </Field>
-      {picked ? (
-        <p className="text-xs text-muted-foreground">{t("admin.trust.stopPicked", { name: picked.name_uz })}</p>
-      ) : (
-        <div className="rounded-[10px] border border-dashed border-border p-2">
-          <StopSearch
-            label={t("admin.trust.stopSearch")}
-            limit={8}
-            onSelect={(stop) => {
-              setPicked(stop);
-              props.onChange(stop.id);
-            }}
-          />
-        </div>
-      )}
-    </div>
+      {problem && problem.problem !== "incomplete" ? (
+        <p role="alert" className="text-xs font-medium text-destructive sm:col-span-3">
+          {problem.problem === "no_centre"
+            ? t("admin.trust.placeNoCentre", { name: problem.name })
+            : t("admin.trust.placeNoDistricts", { name: problem.name })}
+        </p>
+      ) : null}
+    </fieldset>
   );
 }
 
@@ -1348,8 +1449,24 @@ function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
   useEffect(() => {
     parcelCategories().then((catalog) => setCategories(catalog.items ?? [])).catch(() => setCategories([]));
   }, []);
+  const [regions, setRegions] = useState<RegionDTO[]>([]);
+  const [districtsByRegion, setDistrictsByRegion] = useState<Record<string, DistrictDTO[]>>({});
+  useEffect(() => {
+    adminRegions().then(setRegions).catch(() => setRegions([]));
+  }, []);
+  useEffect(() => {
+    for (const regionId of [form.originRegion, form.destRegion]) {
+      if (!regionId || districtsByRegion[regionId]) continue;
+      adminDistricts(regionId)
+        .then((rows) => setDistrictsByRegion((current) => ({ ...current, [regionId]: rows.filter((row) => row.is_active !== false) })))
+        .catch(() => setDistrictsByRegion((current) => ({ ...current, [regionId]: [] })));
+    }
+  }, [form.originRegion, form.destRegion]);
+  const regionOf = (id: string) => regions.find((item) => item.id === id);
+  const origin = placeEnd(regionOf(form.originRegion), districtsByRegion[form.originRegion], form.originDistrict, form.originAddress);
+  const destination = placeEnd(regionOf(form.destRegion), districtsByRegion[form.destRegion], form.destDistrict, form.destAddress);
   const [created, setCreated] = useState<{ listing: AdminListingDTO; warnings: ApiWarning[] } | null>(null);
-  const body = onBehalfBody(form);
+  const body = onBehalfBody(form, origin, destination);
   const set = <K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
@@ -1404,8 +1521,30 @@ function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
         ) : (
           <div />
         )}
-        <StopField label={t("admin.trust.originStop")} ariaLabel={t("admin.trust.originStopAria")} value={form.originStop} onChange={(value) => set("originStop", value)} />
-        <StopField label={t("admin.trust.destStop")} ariaLabel={t("admin.trust.destStopAria")} value={form.destinationStop} onChange={(value) => set("destinationStop", value)} />
+        <PlaceField
+          label={t("admin.trust.originPlace")}
+          regions={regions}
+          districts={districtsByRegion[form.originRegion]}
+          regionId={form.originRegion}
+          districtId={form.originDistrict}
+          address={form.originAddress}
+          resolved={origin}
+          onRegion={(id) => setForm((current) => ({ ...current, originRegion: id, originDistrict: "" }))}
+          onDistrict={(id) => set("originDistrict", id)}
+          onAddress={(value) => set("originAddress", value)}
+        />
+        <PlaceField
+          label={t("admin.trust.destPlace")}
+          regions={regions}
+          districts={districtsByRegion[form.destRegion]}
+          regionId={form.destRegion}
+          districtId={form.destDistrict}
+          address={form.destAddress}
+          resolved={destination}
+          onRegion={(id) => setForm((current) => ({ ...current, destRegion: id, destDistrict: "" }))}
+          onDistrict={(id) => set("destDistrict", id)}
+          onAddress={(value) => set("destAddress", value)}
+        />
         <Field label={t("admin.trust.windowStart")}>
           <input aria-label={t("admin.trust.windowStartAria")} type="datetime-local" value={form.start} onChange={(event) => set("start", event.target.value)} className={INPUT} />
         </Field>
@@ -1453,7 +1592,9 @@ function OnBehalfTab({ caps }: { caps: CapabilitiesDTO | null }) {
         question={t("admin.trust.createListingConfirm")}
         onConfirm={async (key) => {
           if (!body) return;
-          const result = await createListingOnBehalf(body, key);
+          const result = await createListingOnBehalf(body, key).catch((cause: unknown) => {
+            throw explainOnBehalfError(cause);
+          });
           setCreated({ listing: result.data, warnings: result.warnings });
           setForm(EMPTY_FORM);
         }}

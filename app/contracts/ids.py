@@ -78,6 +78,8 @@ class PublicIdPrefix(StrEnum):
     PROMO_BUDGET_REQUEST = "pbr"
     # referral Q123 (additive): approved campaign combinations
     PROMO_COMBINATION = "pcb"
+    # ADR-0027 (additive): a driver's standing direction (Q150)
+    DRIVER_DIRECTION = "drd"
     # ADR-0025 (additive): a client's saved trip/parcel request
     TRIP_INTENT = "tin"
 

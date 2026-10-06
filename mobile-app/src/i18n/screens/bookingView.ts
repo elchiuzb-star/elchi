@@ -42,9 +42,9 @@ export const bookingViewMessages = {
 
   // --- client-listing-detail ---
   "listingDetail.title": { uz: "Buyurtma tafsilotlari", ru: "Детали заказа" },
-  "listingDetail.pickupStop": { uz: "Olib ketish bekati", ru: "Остановка отправления" },
+  "listingDetail.pickupStop": { uz: "Olib ketish joyi", ru: "Место отправления"},
   "listingDetail.pickupPoint": { uz: "Olib ketish joyi", ru: "Место отправления" },
-  "listingDetail.dropoffStop": { uz: "Yetkazish bekati", ru: "Остановка доставки" },
+  "listingDetail.dropoffStop": { uz: "Yetkazish joyi", ru: "Место доставки"},
   "listingDetail.dropoffPoint": { uz: "Yetkazish joyi", ru: "Место доставки" },
   "listingDetail.departureWindow": { uz: "Jo'nash oynasi", ru: "Время отправления" },
   "listingDetail.parcel": { uz: "Posilka", ru: "Посылка" },

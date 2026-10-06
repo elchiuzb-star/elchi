@@ -78,6 +78,12 @@ class Trip(Base):
         Index("ix_trips_driver_user_id_planned_start_at", "driver_user_id", "planned_start_at", "id"),
         Index("ix_trips_vehicle_id", "vehicle_id"),
         Index("ix_trips_status_planned_start_at", "status", "planned_start_at"),
+        Index(
+            "ix_trips_direction_id",
+            "direction_id",
+            postgresql_where=text("direction_id IS NOT NULL"),
+            sqlite_where=text("direction_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
@@ -109,6 +115,10 @@ class Trip(Base):
     detour_used_m: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     pickup_wait_minutes: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("10"))
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    # ADR-0027 (0096): the driver direction this trip was made from; manual and legacy trips have none.
+    direction_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("driver_directions.id", name="fk_trips_direction_id")
+    )
     cancel_reason: Mapped[str | None] = mapped_column(Text)
     interrupted_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -155,4 +165,63 @@ class TripSegmentResource(Base):
     cargo_used_weight_g: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     cargo_capacity_volume_ml: Mapped[int] = mapped_column(Integer, nullable=False)
     cargo_used_volume_ml: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class DriverDirection(Base):
+    """ADR-0027 (0096): a driver's standing "where from -> where to" (Q150).
+
+    Region + optional district on each end, the car and the capacity it offers. No time, stop, corridor or route is
+    asked from the driver: ``corridor_id`` is what the server resolved, kept for matching. Trips are made from a
+    direction by the system when the driver makes an offer (Q152).
+    """
+
+    __tablename__ = "driver_directions"
+    __table_args__ = (
+        UniqueConstraint("public_id", name="uq_driver_directions_public_id"),
+        Index("ix_driver_directions_driver_status", "driver_user_id", "status", "id"),
+        Index("ix_driver_directions_corridor", "corridor_id"),
+        Index(
+            "uq_driver_directions_live_ends",
+            "driver_user_id",
+            "origin_region_id",
+            "origin_district_id",
+            "destination_region_id",
+            "destination_district_id",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+            postgresql_where=text("status <> 'archived'"),
+            sqlite_where=text("status <> 'archived'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
+    public_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    driver_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", name="fk_driver_directions_driver_user_id"), nullable=False
+    )
+    vehicle_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("vehicles.id", name="fk_driver_directions_vehicle_id"), nullable=False
+    )
+    corridor_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("service_corridors.id", name="fk_driver_directions_corridor_id"), nullable=False
+    )
+    origin_region_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("regions.id", name="fk_driver_directions_origin_region_id"), nullable=False
+    )
+    origin_district_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("geo_districts.id", name="fk_driver_directions_origin_district_id")
+    )
+    destination_region_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("regions.id", name="fk_driver_directions_destination_region_id"), nullable=False
+    )
+    destination_district_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("geo_districts.id", name="fk_driver_directions_destination_district_id")
+    )
+    seat_capacity: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    cargo_capacity_weight_g: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    cargo_capacity_volume_ml: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'active'"))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

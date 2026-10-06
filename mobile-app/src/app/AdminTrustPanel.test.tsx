@@ -54,6 +54,28 @@ vi.mock("../api/v2/admin-market.api", async (importOriginal) => {
   };
 });
 
+vi.mock("../api/v2/admin-platform.api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/v2/admin-platform.api")>();
+  return {
+    ...actual,
+    adminRegions: vi.fn(async () => [
+      { id: "reg_tk", code: "UZ-TK", name_uz: "Toshkent shahri", requires_district: false, center_lat: 41.31, center_lng: 69.28 },
+      { id: "reg_sa", code: "UZ-SA", name_uz: "Samarqand viloyati", requires_district: true, center_lat: 39.65, center_lng: 66.96 },
+    ]),
+    adminDistricts: vi.fn(async (regionId: string) =>
+      regionId === "reg_tk"
+        ? [
+            { id: "dis_far", name_uz: "Bektemir", region: { id: "reg_tk", code: "UZ-TK", name_uz: "Toshkent shahri" }, center_lat: 41.2, center_lng: 69.33, is_active: true, stops_count: 0 },
+            { id: "dis_near", name_uz: "Shayxontohur", region: { id: "reg_tk", code: "UZ-TK", name_uz: "Toshkent shahri" }, center_lat: 41.32, center_lng: 69.27, is_active: true, stops_count: 0 },
+          ]
+        : [
+            { id: "dis_sam", name_uz: "Samarqand sh.", region: { id: "reg_sa", code: "UZ-SA", name_uz: "Samarqand viloyati" }, center_lat: 39.65, center_lng: 66.97, is_active: true, stops_count: 0 },
+            { id: "dis_nocentre", name_uz: "Nurobod", region: { id: "reg_sa", code: "UZ-SA", name_uz: "Samarqand viloyati" }, center_lat: null, center_lng: null, is_active: true, stops_count: 0 },
+          ],
+    ),
+  };
+});
+
 vi.mock("../api/v2/mfa.api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/v2/mfa.api")>();
   return { ...actual, stepUp: vi.fn() };
@@ -322,13 +344,21 @@ describe("listing on behalf (O7)", () => {
     const create = await screen.findByRole("button", { name: "E'lon yaratish" });
     expect(create).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Egasi"), { target: { value: "usr_c" } });
-    fireEvent.change(screen.getByLabelText("Jo'nash bekati"), { target: { value: "stp_1" } });
-    fireEvent.change(screen.getByLabelText("Borish bekati"), { target: { value: "stp_2" } });
+    // 06.10.2026: each end is a place - region, district, optional address - never a stop
+    fireEvent.change(await screen.findByLabelText("Olib ketish joyi: hudud"), { target: { value: "reg_tk" } });
+    fireEvent.change(screen.getByLabelText("Olib ketish joyi: manzil"), { target: { value: "Chorsu bozori" } });
+    fireEvent.change(screen.getByLabelText("Tushirish joyi: hudud"), { target: { value: "reg_sa" } });
+    await screen.findByRole("option", { name: "Nurobod" });
+    fireEvent.change(screen.getByLabelText("Tushirish joyi: tuman"), { target: { value: "dis_nocentre" } });
     fireEvent.change(screen.getByLabelText("Oyna boshi"), { target: { value: "2026-09-25T08:00" } });
     fireEvent.change(screen.getByLabelText("Oyna oxiri"), { target: { value: "2026-09-25T10:00" } });
     fireEvent.change(screen.getByLabelText("Narx"), { target: { value: "100000" } });
     expect(create).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Rozilik dalili"), { target: { value: "murojaat #42" } });
+    // a district without a catalogue centre is said in words and blocks the submit - no 0,0 is sent
+    expect(screen.getByText(/«Nurobod» uchun katalogda markaz koordinatasi yo'q/)).toBeInTheDocument();
+    expect(create).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Tushirish joyi: tuman"), { target: { value: "dis_sam" } });
     expect(create).toBeEnabled();
     fireEvent.click(create);
     fireEvent.click(screen.getByRole("button", { name: "Ha, bajarish" }));
@@ -337,9 +367,32 @@ describe("listing on behalf (O7)", () => {
     expect(body).toMatchObject({
       owner_user_id: "usr_c", consent_reference: "murojaat #42", unit_price_minor: 10_000_000,
       departure_window_start: "2026-09-25T08:00:00+05:00",
+      // Tashkent city is its own unit: region centre, nearest catalogue district as the advisory id
+      origin_point: { lat: 41.31, lng: 69.28, district_id: "dis_near", address: "Chorsu bozori" },
+      destination_point: { lat: 39.65, lng: 66.97, district_id: "dis_sam", address: null },
     });
+    expect(body).not.toHaveProperty("origin_stop_id");
+    expect(body).not.toHaveProperty("destination_stop_id");
     expect(typeof key).toBe("string");
     expect(await screen.findByText(/lst_1/)).toBeInTheDocument();
+  });
+
+  it("says a 409 ROUTE_MISMATCH as 'no ELCHI road between these places'", async () => {
+    caps(OPERATOR);
+    m(trust.createListingOnBehalf).mockRejectedValue(new ApiError(409, { code: "ROUTE_MISMATCH", message: "x" }));
+    render(<AdminTrustPanel initialTab="on_behalf" />);
+    fireEvent.change(await screen.findByLabelText("Egasi"), { target: { value: "usr_c" } });
+    fireEvent.change(await screen.findByLabelText("Olib ketish joyi: hudud"), { target: { value: "reg_tk" } });
+    fireEvent.change(screen.getByLabelText("Tushirish joyi: hudud"), { target: { value: "reg_sa" } });
+    await screen.findByRole("option", { name: "Samarqand sh." });
+    fireEvent.change(screen.getByLabelText("Tushirish joyi: tuman"), { target: { value: "dis_sam" } });
+    fireEvent.change(screen.getByLabelText("Oyna boshi"), { target: { value: "2026-09-25T08:00" } });
+    fireEvent.change(screen.getByLabelText("Oyna oxiri"), { target: { value: "2026-09-25T10:00" } });
+    fireEvent.change(screen.getByLabelText("Narx"), { target: { value: "100000" } });
+    fireEvent.change(screen.getByLabelText("Rozilik dalili"), { target: { value: "murojaat #42" } });
+    fireEvent.click(screen.getByRole("button", { name: "E'lon yaratish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ha, bajarish" }));
+    expect(await screen.findByText("Bu ikki joy orasida hali ELCHI marshruti yo'q")).toBeInTheDocument();
   });
 
   it("is not offered without ops.booking_command", async () => {
@@ -353,22 +406,34 @@ describe("listing on behalf (O7)", () => {
   it("builds no body without consent and reads times as Tashkent", () => {
     expect(tashkentIso("2026-09-25T08:00")).toBe("2026-09-25T08:00:00+05:00");
     expect(tashkentIso("")).toBeNull();
+    const ends = {
+      originRegion: "r1", originDistrict: "d1", originAddress: "", destRegion: "r2", destDistrict: "d2", destAddress: "",
+    };
+    const a = { lat: 41.3, lng: 69.2, district_id: "d1", address: null };
+    const b = { lat: 39.6, lng: 66.9, district_id: "d2", address: null };
     expect(
-      onBehalfBody({
-        owner: "usr_c", consent: "", kind: "request", service: "passenger", tripId: "", originStop: "a",
-        destinationStop: "b", start: "2026-09-25T08:00", end: "2026-09-25T09:00", basis: "per_seat", price: "1000",
-        seats: "1", parcelType: "box", categoryId: "", comment: "",
-      }),
+      onBehalfBody(
+        {
+          owner: "usr_c", consent: "", kind: "request", service: "passenger", tripId: "", ...ends,
+          start: "2026-09-25T08:00", end: "2026-09-25T09:00", basis: "per_seat", price: "1000",
+          seats: "1", parcelType: "box", categoryId: "", comment: "",
+        },
+        a,
+        b,
+      ),
     ).toBeNull();
     // Q140 (ADR-0026): a parcel on someone's behalf needs a size category, never a typed weight
     const parcel = {
-      owner: "usr_c", consent: "call 12", kind: "request" as const, service: "parcel" as const, tripId: "", originStop: "a",
-      destinationStop: "b", start: "2026-09-25T08:00", end: "2026-09-25T09:00", basis: "total" as const, price: "30000",
+      owner: "usr_c", consent: "call 12", kind: "request" as const, service: "parcel" as const, tripId: "", ...ends,
+      start: "2026-09-25T08:00", end: "2026-09-25T09:00", basis: "total" as const, price: "30000",
       seats: "1", parcelType: "box" as const, categoryId: "", comment: "",
     };
-    expect(onBehalfBody(parcel)).toBeNull();
-    expect(onBehalfBody({ ...parcel, categoryId: "pct_small" })?.parcel).toMatchObject({ category_id: "pct_small" });
-    expect(onBehalfBody({ ...parcel, categoryId: "pct_small" })?.kind).toBe("request");
+    expect(onBehalfBody(parcel, a, b)).toBeNull();
+    expect(onBehalfBody({ ...parcel, categoryId: "pct_small" }, a, b)?.parcel).toMatchObject({ category_id: "pct_small" });
+    expect(onBehalfBody({ ...parcel, categoryId: "pct_small" }, a, b)?.kind).toBe("request");
+    // an end the catalogue cannot place, or two equal ends, build no body
+    expect(onBehalfBody({ ...parcel, categoryId: "pct_small" }, { problem: "no_centre", name: "Nurobod" }, b)).toBeNull();
+    expect(onBehalfBody({ ...parcel, categoryId: "pct_small" }, a, { ...a, district_id: "d2" })).toBeNull();
   });
 });
 

@@ -28,6 +28,8 @@ class StopRef:
     name_uz: str
     name_ru: str | None
     is_active: bool
+    #: Q158: the district the internal route node sits in - what a client/driver card shows instead of a stop name.
+    district_name_uz: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -22,8 +22,8 @@ const trip = {
   vehicle: { id: "veh_1", make_model: "Cobalt", color: "oq", plate_masked: "01 *** AA", seat_capacity: 4 },
   route_version_id: "rtv_1",
   stops: [
-    { seq: 1, stop: { id: "stp_a", name_uz: "Toshkent" }, planned_arrival_at: at, dwell_minutes: 5 },
-    { seq: 2, stop: { id: "stp_b", name_uz: "Qarshi" }, planned_arrival_at: at, dwell_minutes: 5 },
+    { seq: 1, stop: { id: "stp_a", name_uz: "Toshkent bekati", district_name_uz: "Toshkent shahri" }, planned_arrival_at: at, dwell_minutes: 5 },
+    { seq: 2, stop: { id: "stp_b", name_uz: "Qarshi bekati", district_name_uz: "Qarshi" }, planned_arrival_at: at, dwell_minutes: 5 },
   ],
   planned_start_at: at,
   planned_end_at: at,
@@ -49,7 +49,7 @@ const manifest = {
   trip_version: 1,
   stops: [
     {
-      seq: 1, planned_arrival_at: at, stop: { id: "stp_a", name_uz: "Toshkent" },
+      seq: 1, planned_arrival_at: at, stop: { id: "stp_a", name_uz: "Toshkent bekati", district_name_uz: "Toshkent shahri" },
       pickups: [
         { booking_id: "bkg_1", service_type: "passenger", service_status: "confirmed", client_first_name: "Ali", seats: 2, contact_phone: null },
         { booking_id: "bkg_2", service_type: "parcel", service_status: "picked_up", client_first_name: "Vali", parcel_summary: "Quti, 2 kg", contact_phone: "+998900000000" },
@@ -69,7 +69,9 @@ describe("DriverTripDetail", () => {
     m.tripManifest.mockResolvedValue(manifest as never);
     const { container } = render(<DriverTripDetail tripId="trp_1" />);
     expect(container.querySelectorAll(".el-skeleton").length).toBeGreaterThan(0);
-    expect(await screen.findByTestId("trip-route")).toHaveTextContent("Toshkent → Qarshi");
+    // Q158: the trip is read by districts; an internal route node's name is never shown
+    expect(await screen.findByTestId("trip-route")).toHaveTextContent("Toshkent shahri → Qarshi");
+    expect(screen.queryByText(/bekat/i)).toBeNull();
     expect(await screen.findByTestId("availability-list")).toHaveTextContent("3 o'rin");
     expect(screen.getByTestId("availability-list")).toHaveTextContent("50 kg");
     const items = await screen.findAllByTestId("manifest-item");

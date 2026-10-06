@@ -650,6 +650,8 @@ function CorridorDetail({ corridor, caps, onChanged }: { corridor: CorridorAdmin
       )}
 
       <Section title={t("admin.platform.stopsAll")}>
+        {/* 06.10.2026: staff work point A -> point B; these nodes stay only for segment capacity, ETA and Q47 */}
+        <p className="text-xs text-muted-foreground">{t("admin.platform.anchorNote")}</p>
         {allStops.error && <Empty>{t("admin.platform.stopsError", { error: allStops.error })}</Empty>}
         {!allStops.data && !allStops.error && <Loading />}
         {allStops.data && allStops.data.length === 0 && <Empty>{t("admin.platform.noStops")}</Empty>}

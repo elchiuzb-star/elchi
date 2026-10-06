@@ -104,23 +104,20 @@ export const panelsBMessages = {
   // --- route map ---
   "routeMap.loading": { uz: "Xarita yuklanmoqda...", ru: "Карта загружается..." },
   "routeMap.missingKey": {
-    uz: "Xarita kaliti kiritilmagan — yo'nalish bekatlar ro'yxati bilan ko'rsatilmoqda.",
-    ru: "Ключ карты не указан — направление показано списком остановок.",
+    uz: "Xarita kaliti kiritilmagan — yo'nalish matn bilan ko'rsatilmoqda.", ru: "Ключ карты не указан — направление показано текстом.",
   },
   "routeMap.failedList": {
-    uz: "Xarita yuklanmadi — yo'nalish bekatlar ro'yxati bilan ko'rsatilmoqda.",
-    ru: "Карта не загрузилась — направление показано списком остановок.",
+    uz: "Xarita yuklanmadi — yo'nalish matn bilan ko'rsatilmoqda.", ru: "Карта не загрузилась — направление показано текстом.",
   },
   "routeMap.failed": { uz: "Xarita yuklanmadi.", ru: "Карта не загрузилась." },
 
   // --- stop search and referral code check ---
-  "stopSearch.label": { uz: "Bekat qidirish", ru: "Поиск остановки" },
+  "stopSearch.label": { uz: "Joy qidirish", ru: "Поиск места"},
   "stopSearch.placeholder": { uz: "Masalan: Qarshi avtovokzal", ru: "Например: Карши автовокзал" },
   "stopSearch.minChars": { uz: "Kamida 2 ta harf kiriting.", ru: "Введите не менее 2 букв." },
   "stopSearch.searching": { uz: "Qidirilmoqda...", ru: "Идёт поиск..." },
   "stopSearch.empty": {
-    uz: "Tasdiqlangan bekat topilmadi. Boshqa nom bilan qidiring.",
-    ru: "Подтверждённая остановка не найдена. Попробуйте другое название.",
+    uz: "Joy topilmadi. Boshqa nom bilan qidiring.", ru: "Место не найдено. Попробуйте другое название.",
   },
   "stopSearch.inactive": { uz: "faol emas", ru: "неактивна" },
   "stopSearch.referralLabel": { uz: "Taklif kodi", ru: "Код приглашения" },

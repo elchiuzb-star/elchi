@@ -81,7 +81,8 @@ describe("role matrix (§2: design HIDE and the rules)", () => {
   it("admin and super_admin see every panel", () => {
     expect(visible("admin")).toEqual(ALL_SECTIONS);
     expect(visible("super_admin")).toEqual(ALL_SECTIONS);
-    expect(ALL_SECTIONS).toHaveLength(24);
+    // ADR-0027 added «Yo'nalishlar» (driverDirections) to the market group.
+    expect(ALL_SECTIONS).toHaveLength(25);
   });
 
   it("operator does not see Moliya, Xodimlar or Audit jurnali", () => {

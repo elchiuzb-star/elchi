@@ -278,6 +278,109 @@
         "title": "AdminDriverBlock",
         "type": "object"
       },
+      "AdminDriverDirectionDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "active_trip": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DirectionTripRefDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cargo_capacity_volume_ml": {
+            "title": "Cargo Capacity Volume Ml",
+            "type": "integer"
+          },
+          "cargo_capacity_weight_g": {
+            "title": "Cargo Capacity Weight G",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/DirectionEndDTO"
+          },
+          "driver_display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver Display Name"
+          },
+          "driver_id": {
+            "title": "Driver Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/DirectionEndDTO"
+          },
+          "seat_capacity": {
+            "title": "Seat Capacity",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "paused",
+              "archived"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "vehicle_id": {
+            "title": "Vehicle Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "via_district_names": {
+            "description": "Districts the resolved road passes between the two ends, in travel order.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Via District Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "origin",
+          "destination",
+          "vehicle_id",
+          "seat_capacity",
+          "cargo_capacity_weight_g",
+          "cargo_capacity_volume_ml",
+          "status",
+          "version",
+          "created_at",
+          "updated_at",
+          "driver_id"
+        ],
+        "title": "AdminDriverDirectionDTO",
+        "type": "object"
+      },
       "AdminDriverReject": {
         "additionalProperties": false,
         "properties": {
@@ -5485,6 +5588,179 @@
         "title": "DeviceDTO",
         "type": "object"
       },
+      "DirectionEndDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "district_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District Id"
+          },
+          "district_name_ru": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District Name Ru"
+          },
+          "district_name_uz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District Name Uz"
+          },
+          "region_id": {
+            "title": "Region Id",
+            "type": "string"
+          },
+          "region_name_ru": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Name Ru"
+          },
+          "region_name_uz": {
+            "title": "Region Name Uz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "region_id",
+          "region_name_uz"
+        ],
+        "title": "DirectionEndDTO",
+        "type": "object"
+      },
+      "DirectionEndInput": {
+        "additionalProperties": false,
+        "description": "One end of a driver direction: a region, and a district unless the region is a city without districts.",
+        "properties": {
+          "district_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District Id"
+          },
+          "region_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Region Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "region_id"
+        ],
+        "title": "DirectionEndInput",
+        "type": "object"
+      },
+      "DirectionOfferCreate": {
+        "additionalProperties": false,
+        "description": "Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027).",
+        "properties": {
+          "listing_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Listing Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "pickup_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Q153: the time the driver would pick up, when it differs from the client's window. A new or empty trip is planned around it; on a trip with bookings it must be that trip's own ETA (±30 min).",
+            "title": "Pickup At"
+          },
+          "unit_price_minor": {
+            "exclusiveMinimum": 0.0,
+            "title": "Unit Price Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "listing_id",
+          "unit_price_minor"
+        ],
+        "title": "DirectionOfferCreate",
+        "type": "object"
+      },
+      "DirectionOfferDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "thread": {
+            "$ref": "#/components/schemas/ProposalThreadDTO"
+          },
+          "time_proposal": {
+            "description": "The offer's pickup lies outside the client's window (Q153).",
+            "title": "Time Proposal",
+            "type": "boolean"
+          },
+          "trip": {
+            "$ref": "#/components/schemas/DirectionTripRefDTO"
+          },
+          "trip_created": {
+            "title": "Trip Created",
+            "type": "boolean"
+          },
+          "trip_retimed": {
+            "title": "Trip Retimed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "thread",
+          "trip",
+          "trip_created",
+          "trip_retimed",
+          "time_proposal"
+        ],
+        "title": "DirectionOfferDTO",
+        "type": "object"
+      },
       "DirectionPreviewDTO": {
         "additionalProperties": false,
         "description": "What the server can promise about two marked places, before anything is created (Q88).\n\nThis exists so the client never has to guess. Which corridors exist, which of their routes are confirmed\nand how far off the road each one tolerates are all server facts; the screen asks and renders the answer,\nincluding the answer \"no route serves these two places\".",
@@ -5560,6 +5836,143 @@
           "destination"
         ],
         "title": "DirectionPreviewDTO",
+        "type": "object"
+      },
+      "DirectionRequestItemDTO": {
+        "additionalProperties": false,
+        "description": "A client request along a driver direction, and how the driver's trip meets it.",
+        "properties": {
+          "fit": {
+            "description": "fits_trip: the active trip reaches the pickup in the client's window; no_trip: no trip yet, the first offer plans one; time_differs: the car would be there at pickup_eta, outside the client's window - an offer is then a time proposal (Q153).",
+            "enum": [
+              "fits_trip",
+              "no_trip",
+              "time_differs"
+            ],
+            "title": "Fit",
+            "type": "string"
+          },
+          "listing": {
+            "$ref": "#/components/schemas/ListingPublicDTO"
+          },
+          "match_type": {
+            "$ref": "#/components/schemas/MatchType",
+            "description": "exact: both ends in the direction's areas; on_route: on the way."
+          },
+          "my_thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The driver's own open offer on this request, if any.",
+            "title": "My Thread Id"
+          },
+          "pickup_eta": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the car would be at the pickup.",
+            "title": "Pickup Eta"
+          },
+          "suggested_departure_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "no_trip / an empty trip: when the system would plan the departure.",
+            "title": "Suggested Departure At"
+          }
+        },
+        "required": [
+          "listing",
+          "match_type",
+          "fit"
+        ],
+        "title": "DirectionRequestItemDTO",
+        "type": "object"
+      },
+      "DirectionRequestsDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "active_trip": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DirectionTripRefDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "direction_id": {
+            "title": "Direction Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DirectionRequestItemDTO"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "direction_id",
+          "items"
+        ],
+        "title": "DirectionRequestsDTO",
+        "type": "object"
+      },
+      "DirectionTripRefDTO": {
+        "additionalProperties": false,
+        "description": "The direction's current trip, made by the system from the driver's first offer (Q152).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "planned_end_at": {
+            "format": "date-time",
+            "title": "Planned End At",
+            "type": "string"
+          },
+          "planned_start_at": {
+            "format": "date-time",
+            "title": "Planned Start At",
+            "type": "string"
+          },
+          "seats_booked": {
+            "description": "Most seats taken on any segment of the trip.",
+            "title": "Seats Booked",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TripStatus"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "planned_start_at",
+          "planned_end_at",
+          "seats_booked"
+        ],
+        "title": "DirectionTripRefDTO",
         "type": "object"
       },
       "DisclosureDTO": {
@@ -6175,6 +6588,231 @@
           "driver_commission_percent"
         ],
         "title": "DriverCommissionUpdate",
+        "type": "object"
+      },
+      "DriverDirectionCreate": {
+        "additionalProperties": false,
+        "description": "Q150: \"where from -> where to\". No time, stop, corridor or route - the server resolves the road itself.",
+        "properties": {
+          "cargo_capacity_volume_ml": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: the car's cargo limit.",
+            "title": "Cargo Capacity Volume Ml"
+          },
+          "cargo_capacity_weight_g": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: the car's cargo limit.",
+            "title": "Cargo Capacity Weight G"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/DirectionEndInput"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/DirectionEndInput"
+          },
+          "seat_capacity": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: the car's seats.",
+            "title": "Seat Capacity"
+          },
+          "vehicle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit when the driver has exactly one approved car.",
+            "title": "Vehicle Id"
+          }
+        },
+        "required": [
+          "origin",
+          "destination"
+        ],
+        "title": "DriverDirectionCreate",
+        "type": "object"
+      },
+      "DriverDirectionDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "active_trip": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DirectionTripRefDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cargo_capacity_volume_ml": {
+            "title": "Cargo Capacity Volume Ml",
+            "type": "integer"
+          },
+          "cargo_capacity_weight_g": {
+            "title": "Cargo Capacity Weight G",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/DirectionEndDTO"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/DirectionEndDTO"
+          },
+          "seat_capacity": {
+            "title": "Seat Capacity",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "paused",
+              "archived"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "vehicle_id": {
+            "title": "Vehicle Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "via_district_names": {
+            "description": "Districts the resolved road passes between the two ends, in travel order.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Via District Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "origin",
+          "destination",
+          "vehicle_id",
+          "seat_capacity",
+          "cargo_capacity_weight_g",
+          "cargo_capacity_volume_ml",
+          "status",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DriverDirectionDTO",
+        "type": "object"
+      },
+      "DriverDirectionPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "cargo_capacity_volume_ml": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cargo Capacity Volume Ml"
+          },
+          "cargo_capacity_weight_g": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cargo Capacity Weight G"
+          },
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "seat_capacity": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seat Capacity"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "paused",
+                  "archived"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "expected_version"
+        ],
+        "title": "DriverDirectionPatch",
         "type": "object"
       },
       "DriverDocumentCreate": {
@@ -7712,6 +8350,60 @@
         "title": "Envelope[DeviceDTO]",
         "type": "object"
       },
+      "Envelope_DirectionOfferDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DirectionOfferDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[DirectionOfferDTO]",
+        "type": "object"
+      },
       "Envelope_DirectionPreviewDTO_": {
         "additionalProperties": false,
         "properties": {
@@ -7766,6 +8458,60 @@
         "title": "Envelope[DirectionPreviewDTO]",
         "type": "object"
       },
+      "Envelope_DirectionRequestsDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DirectionRequestsDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[DirectionRequestsDTO]",
+        "type": "object"
+      },
       "Envelope_DisputeDTO_": {
         "additionalProperties": false,
         "properties": {
@@ -7818,6 +8564,60 @@
           "data"
         ],
         "title": "Envelope[DisputeDTO]",
+        "type": "object"
+      },
+      "Envelope_DriverDirectionDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DriverDirectionDTO"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[DriverDirectionDTO]",
         "type": "object"
       },
       "Envelope_DriverEligibilityDTO_": {
@@ -11687,6 +12487,64 @@
         "title": "Envelope[dict[str, Any]]",
         "type": "object"
       },
+      "Envelope_list_AdminDriverDirectionDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdminDriverDirectionDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[AdminDriverDirectionDTO]]",
+        "type": "object"
+      },
       "Envelope_list_AdminStopDTO__": {
         "additionalProperties": false,
         "properties": {
@@ -12729,6 +13587,64 @@
           "data"
         ],
         "title": "Envelope[list[DistrictDTO]]",
+        "type": "object"
+      },
+      "Envelope_list_DriverDirectionDTO__": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DriverDirectionDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageMeta"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "const": true,
+            "default": true,
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ApiWarning"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Envelope[list[DriverDirectionDTO]]",
         "type": "object"
       },
       "Envelope_list_EnrollmentOfferDTO__": {
@@ -21296,6 +22212,18 @@
             ],
             "title": "Message"
           },
+          "outside_request_window": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0027 Q153: a driver's counter may move the pickup outside the request window when true. A counter that keeps the current window keeps its time proposal; a client cannot move it outside.",
+            "title": "Outside Request Window"
+          },
           "parcel": {
             "anyOf": [
               {
@@ -21418,6 +22346,18 @@
               }
             ],
             "title": "Message"
+          },
+          "outside_request_window": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0027 Q153: true - the driver proposes a pickup time outside the client's request window (at most 12 h away). Only a driver may; the client's own accept or counter is the consent. Omitted / false: the window must meet the request window, as before.",
+            "title": "Outside Request Window"
           },
           "parcel": {
             "anyOf": [
@@ -22105,6 +23045,12 @@
               }
             ],
             "title": "Message"
+          },
+          "outside_request_window": {
+            "default": false,
+            "description": "ADR-0027 Q153: the driver proposes a pickup outside the client's requested time; booking it needs the client's own accept (or the client's counter).",
+            "title": "Outside Request Window",
+            "type": "boolean"
           },
           "pickup_point": {
             "anyOf": [
@@ -24686,6 +25632,18 @@
       "StopRefDTO": {
         "additionalProperties": false,
         "properties": {
+          "district_name_uz": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, never by a stop name (ELCHI works point A -> point B).",
+            "title": "District Name Uz"
+          },
           "id": {
             "description": "Opaque stop id (stp_...).",
             "title": "Id",
@@ -30914,6 +31872,139 @@
         "summary": "Admin Dispute Command",
         "tags": [
           "v2 Trust & support"
+        ]
+      }
+    },
+    "/api/v2/admin/driver-directions": {
+      "get": {
+        "description": "ADR-0027: what a driver said they drive, for staff (read-only; ``ops.view``).",
+        "operationId": "list_admin_driver_directions_api_v2_admin_driver_directions_get",
+        "parameters": [
+          {
+            "description": "usr_... - one driver's directions.",
+            "in": "query",
+            "name": "driver_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "usr_... - one driver's directions.",
+              "title": "Driver Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_AdminDriverDirectionDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Admin Driver Directions",
+        "tags": [
+          "v2 Trips"
         ]
       }
     },
@@ -44743,6 +45834,642 @@
         ]
       }
     },
+    "/api/v2/driver-directions": {
+      "post": {
+        "description": "Q150: the driver names only \"where from -> where to\"; the server finds the road and keeps the direction.\n\n``409 ROUTE_MISMATCH`` (``no_corridor_serves_direction``) is the product's \"no ELCHI road here yet\" answer.",
+        "operationId": "create_driver_direction_api_v2_driver_directions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverDirectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_DriverDirectionDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Driver Direction",
+        "tags": [
+          "v2 Trips"
+        ]
+      }
+    },
+    "/api/v2/driver-directions/{direction_id}": {
+      "get": {
+        "operationId": "get_driver_direction_api_v2_driver_directions__direction_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "direction_id",
+            "required": true,
+            "schema": {
+              "title": "Direction Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_DriverDirectionDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Driver Direction",
+        "tags": [
+          "v2 Trips"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_driver_direction_api_v2_driver_directions__direction_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "direction_id",
+            "required": true,
+            "schema": {
+              "title": "Direction Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverDirectionPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_DriverDirectionDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Patch Driver Direction",
+        "tags": [
+          "v2 Trips"
+        ]
+      }
+    },
+    "/api/v2/driver-directions/{direction_id}/offers": {
+      "post": {
+        "description": "Q152: offer on a request from a direction - the system takes, re-times or plans the trip, then proposes.\n\n``409 TIME_WINDOW_CONFLICT`` with ``details.eta`` means the car would be there at another time; resend with\n``pickup_at`` to make it a time proposal (Q153), which the client accepts or not.",
+        "operationId": "offer_from_direction_api_v2_driver_directions__direction_id__offers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "direction_id",
+            "required": true,
+            "schema": {
+              "title": "Direction Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectionOfferCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_DirectionOfferDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Offer From Direction",
+        "tags": [
+          "v2 Marketplace"
+        ]
+      }
+    },
+    "/api/v2/driver-directions/{direction_id}/requests": {
+      "get": {
+        "description": "Q151: client requests along the driver's direction - on the active trip's time, or planned around the client.",
+        "operationId": "list_direction_requests_api_v2_driver_directions__direction_id__requests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "direction_id",
+            "required": true,
+            "schema": {
+              "title": "Direction Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "service_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ServiceType"
+            }
+          },
+          {
+            "description": "ISO-8601 with offset",
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "description": "ISO-8601 with offset",
+              "format": "date-time",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ISO-8601 with offset",
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "description": "ISO-8601 with offset",
+              "format": "date-time",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_DirectionRequestsDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Direction Requests",
+        "tags": [
+          "v2 Marketplace"
+        ]
+      }
+    },
     "/api/v2/events": {
       "get": {
         "operationId": "list_events_api_v2_events_get",
@@ -47390,6 +49117,117 @@
         "summary": "Get My Capabilities",
         "tags": [
           "v2 Identity"
+        ]
+      }
+    },
+    "/api/v2/me/driver-directions": {
+      "get": {
+        "operationId": "list_my_driver_directions_api_v2_me_driver_directions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_list_DriverDirectionDTO__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List My Driver Directions",
+        "tags": [
+          "v2 Trips"
         ]
       }
     },

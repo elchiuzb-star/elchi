@@ -18,6 +18,7 @@ def _stop(info) -> StopRef:  # noqa: ANN001 - geo.service.StopInfo
         name_uz=info.name_uz,
         name_ru=info.name_ru,
         is_active=info.is_active,
+        district_name_uz=info.district_name_uz,
     )
 
 

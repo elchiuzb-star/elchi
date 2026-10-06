@@ -18,6 +18,7 @@ import {
   Bell,
   Building2,
   Car,
+  Route,
   Check,
   ChevronsLeft,
   CircleDollarSign,
@@ -103,6 +104,7 @@ import { AdminSecurityPanel } from "./AdminSecurityPanel";
 import { AdminPriceBandsPanel } from "./AdminPriceBandsPanel";
 import { AdminPromoPanel } from "./AdminPromoPanel";
 import { AdminVehiclesPanel } from "./AdminVehiclesPanel";
+import { AdminDirectionsPanel } from "./AdminDirectionsPanel";
 import { AdminFinancePanel } from "./AdminFinancePanel";
 import { AdminPlatformPanel } from "./AdminPlatformPanel";
 import { AdminTrustPanel } from "./AdminTrustPanel";
@@ -111,7 +113,7 @@ import { AdminSupportThreadsPanel } from "./AdminSupportThreadsPanel";
 export type Section =
   | "overview"
   // Bozor (v2)
-  | "opsQueues" | "trustOps" | "vehicles" | "priceBands" | "disputesV2"
+  | "opsQueues" | "trustOps" | "vehicles" | "driverDirections" | "priceBands" | "disputesV2"
   // Ishonch
   | "support" | "supportThreads"
   // Moliya
@@ -137,6 +139,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "opsQueues", icon: Inbox, label: "admin.nav.opsQueues" },
       { id: "trustOps", icon: Scale, label: "admin.nav.trustOps" },
       { id: "vehicles", icon: Car, label: "admin.nav.vehicles" },
+      // ADR-0027: what drivers said they drive; read-only (ops.view).
+      { id: "driverDirections", icon: Route, label: "admin.nav.driverDirections" },
       { id: "priceBands", icon: CircleDollarSign, label: "admin.nav.priceBands" },
       { id: "disputesV2", icon: Flag, label: "admin.nav.disputesV2" },
     ],
@@ -207,7 +211,7 @@ export const ROLE_HIDDEN: Record<StaffRole, readonly Section[]> = {
   super_admin: [],
   finance: [
     "orders", "drivers", "clients", "cities", "tariffs", "disputes",
-    "vehicles", "priceBands", "disputesV2", "supportThreads", "support", "platform",
+    "vehicles", "driverDirections", "priceBands", "disputesV2", "supportThreads", "support", "platform",
     "users", "audit",
   ],
 };
@@ -868,6 +872,7 @@ export default function AdminApp() {
             {section === "priceBands" && <AdminPriceBandsPanel />}
             {section === "promotions" && <AdminPromoPanel />}
             {section === "vehicles" && <AdminVehiclesPanel />}
+            {section === "driverDirections" && <AdminDirectionsPanel />}
             {section === "finance" && <AdminFinancePanel />}
             {section === "platform" && <AdminPlatformPanel />}
             {section === "trustOps" && <AdminTrustPanel />}

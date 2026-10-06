@@ -461,8 +461,13 @@ def _check_vehicle_capacity(vehicle: Vehicle, data: TripCreate) -> None:
         raise validation_error("a trip must offer seats, baggage or cargo capacity", field="seat_capacity")
 
 
-def create_trip(session: Session, *, driver_user_id: int, data: TripCreate, now: datetime | None = None) -> Trip:
-    """T4. Overlap is decided by the EXCLUDE constraints, not by a racy pre-check (AC13)."""
+def create_trip(
+    session: Session, *, driver_user_id: int, data: TripCreate, now: datetime | None = None, direction_id: int | None = None
+) -> Trip:
+    """T4. Overlap is decided by the EXCLUDE constraints, not by a racy pre-check (AC13).
+
+    ``direction_id`` (ADR-0027): set when the system makes the trip from a driver direction (Q152).
+    """
     now = _now(now)
     identity_service.lock_user_eligibility(session, [driver_user_id], mode="share")
     caps = identity_service.get_capabilities(session, driver_user_id, now=now)
@@ -505,6 +510,7 @@ def create_trip(session: Session, *, driver_user_id: int, data: TripCreate, now:
         detour_used_m=0,
         pickup_wait_minutes=data.pickup_wait_minutes,
         version=1,
+        direction_id=direction_id,
     )
     session.add(trip)
     _flush_or_translate(session, SCHEDULE_TRANSLATIONS)

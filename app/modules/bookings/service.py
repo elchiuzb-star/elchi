@@ -116,7 +116,7 @@ from app.modules.identity import service as identity_service
 from app.modules.marketplace import intents as marketplace_intents
 from app.modules.marketplace import service as marketplace_service
 from app.modules.marketplace.models import Listing, ProposalVersion
-from app.modules.marketplace.rules import check_proposal_quantity
+from app.modules.marketplace.rules import MID_TRIP_BOOKING_ENABLED, check_proposal_quantity
 from app.modules.platform import service as platform_service
 from app.modules.promotions import booking as promo_booking
 from app.modules.trips import service as trips_service
@@ -705,7 +705,10 @@ def accept_proposal(
         raise DomainError(ErrorCode.LISTING_NOT_OPEN, details={"status": listing.status})
     if ensure_aware_utc(listing.expires_at) <= now or ensure_aware_utc(listing.departure_window_end) <= now:
         raise DomainError(ErrorCode.LISTING_NOT_OPEN, details={"reason": "listing_expired"})
-    if trip.status != TripStatus.PLANNED.value or ensure_aware_utc(trip.booking_cutoff_at) <= now:
+    # ADR-0027 Q154: a boarding / moving trip still takes a booking whose pickup is ahead of the car (checked below,
+    # once the pickup is known); a planned one keeps its cutoff (spec §7).
+    moving = MID_TRIP_BOOKING_ENABLED and marketplace_service.trip_is_moving(trip)
+    if not moving and (trip.status != TripStatus.PLANNED.value or ensure_aware_utc(trip.booking_cutoff_at) <= now):
         raise DomainError(ErrorCode.BOOKING_CUTOFF_PASSED, details={"trip_status": trip.status})
     if version.route_version_id != trip.route_version_id:
         raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "route_version_changed"})
@@ -728,10 +731,24 @@ def accept_proposal(
     from app.contracts.timeutil import windows_intersect
     from app.modules.geo.matching import eta_window
 
-    pickup_occ = occurrences[pickup_seq]
-    eta_start, eta_end = eta_window(pickup_occ.planned_arrival_at, pickup_occ.dwell_minutes, pickup_wait_minutes=trip.pickup_wait_minutes)
-    if not windows_intersect(eta_start, eta_end, version.pickup_window_start, version.pickup_window_end):
-        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "schedule_changed"})
+    if version.pickup_point is None:
+        pickup_occ = occurrences[pickup_seq]
+        eta_start, eta_end = eta_window(pickup_occ.planned_arrival_at, pickup_occ.dwell_minutes, pickup_wait_minutes=trip.pickup_wait_minutes)
+        if not windows_intersect(eta_start, eta_end, version.pickup_window_start, version.pickup_window_end):
+            raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "schedule_changed"})
+    else:
+        # ADR-0027 Q155: a map-point pickup sits *inside* its segment, so its ETA is interpolated exactly as the
+        # proposal was validated - not the arrival at the stop that opens the segment (which made every place just
+        # before a stop unbookable: ROUTE_CHANGED on a trip nobody changed).
+        eta = marketplace_service.pickup_eta_on_trip(session, listing, trip, pickup_seq)
+        wait = timedelta(minutes=trip.pickup_wait_minutes or 0)
+        window_start, window_end = ensure_aware_utc(version.pickup_window_start), ensure_aware_utc(version.pickup_window_end)
+        if eta is None or not (window_start - wait <= ensure_aware_utc(eta) <= window_end + wait):
+            raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "schedule_changed"})
+    if moving:
+        marketplace_service.assert_pickup_ahead(
+            session, listing=listing, trip=trip, pickup_seq=pickup_seq, pickup_place=None, now=now
+        )
 
     # Eligibility re-checked under the users lock (Q21, D16, AC41).
     identity_service.ensure_driver_eligible(session, driver_id, now=now)
@@ -854,6 +871,10 @@ def accept_proposal(
             "boarding_window_minutes": int(rules.BOARDING_WINDOW.total_seconds() // 60),
             "detour_quotes": [],
             PROMO_SNAPSHOT_KEY: booking_promo_marker(applied=promo_plan.applied),
+            # ADR-0027: the trip's state when the deal was made (Q154 "booked on the way"), and a driver's time
+            # proposal the client agreed to (Q153).
+            "booked_trip_status": trip.status,
+            "outside_request_window": bool(version.outside_request_window),
         },
         version=1,
         created_at=now,
@@ -893,6 +914,15 @@ def accept_proposal(
     _history(session, booking, machine="commission", from_status=None, to_status=fee_status.value,
              command="hold_fee" if fee_status is CommissionStatus.HELD else "mark_exempt", actor_user_id=None, side=ActorSide.SYSTEM)
     session.flush()
+    if moving:
+        # Q154: the trip already passed the moments that move a booking forward (start_boarding, depart), so the
+        # new booking takes them now, as the system - exactly the steps the trip action would have taken.
+        _set_service_status(session, booking, target=PB.AWAITING_PICKUP.value, command="mark_awaiting_pickup",
+                            actor_user_id=None, side=ActorSide.SYSTEM, now=now)
+        if service is ServiceType.PARCEL and trip.status == TripStatus.IN_PROGRESS.value:
+            _set_service_status(session, booking, target=PC.IN_TRANSIT.value, command="trip_departed",
+                                actor_user_id=None, side=ActorSide.SYSTEM, now=now)
+        session.flush()
 
     # 7a. promo reservations + immutable promo terms + consent used (promo group, after the booking row exists).
     promo_booking.commit_accept(session, promo_plan, booking_id=booking.id, currency=booking.currency, now=now)

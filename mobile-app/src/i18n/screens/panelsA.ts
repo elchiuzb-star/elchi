@@ -85,7 +85,7 @@ export const panelsAMessages = {
   "tripDetail.cutoffValue": { uz: "{time} gacha", ru: "до {time}" },
   "tripDetail.availabilityTitle": { uz: "Bo'sh joy (bo'laklar bo'yicha)", ru: "Свободные места (по участкам)" },
   "tripDetail.availabilityEmpty": { uz: "Bo'laklar hali hisoblanmagan.", ru: "Участки ещё не рассчитаны." },
-  "tripDetail.stopSeq": { uz: "{seq}-bekat", ru: "Остановка {seq}" },
+  "tripDetail.stopSeq": { uz: "{seq}-nuqta", ru: "Точка {seq}"},
   "tripDetail.segmentLine": {
     uz: "{seats} o'rin · yuk {weight} / {volume} · bagaj {baggage}",
     ru: "Мест: {seats} · груз {weight} / {volume} · багаж {baggage}",

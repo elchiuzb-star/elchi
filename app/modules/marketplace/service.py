@@ -1604,9 +1604,16 @@ def _listing_open_for_proposals(listing: Listing, now: datetime) -> None:
         raise DomainError(ErrorCode.LISTING_NOT_OPEN, details={"reason": "listing_expired"})
 
 
-def _trip_open_for_proposals(trip: Trip, now: datetime) -> None:
-    if trip.status != TripStatus.PLANNED.value or ensure_aware_utc(trip.booking_cutoff_at) <= now:
-        raise DomainError(ErrorCode.BOOKING_CUTOFF_PASSED, details={"trip_status": trip.status})
+def _trip_open_for_proposals(trip: Trip, now: datetime) -> bool:
+    """A planned trip before its cutoff, or (Q154) a boarding / moving one - ``True`` for the latter, whose pickup
+    must then be proved still ahead (``assert_pickup_ahead``) once the places are known."""
+    from app.modules.marketplace.rules import MID_TRIP_BOOKING_ENABLED
+
+    if trip.status == TripStatus.PLANNED.value and ensure_aware_utc(trip.booking_cutoff_at) > now:
+        return False
+    if MID_TRIP_BOOKING_ENABLED and trip_is_moving(trip):
+        return True
+    raise DomainError(ErrorCode.BOOKING_CUTOFF_PASSED, details={"trip_status": trip.status})
 
 
 def _require_trip_driver_eligible(session: Session, trip: Trip, now: datetime) -> None:
@@ -1773,15 +1780,29 @@ def _listing_point_ends(session: Session, listing: Listing):  # noqa: ANN202
 
 
 def _place_listing_ends_on_trip(session: Session, listing: Listing, trip: Trip):  # noqa: ANN202
-    """Project the listing's ends onto the trip's confirmed route; ``None`` when this trip cannot serve them."""
+    """Project the listing's ends onto the trip's confirmed route; ``None`` when this trip cannot serve them.
+
+    Only for a listing with at least one map-point end (Q88): ``None`` for a stop-ended listing tells the caller to
+    take the stop path."""
+    from app.modules.geo.service import get_route_version
+
+    if _listing_point_ends(session, listing) is None:
+        return None
+    return place_listing_on_route(session, listing, get_route_version(session, trip.route_version_id))
+
+
+def place_listing_on_route(session: Session, listing: Listing, route):  # noqa: ANN001, ANN202 - RouteVersionInfo
+    """Public (ADR-0027): both ends of a request placed on one confirmed road, pickup before dropoff, else ``None``.
+
+    A stop end takes the stop's own position on the line; a map-point end is projected within the corridor's radius
+    (Q88). Used by the trip path above and by the driver-direction feed, which asks the same question of a road
+    before any trip exists.
+    """
     from app.modules.geo.geometry import LatLng
-    from app.modules.geo.service import corridor_point_offset_m, get_route_version, project_point_on_route
+    from app.modules.geo.service import corridor_point_offset_m, project_point_on_route
 
     row = _listing_point_ends(session, listing)
-    if row is None:
-        return None
     radius = corridor_point_offset_m(session, listing.corridor_id)
-    route = get_route_version(session, trip.route_version_id)
 
     def place(lat, lng, stop_id, district_id, address):  # noqa: ANN001, ANN202
         if lat is None:
@@ -1809,8 +1830,12 @@ def _place_listing_ends_on_trip(session: Session, listing: Listing, trip: Trip):
             segment_ratio=projection.segment_ratio,
         )
 
-    pickup = place(row.o_lat, row.o_lng, listing.origin_stop_id, row.origin_district_id, row.origin_address)
-    dropoff = place(row.d_lat, row.d_lng, listing.destination_stop_id, row.destination_district_id, row.destination_address)
+    if row is None:
+        pickup = place(None, None, listing.origin_stop_id, None, None)
+        dropoff = place(None, None, listing.destination_stop_id, None, None)
+    else:
+        pickup = place(row.o_lat, row.o_lng, listing.origin_stop_id, row.origin_district_id, row.origin_address)
+        dropoff = place(row.d_lat, row.d_lng, listing.destination_stop_id, row.destination_district_id, row.destination_address)
     if pickup is None or dropoff is None or pickup.fraction >= dropoff.fraction:
         return None
     return pickup, dropoff
@@ -1866,6 +1891,99 @@ def _point_eta(session: Session, trip: Trip, place) -> datetime:  # noqa: ANN001
     return start + timedelta(seconds=span * place.segment_ratio)
 
 
+def pickup_eta_on_trip(session: Session, listing: Listing, trip: Trip, pickup_seq: int):  # noqa: ANN201
+    """Public (A4, ADR-0027 Q155): when this trip reaches the pickup - the same answer submit and accept give.
+
+    A map-point pickup is interpolated inside its segment (``_point_eta``); a stop pickup is its occurrence's
+    planned arrival. ``None`` when the places no longer project onto the trip.
+    """
+    if _listing_point_ends(session, listing) is not None:
+        places = _place_listing_ends_on_trip(session, listing, trip)
+        return None if places is None else _point_eta(session, trip, places[0])
+    occurrence = next((o for o in trips_service.list_occurrences(session, trip.id) if o.seq == pickup_seq), None)
+    return None if occurrence is None else ensure_aware_utc(occurrence.planned_arrival_at)
+
+
+def _pickup_fraction(session: Session, trip: Trip, listing: Listing, pickup_seq: int, pickup_place) -> float | None:  # noqa: ANN001
+    """Where the pickup sits on the trip's road (0..1): the projection, or the pickup stop's own position."""
+    from app.modules.geo.service import get_route_version
+
+    if pickup_place is not None:
+        return pickup_place.fraction
+    if _listing_point_ends(session, listing) is not None:
+        places = _place_listing_ends_on_trip(session, listing, trip)
+        return None if places is None else places[0].fraction
+    occurrence = next((o for o in trips_service.list_occurrences(session, trip.id) if o.seq == pickup_seq), None)
+    if occurrence is None:
+        return None
+    route = get_route_version(session, trip.route_version_id)
+    stop = next((s for s in route.stops if s.seq == occurrence.route_version_stop_seq), None)
+    return None if stop is None else float(stop.line_fraction)
+
+
+def trip_is_moving(trip: Trip) -> bool:
+    """Q154: boarding or on the way - a trip that may still take a pickup ahead of the car."""
+    return trip.status in (TripStatus.BOARDING.value, TripStatus.IN_PROGRESS.value)
+
+
+def assert_pickup_ahead(
+    session: Session, *, listing: Listing, trip: Trip, pickup_seq: int, pickup_place, now: datetime  # noqa: ANN001
+) -> datetime:
+    """Q154: new business on a boarding / moving trip only while the car has not reached the pickup yet.
+
+    Two independent answers, both must agree: the schedule (ETA at least MID_TRIP_MIN_LEAD ahead) and, when the
+    driver's phone sent a fresh fix, the road (the fix projects at least MID_TRIP_MIN_AHEAD_M before the pickup).
+    A stale or off-road fix is not evidence either way. Returns the pickup ETA.
+    """
+    from app.modules.geo.geometry import LatLng
+    from app.modules.geo.service import get_route_version, project_point_on_route
+    from app.modules.marketplace.rules import (
+        MID_TRIP_GPS_MAX_AGE,
+        MID_TRIP_GPS_MAX_OFFSET_M,
+        MID_TRIP_MIN_AHEAD_M,
+        MID_TRIP_MIN_LEAD,
+    )
+
+    eta = pickup_eta_on_trip(session, listing, trip, pickup_seq) if pickup_place is None else _point_eta(session, trip, pickup_place)
+    if eta is None:
+        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "points_not_on_trip_route"})
+    if eta < now + MID_TRIP_MIN_LEAD:
+        raise DomainError(
+            ErrorCode.BOOKING_CUTOFF_PASSED,
+            details={"trip_status": trip.status, "reason": "pickup_passed", "eta": ensure_aware_utc(eta).isoformat()},
+        )
+    from app.modules.tracking import service as tracking_service
+
+    live = tracking_service.trip_live_point(session, trip.id)
+    if live is not None and now - live.captured_at <= MID_TRIP_GPS_MAX_AGE:
+        route = get_route_version(session, trip.route_version_id)
+        car = project_point_on_route(
+            session, route_version_id=route.id, point=LatLng(lat=live.lat, lng=live.lng), max_offset_m=MID_TRIP_GPS_MAX_OFFSET_M
+        )
+        pickup_fraction = _pickup_fraction(session, trip, listing, pickup_seq, pickup_place)
+        if car is not None and pickup_fraction is not None:
+            ahead_m = (pickup_fraction - car.fraction) * route.distance_m
+            if ahead_m < MID_TRIP_MIN_AHEAD_M:
+                raise DomainError(
+                    ErrorCode.BOOKING_CUTOFF_PASSED,
+                    details={"trip_status": trip.status, "reason": "pickup_passed", "ahead_m": int(round(ahead_m))},
+                )
+    return eta
+
+
+def _version_expires_at(*, listing: Listing, trip: Trip, pickup_eta: datetime | None, now: datetime) -> datetime:
+    """A planned trip: the AC43 rule (``proposal_expires_at``). A boarding / moving trip (Q154, ``pickup_eta`` from
+    ``assert_pickup_ahead``): the quote lives ``min(10 min, ETA - 15 min, listing expiry)``."""
+    if pickup_eta is None:
+        return proposal_expires_at(
+            now=now, departure_at=trip.planned_start_at, booking_cutoff_at=trip.booking_cutoff_at,
+            listing_expires_at=listing.expires_at,
+        )
+    from app.modules.marketplace.rules import moving_trip_proposal_expires_at
+
+    return moving_trip_proposal_expires_at(now=now, pickup_eta=pickup_eta, listing_expires_at=listing.expires_at)
+
+
 def _route_stop_ids(session: Session, trip: Trip) -> dict[int, int]:
     from app.modules.geo.service import get_route_version
 
@@ -1891,8 +2009,10 @@ def _validate_point_segment(
     window_start: datetime,
     window_end: datetime,
     now: datetime,
-) -> tuple[int, int]:
-    """The point-ended twin of :func:`_validate_segment` (Q88).
+    allow_outside: bool = False,
+) -> tuple[tuple[int, int], bool]:
+    """The point-ended twin of :func:`_validate_segment` (Q88). Returns the segments and whether the window is a
+    time proposal outside the request window (ADR-0027 Q153, only when ``allow_outside``).
 
     Same three questions, answered from the projection instead of from the stop catalogue: are the windows
     sane, does the trip reach the pickup place inside the window both sides asked for, and which segments does
@@ -1904,10 +2024,7 @@ def _validate_point_segment(
     if ensure_aware_utc(window_end) <= now:
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "pickup_window_end", "reason": "in_the_past"})
 
-    match_start = max(ensure_aware_utc(listing.departure_window_start), ensure_aware_utc(window_start))
-    match_end = min(ensure_aware_utc(listing.departure_window_end), ensure_aware_utc(window_end))
-    if match_end <= match_start:
-        raise DomainError(ErrorCode.TIME_WINDOW_CONFLICT, details={"reason": "proposal_window_outside_request_window"})
+    match_start, match_end, outside = _match_window(listing, window_start, window_end, allow_outside=allow_outside)
 
     eta = _point_eta(session, trip, pickup)
     wait = timedelta(minutes=trip.pickup_wait_minutes or 0)
@@ -1920,7 +2037,56 @@ def _validate_point_segment(
     seqs = _occurrence_seqs_for_placements(session, trip, pickup, dropoff)
     if seqs is None:
         raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "points_not_on_trip_route"})
-    return seqs
+    return seqs, outside
+
+
+def _match_window(
+    listing: Listing, window_start: datetime, window_end: datetime, *, allow_outside: bool
+) -> tuple[datetime, datetime, bool]:
+    """The window the trip must reach the pickup in: the request window met with the proposal's own, or - for a
+    driver's explicit time proposal (Q153) - the proposal's own window, inside the Q157 limits."""
+    match_start = max(ensure_aware_utc(listing.departure_window_start), ensure_aware_utc(window_start))
+    match_end = min(ensure_aware_utc(listing.departure_window_end), ensure_aware_utc(window_end))
+    if match_end > match_start:
+        return match_start, match_end, False
+    if not allow_outside:
+        raise DomainError(ErrorCode.TIME_WINDOW_CONFLICT, details={"reason": "proposal_window_outside_request_window"})
+    start, end = ensure_aware_utc(window_start), ensure_aware_utc(window_end)
+    assert_time_proposal_in_range(listing, start + (end - start) / 2)
+    return start, end, True
+
+
+def time_proposal_limits() -> tuple[timedelta, timedelta]:
+    """Q157 (configuration, not code): how much earlier / later than the client's window a driver may propose."""
+    from app.core.config import settings
+
+    return (
+        timedelta(minutes=settings.time_proposal_max_early_shift_minutes),
+        timedelta(minutes=settings.time_proposal_max_late_shift_minutes),
+    )
+
+
+def time_proposal_possible(listing: Listing, pickup_at: datetime) -> bool:
+    """Public (ADR-0027): may a pickup at ``pickup_at`` be offered to this request as a time proposal (Q157)?"""
+    from app.modules.marketplace.rules import time_proposal_in_range
+
+    early, late = time_proposal_limits()
+    return time_proposal_in_range(
+        request_start=listing.departure_window_start, request_end=listing.departure_window_end, pickup_at=pickup_at,
+        max_early=early, max_late=late,
+    )
+
+
+def assert_time_proposal_in_range(listing: Listing, pickup_at: datetime) -> None:
+    if not time_proposal_possible(listing, pickup_at):
+        early, late = time_proposal_limits()
+        raise DomainError(
+            ErrorCode.TIME_WINDOW_CONFLICT,
+            details={
+                "reason": "time_proposal_too_far", "eta": ensure_aware_utc(pickup_at).isoformat(),
+                "max_early_minutes": int(early.total_seconds() // 60), "max_late_minutes": int(late.total_seconds() // 60),
+            },
+        )
 
 
 def _validate_segment(
@@ -1933,8 +2099,11 @@ def _validate_segment(
     window_start: datetime,
     window_end: datetime,
     now: datetime,
-) -> tuple[int, int]:
+    allow_outside: bool = False,
+) -> tuple[tuple[int, int], bool]:
     """Segment and time checks (BR #4) through A2's pure ``evaluate_route_match`` on the trip occurrences.
+
+    Returns the segments and whether the window is a driver's time proposal (ADR-0027 Q153).
 
     * request: stops in the request's corridor; the pickup ETA window must meet the request's
       departure window;
@@ -1947,14 +2116,13 @@ def _validate_segment(
     if ensure_aware_utc(window_end) <= now:
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "pickup_window_end", "reason": "in_the_past"})
     offer_span: tuple[int, int] | None = None
+    outside = False
     if listing.kind == ListingKind.REQUEST.value:
         if pickup.corridor_id != listing.corridor_id or dropoff.corridor_id != listing.corridor_id:
             raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "stop_outside_request_corridor"})
-        # N3: the pickup must meet both the request's window and the proposal's own pickup window.
-        match_start = max(ensure_aware_utc(listing.departure_window_start), ensure_aware_utc(window_start))
-        match_end = min(ensure_aware_utc(listing.departure_window_end), ensure_aware_utc(window_end))
-        if match_end <= match_start:
-            raise DomainError(ErrorCode.TIME_WINDOW_CONFLICT, details={"reason": "proposal_window_outside_request_window"})
+        # N3: the pickup must meet both the request's window and the proposal's own pickup window - or, for a
+        # driver's explicit time proposal (Q153), the proposal's own window.
+        match_start, match_end, outside = _match_window(listing, window_start, window_end, allow_outside=allow_outside)
     else:
         offer_span = trips_service.occurrence_seqs_for_stops(
             session, trip.id, listing.origin_stop_id, listing.destination_stop_id
@@ -2004,7 +2172,7 @@ def _validate_segment(
     seqs = (result.pickup.occurrence_seq, result.dropoff.occurrence_seq)
     if offer_span is not None and (seqs[0] < offer_span[0] or seqs[1] > offer_span[1]):
         raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "outside_offer_segment"})
-    return seqs
+    return seqs, outside
 
 
 def _check_price_band(
@@ -2153,6 +2321,7 @@ def _insert_version(
     message: str | None,
     now: datetime,
     receiver: tuple[str, str] | None = None,
+    outside_request_window: bool = False,
 ) -> ProposalVersion:
     version = ProposalVersion(
         public_id=new_public_uuid(),
@@ -2167,6 +2336,7 @@ def _insert_version(
         dropoff_occurrence_seq=seqs[1],
         pickup_window_start=ensure_aware_utc(window_start),
         pickup_window_end=ensure_aware_utc(window_end),
+        outside_request_window=outside_request_window,
         quantity=quantity,
         price_basis=price_basis.value,
         unit_price_minor=unit_price_minor,
@@ -2278,7 +2448,9 @@ def submit_proposal(
     trip = trips_service.get_trip_by_public_id(session, data.trip_id)
     if trip.driver_user_id != actor_user_id:
         raise DomainError(ErrorCode.NOT_FOUND, details={"field": "trip_id"})
-    _trip_open_for_proposals(trip, now)
+    moving = _trip_open_for_proposals(trip, now)
+    # ADR-0027 Q153: only the driver proposes a different pickup time, and only when they say so explicitly.
+    allow_outside = bool(data.outside_request_window) and side is ActorSide.DRIVER
 
     # Q88: a point-ended listing hands its own places down to the proposal; only a stop-ended one asks the
     # driver which stops they mean.
@@ -2291,7 +2463,7 @@ def submit_proposal(
             )
         pickup_place, dropoff_place = places
         pickup = dropoff = None
-        seqs = _validate_point_segment(
+        seqs, outside = _validate_point_segment(
             session,
             listing=listing,
             trip=trip,
@@ -2300,6 +2472,7 @@ def submit_proposal(
             window_start=data.pickup_window_start,
             window_end=data.pickup_window_end,
             now=now,
+            allow_outside=allow_outside,
         )
     else:
         if data.pickup_stop_id is None or data.dropoff_stop_id is None:
@@ -2308,7 +2481,7 @@ def submit_proposal(
             )
         pickup_place = dropoff_place = None
         pickup, dropoff = _active_stops(session, [data.pickup_stop_id, data.dropoff_stop_id])
-        seqs = _validate_segment(
+        seqs, outside = _validate_segment(
             session,
             listing=listing,
             trip=trip,
@@ -2317,7 +2490,12 @@ def submit_proposal(
             window_start=data.pickup_window_start,
             window_end=data.pickup_window_end,
             now=now,
+            allow_outside=allow_outside,
         )
+    pickup_eta = (
+        assert_pickup_ahead(session, listing=listing, trip=trip, pickup_seq=seqs[0], pickup_place=pickup_place, now=now)
+        if moving else None
+    )
     price_basis = PriceBasis(data.price_basis)
     demand = _demand_for(session, listing, baggage=data.baggage, parcel=data.parcel, current=None)
     receiver = _proposal_receiver(listing, data.parcel, current=None, side=side)
@@ -2358,12 +2536,7 @@ def submit_proposal(
             details={"reason": "open_thread_exists", "thread_id": format_public_id(PublicIdPrefix.PROPOSAL_THREAD, existing)},
         )
     total = compute_total_minor(price_basis, data.unit_price_minor, data.quantity)
-    expires_at = proposal_expires_at(
-        now=now,
-        departure_at=trip.planned_start_at,
-        booking_cutoff_at=trip.booking_cutoff_at,
-        listing_expires_at=listing.expires_at,
-    )
+    expires_at = _version_expires_at(listing=listing, trip=trip, pickup_eta=pickup_eta, now=now)
     quote = _quote(session, listing, total, now)
 
     driver_offer_label(session, listing.id, driver_id)
@@ -2414,6 +2587,7 @@ def submit_proposal(
         message=message,
         now=now,
         receiver=receiver,
+        outside_request_window=outside,
     )
     thread.current_version_id = version.id
     session.flush()
@@ -2467,7 +2641,13 @@ def counter_proposal(
     trip = trips_service.get_trip(session, thread.trip_id)
     if side is ActorSide.CLIENT:
         _require_trip_driver_eligible(session, trip, now)
-    _trip_open_for_proposals(trip, now)
+    moving = _trip_open_for_proposals(trip, now)
+    # ADR-0027 Q153: the driver may move the pickup outside the request window explicitly; a counter that keeps the
+    # current window keeps its time proposal (the client countering it is the client agreeing to the time).
+    window_kept = data.pickup_window_start is None and data.pickup_window_end is None
+    allow_outside = (side is ActorSide.DRIVER and bool(data.outside_request_window)) or (
+        window_kept and bool(current.outside_request_window)
+    )
 
     window_start = data.pickup_window_start or current.pickup_window_start
     window_end = data.pickup_window_end or current.pickup_window_end
@@ -2487,7 +2667,7 @@ def counter_proposal(
             )
         pickup_place, dropoff_place = places
         pickup = dropoff = None
-        seqs = _validate_point_segment(
+        seqs, outside = _validate_point_segment(
             session,
             listing=listing,
             trip=trip,
@@ -2496,6 +2676,7 @@ def counter_proposal(
             window_start=window_start,
             window_end=window_end,
             now=now,
+            allow_outside=allow_outside,
         )
     else:
         pickup_place = dropoff_place = None
@@ -2507,7 +2688,7 @@ def counter_proposal(
             dropoff = _active_stops(session, [data.dropoff_stop_id])[0]
         if pickup.id == dropoff.id:
             raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "dropoff_stop_id"})
-        seqs = _validate_segment(
+        seqs, outside = _validate_segment(
             session,
             listing=listing,
             trip=trip,
@@ -2516,7 +2697,12 @@ def counter_proposal(
             window_start=window_start,
             window_end=window_end,
             now=now,
+            allow_outside=allow_outside,
         )
+    pickup_eta = (
+        assert_pickup_ahead(session, listing=listing, trip=trip, pickup_seq=seqs[0], pickup_place=pickup_place, now=now)
+        if moving else None
+    )
     demand = _demand_for(session, listing, baggage=data.baggage, parcel=data.parcel, current=current)
     receiver = _proposal_receiver(listing, data.parcel, current=current, side=side)
     _check_terms_and_capacity(
@@ -2546,9 +2732,7 @@ def counter_proposal(
         getattr(thread, revisions_field), price_changed=unit_price != current.unit_price_minor
     )
     total = compute_total_minor(price_basis, unit_price, quantity)
-    expires_at = proposal_expires_at(
-        now=now, departure_at=trip.planned_start_at, booking_cutoff_at=trip.booking_cutoff_at, listing_expires_at=listing.expires_at
-    )
+    expires_at = _version_expires_at(listing=listing, trip=trip, pickup_eta=pickup_eta, now=now)
     quote = _quote(session, listing, total, now)  # a counter gets a fresh quote (AC43)
 
     PROPOSAL_VERSION.assert_transition(current.status, ProposalStatus.SUPERSEDED.value, "counter")
@@ -2581,6 +2765,7 @@ def counter_proposal(
         message=message,
         now=now,
         receiver=receiver,
+        outside_request_window=outside,
     )
     thread.current_version_id = version.id
     setattr(thread, revisions_field, revisions)

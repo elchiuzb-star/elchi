@@ -15,6 +15,14 @@ PROPOSAL_NEAR_DEPARTURE_TTL = timedelta(minutes=10)
 MAX_PRICE_REVISIONS_PER_SIDE = 3
 PROPOSAL_MESSAGE_MAX_LENGTH = 500
 
+# ADR-0027 Q154: new business on a trip that is boarding or on the way, while the pickup is still ahead.
+MID_TRIP_BOOKING_ENABLED = True
+MID_TRIP_MIN_LEAD = timedelta(minutes=15)  # the scheduled pickup is at least this far in the future
+MID_TRIP_MIN_AHEAD_M = 2_000  # a fresh GPS fix is at least this far before the pickup along the road
+MID_TRIP_GPS_MAX_AGE = timedelta(minutes=10)  # an older fix says nothing about where the car is now
+MID_TRIP_GPS_MAX_OFFSET_M = 50_000  # a fix this far off the road is not on the trip at all; ignored
+MID_TRIP_PROPOSAL_TTL = timedelta(minutes=10)
+
 
 def ensure_price_basis_allowed(kind: ListingKind, service_type: ServiceType, price_basis: PriceBasis) -> None:
     allowed = ALLOWED_PRICE_BASIS[(ListingKind(kind), ServiceType(service_type))]
@@ -93,6 +101,32 @@ def proposal_expires_at(
             raise DomainError(ErrorCode.LISTING_NOT_OPEN, details={"reason": "listing_expired"})
         candidates.append(listing_expiry)
     return min(candidates)
+
+
+def moving_trip_proposal_expires_at(
+    *, now: datetime, pickup_eta: datetime, listing_expires_at: datetime | None = None
+) -> datetime:
+    """Q154: a proposal on a trip already boarding or on the way lives ``min(now + 10 min, ETA - 15 min, listing expiry)``."""
+    now = ensure_aware_utc(now)
+    candidates = [now + MID_TRIP_PROPOSAL_TTL, ensure_aware_utc(pickup_eta) - MID_TRIP_MIN_LEAD]
+    if listing_expires_at is not None:
+        candidates.append(ensure_aware_utc(listing_expires_at))
+    expires = min(candidates)
+    if expires <= now:
+        raise DomainError(ErrorCode.BOOKING_CUTOFF_PASSED, details={"reason": "pickup_passed"})
+    return expires
+
+
+def time_proposal_in_range(
+    *, request_start: datetime, request_end: datetime, pickup_at: datetime, max_early: timedelta, max_late: timedelta
+) -> bool:
+    """ADR-0027 Q157: a driver's proposed pickup time is at most ``max_early`` before the client's window starts and at
+    most ``max_late`` after it ends (asymmetric - leaving hours earlier than asked is rarely usable on intercity trips).
+
+    Client asked 07:55-08:55, limits 3 h / 12 h -> any pickup from 04:55 to 20:55 may be proposed; 23:43 the evening
+    before may not. ``pickup_at`` is the car's ETA (the middle of the proposed window)."""
+    pickup_at = ensure_aware_utc(pickup_at)
+    return ensure_aware_utc(request_start) - max_early <= pickup_at <= ensure_aware_utc(request_end) + max_late
 
 
 def next_price_revision_count(current: int, *, price_changed: bool) -> int:

@@ -225,6 +225,11 @@ def _trip_live_point(session: Session, trip_id: int) -> LivePoint | None:
     return LivePoint(ensure_aware_utc(captured_at), ensure_aware_utc(received_at), float(lat), float(lng), int(accuracy_m))
 
 
+def trip_live_point(session: Session, trip_id: int) -> LivePoint | None:
+    """Public (ADR-0027 Q154): the trip's newest trusted fix, or ``None`` - read-only, no audit (no viewer)."""
+    return _trip_live_point(session, trip_id)
+
+
 def _active_session(session: Session, trip_id: int) -> TrackingSession | None:
     return session.execute(
         select(TrackingSession).where(TrackingSession.trip_id == trip_id, TrackingSession.status == ACTIVE)

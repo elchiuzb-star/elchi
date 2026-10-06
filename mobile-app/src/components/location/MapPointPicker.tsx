@@ -5,7 +5,6 @@ import { cls } from "../../app/ui/mobile";
 import { CentrePin, YandexMap, useYandexMapsStatus } from "../maps/YandexMap";
 import { TASHKENT, type LatLng } from "../maps/yandex";
 import { resolvePlace, reverseGeocode, suggestPlaces, type PlaceSuggestion } from "../../api/geo.api";
-import type { StopOption } from "./stops";
 import { translate } from "../../i18n";
 
 /**
@@ -59,15 +58,6 @@ type MapPointPickerProps = {
   /** Set when the server refused the *previous* pick; shown so the person knows what to change. */
   routeError?: string | null;
   busy?: boolean;
-  /**
-   * Verified stops in the chosen district, when the catalogue has any.
-   *
-   * Offered, never required. A stop is a meeting place an operator checked, and picking one gives the listing
-   * an `exact` match instead of a projected one (Q88) - but only six districts have one, so the map is the
-   * flow and these are a shortcut inside it.
-   */
-  stops?: StopOption[];
-  onSelectStop?: (option: StopOption) => void;
   onConfirm: (point: MarkedPoint) => void;
   onBack: () => void;
 };
@@ -85,8 +75,6 @@ export function MapPointPicker({
   maxOffsetM,
   routeError,
   busy,
-  stops,
-  onSelectStop,
   onConfirm,
   onBack,
 }: MapPointPickerProps) {
@@ -343,21 +331,6 @@ export function MapPointPicker({
       <section className="shrink-0 space-y-3 border-t border-border bg-card px-5 py-4">
         {districtName && <p className="truncate text-[13px] font-semibold text-muted-foreground">{districtName}</p>}
 
-        {stops && stops.length > 0 && onSelectStop && (
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-            {stops.map((option) => (
-              <button
-                key={option.stop.id}
-                type="button"
-                onClick={() => onSelectStop(option)}
-                className="el-press flex shrink-0 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-[13px] font-semibold text-primary"
-              >
-                <MapPin size={14} />
-                {option.stop.name_uz}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="rounded-[14px] border border-border bg-slate-50 p-4">
           <p className="text-[12px] text-muted-foreground">{placed ? translate("location.chosenPlace") : translate("location.placeNotMarked")}</p>
           <p

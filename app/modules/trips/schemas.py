@@ -14,6 +14,11 @@ class StopRefDTO(ContractModel):
     id: str = Field(description="Opaque stop id (stp_...).")
     name_uz: str
     name_ru: str | None = None
+    district_name_uz: str | None = Field(
+        default=None,
+        description="Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, "
+        "never by a stop name (ELCHI works point A -> point B).",
+    )
 
 
 # --- vehicles --------------------------------------------------------------------------
@@ -249,3 +254,73 @@ class AdminTripSearchDTO(ContractModel):
     planned_start_at: UtcDateTime
     planned_end_at: UtcDateTime
     seat_capacity: StrictInt
+
+
+# --- driver directions (ADR-0027, Q150) -----------------------------------------------------------------------
+
+
+class DirectionEndInput(ContractModel):
+    """One end of a driver direction: a region, and a district unless the region is a city without districts."""
+
+    region_id: str = Field(min_length=1, max_length=64)
+    district_id: str | None = Field(default=None, max_length=64)
+
+
+class DriverDirectionCreate(ContractModel):
+    """Q150: "where from -> where to". No time, stop, corridor or route - the server resolves the road itself."""
+
+    origin: DirectionEndInput
+    destination: DirectionEndInput
+    vehicle_id: str | None = Field(default=None, description="Omit when the driver has exactly one approved car.")
+    seat_capacity: StrictInt | None = Field(default=None, ge=0, le=60, description="Default: the car's seats.")
+    cargo_capacity_weight_g: StrictInt | None = Field(default=None, ge=0, description="Default: the car's cargo limit.")
+    cargo_capacity_volume_ml: StrictInt | None = Field(default=None, ge=0, description="Default: the car's cargo limit.")
+
+
+class DriverDirectionPatch(VersionedCommand):
+    status: Literal["active", "paused", "archived"] | None = None
+    seat_capacity: StrictInt | None = Field(default=None, ge=0, le=60)
+    cargo_capacity_weight_g: StrictInt | None = Field(default=None, ge=0)
+    cargo_capacity_volume_ml: StrictInt | None = Field(default=None, ge=0)
+
+
+class DirectionEndDTO(ContractModel):
+    region_id: str
+    region_name_uz: str
+    region_name_ru: str | None = None
+    district_id: str | None = None
+    district_name_uz: str | None = None
+    district_name_ru: str | None = None
+
+
+class DirectionTripRefDTO(ContractModel):
+    """The direction's current trip, made by the system from the driver's first offer (Q152)."""
+
+    id: str
+    status: TripStatus
+    planned_start_at: UtcDateTime
+    planned_end_at: UtcDateTime
+    seats_booked: int = Field(description="Most seats taken on any segment of the trip.")
+
+
+class DriverDirectionDTO(ContractModel):
+    id: str
+    origin: DirectionEndDTO
+    destination: DirectionEndDTO
+    via_district_names: list[str] = Field(
+        default_factory=list, description="Districts the resolved road passes between the two ends, in travel order."
+    )
+    vehicle_id: str
+    seat_capacity: int
+    cargo_capacity_weight_g: int
+    cargo_capacity_volume_ml: int
+    status: Literal["active", "paused", "archived"]
+    version: int
+    active_trip: DirectionTripRefDTO | None = None
+    created_at: UtcDateTime
+    updated_at: UtcDateTime
+
+
+class AdminDriverDirectionDTO(DriverDirectionDTO):
+    driver_id: str
+    driver_display_name: str | None = None

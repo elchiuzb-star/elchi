@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from contextvars import ContextVar
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request
 from fastapi.responses import JSONResponse
@@ -53,7 +54,11 @@ from app.modules.marketplace.schemas import (
     ProposalPromoClientDTO,
     ProposalPromoConfirmation,
     PromoPreviewDTO,
+    DirectionOfferCreate,
+    DirectionOfferDTO,
     DirectionPreviewDTO,
+    DirectionRequestItemDTO,
+    DirectionRequestsDTO,
     ListingCancel,
     ListingCommand,
     ListingCreate,
@@ -945,3 +950,98 @@ def trip_intent_fit(
     if listing.status == ListingStatus.DRAFT.value and listing.owner_user_id != user_id:
         raise DomainError(ErrorCode.NOT_FOUND)
     return Envelope[TripIntentFitDTO](data=TripIntentFitDTO.model_validate(marketplace_intents.fit(session, intent, listing)))
+
+
+# --- driver directions (ADR-0027, Q151-Q153) ------------------------------------------------------------------
+
+
+@router.get(
+    "/driver-directions/{direction_id}/requests", response_model=Envelope[DirectionRequestsDTO], responses=ERROR_RESPONSES
+)
+def list_direction_requests(
+    direction_id: str,
+    service_type: ServiceType = Query(...),
+    date_from: datetime = Query(..., description="ISO-8601 with offset"),
+    date_to: datetime = Query(..., description="ISO-8601 with offset"),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> Envelope[DirectionRequestsDTO]:
+    """Q151: client requests along the driver's direction - on the active trip's time, or planned around the client."""
+    from app.contracts.timeutil import ensure_aware_utc
+    from app.modules.marketplace import directions as market_directions
+    from app.modules.trips.directions import direction_public_id
+    from app.modules.trips.views import direction_trip_ref
+
+    if date_to.tzinfo is None or date_from.tzinfo is None:
+        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "date_from", "reason": "offset_required"})
+    if ensure_aware_utc(date_to) <= ensure_aware_utc(date_from) or date_to - date_from > timedelta(days=14):
+        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "date_to", "reason": "window_invalid"})
+    direction, trip, items = market_directions.direction_requests(
+        session, driver_user_id=user_id, direction_public_id_value=direction_id, service_type=service_type,
+        date_from=date_from, date_to=date_to,
+    )
+    return Envelope[DirectionRequestsDTO](
+        data=DirectionRequestsDTO(
+            direction_id=direction_public_id(direction),
+            active_trip=direction_trip_ref(session, trip),
+            items=[
+                DirectionRequestItemDTO(
+                    listing=listing_public_dto(session, item.listing),
+                    match_type=item.match_type,
+                    fit=item.fit,
+                    pickup_eta=item.pickup_eta,
+                    suggested_departure_at=item.suggested_departure_at,
+                    my_thread_id=marketplace_service.thread_public_id(item.my_thread) if item.my_thread else None,
+                )
+                for item in items
+            ],
+        )
+    )
+
+
+@router.post(
+    "/driver-directions/{direction_id}/offers", response_model=Envelope[DirectionOfferDTO], status_code=201,
+    responses=ERROR_RESPONSES,
+)
+def offer_from_direction(
+    direction_id: str,
+    body: DirectionOfferCreate,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    user_id: int = Depends(current_user_id),
+    session: Session = Depends(get_session),
+) -> JSONResponse:
+    """Q152: offer on a request from a direction - the system takes, re-times or plans the trip, then proposes.
+
+    ``409 TIME_WINDOW_CONFLICT`` with ``details.eta`` means the car would be there at another time; resend with
+    ``pickup_at`` to make it a time proposal (Q153), which the client accepts or not.
+    """
+    from app.modules.marketplace import directions as market_directions
+    from app.modules.trips.views import direction_trip_ref
+
+    def build(warnings: list[dict]) -> DirectionOfferDTO:
+        offer = market_directions.offer_from_direction(
+            session, driver_user_id=user_id, direction_public_id_value=direction_id, listing_public_id_value=body.listing_id,
+            unit_price_minor=body.unit_price_minor, message=body.message, pickup_at=body.pickup_at,
+            warnings=warnings, filter_hits=_current_hits(),
+        )
+        return DirectionOfferDTO(
+            thread=thread_dto(session, offer.thread, viewer_user_id=user_id),
+            trip=direction_trip_ref(session, offer.trip),
+            trip_created=offer.trip_created,
+            trip_retimed=offer.trip_retimed,
+            time_proposal=offer.time_proposal,
+        )
+
+    return _recording_hits(
+        session,
+        run_command,
+        request,
+        session,
+        actor_user_id=user_id,
+        idempotency_key=idempotency_key,
+        body=body,
+        handler=lambda: _with_warnings(build),
+        success_status=201,
+        resource_type="proposal_thread",
+    )

@@ -12,6 +12,7 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 from app.contracts.dto import ContractModel, MediaRefDTO, UtcDateTime, VersionedCommand
 from app.modules.geo.schemas import DistrictRefDTO
 from app.contracts.enums import (
+    MatchType,
     ActorSide,
     Amenity,
     Currency,
@@ -27,6 +28,7 @@ from app.contracts.enums import (
     TripIntentStatus,
 )
 from app.modules.marketplace.rules import LISTING_TIMEZONE, PROPOSAL_MESSAGE_MAX_LENGTH
+from app.modules.trips.schemas import DirectionTripRefDTO
 from app.modules.trips.schemas import StopRefDTO
 
 REASON_CODE_PATTERN = r"^[a-z][a-z0-9_]{2,63}$"
@@ -399,6 +401,12 @@ class ProposalCreate(ContractModel):
     baggage: ProposalBaggage | None = None
     parcel: ProposalParcel | None = None
     promo_consent: ProposalPromoConsent | None = None
+    outside_request_window: bool | None = Field(
+        default=None,
+        description="ADR-0027 Q153: true - the driver proposes a pickup time outside the client's request window (at "
+        "most 12 h away). Only a driver may; the client's own accept or counter is the consent. Omitted / false: the "
+        "window must meet the request window, as before.",
+    )
     trip_intent: TripIntentRef | None = Field(
         default=None,
         description="ADR-0025: the client's saved request this offer is made from. The server takes quantity and the "
@@ -420,6 +428,11 @@ class ProposalCreate(ContractModel):
 
 class ProposalCounter(ContractModel):
     expected_revision: StrictInt = Field(ge=1)
+    outside_request_window: bool | None = Field(
+        default=None,
+        description="ADR-0027 Q153: a driver's counter may move the pickup outside the request window when true. A "
+        "counter that keeps the current window keeps its time proposal; a client cannot move it outside.",
+    )
     pickup_stop_id: str | None = None
     dropoff_stop_id: str | None = None
     pickup_window_start: UtcDateTime | None = None
@@ -571,6 +584,11 @@ class ProposalVersionDTO(ContractModel):
     listing_terms_version: int = Field(
         description="Q54: the listing terms version this version was made against. Accept succeeds only while it "
         "equals the thread's listing_terms_version."
+    )
+    outside_request_window: bool = Field(
+        default=False,
+        description="ADR-0027 Q153: the driver proposes a pickup outside the client's requested time; booking it needs "
+        "the client's own accept (or the client's counter).",
     )
 
 
@@ -876,3 +894,50 @@ class ParcelCategoryVersionDTO(ContractModel):
     effective_from: UtcDateTime | None = None
     version: int
     items: list[ParcelCategoryDTO] = Field(default_factory=list)
+
+
+# --- driver directions (ADR-0027, Q151-Q153) ------------------------------------------------------------------
+
+
+class DirectionRequestItemDTO(ContractModel):
+    """A client request along a driver direction, and how the driver's trip meets it."""
+
+    listing: ListingPublicDTO
+    match_type: MatchType = Field(description="exact: both ends in the direction's areas; on_route: on the way.")
+    fit: Literal["fits_trip", "no_trip", "time_differs"] = Field(
+        description="fits_trip: the active trip reaches the pickup in the client's window; no_trip: no trip yet, the "
+        "first offer plans one; time_differs: the car would be there at pickup_eta, outside the client's window - an "
+        "offer is then a time proposal (Q153)."
+    )
+    pickup_eta: UtcDateTime | None = Field(default=None, description="When the car would be at the pickup.")
+    suggested_departure_at: UtcDateTime | None = Field(
+        default=None, description="no_trip / an empty trip: when the system would plan the departure."
+    )
+    my_thread_id: str | None = Field(default=None, description="The driver's own open offer on this request, if any.")
+
+
+class DirectionRequestsDTO(ContractModel):
+    direction_id: str
+    active_trip: DirectionTripRefDTO | None = None
+    items: list[DirectionRequestItemDTO]
+
+
+class DirectionOfferCreate(ContractModel):
+    """Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027)."""
+
+    listing_id: str = Field(min_length=1, max_length=64)
+    unit_price_minor: StrictInt = Field(gt=0)
+    message: str | None = Field(default=None, max_length=PROPOSAL_MESSAGE_MAX_LENGTH)
+    pickup_at: UtcDateTime | None = Field(
+        default=None,
+        description="Q153: the time the driver would pick up, when it differs from the client's window. A new or empty "
+        "trip is planned around it; on a trip with bookings it must be that trip's own ETA (±30 min).",
+    )
+
+
+class DirectionOfferDTO(ContractModel):
+    thread: ProposalThreadDTO
+    trip: DirectionTripRefDTO
+    trip_created: bool
+    trip_retimed: bool
+    time_proposal: bool = Field(description="The offer's pickup lies outside the client's window (Q153).")

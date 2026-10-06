@@ -307,6 +307,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/admin/driver-directions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Admin Driver Directions
+         * @description ADR-0027: what a driver said they drive, for staff (read-only; ``ops.view``).
+         */
+        get: operations["list_admin_driver_directions_api_v2_admin_driver_directions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/admin/drivers/{user_id}/eligibility": {
         parameters: {
             query?: never;
@@ -2244,6 +2264,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/driver-directions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Driver Direction
+         * @description Q150: the driver names only "where from -> where to"; the server finds the road and keeps the direction.
+         *
+         *     ``409 ROUTE_MISMATCH`` (``no_corridor_serves_direction``) is the product's "no ELCHI road here yet" answer.
+         */
+        post: operations["create_driver_direction_api_v2_driver_directions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/driver-directions/{direction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Driver Direction */
+        get: operations["get_driver_direction_api_v2_driver_directions__direction_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Driver Direction */
+        patch: operations["patch_driver_direction_api_v2_driver_directions__direction_id__patch"];
+        trace?: never;
+    };
+    "/api/v2/driver-directions/{direction_id}/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Offer From Direction
+         * @description Q152: offer on a request from a direction - the system takes, re-times or plans the trip, then proposes.
+         *
+         *     ``409 TIME_WINDOW_CONFLICT`` with ``details.eta`` means the car would be there at another time; resend with
+         *     ``pickup_at`` to make it a time proposal (Q153), which the client accepts or not.
+         */
+        post: operations["offer_from_direction_api_v2_driver_directions__direction_id__offers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/driver-directions/{direction_id}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Direction Requests
+         * @description Q151: client requests along the driver's direction - on the active trip's time, or planned around the client.
+         */
+        get: operations["list_direction_requests_api_v2_driver_directions__direction_id__requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/events": {
         parameters: {
             query?: never;
@@ -2519,6 +2622,23 @@ export interface paths {
         };
         /** Get My Capabilities */
         get: operations["get_my_capabilities_api_v2_me_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/me/driver-directions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List My Driver Directions */
+        get: operations["list_my_driver_directions_api_v2_me_driver_directions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3765,6 +3885,48 @@ export interface components {
             emergency: boolean;
             /** Reason */
             reason?: string | null;
+        };
+        /** AdminDriverDirectionDTO */
+        AdminDriverDirectionDTO: {
+            active_trip?: components["schemas"]["DirectionTripRefDTO"] | null;
+            /** Cargo Capacity Volume Ml */
+            cargo_capacity_volume_ml: number;
+            /** Cargo Capacity Weight G */
+            cargo_capacity_weight_g: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            destination: components["schemas"]["DirectionEndDTO"];
+            /** Driver Display Name */
+            driver_display_name?: string | null;
+            /** Driver Id */
+            driver_id: string;
+            /** Id */
+            id: string;
+            origin: components["schemas"]["DirectionEndDTO"];
+            /** Seat Capacity */
+            seat_capacity: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "archived";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Vehicle Id */
+            vehicle_id: string;
+            /** Version */
+            version: number;
+            /**
+             * Via District Names
+             * @description Districts the resolved road passes between the two ends, in travel order.
+             */
+            via_district_names?: string[];
         };
         /** AdminDriverReject */
         AdminDriverReject: {
@@ -5462,6 +5624,62 @@ export interface components {
             id: string;
             platform: components["schemas"]["ClientPlatform"];
         };
+        /** DirectionEndDTO */
+        DirectionEndDTO: {
+            /** District Id */
+            district_id?: string | null;
+            /** District Name Ru */
+            district_name_ru?: string | null;
+            /** District Name Uz */
+            district_name_uz?: string | null;
+            /** Region Id */
+            region_id: string;
+            /** Region Name Ru */
+            region_name_ru?: string | null;
+            /** Region Name Uz */
+            region_name_uz: string;
+        };
+        /**
+         * DirectionEndInput
+         * @description One end of a driver direction: a region, and a district unless the region is a city without districts.
+         */
+        DirectionEndInput: {
+            /** District Id */
+            district_id?: string | null;
+            /** Region Id */
+            region_id: string;
+        };
+        /**
+         * DirectionOfferCreate
+         * @description Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027).
+         */
+        DirectionOfferCreate: {
+            /** Listing Id */
+            listing_id: string;
+            /** Message */
+            message?: string | null;
+            /**
+             * Pickup At
+             * @description Q153: the time the driver would pick up, when it differs from the client's window. A new or empty trip is planned around it; on a trip with bookings it must be that trip's own ETA (±30 min).
+             */
+            pickup_at?: string | null;
+            /** Unit Price Minor */
+            unit_price_minor: number;
+        };
+        /** DirectionOfferDTO */
+        DirectionOfferDTO: {
+            thread: components["schemas"]["ProposalThreadDTO"];
+            /**
+             * Time Proposal
+             * @description The offer's pickup lies outside the client's window (Q153).
+             */
+            time_proposal: boolean;
+            trip: components["schemas"]["DirectionTripRefDTO"];
+            /** Trip Created */
+            trip_created: boolean;
+            /** Trip Retimed */
+            trip_retimed: boolean;
+        };
         /**
          * DirectionPreviewDTO
          * @description What the server can promise about two marked places, before anything is created (Q88).
@@ -5514,6 +5732,68 @@ export interface components {
             route_polyline: string;
             /** Route Version Id */
             route_version_id: string;
+        };
+        /**
+         * DirectionRequestItemDTO
+         * @description A client request along a driver direction, and how the driver's trip meets it.
+         */
+        DirectionRequestItemDTO: {
+            /**
+             * Fit
+             * @description fits_trip: the active trip reaches the pickup in the client's window; no_trip: no trip yet, the first offer plans one; time_differs: the car would be there at pickup_eta, outside the client's window - an offer is then a time proposal (Q153).
+             * @enum {string}
+             */
+            fit: "fits_trip" | "no_trip" | "time_differs";
+            listing: components["schemas"]["ListingPublicDTO"];
+            /** @description exact: both ends in the direction's areas; on_route: on the way. */
+            match_type: components["schemas"]["MatchType"];
+            /**
+             * My Thread Id
+             * @description The driver's own open offer on this request, if any.
+             */
+            my_thread_id?: string | null;
+            /**
+             * Pickup Eta
+             * @description When the car would be at the pickup.
+             */
+            pickup_eta?: string | null;
+            /**
+             * Suggested Departure At
+             * @description no_trip / an empty trip: when the system would plan the departure.
+             */
+            suggested_departure_at?: string | null;
+        };
+        /** DirectionRequestsDTO */
+        DirectionRequestsDTO: {
+            active_trip?: components["schemas"]["DirectionTripRefDTO"] | null;
+            /** Direction Id */
+            direction_id: string;
+            /** Items */
+            items: components["schemas"]["DirectionRequestItemDTO"][];
+        };
+        /**
+         * DirectionTripRefDTO
+         * @description The direction's current trip, made by the system from the driver's first offer (Q152).
+         */
+        DirectionTripRefDTO: {
+            /** Id */
+            id: string;
+            /**
+             * Planned End At
+             * Format: date-time
+             */
+            planned_end_at: string;
+            /**
+             * Planned Start At
+             * Format: date-time
+             */
+            planned_start_at: string;
+            /**
+             * Seats Booked
+             * @description Most seats taken on any segment of the trip.
+             */
+            seats_booked: number;
+            status: components["schemas"]["TripStatus"];
         };
         /**
          * DisclosureDTO
@@ -5711,6 +5991,85 @@ export interface components {
         DriverCommissionUpdate: {
             /** Driver Commission Percent */
             driver_commission_percent: number | string;
+        };
+        /**
+         * DriverDirectionCreate
+         * @description Q150: "where from -> where to". No time, stop, corridor or route - the server resolves the road itself.
+         */
+        DriverDirectionCreate: {
+            /**
+             * Cargo Capacity Volume Ml
+             * @description Default: the car's cargo limit.
+             */
+            cargo_capacity_volume_ml?: number | null;
+            /**
+             * Cargo Capacity Weight G
+             * @description Default: the car's cargo limit.
+             */
+            cargo_capacity_weight_g?: number | null;
+            destination: components["schemas"]["DirectionEndInput"];
+            origin: components["schemas"]["DirectionEndInput"];
+            /**
+             * Seat Capacity
+             * @description Default: the car's seats.
+             */
+            seat_capacity?: number | null;
+            /**
+             * Vehicle Id
+             * @description Omit when the driver has exactly one approved car.
+             */
+            vehicle_id?: string | null;
+        };
+        /** DriverDirectionDTO */
+        DriverDirectionDTO: {
+            active_trip?: components["schemas"]["DirectionTripRefDTO"] | null;
+            /** Cargo Capacity Volume Ml */
+            cargo_capacity_volume_ml: number;
+            /** Cargo Capacity Weight G */
+            cargo_capacity_weight_g: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            destination: components["schemas"]["DirectionEndDTO"];
+            /** Id */
+            id: string;
+            origin: components["schemas"]["DirectionEndDTO"];
+            /** Seat Capacity */
+            seat_capacity: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "paused" | "archived";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Vehicle Id */
+            vehicle_id: string;
+            /** Version */
+            version: number;
+            /**
+             * Via District Names
+             * @description Districts the resolved road passes between the two ends, in travel order.
+             */
+            via_district_names?: string[];
+        };
+        /** DriverDirectionPatch */
+        DriverDirectionPatch: {
+            /** Cargo Capacity Volume Ml */
+            cargo_capacity_volume_ml?: number | null;
+            /** Cargo Capacity Weight G */
+            cargo_capacity_weight_g?: number | null;
+            /** Expected Version */
+            expected_version: number;
+            /** Seat Capacity */
+            seat_capacity?: number | null;
+            /** Status */
+            status?: ("active" | "paused" | "archived") | null;
         };
         /** DriverDocumentCreate */
         DriverDocumentCreate: {
@@ -6167,6 +6526,21 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[DirectionOfferDTO] */
+        Envelope_DirectionOfferDTO_: {
+            data: components["schemas"]["DirectionOfferDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[DirectionPreviewDTO] */
         Envelope_DirectionPreviewDTO_: {
             data: components["schemas"]["DirectionPreviewDTO"];
@@ -6182,9 +6556,39 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[DirectionRequestsDTO] */
+        Envelope_DirectionRequestsDTO_: {
+            data: components["schemas"]["DirectionRequestsDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[DisputeDTO] */
         Envelope_DisputeDTO_: {
             data: components["schemas"]["DisputeDTO"];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[DriverDirectionDTO] */
+        Envelope_DriverDirectionDTO_: {
+            data: components["schemas"]["DriverDirectionDTO"];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -7268,6 +7672,22 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
+        /** Envelope[list[AdminDriverDirectionDTO]] */
+        Envelope_list_AdminDriverDirectionDTO__: {
+            /** Data */
+            data: components["schemas"]["AdminDriverDirectionDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
         /** Envelope[list[AdminStopDTO]] */
         Envelope_list_AdminStopDTO__: {
             /** Data */
@@ -7544,6 +7964,22 @@ export interface components {
         Envelope_list_DistrictDTO__: {
             /** Data */
             data: components["schemas"]["DistrictDTO"][];
+            /** Message */
+            message?: string | null;
+            meta?: components["schemas"]["PageMeta"] | null;
+            /**
+             * Success
+             * @default true
+             * @constant
+             */
+            success: true;
+            /** Warnings */
+            warnings?: components["schemas"]["ApiWarning"][] | null;
+        };
+        /** Envelope[list[DriverDirectionDTO]] */
+        Envelope_list_DriverDirectionDTO__: {
+            /** Data */
+            data: components["schemas"]["DriverDirectionDTO"][];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -10425,6 +10861,11 @@ export interface components {
             expected_revision: number;
             /** Message */
             message?: string | null;
+            /**
+             * Outside Request Window
+             * @description ADR-0027 Q153: a driver's counter may move the pickup outside the request window when true. A counter that keeps the current window keeps its time proposal; a client cannot move it outside.
+             */
+            outside_request_window?: boolean | null;
             parcel?: components["schemas"]["ProposalParcel"] | null;
             /** Pickup Stop Id */
             pickup_stop_id?: string | null;
@@ -10445,6 +10886,11 @@ export interface components {
             dropoff_stop_id?: string | null;
             /** Message */
             message?: string | null;
+            /**
+             * Outside Request Window
+             * @description ADR-0027 Q153: true - the driver proposes a pickup time outside the client's request window (at most 12 h away). Only a driver may; the client's own accept or counter is the consent. Omitted / false: the window must meet the request window, as before.
+             */
+            outside_request_window?: boolean | null;
             parcel?: components["schemas"]["ProposalParcel"] | null;
             /** Pickup Stop Id */
             pickup_stop_id?: string | null;
@@ -10696,6 +11142,12 @@ export interface components {
             listing_terms_version: number;
             /** Message */
             message: string | null;
+            /**
+             * Outside Request Window
+             * @description ADR-0027 Q153: the driver proposes a pickup outside the client's requested time; booking it needs the client's own accept (or the client's counter).
+             * @default false
+             */
+            outside_request_window: boolean;
             pickup_point?: components["schemas"]["PointEndDTO"] | null;
             pickup_stop?: components["schemas"]["StopRefDTO"] | null;
             /**
@@ -11701,6 +12153,11 @@ export interface components {
         };
         /** StopRefDTO */
         StopRefDTO: {
+            /**
+             * District Name Uz
+             * @description Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, never by a stop name (ELCHI works point A -> point B).
+             */
+            district_name_uz?: string | null;
             /**
              * Id
              * @description Opaque stop id (stp_...).
@@ -14524,6 +14981,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_DisputeDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_admin_driver_directions_api_v2_admin_driver_directions_get: {
+        parameters: {
+            query?: {
+                /** @description usr_... - one driver's directions. */
+                driver_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_AdminDriverDirectionDTO__"];
                 };
             };
             /** @description Bad Request */
@@ -23728,6 +24272,451 @@ export interface operations {
             };
         };
     };
+    create_driver_direction_api_v2_driver_directions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriverDirectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_DriverDirectionDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_driver_direction_api_v2_driver_directions__direction_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                direction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_DriverDirectionDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    patch_driver_direction_api_v2_driver_directions__direction_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                direction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriverDirectionPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_DriverDirectionDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    offer_from_direction_api_v2_driver_directions__direction_id__offers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                direction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectionOfferCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_DirectionOfferDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_direction_requests_api_v2_driver_directions__direction_id__requests_get: {
+        parameters: {
+            query: {
+                service_type: components["schemas"]["ServiceType"];
+                /** @description ISO-8601 with offset */
+                date_from: string;
+                /** @description ISO-8601 with offset */
+                date_to: string;
+            };
+            header?: never;
+            path: {
+                direction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_DirectionRequestsDTO_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_events_api_v2_events_get: {
         parameters: {
             query?: {
@@ -25389,6 +26378,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_my_driver_directions_api_v2_me_driver_directions_get: {
+        parameters: {
+            query?: {
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_list_DriverDirectionDTO__"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Too Many Requests */

@@ -34,7 +34,7 @@ from app.modules.trips.schemas import (
 def stop_ref_dto(ref: StopRef | None) -> StopRefDTO:
     if ref is None:  # geo row missing: never invent a name
         return StopRefDTO(id="", name_uz="", name_ru=None)
-    return StopRefDTO(id=ref.public_id, name_uz=ref.name_uz, name_ru=ref.name_ru)
+    return StopRefDTO(id=ref.public_id, name_uz=ref.name_uz, name_ru=ref.name_ru, district_name_uz=ref.district_name_uz)
 
 
 def vehicle_dto(vehicle: Vehicle) -> VehicleDTO:
@@ -196,3 +196,62 @@ def availability_dto(session: Session, trip: Trip, now: datetime | None = None) 
             for load in loads
         ],
     )
+
+
+# --- driver directions (ADR-0027) -------------------------------------------------------------------------------
+
+
+def direction_trip_ref(session: Session, trip: Trip | None):  # noqa: ANN201 - DirectionTripRefDTO | None
+    from app.modules.trips import directions as trip_directions
+    from app.modules.trips.schemas import DirectionTripRefDTO
+
+    if trip is None:
+        return None
+    return DirectionTripRefDTO(
+        id=trips_service.trip_public_id(trip),
+        status=TripStatus(trip.status),
+        planned_start_at=ensure_aware_utc(trip.planned_start_at),
+        planned_end_at=ensure_aware_utc(trip.planned_end_at),
+        seats_booked=trip_directions.seats_booked(session, trip),
+    )
+
+
+def direction_dto(session: Session, direction, *, admin: bool = False):  # noqa: ANN001, ANN201
+    """DriverDirectionDTO (or the admin variant): names of both ends, the road's districts between them, the car,
+    the capacity and the trip the system made from the direction."""
+    from app.modules.trips import directions as trip_directions
+    from app.modules.trips.schemas import AdminDriverDirectionDTO, DirectionEndDTO, DriverDirectionDTO
+
+    origin, destination = trip_directions.direction_ends(session, direction)
+
+    def end(value) -> DirectionEndDTO:  # noqa: ANN001
+        return DirectionEndDTO(
+            region_id=value.region_api_id, region_name_uz=value.region_name_uz, region_name_ru=value.region_name_ru,
+            district_id=value.district_api_id, district_name_uz=value.district_name_uz, district_name_ru=value.district_name_ru,
+        )
+
+    routes = trip_directions.direction_routes(session, direction) if direction.status != trip_directions.STATUS_ARCHIVED else []
+    via = trip_directions.via_district_names(session, routes[0]) if routes else []
+    vehicle = trips_service.get_vehicle(session, direction.vehicle_id)
+    fields = dict(
+        id=trip_directions.direction_public_id(direction),
+        origin=end(origin),
+        destination=end(destination),
+        via_district_names=via,
+        vehicle_id=trips_service.vehicle_public_id(vehicle),
+        seat_capacity=direction.seat_capacity,
+        cargo_capacity_weight_g=direction.cargo_capacity_weight_g,
+        cargo_capacity_volume_ml=direction.cargo_capacity_volume_ml,
+        status=direction.status,
+        version=direction.version,
+        active_trip=direction_trip_ref(session, trip_directions.active_trip(session, direction)),
+        created_at=ensure_aware_utc(direction.created_at),
+        updated_at=ensure_aware_utc(direction.updated_at),
+    )
+    if not admin:
+        return DriverDirectionDTO(**fields)
+    from app.modules.bookings.rules import first_name
+
+    refs = identity_service.user_refs(session, [direction.driver_user_id])
+    driver_api_id, full_name = refs[direction.driver_user_id]
+    return AdminDriverDirectionDTO(**fields, driver_id=driver_api_id, driver_display_name=first_name(full_name, "Haydovchi"))

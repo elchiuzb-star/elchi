@@ -61,12 +61,11 @@ import { ClientMapCanvas } from "../components/maps/ClientMapCanvas";
 import { MapAddressPicker } from "../components/maps/MapAddressPicker";
 import { RegionSelector } from "../components/location/RegionSelector";
 import { GeoDistrictSelector } from "../components/location/GeoDistrictSelector";
-import { loadStopOptions, type StopOption } from "../components/location/stops";
 import { MapPointPicker, type MarkedPoint } from "../components/location/MapPointPicker";
 import { AppSidebar, SidebarButton, clientSidebarItems } from "../components/nav/AppSidebar";
 import { SeatPicker, type SeatId } from "../components/passenger/SeatPicker";
 import { reverseGeocode } from "../api/geo.api";
-import { RouteMap } from "./v2/RouteMap";
+import { RouteMap, type RouteMapPoint } from "./v2/RouteMap";
 import {
   AcceptConsentPanel,
   BonusConsentPanel,
@@ -140,6 +139,30 @@ import type { MessageKey } from "../i18n/messages";
 import { negotiationActions, turnLabel, type ActorSide } from "./auction";
 import { alternativeReason, splitFeedGroups } from "./feedGroups";
 import {
+  clockTime,
+  dayClock,
+  directionEndName,
+  feedRange,
+  groupDirectionItems,
+  isDuplicateDirection,
+  isNoRoad,
+  isPickupPassed,
+  pickDirection,
+  timeProposalEta,
+  timeProposalTooFar,
+  type FeedDay,
+} from "./directionFeed";
+import {
+  createDirection,
+  directionRequests,
+  listMyDirections,
+  offerFromDirection,
+  patchDirection,
+  type DirectionRequestItemDTO,
+  type DirectionRequestsDTO,
+  type DriverDirectionDTO,
+} from "../api/v2/directions.api";
+import {
   CANCEL_REASONS,
   canCancelBooking,
   canOpenDispute,
@@ -167,7 +190,6 @@ import { BookingLiveTracking } from "./v2/BookingLiveTracking";
 import { DriverTrackingBar } from "./v2/DriverTrackingBar";
 import { driverTracker } from "./v2/driverTracker";
 import { trackableTrip } from "./gpsOutbox";
-import { StopSearch } from "./v2/StopSearch";
 import { bookingCounterparty, canShareListing, canShareTracking, routesThroughStop } from "./safetyMounts";
 import {
   createTrip,
@@ -323,6 +345,7 @@ type Screen =
   | "driver-add-route"
   | "driver-feed"
   | "driver-bid"
+  | "driver-direction-bid"
   | "driver-orders"
   | "driver-order-detail"
   | "driver-income"
@@ -501,7 +524,7 @@ function directionEndLabel(end: DirectionEnd): string {
       end.point.address?.trim() || [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ")
     );
   }
-  if (end.stop) return [end.stop.name_uz, end.stop.district.name_uz].filter(Boolean).join(", ");
+  if (end.stop) return [end.stop.district.name_uz, end.region?.name_uz].filter(Boolean).join(", "); // Q158: a place, not a stop
   if (end.district) return [end.district.name_uz, end.region?.name_uz].filter(Boolean).join(", ");
   return end.region?.name_uz ?? "";
 }
@@ -1440,12 +1463,27 @@ function endLabel(
   point: MapPointDTO | null | undefined,
   fallback = translate("app.endLabel.mapPlace"),
 ): string {
-  if (stop) return stop.name_uz;
+  // Q158: a legacy stop end is shown as the district it is in - ELCHI works point A -> point B, no stops on screen.
+  if (stop) return stop.district_name_uz || fallback;
   if (!point) return fallback;
   return point.address?.trim() || point.district?.name_uz || fallback;
 }
 
-/** `Olib ketish bekati` reads wrong for a marked place; the row says what the end actually is. */
+/** Q158: the client's own end as the route map draws it - a place with a name, never a stop. */
+function routePoint(end: DirectionEnd): RouteMapPoint | null {
+  const at = end.point ?? end.stop?.point;
+  if (!at) return null;
+  const name = end.point?.address?.trim() || [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ") || "-";
+  return { lat: at.lat, lng: at.lng, name };
+}
+
+/** Q158: a trip is named by the districts it runs between, never by its internal route nodes. */
+function tripEndName(trip: TripDTO, which: "first" | "last"): string {
+  const node = which === "first" ? trip.stops[0] : trip.stops[trip.stops.length - 1];
+  return node?.stop.district_name_uz || "-";
+}
+
+/** The row label of an end: always a place ("Olib ketish joyi"), whatever the end is stored as. */
 function endRowLabel(stop: StopRefDTO | null | undefined, stopWord: string, pointWord: string): string {
   return stop ? stopWord : pointWord;
 }
@@ -1664,7 +1702,6 @@ export function ConnectedApp() {
   const [routeDistricts, setRouteDistricts] = useState<CorridorDistrictDTO[]>([]);
   const [corridorStops, setCorridorStops] = useState<StopDTO[]>([]);
   /** Verified stops for the end being marked, offered on the map as a shortcut (Q88). */
-  const [stopOptions, setStopOptions] = useState<StopOption[]>([]);
   const [listingForm, setListingForm] = useState({
     windowStart: "",
     windowEnd: "",
@@ -1715,6 +1752,20 @@ export function ConnectedApp() {
   const [matchScope, setMatchScope] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<FeedItemDTO | null>(null);
   const [proposalTripId, setProposalTripId] = useState("");
+  // ADR-0027: the driver's directions ("where from -> where to"), the one whose requests are on screen, the add form
+  // and the offer being written from a direction. Trips, stops and the departure are the server's (Q150-Q152).
+  const [directions, setDirections] = useState<DriverDirectionDTO[]>([]);
+  const [activeDirectionId, setActiveDirectionId] = useState("");
+  const [directionFeed, setDirectionFeed] = useState<DirectionRequestsDTO | null>(null);
+  const [feedDay, setFeedDay] = useState<FeedDay>("week");
+  const [directionForm, setDirectionForm] = useState({ originRegion: "", originDistrict: "", destRegion: "", destDistrict: "" });
+  const [directionRegions, setDirectionRegions] = useState<RegionDTO[]>([]);
+  const [originDistricts, setOriginDistricts] = useState<DistrictDTO[]>([]);
+  const [destDistricts, setDestDistricts] = useState<DistrictDTO[]>([]);
+  const [directionNotice, setDirectionNotice] = useState("");
+  const [directionBid, setDirectionBid] = useState<DirectionRequestItemDTO | null>(null);
+  /** Q153: the car's real ETA the server answered with - the offer becomes a time proposal at exactly that time. */
+  const [directionEta, setDirectionEta] = useState<string | null>(null);
   /** §17.1: what the driver has already sent per slot, so each row can say where its review stands. */
   const [driverDocuments, setDriverDocuments] = useState<DriverDocument[]>([]);
   /** Q40/ADR-0019: the anonymous board of the other drivers' current offers on the request being bid on.
@@ -2811,6 +2862,23 @@ export function ConnectedApp() {
     setMatchScope((result.meta as { match_scope?: string } | undefined)?.match_scope ?? null);
   }
 
+  /** ADR-0027: the driver's directions; returns them so a caller can pick one before React applies the state. */
+  async function loadDirections(): Promise<DriverDirectionDTO[]> {
+    const list = await listMyDirections();
+    setDirections(list);
+    setActiveDirectionId((current) => pickDirection(list, current));
+    return list;
+  }
+
+  /** Q151: the requests along one direction, for one service and the day chips' range. */
+  async function loadDirectionFeed(directionId = activeDirectionId, mode = driverServiceMode, day = feedDay) {
+    if (!directionId) {
+      setDirectionFeed(null);
+      return;
+    }
+    setDirectionFeed(await directionRequests(directionId, { service_type: mode, ...feedRange(day) }));
+  }
+
   /** The documents screen reads its own list: the profile carries a verdict, not which slot is missing. */
   async function loadDriverDocuments() {
     setDriverDocuments(await listDriverDocuments());
@@ -2929,17 +2997,6 @@ export function ConnectedApp() {
     }
     if (screen === "client-notifications" || screen === "driver-notifications") void run(loadNotifications);
     if (screen === "support") void run(loadSupport);
-    if (screen === "client-point-picker") {
-      // Fails quietly: the map is the flow, and the shortcuts are an extra. An empty list is also the
-      // truthful answer for most districts.
-      void loadStopOptions({
-        districtId: activeEnd.district?.id ?? null,
-        regionId: activeEnd.district ? null : (activeEnd.region?.id ?? null),
-        corridorId: otherEnd.corridorId || null,
-      })
-        .then(setStopOptions)
-        .catch(() => setStopOptions([]));
-    }
     if (screen === "client-profile") {
       void run(async () => {
         const profile = await getClientProfile();
@@ -2959,15 +3016,15 @@ export function ConnectedApp() {
     }
     if (screen === "my-support-threads") void run(async () => setSupportThreads(await mySupportThreads({ limit: 30 })));
     if (screen === "driver-saved-searches") void run(loadSavedSearches);
-    if (screen === "driver-routes") void run(loadDriverTrips);
-    if (screen === "driver-add-route") {
-      void run(async () => {
-        await loadDriverTrips();
-        setCorridors(await listCorridors());
-      });
-    }
+    // ADR-0027: the effect lines stay brace-less, so the screen's render block is the first `if (screen === "x") {`.
+    if (screen === "driver-routes") void run(async () => { await Promise.all([loadDriverTrips(), loadDirections()]); });
+    if (screen === "driver-add-route") void run(async () => setDirectionRegions(await listRegions()));
     if (screen === "driver-documents") void run(loadDriverDocuments);
-    if (screen === "driver-feed") void run(loadRequestFeed);
+    if (screen === "driver-feed") void run(async () => {
+      await loadRequestFeed();
+      const list = await loadDirections();
+      await loadDirectionFeed(pickDirection(list, activeDirectionId));
+    });
     if (screen === "driver-proposals" || screen === "client-proposals") {
       void run(async () => {
         if (screen === "driver-proposals") await loadDriverTrips();
@@ -2986,12 +3043,13 @@ export function ConnectedApp() {
    * unavailable estimate must not stop a bid.
    */
   useEffect(() => {
-    if (screen !== "driver-bid" || auth.user?.role !== "driver" || !selectedRequest) {
+    const bidListing = screen === "driver-bid" ? selectedRequest?.listing : screen === "driver-direction-bid" ? directionBid?.listing : undefined;
+    if (auth.user?.role !== "driver" || !bidListing) {
       setFeeQuote(null);
       setFeeQuoteFailed(false);
       return;
     }
-    const listing = selectedRequest.listing;
+    const listing = bidListing;
     const total = bidTotalMinor(listing.price_basis, Math.round(Number(bidPrice)) * 100, listing.quantity);
     if (total <= 0) {
       setFeeQuote(null);
@@ -3005,7 +3063,7 @@ export function ConnectedApp() {
         .catch(() => { if (active) { setFeeQuote(null); setFeeQuoteFailed(true); } });
     }, 400);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [screen, bidPrice, selectedRequest, auth.user?.role]);
+  }, [screen, bidPrice, selectedRequest, directionBid, auth.user?.role]);
 
   /**
    * D16 / §17.1: an unverified driver takes no new business at all - no bid, no trip, no trip offer.
@@ -3820,8 +3878,6 @@ export function ConnectedApp() {
           maxOffsetM={preview?.max_point_offset_m ?? null}
           routeError={previewError}
           busy={previewBusy}
-          stops={stopOptions}
-          onSelectStop={(option) => selectGeoStop(option.stop, option.corridorId)}
           onConfirm={(point) => void markPoint(point)}
           onBack={() => go(activeEnd.region?.requires_district ? "client-district-selector" : "client-location-selector")}
         />
@@ -3839,7 +3895,7 @@ export function ConnectedApp() {
                   alone is why every marked place used to render as "Manzil kiritilmagan". */}
               <RouteSummaryRow
                 label={translate("routeSummary.pickup")}
-                address={pickupEnd.stop?.name_uz ?? pickupEnd.point?.address ?? ""}
+                address={pickupEnd.point?.address ?? pickupEnd.stop?.district.name_uz ?? ""}
                 fallback={pickupEnd.point ? coordinateLabel(pickupEnd.point.lat, pickupEnd.point.lng) : undefined}
                 city={pickupEnd.region?.name_uz}
                 district={pickupEnd.district?.name_uz}
@@ -3848,7 +3904,7 @@ export function ConnectedApp() {
               />
               <RouteSummaryRow
                 label={translate("routeSummary.dropoff")}
-                address={dropoffEnd.stop?.name_uz ?? dropoffEnd.point?.address ?? ""}
+                address={dropoffEnd.point?.address ?? dropoffEnd.stop?.district.name_uz ?? ""}
                 fallback={dropoffEnd.point ? coordinateLabel(dropoffEnd.point.lat, dropoffEnd.point.lng) : undefined}
                 city={dropoffEnd.region?.name_uz}
                 district={dropoffEnd.district?.name_uz}
@@ -3879,9 +3935,8 @@ export function ConnectedApp() {
             <div className="mt-4 overflow-hidden rounded-[16px] border border-border bg-slate-50">
               <RouteMap
                 geometryPolyline={routeVersion?.geometry_polyline}
-                stops={corridorStops}
-                routeStops={routeVersion?.stops ?? []}
-                highlight={{ originStopId: pickupEnd.stop?.id, destinationStopId: dropoffEnd.stop?.id }}
+                pointA={routePoint(pickupEnd)}
+                pointB={routePoint(dropoffEnd)}
                 note={translate("routeSummary.mapNote")}
               />
             </div>
@@ -4102,8 +4157,7 @@ export function ConnectedApp() {
             {(() => {
               const endRow = (label: string, end: DirectionEnd): [string, string, string?] => {
                 const place =
-                  end.stop?.name_uz
-                  || end.point?.address
+                  end.point?.address
                   || (end.point ? coordinateLabel(end.point.lat, end.point.lng) : "");
                 const where = [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ");
                 return [label, place || where || "-", end.stop ? translate("orderForm.review.verifiedStop", { where }) : where];
@@ -5394,6 +5448,16 @@ export function ConnectedApp() {
                       <p className="mt-1 text-[13px] text-muted-foreground">
                         {version ? `${shortDate(version.pickup_window_start)} - ${shortDate(version.pickup_window_end)}` : "-"}
                       </p>
+                      {version?.outside_request_window && (
+                        // ADR-0027 (Q153): the driver offers another time; accepting (or countering the price) is the consent.
+                        <p className="mt-1 rounded-[10px] bg-warning/14 px-2.5 py-1.5 text-[12px] leading-5 text-warning" data-testid="time-proposal">
+                          {translate("offer.timeProposal", {
+                            time: dayClock(version.pickup_window_start),
+                            start: dayClock(listing.departure_window_start),
+                            end: clockTime(listing.departure_window_end),
+                          })}
+                        </p>
+                      )}
                       {thread.driver_summary && (
                         // ADR-0026 (Q138 + Q40): the client compares the answers by the anonymous set - vehicle class,
                         // seats and the rating group with its count; never a name, plate or phone before accept (Q43).
@@ -6046,10 +6110,13 @@ export function ConnectedApp() {
             <div className="flex items-center justify-between">
               <h1 className="text-[24px] font-bold text-foreground">{translate("driverRoutes.title")}</h1>
               <button
+                type="button"
+                aria-label={translate("driverRoutes.addRoute")}
                 onClick={() => {
-                  setTripForm({ vehicleId: "", corridorId: "", routeId: "", startAt: "", seats: 4, cargoKg: "20", cargoLitres: "100" });
-                  setTripRoutes([]);
-                  setRouteStopFilter(null);
+                  setDirectionForm({ originRegion: "", originDistrict: "", destRegion: "", destDistrict: "" });
+                  setOriginDistricts([]);
+                  setDestDistricts([]);
+                  setDirectionNotice("");
                   go("driver-add-route");
                 }}
                 className="el-press flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
@@ -6057,6 +6124,93 @@ export function ConnectedApp() {
                 +
               </button>
             </div>
+            {/* ADR-0027 (Q150): the driver keeps directions only; trips are made from them by the system. */}
+            {directions.length ? directions.map((direction) => (
+              <div key={direction.id} className="rounded-[14px] border border-border bg-card p-4" data-testid="driver-direction">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[15px] font-semibold leading-6 text-foreground">
+                    {directionEndName(direction.origin, locale === "ru")} {"->"} {directionEndName(direction.destination, locale === "ru")}
+                  </p>
+                  <span
+                    className={cls(
+                      "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      direction.status === "active" ? "bg-accent text-primary" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {translate(direction.status === "active" ? "dir.statusActive" : "dir.statusPaused")}
+                  </span>
+                </div>
+                {(direction.via_district_names ?? []).length > 0 && (
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    {translate("dir.via", { names: (direction.via_district_names ?? []).join(", ") })}
+                  </p>
+                )}
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  {translate("dir.capacity", { seats: direction.seat_capacity, kg: Math.round(direction.cargo_capacity_weight_g / 1000) })}
+                </p>
+                <p className="mt-2 text-[13px] text-foreground">
+                  {direction.active_trip
+                    ? translate("dir.trip", {
+                        date: dayClock(direction.active_trip.planned_start_at),
+                        status: tripStatusLabel(direction.active_trip.status),
+                        seats: direction.active_trip.seats_booked,
+                      })
+                    : translate("dir.noTrip")}
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={direction.status !== "active"}
+                    onClick={() => {
+                      setActiveDirectionId(direction.id);
+                      go("driver-feed");
+                    }}
+                    className="el-press h-10 rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground disabled:opacity-50"
+                  >
+                    {translate("dir.openRequests")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(async () => {
+                      await patchDirection(direction.id, {
+                        expected_version: direction.version,
+                        status: direction.status === "active" ? "paused" : "active",
+                      });
+                      await loadDirections();
+                    }, translate("dir.updated"))}
+                    className="el-press h-10 rounded-[10px] bg-accent text-[14px] font-semibold text-primary"
+                  >
+                    {translate(direction.status === "active" ? "dir.pause" : "dir.resume")}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(async () => {
+                    await patchDirection(direction.id, { expected_version: direction.version, status: "archived" });
+                    await loadDirections();
+                  }, translate("dir.archived"))}
+                  className="el-press mt-2 text-[13px] font-semibold text-destructive"
+                >
+                  {translate("dir.archive")}
+                </button>
+              </div>
+            )) : !busy && (
+              <EmptyState
+                icon={Navigation}
+                title={translate("dir.empty")}
+                subtitle={translate("dir.emptyHint")}
+                action={translate("driverRoutes.addRoute")}
+                onAction={() => go("driver-add-route")}
+              />
+            )}
+            {trips.length > 0 && (
+              <div className="pt-3">
+                <h2 className="text-[17px] font-bold text-foreground">{translate("dir.tripsTitle")}</h2>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("dir.tripsHint")}</p>
+              </div>
+            )}
             {busy && !trips.length ? <ListSkeleton /> : trips.length ? trips.map((trip) => {
               const nextAction = tripNextAction(trip.status);
               return (
@@ -6072,12 +6226,12 @@ export function ConnectedApp() {
                 >
                   <span className="flex items-start justify-between gap-2">
                     <span className="text-[15px] font-semibold leading-6 text-foreground">
-                      {trip.stops[0]?.stop.name_uz ?? "-"} {"->"} {trip.stops[trip.stops.length - 1]?.stop.name_uz ?? "-"}
+                      {tripEndName(trip, "first")} {"->"} {tripEndName(trip, "last")}
                     </span>
                     <ChevronRight size={18} className="mt-1 shrink-0 text-muted-foreground" />
                   </span>
                   <span className="mt-1 block text-[13px] text-muted-foreground">
-                    {translate("driverRoutes.tripMeta", { date: shortDate(trip.planned_start_at), stops: trip.stops.length, seats: trip.seat_capacity })}
+                    {translate("driverRoutes.tripMeta", { date: shortDate(trip.planned_start_at), seats: trip.seat_capacity })}
                   </span>
                 </button>
                 <p className="mt-1 text-[13px] text-success">{translate("driverRoutes.status", { status: tripStatusLabel(trip.status) })}</p>
@@ -6110,7 +6264,7 @@ export function ConnectedApp() {
                     never published to clients; the driver answers client requests from the feed with it. */}
               </div>
               );
-            }) : <EmptyState icon={Navigation} title={translate("driverRoutes.empty")} action={translate("driverRoutes.addRoute")} onAction={() => go("driver-add-route")} />}
+            }) : null}
           </section>
           <BottomNav role="driver" active={screen} go={go} />
         </main>
@@ -6245,162 +6399,115 @@ export function ConnectedApp() {
     }
 
     if (screen === "driver-add-route") {
-      const approvedVehicles = vehicles.filter((vehicle) => vehicle.verification_status === "approved");
-      const chosenRoute = tripRoutes.find((route) => route.id === tripForm.routeId);
-      const filteredTripRoutes = routesThroughStop(tripRoutes, routeStopFilter?.id);
-      const tripReady = Boolean(
-        tripForm.vehicleId && chosenRoute && tripForm.startAt && tripForm.seats > 0
-        && Number(tripForm.cargoKg) > 0 && Number(tripForm.cargoLitres) > 0,
+      // ADR-0027 (Q150): "where from -> where to" and nothing else. No time, stop, corridor or route: the server
+      // finds the road, and the first offer from the direction plans the trip around the client's pickup time.
+      if (!driverApproved) {
+        return (
+          <main className="flex flex-1 flex-col bg-card">
+            <TopBar title={translate("driverRoutes.addRoute")} back={() => go("driver-routes")} />
+            <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
+              <DriverVerificationGate
+                status={driverProfile?.verification_status}
+                onProfile={() => go("driver-profile-form")}
+                onDocuments={() => go("driver-documents")}
+                onSupport={() => go("support")}
+              />
+            </section>
+          </main>
+        );
+      }
+      const ru = locale === "ru";
+      const originRegion = directionRegions.find((region) => region.id === directionForm.originRegion);
+      const destRegion = directionRegions.find((region) => region.id === directionForm.destRegion);
+      const needsDistrict = (region?: RegionDTO) => region?.requires_district !== false;
+      const directionReady = Boolean(
+        originRegion && destRegion
+        && (!needsDistrict(originRegion) || directionForm.originDistrict)
+        && (!needsDistrict(destRegion) || directionForm.destDistrict),
       );
+      const regionOptions = directionRegions.map((region) => [region.id, (ru && region.name_ru) || region.name_uz] as [string, string]);
+      const districtOptions = (list: DistrictDTO[]) => list.map((district) => [district.id, (ru && district.name_ru) || district.name_uz] as [string, string]);
+      const loadEndDistricts = (regionId: string, set: (list: DistrictDTO[]) => void) => {
+        set([]);
+        if (regionId) void run(async () => set(await listDistricts({ region_id: regionId, limit: 200 })));
+      };
       return (
         <main className="flex flex-1 flex-col bg-card">
           <TopBar title={translate("driverRoutes.addRoute")} back={() => go("driver-routes")} />
           <section className="el-enter flex-1 space-y-4 overflow-y-auto px-5 py-5">
+            <p className="text-[13px] leading-5 text-muted-foreground">{translate("dir.formHint")}</p>
+            <h2 className="text-[15px] font-semibold text-foreground">{translate("driverFeed.from")}</h2>
             <PickSelect
-              label={translate("addRoute.vehicle")}
-              placeholder={approvedVehicles.length ? translate("addRoute.vehiclePlaceholder") : translate("addRoute.noApprovedVehicle")}
-              value={tripForm.vehicleId}
-              options={approvedVehicles.map((vehicle) => [
-                vehicle.id,
-                translate("addRoute.vehicleOption", { model: vehicle.make_model, plate: vehicle.plate_masked ?? vehicle.plate_number ?? "-", seats: vehicle.seat_capacity }),
-              ] as [string, string])}
+              label={translate("dir.region")}
+              placeholder={translate("dir.regionPlaceholder")}
+              value={directionForm.originRegion}
+              options={regionOptions}
               onChange={(value) => {
-                const picked = approvedVehicles.find((vehicle) => vehicle.id === value);
-                setTripForm({
-                  ...tripForm,
-                  vehicleId: value,
-                  seats: picked?.seat_capacity ?? tripForm.seats,
-                  cargoKg: picked?.cargo_max_weight_g ? String(Math.round(picked.cargo_max_weight_g / 1000)) : tripForm.cargoKg,
-                  cargoLitres: picked?.cargo_max_volume_ml ? String(Math.round(picked.cargo_max_volume_ml / 1000)) : tripForm.cargoLitres,
-                });
+                setDirectionForm({ ...directionForm, originRegion: value, originDistrict: "" });
+                setDirectionNotice("");
+                loadEndDistricts(value, setOriginDistricts);
               }}
             />
-            {approvedVehicles.length === 0 && (
-              <p className="text-[12px] leading-5 text-destructive">
-                {translate("addRoute.vehicleNeedsReview")}
-              </p>
-            )}
             <PickSelect
-              label={translate("addRoute.corridor")}
-              placeholder={translate("addRoute.corridorPlaceholder")}
-              value={tripForm.corridorId}
-              options={corridors.map((corridor) => [corridor.id, corridor.name] as [string, string])}
+              label={translate("dir.district")}
+              placeholder={needsDistrict(originRegion) ? translate("dir.districtPlaceholder") : translate("dir.wholeCity")}
+              disabled={!originRegion}
+              value={directionForm.originDistrict}
+              options={districtOptions(originDistricts)}
               onChange={(value) => {
-                setTripForm({ ...tripForm, corridorId: value, routeId: "" });
-                setTripRoutes([]);
-                setRouteStopFilter(null);
-                if (value) void run(async () => setTripRoutes(await listCorridorRoutes(value)));
+                setDirectionForm({ ...directionForm, originDistrict: value });
+                setDirectionNotice("");
               }}
             />
-            {/* A corridor can have several approved routes; finding a stop by name shows which of them pass it.
-                The stops themselves stay the route's own (the trip is planned on an operator-approved route). */}
-            {tripRoutes.length > 1 && (
-              <div className="space-y-2 rounded-[14px] border border-border p-3">
-                {routeStopFilter ? (
-                  <>
-                    <p className="text-[13px] font-medium text-foreground">
-                      {translate("tripPlan.stopFilter", { name: routeStopFilter.name })}
-                    </p>
-                    {filteredTripRoutes.length === 0 && (
-                      <p className="text-[12px] leading-5 text-warning">
-                        {translate("tripPlan.stopFilterNone", { name: routeStopFilter.name })}
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setRouteStopFilter(null)}
-                      className="el-press text-[13px] font-semibold text-primary"
-                    >
-                      {translate("tripPlan.stopFilterClear")}
-                    </button>
-                  </>
-                ) : (
-                  <StopSearch
-                    label={translate("tripPlan.stopSearchLabel")}
-                    onSelect={(stop) => {
-                      setRouteStopFilter({ id: stop.id, name: stop.name_uz });
-                      const through = routesThroughStop(tripRoutes, stop.id);
-                      const keep = through.some((route) => route.id === tripForm.routeId);
-                      setTripForm({ ...tripForm, routeId: keep ? tripForm.routeId : through.length === 1 ? through[0].id : "" });
-                    }}
-                  />
-                )}
-              </div>
-            )}
+            <h2 className="pt-1 text-[15px] font-semibold text-foreground">{translate("driverFeed.to")}</h2>
             <PickSelect
-              label={translate("addRoute.route")}
-              placeholder={tripForm.corridorId ? translate("addRoute.routePlaceholder") : translate("addRoute.pickCorridorFirst")}
-              disabled={!tripForm.corridorId}
-              value={tripForm.routeId}
-              options={filteredTripRoutes.map((route) => [
-                route.id,
-                translate("addRoute.routeOption", { stops: route.stops.length, km: Math.round(route.distance_m / 1000), hours: Math.round(route.duration_s / 3600) }),
-              ] as [string, string])}
-              onChange={(value) => setTripForm({ ...tripForm, routeId: value })}
+              label={translate("dir.region")}
+              placeholder={translate("dir.regionPlaceholder")}
+              value={directionForm.destRegion}
+              options={regionOptions}
+              onChange={(value) => {
+                setDirectionForm({ ...directionForm, destRegion: value, destDistrict: "" });
+                setDirectionNotice("");
+                loadEndDistricts(value, setDestDistricts);
+              }}
             />
-            {Boolean(tripForm.corridorId) && tripRoutes.length === 0 && (
-              <p className="text-[12px] leading-5 text-destructive">
-                {translate("addRoute.noApprovedRoute")}
+            <PickSelect
+              label={translate("dir.district")}
+              placeholder={needsDistrict(destRegion) ? translate("dir.districtPlaceholder") : translate("dir.wholeCity")}
+              disabled={!destRegion}
+              value={directionForm.destDistrict}
+              options={districtOptions(destDistricts)}
+              onChange={(value) => {
+                setDirectionForm({ ...directionForm, destDistrict: value });
+                setDirectionNotice("");
+              }}
+            />
+            {directionNotice && (
+              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning" data-testid="direction-notice">
+                {directionNotice}
               </p>
             )}
-            <Field
-              label={translate("addRoute.departureTime")}
-              type="datetime-local"
-              value={tripForm.startAt}
-              onChange={(v) => setTripForm({ ...tripForm, startAt: v })}
-            />
-            <Field
-              label={translate("addRoute.freeSeats")}
-              type="number"
-              value={String(tripForm.seats)}
-              onChange={(v) => setTripForm({ ...tripForm, seats: Math.max(1, Number(v) || 1) })}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Field
-                label={translate("driverProfileForm.cargoKg")}
-                type="number"
-                value={tripForm.cargoKg}
-                onChange={(v) => setTripForm({ ...tripForm, cargoKg: v })}
-              />
-              <Field
-                label={translate("driverProfileForm.cargoLitres")}
-                type="number"
-                value={tripForm.cargoLitres}
-                onChange={(v) => setTripForm({ ...tripForm, cargoLitres: v })}
-              />
-            </div>
-            <p className="text-[12px] leading-5 text-muted-foreground">
-              {translate("addRoute.plannedOnApprovedRoute")}
-            </p>
             <PrimaryButton
-              disabled={!tripReady || busy}
+              disabled={!directionReady || busy}
               onClick={() => void run(async () => {
-                if (!chosenRoute) return;
-                const start = new Date(tripForm.startAt);
-                await createTrip({
-                  vehicle_id: tripForm.vehicleId,
-                  route_version_id: chosenRoute.id,
-                  planned_start_at: start.toISOString(),
-                  planned_end_at: new Date(start.getTime() + chosenRoute.duration_s * 1000).toISOString(),
-                  seat_capacity: tripForm.seats,
-                  // AC12: the capacity the trip really offers; without it no parcel proposal can be sent.
-                  cargo_capacity_weight_g: Math.round(Number(tripForm.cargoKg) * 1000),
-                  cargo_capacity_volume_ml: Math.round(Number(tripForm.cargoLitres) * 1000),
-                  max_detour_minutes: 15,
-                  max_detour_m: 5000,
-                  pickup_wait_minutes: 10,
-                  stops: chosenRoute.stops.map((stop, index) => ({
-                    stop_id: stop.stop_id,
-                    seq: index + 1,
-                    planned_arrival_at: new Date(start.getTime() + (stop.cumulative_duration_s ?? 0) * 1000).toISOString(),
-                    dwell_minutes: 5,
-                  })),
-                });
-                await loadDriverTrips();
+                setDirectionNotice("");
+                try {
+                  await createDirection({
+                    origin: { region_id: directionForm.originRegion, district_id: directionForm.originDistrict || null },
+                    destination: { region_id: directionForm.destRegion, district_id: directionForm.destDistrict || null },
+                  });
+                } catch (err) {
+                  // Both are product answers, said in place - not a failure banner.
+                  if (isNoRoad(err)) return setDirectionNotice(translate("dir.noRoad"));
+                  if (isDuplicateDirection(err)) return setDirectionNotice(translate("dir.exists"));
+                  throw err;
+                }
+                await loadDirections();
+                setMessage(translate("dir.added"));
                 go("driver-routes");
-              }, translate("addRoute.added"))}
+              })}
             >
-              {translate("common.save")}
+              {translate("dir.save")}
             </PrimaryButton>
           </section>
         </main>
@@ -6426,6 +6533,66 @@ export function ConnectedApp() {
           </main>
         );
       }
+      // ADR-0027 (Q151): the requests along the driver's direction, cut into the three answers the server gave.
+      const activeDirection = directions.find((direction) => direction.id === activeDirectionId);
+      const directionGroups = groupDirectionItems(directionFeed?.items ?? []);
+      const directionCard = (item: DirectionRequestItemDTO) => (
+        <div
+          key={item.listing.id}
+          className={cls(
+            "rounded-[16px] border bg-card p-4",
+            item.fit === "time_differs" ? "border-dashed border-warning/50" : "border-border",
+          )}
+          data-testid="direction-request"
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+              <MapPin size={14} color="var(--primary)" />
+              {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+            </span>
+            <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-primary">{matchLabel(item.match_type)}</span>
+          </div>
+          <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+            <span>{translate("dir.card.asked", { start: dayClock(item.listing.departure_window_start), end: clockTime(item.listing.departure_window_end) })}</span>
+            <span className="font-semibold text-foreground">{formatUzs(item.listing.total_minor / 100)}</span>
+          </div>
+          {item.pickup_eta && (
+            <p className={cls("mt-1 text-[13px]", item.fit === "time_differs" ? "font-semibold text-warning" : "text-foreground")}>
+              {translate("dir.card.eta", { time: dayClock(item.pickup_eta) })}
+            </p>
+          )}
+          {item.fit === "no_trip" && item.suggested_departure_at && (
+            <p className="mt-1 text-[12px] text-muted-foreground">{translate("dir.card.departure", { time: dayClock(item.suggested_departure_at) })}</p>
+          )}
+          <ParcelCategoryLine category={item.listing.parcel_category} />
+          {item.my_thread_id ? (
+            <p className="mt-3 text-[13px] font-semibold text-success">{translate("dir.card.myOffer")}</p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setDirectionBid(item);
+                setDirectionEta(null);
+                setBidPrice(String(Math.round(item.listing.total_minor / 100)));
+                void loadRivalOffers(item.listing.id);
+                go("driver-direction-bid");
+              }}
+              className="el-press mt-3 h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
+            >
+              {translate("driverFeed.sendOffer")}
+            </button>
+          )}
+        </div>
+      );
+      const directionGroup = (title: MessageKey, note: MessageKey, list: DirectionRequestItemDTO[]) => list.length ? (
+        <>
+          <div className="pt-1">
+            <h2 className="text-[16px] font-bold text-foreground">{translate(title)}</h2>
+            <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate(note)}</p>
+          </div>
+          {list.map(directionCard)}
+        </>
+      ) : null;
       // One ordered page, two answers. The server ranks alternatives last, so the split preserves its order.
       const feedSections = splitFeedGroups(requestFeed);
       const requestCard = (item: FeedItemDTO, isAlternative = false) => {
@@ -6454,7 +6621,7 @@ export function ConnectedApp() {
               </span>
             </div>
             <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-              <span>{shortDate(item.listing.departure_window_start)}</span>
+              <span>{dayClock(item.listing.departure_window_start)}</span>
               <span className="font-semibold text-foreground">{formatUzs(item.listing.total_minor / 100)}</span>
             </div>
             {/* Q140: the driver sees the parcel's size category and its limits before offering. */}
@@ -6493,10 +6660,73 @@ export function ConnectedApp() {
                 options={[["passenger", translate("driverFeed.modeTaxi")], ["parcel", translate("driverFeed.modeParcel")]] as const}
                 onChange={(value) => {
                   setDriverServiceMode(value);
-                  void run(() => loadRequestFeed(value));
+                  void run(async () => {
+                    await loadRequestFeed(value);
+                    await loadDirectionFeed(activeDirectionId, value);
+                  });
                 }}
               />
             )}
+            {directions.length > 0 ? (
+              <div className="space-y-3">
+                {directions.filter((direction) => direction.status !== "archived").length > 1 && (
+                  <PickSelect
+                    label={translate("dir.feedPick")}
+                    placeholder={translate("dir.feedPick")}
+                    value={activeDirectionId}
+                    options={directions
+                      .filter((direction) => direction.status !== "archived")
+                      .map((direction) => [
+                        direction.id,
+                        `${directionEndName(direction.origin, locale === "ru")} -> ${directionEndName(direction.destination, locale === "ru")}`,
+                      ] as [string, string])}
+                    onChange={(value) => {
+                      setActiveDirectionId(value);
+                      void run(() => loadDirectionFeed(value));
+                    }}
+                  />
+                )}
+                <SegmentedControl
+                  value={feedDay}
+                  options={[["today", translate("dir.day.today")], ["tomorrow", translate("dir.day.tomorrow")], ["week", translate("dir.day.week")]] as const}
+                  onChange={(value) => {
+                    setFeedDay(value);
+                    void run(() => loadDirectionFeed(activeDirectionId, driverServiceMode, value));
+                  }}
+                />
+                {activeDirection && activeDirection.status !== "active" && (
+                  <p className="rounded-[12px] bg-muted px-3 py-2.5 text-[12px] leading-5 text-muted-foreground">{translate("dir.paused")}</p>
+                )}
+                {directionFeed?.active_trip && (
+                  <p className="rounded-[12px] bg-accent px-3 py-2.5 text-[13px] text-primary">
+                    {translate("dir.trip", {
+                      date: dayClock(directionFeed.active_trip.planned_start_at),
+                      status: tripStatusLabel(directionFeed.active_trip.status),
+                      seats: directionFeed.active_trip.seats_booked,
+                    })}
+                  </p>
+                )}
+                {directionGroup("dir.group.fits", "dir.group.fitsNote", directionGroups.fits)}
+                {directionGroup("dir.group.new", "dir.group.newNote", directionGroups.fresh)}
+                {directionGroup("dir.group.time", "dir.group.timeNote", directionGroups.otherTime)}
+                {!busy && directionFeed && directionFeed.items.length === 0 && (
+                  <p className="px-1 text-[13px] leading-5 text-muted-foreground">{translate("dir.feedEmpty")}</p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-[16px] border border-dashed border-primary/40 bg-card p-4">
+                <p className="text-[15px] font-semibold text-foreground">{translate("dir.noDirections")}</p>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("dir.noDirectionsHint")}</p>
+                <button
+                  type="button"
+                  onClick={() => go("driver-add-route")}
+                  className="el-press mt-3 h-10 w-full rounded-[10px] bg-primary text-[14px] font-semibold text-primary-foreground"
+                >
+                  {translate("driverRoutes.addRoute")}
+                </button>
+              </div>
+            )}
+            <h2 className="pt-3 text-[16px] font-bold text-foreground">{translate("dir.districtSearch")}</h2>
             <div className="overflow-hidden rounded-[18px] border border-border bg-card">
               <LocationPointRow
                 label={translate("driverFeed.from")}
@@ -6640,7 +6870,7 @@ export function ConnectedApp() {
               value={proposalTripId}
               options={plannedTrips.map((trip) => [
                 trip.id,
-                (trip.stops[0]?.stop.name_uz ?? "-") + " -> " + (trip.stops[trip.stops.length - 1]?.stop.name_uz ?? "-") + " · " + shortDate(trip.planned_start_at),
+                tripEndName(trip, "first") + " -> " + tripEndName(trip, "last") + " · " + shortDate(trip.planned_start_at),
               ] as [string, string])}
               onChange={setProposalTripId}
             />
@@ -6707,6 +6937,117 @@ export function ConnectedApp() {
                 }, translate("driverBid.sent"))}
               >
                 {translate("driverBid.send")}
+              </PrimaryButton>
+            </div>
+          </section>
+        </main>
+      );
+    }
+
+    if (screen === "driver-direction-bid" && directionBid) {
+      const item = directionBid;
+      // ADR-0027 (Q152/Q153): no trip to pick and no window to compute - the server takes, re-times or plans the trip.
+      if (!driverApproved) {
+        return (
+          <main className="flex flex-1 flex-col bg-card">
+            <TopBar title={translate("driverBid.title")} back={() => go("driver-feed")} />
+            <section className="el-enter flex-1 space-y-3 overflow-y-auto px-5 py-5">
+              <DriverVerificationGate
+                status={driverProfile?.verification_status}
+                onProfile={() => go("driver-profile-form")}
+                onDocuments={() => go("driver-documents")}
+                onSupport={() => go("support")}
+              />
+            </section>
+          </main>
+        );
+      }
+      const direction = directions.find((candidate) => candidate.id === activeDirectionId);
+      // A request at another time is offered as a time proposal at the car's own ETA; the client agrees or not.
+      const proposeAt = directionEta ?? (item.fit === "time_differs" ? item.pickup_eta ?? null : null);
+      const sendOffer = (pickupAt: string | null) => void run(async () => {
+        if (!direction) return;
+        try {
+          const result = await offerFromDirection(
+            direction.id,
+            { listing_id: item.listing.id, unit_price_minor: Math.round(Number(bidPrice)) * 100, pickup_at: pickupAt },
+            newIdempotencyKey(),
+          );
+          const trip = result.data.trip;
+          setMessage(
+            result.data.trip_created ? translate("dir.bid.tripCreated", { time: dayClock(trip.planned_start_at) })
+              : result.data.trip_retimed ? translate("dir.bid.tripRetimed", { time: dayClock(trip.planned_start_at) })
+                : translate("driverBid.sent"),
+          );
+          go("driver-feed");
+        } catch (err) {
+          const eta = timeProposalEta(err);
+          if (eta && !pickupAt) return setDirectionEta(eta);
+          if (isPickupPassed(err)) return setError(translate("dir.passed"));
+          const tooFar = timeProposalTooFar(err);
+          if (tooFar) return setError(translate("dir.bid.tooFar", tooFar));
+          throw err;
+        }
+      });
+      return (
+        <main className="flex flex-1 flex-col bg-card">
+          <TopBar title={translate("driverBid.title")} back={() => go("driver-feed")} />
+          <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+            <div className="rounded-[14px] bg-background p-4">
+              <p className="font-semibold text-foreground">
+                {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"}{" "}
+                {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+              </p>
+              <p className="text-[13px] text-muted-foreground">{translate("driverBid.clientPrice", { price: formatUzs(item.listing.total_minor / 100) })}</p>
+              <ParcelCategoryLine category={item.listing.parcel_category} />
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                {translate("dir.card.asked", { start: dayClock(item.listing.departure_window_start), end: clockTime(item.listing.departure_window_end) })}
+              </p>
+            </div>
+            {item.pickup_eta && (
+              <div className="rounded-[14px] bg-accent px-4 py-3">
+                <p className="text-[12px] font-semibold text-primary">{translate("driverBid.pickupWindow")}</p>
+                <p className="mt-0.5 text-[15px] font-semibold text-foreground">{translate("dir.card.eta", { time: dayClock(item.pickup_eta) })}</p>
+                {item.fit === "no_trip" && item.suggested_departure_at && (
+                  <p className="mt-1 text-[12px] text-muted-foreground">{translate("dir.bid.planned", { time: dayClock(item.suggested_departure_at) })}</p>
+                )}
+              </div>
+            )}
+            {proposeAt && (
+              <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning" data-testid="time-proposal-note">
+                {translate("dir.bid.timeProposal", {
+                  time: dayClock(proposeAt),
+                  start: dayClock(item.listing.departure_window_start),
+                  end: clockTime(item.listing.departure_window_end),
+                })}
+              </p>
+            )}
+            <RivalOfferBoard offers={rivalOffers} unavailable={rivalOffersError} />
+            <Field label={translate("driverBid.priceLabel")} type="number" value={bidPrice} onChange={setBidPrice} placeholder={translate("driverBid.pricePlaceholder")} />
+            {feeQuote && (
+              // W11: an estimate under today's policy, held only when a client accepts - never money received (§9).
+              <div className="rounded-[14px] border border-border bg-background p-4">
+                <p className="text-[13px] font-semibold text-foreground">{translate("commissionPreview.title")}</p>
+                <p className="mt-1 text-[14px] text-foreground">
+                  {translate("commissionPreview.line", {
+                    amount: formatUzs(feeQuote.quote.commission_minor / 100),
+                    percent: bpsPercent(feeQuote.quote.fee_bps),
+                    total: formatUzs(feeQuote.totalMinor / 100),
+                  })}
+                </p>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{translate("commissionPreview.note")}</p>
+              </div>
+            )}
+            {feeQuoteFailed && (
+              <p className="text-[12px] leading-5 text-muted-foreground">{translate("commissionPreview.unavailable")}</p>
+            )}
+            <p className="text-[12px] leading-5 text-muted-foreground">{translate("driverBid.noHoldNote")}</p>
+            <div className="mt-auto">
+              <PrimaryButton
+                disabled={!Number(bidPrice) || Number(bidPrice) <= 0 || !direction || busy}
+                onClick={() => sendOffer(proposeAt)}
+              >
+                {proposeAt ? translate("dir.bid.proposeTime", { time: clockTime(proposeAt) }) : translate("driverBid.send")}
               </PrimaryButton>
             </div>
           </section>

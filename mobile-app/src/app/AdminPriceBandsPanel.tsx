@@ -10,8 +10,10 @@
  * So the screen is built around making the difference impossible to miss: an advisory reference is the default
  * and reads as advice, and turning a band into a hard limit is a separate, explained switch.
  *
- * Scope: a band is either corridor-wide (a loose safety range for the whole direction) or for one exact stop
- * pair (the real range for that segment). The segment one wins when both exist (Q53).
+ * Scope: only the corridor-wide band (a loose safety range for the whole direction) is created or edited here.
+ * The server still knows bands for one pair of internal route anchor points (Q53 segment bands, the segment one
+ * wins when both exist), but since 06.10.2026 staff work point A -> point B and never see those anchors as
+ * places, so old pair rows are listed read-only as "eski" and no new one can be made from this screen.
  *
  * Q52: editing is admin+ (`ops.corridor_manage`). Without that capability the form is not rendered at all - the
  * operator reads the table and the history, and the button names the version a save would create ("Yangilash (v3)").
@@ -323,7 +325,7 @@ export function AdminPriceBandsPanel() {
                   <tr key={`${band.service_type}-${band.origin_stop_id ?? "corridor"}-${band.destination_stop_id ?? ""}`}>
                     <td className="px-3 py-2 font-medium text-foreground">{serviceLabel(band.service_type)}</td>
                     <td className="px-3 py-2 text-muted-foreground">
-                      {band.origin_stop_id ? t("admin.bands.segment") : t("admin.bands.wholeCorridor")}
+                      {band.origin_stop_id ? t("admin.bands.legacyPair") : t("admin.bands.wholeCorridor")}
                     </td>
                     <td className="px-3 py-2 text-foreground">
                       {t(band.price_basis === "per_seat" ? "admin.bands.rangePerSeat" : "admin.bands.rangeTotal", {
@@ -345,6 +347,7 @@ export function AdminPriceBandsPanel() {
               </tbody>
             </table>
           </div>
+          {bands.some((band) => band.origin_stop_id) && <Note>{t("admin.bands.legacyPairNote")}</Note>}
 
           <div className="rounded-[12px] border border-border bg-card p-4">
             <p className="text-sm font-semibold text-foreground">{t("admin.bands.history")}</p>

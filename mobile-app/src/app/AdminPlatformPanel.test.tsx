@@ -161,10 +161,10 @@ describe("corridors", () => {
     expect(typeof key).toBe("string");
   });
 
-  it("creates a stop with an idempotency key after confirmation", async () => {
+  it("creates an internal route anchor point with an idempotency key after confirmation", async () => {
     api.adminDistricts.mockResolvedValue([{ id: "dis_1", name_uz: "Chilonzor", region: { id: "reg_1", code: "UZ-TK", name_uz: "Toshkent" }, stops_count: 0 }]);
     const created = {
-      id: "stp_1", name_uz: "Bekat", district: { id: "dis_1", name_uz: "Chilonzor" }, point: { lat: 41.3, lng: 69.2 },
+      id: "stp_1", name_uz: "Chilonzor tayanch", district: { id: "dis_1", name_uz: "Chilonzor" }, point: { lat: 41.3, lng: 69.2 },
       is_active: false, corridor_id: CORRIDOR.id, sequence_hint: 0, version: 1, meeting_note: "Kafe oldida",
     };
     api.adminCreateStop.mockResolvedValue(created);
@@ -173,18 +173,20 @@ describe("corridors", () => {
     render(<AdminPlatformPanel initialTab="corridors" />);
     fireEvent.click(await screen.findByRole("button", { name: /Toshkent — Samarqand/ }));
     await screen.findByRole("option", { name: "Toshkent: Chilonzor" });
-    fireEvent.change(screen.getByLabelText("Nomi (uz)"), { target: { value: "Bekat" } });
+    fireEvent.change(screen.getByLabelText("Nomi (uz)"), { target: { value: "Chilonzor tayanch" } });
     fireEvent.change(screen.getByLabelText("Tuman"), { target: { value: "dis_1" } });
     fireEvent.change(screen.getByLabelText("Kenglik (lat)"), { target: { value: "41.3" } });
     fireEvent.change(screen.getByLabelText("Uzunlik (lng)"), { target: { value: "69.2" } });
-    fireEvent.change(screen.getByLabelText("Uchrashuv izohi (dalil)"), { target: { value: "Kafe oldida" } });
-    fireEvent.click(screen.getByRole("button", { name: "Bekat qo'shish…" }));
+    fireEvent.change(screen.getByLabelText("Ichki izoh (dalil)"), { target: { value: "Kafe oldida" } });
+    // 06.10.2026: the nodes are presented as internal anchors, never as passenger stops
+    expect(screen.getByText(/Mijoz va haydovchiga ko'rinmaydi/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tayanch nuqta qo'shish…" }));
     expect(api.adminCreateStop).not.toHaveBeenCalled();
     confirm();
     await waitFor(() => expect(api.adminCreateStop).toHaveBeenCalledTimes(1));
     const [id, body, key] = api.adminCreateStop.mock.calls[0];
     expect(id).toBe(CORRIDOR.id);
-    expect(body).toMatchObject({ name_uz: "Bekat", district_id: "dis_1", point: { lat: 41.3, lng: 69.2 }, meeting_note: "Kafe oldida", is_active: false });
+    expect(body).toMatchObject({ name_uz: "Chilonzor tayanch", district_id: "dis_1", point: { lat: 41.3, lng: 69.2 }, meeting_note: "Kafe oldida", is_active: false });
     expect(typeof key).toBe("string");
     expect(await screen.findByText(/v1 · dalil bor/)).toBeInTheDocument();
   });

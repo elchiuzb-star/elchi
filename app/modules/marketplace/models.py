@@ -412,6 +412,9 @@ class ProposalVersion(Base):
     dropoff_occurrence_seq: Mapped[int | None] = mapped_column(SmallInteger)
     pickup_window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     pickup_window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # ADR-0027 Q153 (0096): a driver's time proposal - the pickup window lies outside the client's request window,
+    # so only the client's own accept (or counter, which keeps the window) turns it into a booking.
+    outside_request_window: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     price_basis: Mapped[str] = mapped_column(String(16), nullable=False)
     unit_price_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)

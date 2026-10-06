@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     otp_max_requests_per_ip: int = 15
     otp_ip_window_minutes: int = 60
     otp_global_daily_cap: int = 2000
+    # ── ADR-0027 Q157: how far a driver's time proposal may move the client's pickup (pilot values) ──────────────
+    # Asymmetric on purpose: on intercity trips leaving much EARLIER than asked is rarely usable, a few hours later
+    # often is. Measured from the client's window: the proposed pickup (the car's ETA) is at most `early` before its
+    # start and at most `late` after its end. Change by env after the pilot (e.g. 120/480, 180/600), not in code.
+    time_proposal_max_early_shift_minutes: int = Field(default=180, ge=0, le=1440)
+    time_proposal_max_late_shift_minutes: int = Field(default=720, ge=0, le=1440)
     # ── Referral stage 5 (ADR-0023 §16, Q107) ────────────────────────────────
     # Host of the share link https://<host>/r/<code>. Unset -> the app shows the code for manual entry only.
     # Setting it does NOT mean the link works: DNS, certificate, deploy and App Links are verified separately.

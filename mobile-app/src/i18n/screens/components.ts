@@ -21,8 +21,7 @@ export const componentsMessages = {
   "location.districtNotFound": { uz: "Tuman topilmadi", ru: "Район не найден" },
   "location.regionsLoadFailed": { uz: "Hududlarni yuklab bo'lmadi", ru: "Не удалось загрузить регионы" },
   "location.pickRegionThenDistrict": {
-    uz: "Avval hududni tanlang, keyin tuman va bekatni belgilaysiz.",
-    ru: "Сначала выберите регион, затем укажете район и остановку.",
+    uz: "Avval hududni tanlang, keyin tumanni va xaritada joyni belgilaysiz.", ru: "Сначала выберите регион, затем район и отметите место на карте.",
   },
   "location.regionsLoading": { uz: "Hududlar yuklanmoqda...", ru: "Загрузка регионов..." },
   "location.districtRequired": { uz: "Tuman tanlanadi", ru: "Нужно выбрать район" },

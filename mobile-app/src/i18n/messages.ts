@@ -18,6 +18,7 @@ import { bookingOpsMessages } from "./screens/bookingOps";
 import { bookingViewMessages } from "./screens/bookingView";
 import { driverSetupMessages } from "./screens/driverSetup";
 import { driverWorkMessages } from "./screens/driverWork";
+import { driverDirectionsMessages } from "./screens/driverDirections";
 import { panelsAMessages } from "./screens/panelsA";
 import { panelsBMessages } from "./screens/panelsB";
 import { componentsMessages } from "./screens/components";
@@ -190,12 +191,11 @@ const baseMessages = {
   "error.BOOKING_CUTOFF_PASSED": { uz: "Bron muddati o'tgan", ru: "Время бронирования прошло" },
   "error.ROUTE_MISMATCH": { uz: "Bu joy safar marshrutiga mos kelmadi", ru: "Это место не совпадает с маршрутом поездки" },
   "error.ROUTING_UNAVAILABLE": {
-    uz: "Marshrut hisoblanmadi — faqat tasdiqlangan bekatlar ko'rsatilmoqda",
-    ru: "Маршрут не рассчитан — показаны только подтверждённые остановки",
+    uz: "Marshrut hisoblanmadi — faqat tasdiqlangan yo'nalishlardagi joylar ko'rsatilmoqda", ru: "Маршрут не рассчитан — показаны только места на утверждённых направлениях",
   },
   "error.CORRIDOR_NOT_ACTIVE": { uz: "Bu yo'nalish hozir faol emas", ru: "Это направление сейчас неактивно" },
   "error.TRIP_NOT_STARTED": { uz: "Avval safarni boshlang", ru: "Сначала начните поездку" },
-  "error.TRIP_STOPS_LOCKED": { uz: "Bronlar bor — bekatlarni o'zgartirib bo'lmaydi", ru: "Есть брони — остановки изменить нельзя" },
+  "error.TRIP_STOPS_LOCKED": { uz: "Bronlar bor — safar yo'nalishini o'zgartirib bo'lmaydi", ru: "Есть брони — маршрут поездки изменить нельзя"},
   "error.AMENDMENT_CONFLICT": { uz: "O'zgartirish so'rovi allaqachon bor", ru: "Запрос на изменение уже есть" },
 
   "error.PROOF_INVALID": { uz: "Kod noto'g'ri", ru: "Неверный код" },
@@ -229,7 +229,7 @@ const baseMessages = {
     ru: "Контакты скрыты — договорённость проходит внутри приложения",
   },
   "warning.PROOF_CODE_MASKED": { uz: "Kod chatda yashirildi — uni faqat yuzma-yuz ayting", ru: "Код скрыт в чате — называйте его только лично" },
-  "warning.ROUTING_UNAVAILABLE": { uz: "Marshrut o'lchanmadi — faqat tasdiqlangan bekatlar", ru: "Маршрут не измерен — только подтверждённые остановки" },
+  "warning.ROUTING_UNAVAILABLE": { uz: "Marshrut o'lchanmadi — faqat tasdiqlangan yo'nalishlar", ru: "Маршрут не измерен — только утверждённые направления"},
   "warning.PRICE_OUTSIDE_REFERENCE": {
     uz: "Bu narx yo'nalish uchun odatdagi oraliqdan tashqarida — taklif yuborildi, lekin bir ko'rib chiqing",
     ru: "Цена вне обычного диапазона для направления — предложение отправлено, но стоит перепроверить",
@@ -266,7 +266,7 @@ const baseMessages = {
   "status.no_show": { uz: "Kelmadi", ru: "Не явился" },
 
   // --- match types (§8.2) ----------------------------------------------------------------------------------
-  "match.exact": { uz: "Bekat mos", ru: "Остановка совпадает" },
+  "match.exact": { uz: "Aniq yo'nalish", ru: "Точное направление"},
   // Not "on the way": the place projects onto the road the driver already drives. What happens at the pickup
   // is still what the two of them agree - the app must not promise a detour it has not measured (Q46).
   "match.on_route": { uz: "Yo'l yo'nalishida", ru: "По направлению маршрута" },
@@ -280,14 +280,10 @@ const baseMessages = {
     ru: "Это не полное совпадение с вашим запросом, но близкие варианты. Проверьте время и место перед предложением.",
   },
   "match.reason.time_differs": { uz: "Vaqti boshqa", ru: "Другое время" },
-  "match.reason.nearby_stop": { uz: "Yaqin bekat", ru: "Ближайшая остановка" },
+  "match.reason.nearby_stop": { uz: "Yaqin joy", ru: "Рядом"},
   "match.confirmedStopsNote": {
     uz:
-      "Mosliklar tasdiqlangan bekatlar bo'yicha hisoblangan. Haydovchining yo'ldan chetga chiqishi hisoblanmagan — " +
-      "aniq uchrashuv joyini taklif yozishmasida kelishasiz.",
-    ru:
-      "Совпадения рассчитаны по подтверждённым остановкам. Заезд водителя в сторону не рассчитывался — " +
-      "точное место встречи вы согласуете в переписке по предложению.",
+      "Mosliklar tasdiqlangan yo'nalish bo'yicha hisoblangan. Aniq uchrashuv joyini bron chatida kelishasiz.", ru: "Совпадения рассчитаны по утверждённому направлению. Точное место встречи вы согласуете в чате брони.",
   },
 
   // --- vehicles, proofs, trips -----------------------------------------------------------------------------
@@ -371,9 +367,9 @@ const baseMessages = {
   // A quick reply is a sentence, not a command: it never changes what was agreed (§16). `price_agreed` is
   // deliberately absent from the booking chat - by then the price is settled, and offering it back would
   // invite exactly the haggling the negotiation flow exists to keep out of here.
-  "quickReply.clarify_stop": { uz: "Bekatni aniqlashtiraylik", ru: "Уточним место" },
+  "quickReply.clarify_stop": { uz: "Joyni aniqlashtiraylik", ru: "Уточним место"},
   "quickReply.arriving_in_5_min": { uz: "5 daqiqada yetaman", ru: "Буду через 5 минут" },
-  "quickReply.at_stop": { uz: "Bekatdaman", ru: "Я на месте" },
+  "quickReply.at_stop": { uz: "Keldim, joydaman", ru: "Я на месте"},
   "quickReply.price_agreed": { uz: "Narxga roziman", ru: "Согласен с ценой" },
 
   "chat.closedTitle": { uz: "Suhbat yopildi", ru: "Чат закрыт" },
@@ -618,7 +614,7 @@ const baseMessages = {
   "tracking.shareTitle": { uz: "Yaqinlaringiz bilan kuzatuv", ru: "Отслеживание для близких" },
   "listingShare.title": { uz: "E'lonni ulashish", ru: "Поделиться объявлением" },
   "trip.detailsTitle": { uz: "Safar tafsilotlari", ru: "Детали поездки" },
-  "tripPlan.stopSearchLabel": { uz: "Bekat nomi bo'yicha marshrut topish", ru: "Найти маршрут по названию остановки" },
+  "tripPlan.stopSearchLabel": { uz: "Joy nomi bo'yicha marshrut topish", ru: "Найти маршрут по названию места"},
   "tripPlan.stopFilter": { uz: "{name} orqali o'tadigan marshrutlar", ru: "Маршруты через {name}" },
   "tripPlan.stopFilterClear": { uz: "Filtrni olib tashlash", ru: "Сбросить фильтр" },
   "tripPlan.stopFilterNone": {
@@ -655,6 +651,7 @@ export const messageSources = {
   adminShell: adminShellMessages,
   adminMarket: adminMarketMessages,
   adminMoney: adminMoneyMessages,
+  driverDirections: driverDirectionsMessages,
 } as const;
 
 export const messages = {
@@ -676,6 +673,7 @@ export const messages = {
   ...adminShellMessages,
   ...adminMarketMessages,
   ...adminMoneyMessages,
+  ...driverDirectionsMessages,
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof messages;

@@ -93,7 +93,12 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
     manifest.reload();
   };
 
-  const stopName = new Map((trip.data?.stops ?? []).map((stop) => [stop.stop.id, stop.stop.name_uz]));
+  // Q158: route nodes are internal; the driver reads the road by its districts and the clients' own places.
+  const placeOf = (stop: { stop: { district_name_uz?: string | null } } | undefined) => stop?.stop.district_name_uz || "-";
+  const nodeDistrict = new Map((trip.data?.stops ?? []).map((stop) => [stop.stop.id, placeOf(stop)]));
+  const alongTheRoad = (trip.data?.stops ?? []).filter(
+    (stop, index, all) => index === 0 || placeOf(stop) !== placeOf(all[index - 1]),
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -105,7 +110,7 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
         <Card>
           <div className="flex items-center justify-between gap-2">
             <strong className="text-[15px]" data-testid="trip-route">
-              {trip.data.stops[0]?.stop.name_uz ?? "-"} → {trip.data.stops[trip.data.stops.length - 1]?.stop.name_uz ?? "-"}
+              {placeOf(trip.data.stops[0])} → {placeOf(trip.data.stops[trip.data.stops.length - 1])}
             </strong>
             <Badge {...badge(trip.data.status)} />
           </div>
@@ -120,10 +125,11 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
             label={translate("tripDetail.cutoffLabel")}
             value={translate("tripDetail.cutoffValue", { time: formatDateTime(trip.data.booking_cutoff_at) })}
           />
-          <ol className="mt-1 flex flex-col gap-1">
-            {trip.data.stops.map((stop) => (
+          <p className="mt-1 text-[12px] font-semibold text-muted-foreground">{translate("tripDetail.alongTheRoad")}</p>
+          <ol className="flex flex-col gap-1">
+            {alongTheRoad.map((stop) => (
               <li key={stop.seq} className="flex justify-between gap-2 text-[13px]">
-                <span className="text-foreground">{stop.stop.name_uz}</span>
+                <span className="text-foreground">{placeOf(stop)}</span>
                 <span className="text-muted-foreground">{formatTime(stop.eta_arrival_at ?? stop.planned_arrival_at)}</span>
               </li>
             ))}
@@ -145,8 +151,8 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
               {availability.data.segments.map((segment) => (
                 <li key={`${segment.from_seq}-${segment.to_seq}`} className="rounded-[10px] bg-background px-3 py-2">
                   <p className="text-[13px] font-medium text-foreground">
-                    {stopName.get(segment.from_stop_id) ?? translate("tripDetail.stopSeq", { seq: segment.from_seq })} →{" "}
-                    {stopName.get(segment.to_stop_id) ?? translate("tripDetail.stopSeq", { seq: segment.to_seq })}
+                    {nodeDistrict.get(segment.from_stop_id) ?? translate("tripDetail.stopSeq", { seq: segment.from_seq })} →{" "}
+                    {nodeDistrict.get(segment.to_stop_id) ?? translate("tripDetail.stopSeq", { seq: segment.to_seq })}
                   </p>
                   <p className="text-[12px] text-muted-foreground">
                     {translate("tripDetail.segmentLine", {
@@ -180,7 +186,7 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
             .map((stop) => (
               <section key={stop.seq} className="flex flex-col gap-1.5">
                 <p className="text-[13px] font-semibold text-secondary-foreground">
-                  {stop.stop?.name_uz ?? stop.point?.address ?? stop.point?.district?.name_uz ?? translate("tripDetail.agreedPoint")} ·{" "}
+                  {stop.point?.address ?? stop.point?.district?.name_uz ?? stop.stop?.district_name_uz ?? translate("tripDetail.agreedPoint")} ·{" "}
                   {formatTime(stop.planned_arrival_at)}
                 </p>
                 {stop.pickups.length ? (

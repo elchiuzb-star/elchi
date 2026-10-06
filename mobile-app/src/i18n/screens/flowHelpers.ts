@@ -28,13 +28,11 @@ export const flowHelpersMessages = {
     ru: "Время водителя отличается от выбранного вами интервала на {difference}.",
   },
   "intentFit.originSameDistrict": {
-    uz: "Olib ketish joyi shu tumanda, lekin boshqa bekatda.",
-    ru: "Место посадки в том же районе, но на другой остановке.",
+    uz: "Olib ketish joyi shu tumanda, lekin boshqa nuqtada.", ru: "Место посадки в том же районе, но в другой точке.",
   },
   "intentFit.originDifferent": { uz: "Olib ketish joyi siz tanlagan joydan boshqa.", ru: "Место посадки отличается от выбранного вами." },
   "intentFit.destinationSameDistrict": {
-    uz: "Tushirish joyi shu tumanda, lekin boshqa bekatda.",
-    ru: "Место высадки в том же районе, но на другой остановке.",
+    uz: "Tushirish joyi shu tumanda, lekin boshqa nuqtada.", ru: "Место высадки в том же районе, но в другой точке.",
   },
   "intentFit.destinationDifferent": { uz: "Tushirish joyi siz tanlagan joydan boshqa.", ru: "Место высадки отличается от выбранного вами." },
   "intentFit.offersAffectedOne": {

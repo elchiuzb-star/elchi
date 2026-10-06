@@ -344,6 +344,7 @@ def _version_dto(
         created_at=ensure_aware_utc(version.created_at),
         message=version.message,
         listing_terms_version=version.listing_terms_version,
+        outside_request_window=bool(version.outside_request_window),
         demand=ProposalDemandDTO(
             baggage_ml=version.baggage_ml,
             cargo_weight_g=version.cargo_weight_g,

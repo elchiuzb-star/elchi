@@ -44,7 +44,7 @@ export const driverSetupMessages = {
 
   // --- driver-routes / driver-trip-detail ---
   "driverRoutes.title": { uz: "Yo'nalishlarim", ru: "Мои направления" },
-  "driverRoutes.tripMeta": { uz: "{date} · {stops} bekat · {seats} o'rin", ru: "{date} · Остановок: {stops} · Мест: {seats}" },
+  "driverRoutes.tripMeta": { uz: "{date} · {seats} o'rin", ru: "{date} · Мест: {seats}"},
   "driverRoutes.status": { uz: "Status: {status}", ru: "Статус: {status}" },
   "driverRoutes.tripStatusUpdated": { uz: "Safar holati yangilandi", ru: "Статус поездки обновлён" },
   "driverRoutes.boardingWindowHint": {
@@ -80,7 +80,7 @@ export const driverSetupMessages = {
   "addRoute.route": { uz: "Marshrut", ru: "Маршрут" },
   "addRoute.routePlaceholder": { uz: "Marshrutni tanlang", ru: "Выберите маршрут" },
   "addRoute.pickCorridorFirst": { uz: "Avval yo'nalishni tanlang", ru: "Сначала выберите направление" },
-  "addRoute.routeOption": { uz: "{stops} bekat · {km} km · {hours} soat", ru: "Остановок: {stops} · {km} км · {hours} ч" },
+  "addRoute.routeOption": { uz: "{km} km · {hours} soat", ru: "{km} км · {hours} ч"},
   "addRoute.noApprovedRoute": {
     uz: "Bu yo'nalishda tasdiqlangan marshrut yo'q — operator marshrut qo'shishi kerak.",
     ru: "На этом направлении нет утверждённого маршрута — его должен добавить оператор.",
@@ -108,12 +108,11 @@ export const driverSetupMessages = {
   },
   "offerCreate.from": { uz: "Qayerdan", ru: "Откуда" },
   "offerCreate.to": { uz: "Qayerga", ru: "Куда" },
-  "offerCreate.stopPlaceholder": { uz: "Bekatni tanlang", ru: "Выберите остановку" },
-  "offerCreate.sameStops": { uz: "Ikki bekat bir xil bo'lishi mumkin emas.", ru: "Остановки не могут совпадать." },
+  "offerCreate.stopPlaceholder": { uz: "Joyni tanlang", ru: "Выберите место"},
+  "offerCreate.sameStops": { uz: "Ikki joy bir xil bo'lishi mumkin emas.", ru: "Места не могут совпадать."},
   "offerCreate.departureWindow": { uz: "Chiqish vaqti", ru: "Время посадки" },
   "offerCreate.windowHint": {
-    uz: "Safar shu bekatga rejalashtirilgan vaqt atrofida. Mijoz shu oynada taklif yuboradi.",
-    ru: "Окно вокруг запланированного времени прибытия на эту остановку. Клиент отправляет предложение в рамках этого окна.",
+    uz: "Safar shu joyga rejalashtirilgan vaqt atrofida. Mijoz shu oynada taklif yuboradi.", ru: "Окно вокруг запланированного времени прибытия в это место. Клиент отправляет предложение в рамках этого окна.",
   },
   "offerCreate.pricePerSeat": { uz: "Bir o'rin narxi (so'm)", ru: "Цена за место (сум)" },
   "offerCreate.priceParcel": { uz: "Yuk uchun narx (so'm)", ru: "Цена за груз (сум)" },

@@ -522,6 +522,50 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   oraliqlar (ekran qulfi/fon vs GPS yo‘q), batareya (`battery_pct` nuqtada, ≤ 20 % ogohlantirish), tik turgan telefon uchun
   `getCurrentPosition` heartbeat. Dala sinovi ro‘yxati — `docs/ops/GPS_FIELD_TEST.md` (real telefon qismi ochiq).
 
+**Haydovchi yo'nalishi (06.10.2026) — ADR-0027:**
+- **Q150 (foydalanuvchi qarori)** Haydovchi v1 dagidek faqat **yo'nalish qo'shadi**: qayerdan (hudud + tuman, tumansiz
+  shaharda faqat hudud) → qayerga. Vaqt, koordinata, bekat, koridor, marshrut so'ralmaydi; sig'im mashinadan
+  (`driver_directions`). Server tasdiqlangan marshrutga proyeksiya bilan koridorni topadi (Q88 mexanizmi); topilmasa
+  `ROUTE_MISMATCH`. Yo'nalish e'lon emas, mijozga ko'rinmaydi (Q138 o'zgarmaydi). Android/iOS o'zgartirilmaydi — yangi
+  oqim backend va `mobile-app` da; native ilovalar mavjud `POST /trips` + `GET /feed` bilan ishlashda davom etadi.
+- **Q151** Yo'nalish lentasi (`GET /driver-directions/{id}/requests`): koridordagi ochiq so'rovlar, uchlari yo'nalish
+  oralig'ida (olish — boshlanish hududida yoki undan keyin, tushirish — oxirgi hududda yoki undan oldin). Element:
+  `fits_trip` / `no_trip` / `time_differs` (+ `pickup_eta`), `exact` / `on_route`. Sig'imga sig'maydigan va mashina
+  o'tib ketgan so'rov ko'rsatilmaydi.
+- **Q152** Yo'nalishdan taklif (`POST /driver-directions/{id}/offers`): tizim faol safarni ishlatadi, bo'sh safarni
+  (bron va ochiq taklifsiz) yangi mijozga qayta vaqtlaydi yoki yangi safar yaratadi (jo'nash = mijoz vaqti − nuqtagacha
+  yo'l, kamida hozir + 15 daq; standartlar native formadek: to'xtash 5, kutish 10, chetlanish 15 daq/5 km). Taklif
+  oddiy `submit_proposal` orqali — barcha mavjud qoidalar o'zgarmaydi.
+- **Q153** *(siljish chegarasi Q157 bilan almashtirilgan)* Vaqt taklifi: faqat haydovchi mijoz oynasidan tashqaridagi olish vaqtini aniq
+  (`outside_request_window=true`) taklif qiladi; versiyada belgi saqlanadi, mijozga ko'rinadi. Bron faqat mijoz
+  roziligi bilan — mijoz qabul qiladi yoki narxni counter qiladi (oyna meros); mijoz o'zi oynani tashqariga sura olmaydi.
+  E'lon oynasi/muddati o'zgarmaydi (pilot cheklovi).
+- **Q154 (spec §7 dan chekinish)** `boarding`/`in_progress` safarga yangi taklif/bron — olish nuqtasi oldinda bo'lsa:
+  jadval ETA ≥ hozir + 15 daq va yangi (≤ 10 daq) GPS nuqtasi bo'lsa ≥ 2 km oldinda; aks holda `BOOKING_CUTOFF_PASSED`
+  (`pickup_passed`). `interrupted` — yo'q; `planned` cutoff o'zgarmaydi. Taklif muddati `min(10 daq, ETA − 15 daq, e'lon
+  muddati)`. Yangi bron darhol `awaiting_pickup`; pochta `in_progress` safarda `in_transit` (`trip_departed`, Q139/Q142
+  talqini). `terms_snapshot.booked_trip_status` yoziladi.
+- **Q155 (xato tuzatish)** Accept nuqtali olishda taklif bilan bir xil interpolyatsiya qilingan ETA ni tekshiradi
+  (`marketplace_service.pickup_eta_on_trip`) — bekatdan oldingi nuqta endi `ROUTE_CHANGED` bilan rad etilmaydi.
+- **Q157 (foydalanuvchi qarori, 06.10.2026 — Q153 chegarasini almashtiradi)** Vaqt taklifi **asimmetrik**: haydovchi taklif
+  qilgan olish vaqti (mashinaning ETA si) mijoz oynasi boshidan **ko'pi bilan 3 soat oldin** yoki oynasi oxiridan **ko'pi
+  bilan 12 soat keyin**. Sabab: shaharlararo qatnovda ancha erta ketish amalda foydasiz, bir necha soat kech — ko'pincha
+  qabul qilinadi (06.10 sinovi: 07:55 so'ragan mijozga 23:43 taklif qilingan edi). Chegaradan tashqaridagi e'lon
+  yo'nalish lentasida «vaqti boshqa» sifatida ham ko'rsatilmaydi; taklif `TIME_WINDOW_CONFLICT`
+  (`time_proposal_too_far` yoki `time_proposal_possible=false`). Qiymatlar kodda emas, konfiguratsiyada:
+  `ELCHI_TIME_PROPOSAL_MAX_EARLY_SHIFT_MINUTES=180`, `ELCHI_TIME_PROPOSAL_MAX_LATE_SHIFT_MINUTES=720` — pilotdan keyin
+  statistika bo'yicha o'zgartiriladi.
+- **Q158 (foydalanuvchi qarori, 06.10.2026)** ELCHI faqat **A nuqta → B nuqta** asosida ishlaydi: yo'lovchi, haydovchi va admin
+  interfeysida **«bekat» tushunchasi yo'q**. Mijoz xaritadan joy belgilaydi (bekat tanlash yo'q, `mobile-app` e'lonni faqat
+  `*_point` bilan yuboradi); kartalar joyni manzil yoki tuman bilan ataydi; belgi «Aniq yo'nalish»; tezkor javoblar «Keldim,
+  joydaman» / «Joyni aniqlashtiraylik» (kodlar `at_stop`/`clarify_stop` o'zgarmaydi); haydovchi safari tumanlar va taxminiy vaqt
+  bilan ko'rsatiladi; xarita marshrut chizig'i va A/B ni chizadi. Ichkarida `corridor_stops`/`route_version_stops` **ichki
+  marshrut tayanch nuqtalari** sifatida qoladi (segment sig'imi, ETA, Q63); admin ularni «tayanch nuqta» deb ko'radi. Q27/Q47/Q46
+  backend qoidalari hozircha o'zgarmaydi (alohida qaror). Backend native ilovalar uchun eski bekat maydonlarini qabul qiladi;
+  `StopRefDTO.district_name_uz` (additiv) kartalar uchun.
+- **Q156** API faqat additiv; `gen_native_api --check` OpenAPI o'zgargani uchun «stale» — Android/iOS dasturchisiga
+  handoff (`docs/handoff/ADR0027_NATIVE.md`), agentlar native fayllarni qayta generatsiya qilmaydi.
+
 **Wave 3.1 dan keyin ochiq qolgan uch band yopilgan (24.09.2026 audit):** U6 `rating_bucket` — A-variant; ADR-0021 staff MFA — **Accepted** (faqat xodim faktorlarini ulash va `enforce_privileged` rejimi — go-live bandi); dalil fayllari — imzolangan havola bilan.
 
 ## 4. Kod tuzilishi
@@ -546,7 +590,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Sirlar:** `settings.secret_key` bevosita ishlatilmaydi — `crypto.derive_subkey(secret_key, purpose)`. Link/share token’lar `crypto.new_secret_token` (≥128 bit `secrets.token_bytes`), bazada faqat hash. uuid4 token emas (ADR-0018).
 - **API v2:** `/api/v2`, envelope `app.contracts.dto`, xato kodi `ErrorCode`, buyruqlarda `Idempotency-Key` (domen 4xx savepoint naqshi — ADR-0005), versiyali agregatda `expected_version`, cursor pagination. Har v2 endpoint `response_model` bilan.
 - **Holat:** har status yozuvi `state_machines.<MACHINE>.assert_transition(..., command=...)` orqali; DB’da CHECK.
-- **Global lock tartibi (ADR-0017):** `users → trips → listings → proposal_threads → trip_intents (ADR-0025) → bookings → booking bolalari (amendments, no_show_reviews, custody_cases, cash_receipts, disputes) → wallet_accounts → wallet_holds/topup_requests/ledger_adjustment_requests`; har guruh ichida id o‘sish tartibida. Bola id bilan kelgan buyruq avval lock’siz o‘qib ota id’larini topadi, keyin tartib bo‘yicha lock oladi va qayta tekshiradi.
+- **Global lock tartibi (ADR-0017):** `users → driver_directions (ADR-0027) → trips → listings → proposal_threads → trip_intents (ADR-0025) → bookings → booking bolalari (amendments, no_show_reviews, custody_cases, cash_receipts, disputes) → wallet_accounts → wallet_holds/topup_requests/ledger_adjustment_requests`; har guruh ichida id o‘sish tartibida. Bola id bilan kelgan buyruq avval lock’siz o‘qib ota id’larini topadi, keyin tartib bo‘yicha lock oladi va qayta tekshiradi.
 - **Lock rejimi:** `users`, `trips`, `listings`, `proposal_threads` (va boshqa FK ota qatorlari) `FOR NO KEY UPDATE` (`with_for_update(key_share=True)`) yoki `FOR SHARE` bilan; **oddiy `FOR UPDATE` emas** — FK insert’larining key-share lock’lari bilan deadlock bo‘ladi. Yagona istisno: unique ustun o‘zgarsa (`users.phone`/`username`, `driver_profiles.plate_number`) qator boshidanoq `FOR UPDATE`. Qator har doim boshidanoq yakuniy rejimda olinadi (kuchaytirish yo‘q). v1: `orders → users → driver_profiles → wallet`; akkaunt o‘chirish `users`/profil `FOR UPDATE`; token refresh `users FOR SHARE` → session `FOR UPDATE` (ADR-0017 §12–13).
 - **Retry:** har v2 buyrug‘i `platform.service.run_with_db_retry` ichida (deadlock/serialization, ≤3).
 - **Release kontrakti:** A4 `booking_allocations.active`ni trip lock ostida true→false o‘tkazadi va `trips.release`ni faqat shu o‘tishda chaqiradi (ikki marta release yo‘q).

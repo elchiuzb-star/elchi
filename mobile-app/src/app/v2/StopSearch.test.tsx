@@ -7,7 +7,7 @@ vi.mock("../../api/v2/safety.api", () => ({ searchStops: vi.fn(), checkReferralC
 import * as api from "../../api/v2/safety.api";
 import type { StopDTO } from "../../api/v2/safety.api";
 import { ApiError } from "../../types/api";
-import { ReferralCodeCheck, StopSearch } from "./StopSearch";
+import { ReferralCodeCheck } from "./StopSearch";
 
 const m = vi.mocked(api);
 const stop: StopDTO = {
@@ -20,39 +20,6 @@ const stop: StopDTO = {
 };
 
 beforeEach(() => vi.resetAllMocks());
-
-describe("StopSearch", () => {
-  it("waits for 2 characters, then searches and selects a stop", async () => {
-    m.searchStops.mockResolvedValue([stop, { ...stop, id: "stp_2", name_uz: "Eski bekat", is_active: false }]);
-    const onSelect = vi.fn();
-    render(<StopSearch onSelect={onSelect} regionId="reg_1" debounceMs={0} />);
-    const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "Q" } });
-    expect(screen.getByText("Kamida 2 ta harf kiriting.")).toBeInTheDocument();
-    expect(m.searchStops).not.toHaveBeenCalled();
-    fireEvent.change(input, { target: { value: "Qarshi" } });
-    expect(await screen.findByTestId("stops-list")).toBeInTheDocument();
-    expect(m.searchStops).toHaveBeenCalledWith({ q: "Qarshi", region_id: "reg_1", limit: 20 });
-    expect(screen.getByText("Eski bekat").closest("button")).toBeDisabled();
-    fireEvent.click(screen.getByText("Qarshi avtovokzal"));
-    expect(onSelect).toHaveBeenCalledWith(stop);
-  });
-
-  it("shows the loading, empty and error states", async () => {
-    m.searchStops.mockResolvedValueOnce([]);
-    render(<StopSearch onSelect={vi.fn()} debounceMs={0} />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Yo'q" } });
-    expect(screen.getByText("Qidirilmoqda...")).toBeInTheDocument();
-    expect(await screen.findByTestId("stops-empty")).toBeInTheDocument();
-    m.searchStops.mockRejectedValueOnce(new ApiError(500, { code: "SERVER_ERROR", message: "x" }));
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Yo'q2" } });
-    const retry = await screen.findByText("Qayta urinish");
-    m.searchStops.mockResolvedValueOnce([stop]);
-    fireEvent.click(retry);
-    expect(await screen.findByTestId("stops-list")).toBeInTheDocument();
-    await waitFor(() => expect(m.searchStops).toHaveBeenCalledTimes(3));
-  });
-});
 
 describe("ReferralCodeCheck", () => {
   it("says only valid or not valid", async () => {

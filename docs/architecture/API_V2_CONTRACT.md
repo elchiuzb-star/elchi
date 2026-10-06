@@ -629,3 +629,28 @@ Production: tasdiqlangan `synthetic=false` katalog bo‘lmasa pochta e’loni/br
 - `qualification_path_retired` review: `reject` → `409 INVALID_STATE_TRANSITION` (`retired_path_is_not_a_violation`); `approve`
   qiymat o'zgartirmaydi (D-4).
 
+
+## 17. ADR-0027 (06.10.2026, Q150–Q156) — haydovchi yo'nalishi (additiv)
+Mavjud endpointlar o'zgarmaydi (native ilovalar `POST /trips` + `GET /feed` bilan ishlaydi). Yangi:
+
+| # | Method / path | Auth / capability | Request | Response | Idem | Ver | Xatolar |
+|---|---|---|---|---|---|---|---|
+| DD1 | `POST /driver-directions` | `trip.create` | `DriverDirectionCreate {origin: {region_id, district_id?}, destination: {...}, vehicle_id?, seat_capacity?, cargo_capacity_weight_g?, cargo_capacity_volume_ml?}` | `DriverDirectionDTO` (201) | Y | — | `ROUTE_MISMATCH` (`no_corridor_serves_direction`), `VALIDATION_ERROR` (`district_required`, `same_as_origin`, `direction_exists` + `direction_id`, `no_approved_vehicle`, `choose_vehicle`), `VEHICLE_NOT_ELIGIBLE` |
+| DD2 | `GET /me/driver-directions` | driver | `?include_archived` | `list[DriverDirectionDTO]` | — | — | `CAPABILITY_REQUIRED` |
+| DD3 | `GET /driver-directions/{id}` | egasi | — | `DriverDirectionDTO` | — | — | `NOT_FOUND` |
+| DD4 | `PATCH /driver-directions/{id}` | egasi | `DriverDirectionPatch {expected_version, status?: active\|paused\|archived, seat_capacity?, cargo_*?}` | `DriverDirectionDTO` | — | Y | `VERSION_CONFLICT`, `INVALID_STATE_TRANSITION` (archived) |
+| DD5 | `GET /driver-directions/{id}/requests` | egasi | `?service_type&date_from&date_to` (offset bilan, ≤ 14 kun) | `DirectionRequestsDTO {direction_id, active_trip?, items: [{listing: ListingPublicDTO, match_type, fit: fits_trip\|no_trip\|time_differs, pickup_eta?, suggested_departure_at?, my_thread_id?}]}` | — | — | `NOT_FOUND`, `VALIDATION_ERROR` |
+| DD6 | `POST /driver-directions/{id}/offers` | egasi; taklif qoidalari (P1) | `DirectionOfferCreate {listing_id, unit_price_minor, message?, pickup_at?}` | `DirectionOfferDTO {thread: ProposalThreadDTO, trip: DirectionTripRefDTO, trip_created, trip_retimed, time_proposal}` (201) | Y | — | P1 xatolari + `TIME_WINDOW_CONFLICT` (`trip_time_differs`, `details.eta` — `pickup_at` bilan qayta yuborilsa vaqt taklifi), `SCHEDULE_CONFLICT` (`active_trip_cannot_serve`), `BOOKING_CUTOFF_PASSED` (`pickup_passed`), `ROUTE_MISMATCH` (`request_not_on_direction`); `warnings` `CONTACT_INFO_MASKED` |
+| DD7 | `GET /admin/driver-directions` | `ops.view` | `?driver_id&limit` | `list[AdminDriverDirectionDTO]` | — | — | `FORBIDDEN` |
+
+**O'zgargan xulq (additiv maydonlar):**
+- `ProposalCreate.outside_request_window?` / `ProposalCounter.outside_request_window?` (Q153): haydovchining vaqt
+  taklifi; `ProposalVersionDTO.outside_request_window` mijoz va haydovchiga ko'rinadi. Mijoz counter'i oynani meros
+  oladi; mijoz o'zi tashqariga sura olmaydi (`TIME_WINDOW_CONFLICT`). Q157: olish vaqti oyna boshidan > 3 soat oldin yoki
+  oyna oxiridan > 12 soat keyin — `TIME_WINDOW_CONFLICT` (`reason=time_proposal_too_far`, `eta`, `max_early_minutes`,
+  `max_late_minutes`; qiymatlar env'da). DD6 ning `trip_time_differs` javobida `time_proposal_possible: bool`; DD5 bu
+  chegaradan tashqaridagi so'rovlarni qaytarmaydi.
+- P1/P5/P8 `boarding`/`in_progress` safarga ham (Q154): olish nuqtasi oldinda bo'lmasa `409 BOOKING_CUTOFF_PASSED`
+  (`details.reason = pickup_passed`, `eta` yoki `ahead_m`); `interrupted` — avvalgidek rad. Yo'lda yaratilgan bron
+  `awaiting_pickup` (pochta `in_progress` safarda `in_transit`).
+- P8 nuqtali olishda `ROUTE_CHANGED (schedule_changed)` endi interpolyatsiya qilingan ETA bo'yicha (Q155).
