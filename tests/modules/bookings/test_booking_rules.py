@@ -173,5 +173,7 @@ def test_fee_finalizable_only_after_a_service_outcome() -> None:
         rules.ensure_fee_finalizable("confirmed")
 
 
-def test_boarding_window_is_60_minutes() -> None:
-    assert rules.boarding_opens_at(T0) == T0 - timedelta(minutes=60)
+def test_boarding_has_no_time_window() -> None:
+    """Q162: a driver starts boarding whenever the trip is planned - the 60-minute window (Q19) is gone."""
+    assert not hasattr(rules, "boarding_opens_at")
+    assert not hasattr(rules, "BOARDING_WINDOW")

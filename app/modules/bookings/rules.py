@@ -26,7 +26,6 @@ PB = PassengerBookingStatus
 PC = ParcelBookingStatus
 
 # --- pilot configuration (spec §9.5, §10.6, Q19, Q44) ------------------------------------------------------
-BOARDING_WINDOW = timedelta(minutes=60)  # Q19: trip start_boarding opens 60 min before planned start
 CONTACT_HIDE_AFTER_TERMINAL = timedelta(hours=24)  # Q44
 CONFIRMATION_WINDOW = timedelta(hours=24)  # §9.5: client confirmation, then operator queue
 HOLD_ESCALATION_AFTER = timedelta(hours=48)  # §9.5 (A3 sets wallet_holds.escalate_at)
@@ -292,10 +291,6 @@ def ensure_fee_finalizable(service_status: str) -> None:
             ErrorCode.INVALID_STATE_TRANSITION,
             details={"machine": "commission", "command": "finalize_fee", "service_status": service_status},
         )
-
-
-def boarding_opens_at(planned_start_at: datetime) -> datetime:
-    return ensure_aware_utc(planned_start_at) - BOARDING_WINDOW
 
 
 def quantity_amendable(service_type: ServiceType | str, *, from_request: bool) -> bool:

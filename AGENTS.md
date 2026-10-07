@@ -43,7 +43,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Q16** Komissiya holati mijozdan yashirin, mijozga yuboriladigan event’larda ham (N2).
 - **Q17** Alohida `finance` staff roli: top-up tasdiqlash, `finalize_fee`, moliya hisobotlari; katta tuzatishlar ikki **turli** xodim bilan. Rol ulangunicha super_admin bajaradi. Egasi A1 (rol), A3 (capability tekshiruvi).
 - **Q18** v1 `BID_NOT_ACTIVE` 409 saqlanadi.
-- **Q19** Qolgan barcha ADR’lar qabul qilindi. Kampaniya standard’dan ustun, keyin eng aniq scope; boarding oynasi 60 daqiqa (konfiguratsiya); amendment bron fee snapshot’ini saqlaydi; request listing faqat driver/operator bekor qilgach, amal qiladigan oynada qayta ochiladi va mijozga xabar beriladi; pending no-show review davomida faqat operator bekor qila oladi.
+- **Q19** Qolgan barcha ADR’lar qabul qilindi. Kampaniya standard’dan ustun, keyin eng aniq scope; boarding oynasi 60 daqiqa (konfiguratsiya) *(Q162 bilan olib tashlandi)*; amendment bron fee snapshot’ini saqlaydi; request listing faqat driver/operator bekor qilgach, amal qiladigan oynada qayta ochiladi va mijozga xabar beriladi; pending no-show review davomida faqat operator bekor qila oladi.
 
 **Wave 1.5 tasdiqlari (14.09.2026):**
 - **Q20** Listing tahriri ochiq takliflarni faqat yo‘nalish, oyna, miqdor/`seat_count` yoki `price_basis` o‘zgarsa expire qiladi; birlik narxi, izoh, amal muddati, qulayliklar, maxsus yordam tahriri expire qilmaydi.
@@ -611,6 +611,16 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   qilinadi (Q159/Q160 da'volari). `DUPLICATE_LISTING` kodi kontraktda qoladi (retired trip_offer yo'li uchun), lekin
   L4 publish endi uni qaytarmaydi. Ma'lum oqibat: lentada bir mijozning bir xil ikki e'loni ko'rinishi mumkin va
   takliflar ular orasida bo'linadi — bu qabul qilingan.
+
+**Chiqish oynasi olib tashlandi (07.10.2026):**
+- **Q162 (foydalanuvchi qarori; Q19 dagi "boarding oynasi 60 daqiqa" bandini bekor qiladi)** Haydovchi `start_boarding`
+  ni safar `planned` bo'lgan istalgan paytda bosa oladi — jo'nashdan 60 daqiqa oldin ochiladigan oyna **butunlay olib
+  tashlandi** (`rules.BOARDING_WINDOW`, `rules.boarding_opens_at`, service'dagi `boarding_window_not_open` rad etishi va
+  bron snapshot'idagi `boarding_window_minutes`). Sabab: pilotda sinov va erta yig'ilish shu oyna tufayli to'xtardi;
+  boshqa qoidalar (holat mashinasi, sig'im, eligibility) o'zgarmagani uchun erta boarding xavf tug'dirmaydi — u faqat
+  bronni `awaiting_pickup` ga o'tkazadi va to'liq davlat raqamini ochadi (Q64 ning `boarding` sharti). `INVALID_STATE_TRANSITION
+  {reason: boarding_window_not_open}` endi hech qachon qaytmaydi; Android/iOS dagi uni ko'rsatadigan kod zararsiz
+  o'lik yo'l sifatida qoladi.
 
 **Wave 3.1 dan keyin ochiq qolgan uch band yopilgan (24.09.2026 audit):** U6 `rating_bucket` — A-variant; ADR-0021 staff MFA — **Accepted** (faqat xodim faktorlarini ulash va `enforce_privileged` rejimi — go-live bandi); dalil fayllari — imzolangan havola bilan.
 

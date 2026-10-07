@@ -735,7 +735,6 @@ def accept_proposal(
             "fee": {"fee_policy_id": version.fee_policy_id, "fee_bps": version.fee_bps, "commission_minor": version.commission_minor},
             "cancellation_policy": rules.CANCELLATION_POLICY,
             "pickup_wait_minutes": trip.pickup_wait_minutes,
-            "boarding_window_minutes": int(rules.BOARDING_WINDOW.total_seconds() // 60),
             "detour_quotes": [],
             PROMO_SNAPSHOT_KEY: booking_promo_marker(applied=promo_plan.applied),
             # ADR-0027: the trip's state when the deal was made (Q154 "booked on the way"), and a driver's time
@@ -1789,9 +1788,6 @@ def trip_action(
     TRIP.assert_transition(trip.status, target.value, action)
     if action == "complete" and trip.status == TripStatus.INTERRUPTED.value and side is not ActorSide.OPERATOR:
         raise DomainError(ErrorCode.FORBIDDEN, details={"reason": "operator_completes_interrupted_trip"})
-    if action == "start_boarding" and now < rules.boarding_opens_at(trip.planned_start_at):
-        raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"reason": "boarding_window_not_open",
-                                                                       "opens_at": rules.boarding_opens_at(trip.planned_start_at).isoformat()})
 
     listings: dict[int, Listing] = {}
     if action == "cancel":
