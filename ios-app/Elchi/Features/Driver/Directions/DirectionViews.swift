@@ -1,58 +1,29 @@
 import SwiftUI
 
-// MARK: - Yo'nalishlarim (the Routes tab)
+// MARK: - Yo'nalishlarim (the second segment of Moslar, design v3)
 
-/// ADR-0027 (Q150): the driver keeps directions only - "where from -> where to". Each card: the two ends, status,
-/// capacity, the active trip (or that the first offer plans it), "Mos buyurtmalar", pause / resume, archive. Under them
-/// the trips the system made ("Safarlarim"): the trip operation screens are the same as before (Q148), and the manual
-/// trip form stays reachable from there as a fallback.
-struct DirectionsTabView: View {
+/// ADR-0027 (Q150): the driver keeps directions only - "where from -> where to". Each card: the two ends, an on/off
+/// switch (pause / resume), the state dot, capacity, the active trip line, "Mos buyurtmalar" and delete with an inline
+/// confirm. Under them the trips the system made ("Safarlarim"): the trip operation screens are the same as before
+/// (Q148). The manual trip form has no entry here any more (Safar 2.9 / 3.9).
+struct DirectionsListSection: View {
     let model: DirectionsModel
     let trips: TripsModel
     let onAdd: () -> Void
     let onOpenRequests: (String) -> Void
     let onOpenTrip: (String) -> Void
-    let onPlanTrip: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
-    @State private var archiving: DriverDirectionDTO?
+    /// The card whose inline "Yo'nalish o'chirilsinmi?" row is open.
+    @State private var deleting: String?
 
     var body: some View {
-        DriverTabScreen(title: strings.t("driverRoutes.title"), plus: (strings.t("driverRoutes.addRoute"), onAdd)) {
-            directions
+        directions
+        if model.list.value.map({ !DirectionFeed.live($0).isEmpty }) == true || trips.trips.value?.isEmpty == false {
             SectionTitle(strings.t("dir.tripsTitle"), description: strings.t("dir.tripsHint"))
                 .padding(.top, 8)
                 .accessibilityIdentifier("elchi.directions.tripsTitle")
             tripList
-            ElchiButton(strings.t("driver.dash.planTrip"), variant: .outline, size: .medium, icon: .plus, action: onPlanTrip)
-                .accessibilityIdentifier("elchi.directions.planTrip")
-        }
-        .refreshable {
-            async let list: Void = model.load()
-            async let trips: Void = self.trips.load()
-            _ = await (list, trips)
-        }
-        .task {
-            async let list: Void = model.load()
-            async let trips: Void = self.trips.load()
-            _ = await (list, trips)
-        }
-        .overlay {
-            if let direction = archiving {
-                DialogOverlay(dismissLabel: strings.t("confirmDialog.back"), onDismiss: { archiving = nil }) {
-                    Text(strings.t("dir.archiveConfirm", ("title", DirectionEndName.route(direction, ru: strings.locale == .ru))))
-                        .font(ElchiFont.poppins(18, .medium)).foregroundStyle(c.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityIdentifier("elchi.directions.archiveConfirmText")
-                    ElchiButton(strings.t("dir.archive"), variant: .danger) {
-                        archiving = nil
-                        Task { await model.setStatus(direction, to: "archived") }
-                    }
-                    .accessibilityIdentifier("elchi.directions.confirmArchive")
-                    ElchiButton(strings.t("confirmDialog.back"), variant: .neutral, size: .medium) { archiving = nil }
-                }
-            }
         }
     }
 
@@ -70,9 +41,15 @@ struct DirectionsTabView: View {
             } else {
                 ForEach(model.directions, id: \.id) { direction in
                     DirectionCard(direction: direction, running: model.running == direction.id, locked: model.running != nil,
+                                  confirming: deleting == direction.id,
                                   onOpen: { onOpenRequests(direction.id) },
                                   onToggle: { Task { await model.setStatus(direction, to: direction.status == "active" ? "paused" : "active") } },
-                                  onArchive: { archiving = direction })
+                                  onAskDelete: { deleting = direction.id },
+                                  onCancelDelete: { deleting = nil },
+                                  onDelete: {
+                                      deleting = nil
+                                      Task { await model.setStatus(direction, to: "archived") }
+                                  })
                 }
             }
         }
@@ -86,7 +63,7 @@ struct DirectionsTabView: View {
         case .failed(let error):
             Note(strings.errorText(error), tone: .err)
         case .loaded(let list) where list.isEmpty:
-            Text(strings.t("driverRoutes.empty")).font(ElchiFont.caption).foregroundStyle(c.muted)
+            EmptyView()
         case .loaded(let list):
             let sections = TripList.sections(list)
             ForEach(sections.active, id: \.id) { TripCard(trip: $0, trips: trips) { onOpenTrip($0) } }
@@ -95,65 +72,131 @@ struct DirectionsTabView: View {
     }
 }
 
-/// "Avval yo'nalish qo'shing": what a direction does, and the add button.
+/// "Hozircha yo'nalish qo'shilmagan": what a direction does, and the add button (one pair on both apps, Safar 2.8).
 struct NoDirectionsCard: View {
     let onAdd: () -> Void
     @Environment(LocaleStore.self) private var strings
 
     var body: some View {
-        EmptyState(icon: .route, title: strings.t("dir.noDirections"), description: strings.t("dir.noDirectionsHint"))
+        EmptyState(icon: .route, title: strings.t("driverRoutes.empty"), description: strings.t("dir.noDirectionsHint"))
             .accessibilityIdentifier("elchi.directions.empty")
         ElchiButton(strings.t("driverRoutes.addRoute"), variant: .soft, icon: .plus, action: onAdd)
             .accessibilityIdentifier("elchi.directions.add")
     }
 }
 
-/// One direction: ends, status, capacity, the trip line, and its three actions.
+/// One direction (Safar 2.2 / 2.3): ends, capacity, an on/off switch with the state dot, the via / trip lines,
+/// "Mos buyurtmalar" and a trash button that opens an inline confirm. A paused card is faded.
 struct DirectionCard: View {
     let direction: DriverDirectionDTO
     let running: Bool
     let locked: Bool
+    var confirming = false
     let onOpen: () -> Void
     let onToggle: () -> Void
-    let onArchive: () -> Void
+    var onAskDelete: () -> Void = {}
+    var onCancelDelete: () -> Void = {}
+    var onDelete: () -> Void = {}
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
     var body: some View {
         let active = direction.status == "active"
-        ItemCard(title: DirectionEndName.route(direction, ru: strings.locale == .ru), icon: .route,
-                 badge: (strings.t(active ? "dir.statusActive" : "dir.statusPaused"), active ? .ok : .gray),
-                 sub: strings.t("dir.capacity", ("seats", direction.seatCapacity), ("kg", Int((Double(direction.cargoCapacityWeightG) / 1000).rounded()))),
-                 lines: lines) {
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    ElchiButton(strings.t("dir.openRequests"), size: .pair, action: onOpen)
-                        .disabled(!active)
-                        .accessibilityIdentifier("elchi.direction.open.\(direction.id)")
-                    ElchiButton(strings.t(active ? "dir.pause" : "dir.resume"), variant: .soft, size: .pair, loading: running, action: onToggle)
-                        .disabled(locked && !running)
+        let route = DirectionEndName.route(direction, ru: strings.locale == .ru)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(route).font(ElchiFont.poppins(15, .semibold)).foregroundStyle(c.text).lineLimit(2)
+                    Text(strings.t("dir.capacity", ("seats", direction.seatCapacity), ("kg", Int((Double(direction.cargoCapacityWeightG) / 1000).rounded()))))
+                        .font(ElchiFont.poppins(12.5)).foregroundStyle(c.muted)
+                }
+                .opacity(active ? 1 : 0.55)
+                Spacer(minLength: 0)
+                if running {
+                    ProgressView().frame(width: 56, height: 32)
+                } else {
+                    Toggle("", isOn: Binding(get: { active }, set: { _ in onToggle() }))
+                        .labelsHidden()
+                        .tint(c.brand)
+                        .disabled(locked)
+                        .accessibilityLabel(strings.t(active ? "dir.pause" : "dir.resume"))
                         .accessibilityIdentifier("elchi.direction.toggle.\(direction.id)")
                 }
-                Button(strings.t("dir.archive"), action: onArchive)
-                    .font(ElchiFont.poppins(13, .semibold)).foregroundStyle(c.tone(.err).fg)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minHeight: 44)
-                    .disabled(locked)
-                    .accessibilityIdentifier("elchi.direction.archive.\(direction.id)")
             }
-            .padding(.top, 6)
+            HStack(spacing: 6) {
+                Circle().fill(active ? c.tone(.ok).fg : c.placeholder).frame(width: 7, height: 7)
+                Text(strings.t(active ? "dir.statusActive" : "dir.statusPaused")).font(ElchiFont.poppins(12, .semibold))
+                    .foregroundStyle(active ? c.tone(.ok).fg : c.placeholder)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("elchi.direction.state.\(direction.id)")
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                // The via line can name dozens of districts: two lines, the rest elided.
+                Text(line.text).font(ElchiFont.poppins(12.5)).foregroundStyle(line.blue ? c.accentText : c.muted)
+                    .lineLimit(line.blue ? nil : 2)
+            }
+            .opacity(active ? 1 : 0.55)
+            if confirming {
+                HStack(spacing: 8) {
+                    Text(strings.t("dir.archiveConfirm", ("title", route))).font(ElchiFont.poppins(13, .medium)).foregroundStyle(c.tone(.err).noteText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("elchi.directions.archiveConfirmText")
+                    pill(strings.t("common.none"), bg: c.card, fg: c.text, action: onCancelDelete)
+                    pill(strings.t("common.delete"), bg: c.danger, fg: .white, action: onDelete)
+                        .accessibilityIdentifier("elchi.directions.confirmArchive")
+                }
+                .padding(.leading, 14).padding(.trailing, 8).padding(.vertical, 8)
+                .background(c.tone(.err).bg, in: RoundedRectangle(cornerRadius: 16))
+            } else {
+                HStack(spacing: 8) {
+                    Button(action: onOpen) {
+                        Text(strings.t("dir.openRequests")).font(ElchiFont.poppins(14, .medium)).foregroundStyle(c.softText).lineLimit(1)
+                            .frame(maxWidth: .infinity).frame(height: 42)
+                            .background(c.soft, in: Capsule())
+                    }
+                    .buttonStyle(PressFade())
+                    .disabled(!active)
+                    .opacity(active ? 1 : 0.55)
+                    .accessibilityIdentifier("elchi.direction.open.\(direction.id)")
+                    Button(action: onAskDelete) {
+                        ElchiIcon.trash.image(size: 17).foregroundStyle(c.tone(.err).fg)
+                            .frame(width: 42, height: 42)
+                            .background(c.tone(.err).bg, in: Circle())
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(PressFade())
+                    .disabled(locked)
+                    .accessibilityLabel(strings.t("common.delete"))
+                    .accessibilityIdentifier("elchi.direction.archive.\(direction.id)")
+                }
+            }
         }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .background(c.card, in: RoundedRectangle(cornerRadius: ElchiShape.cardV3))
+        .shadow(color: c.softShadow, radius: 12, y: 6)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("elchi.direction.\(direction.id)")
     }
 
-    private var lines: [ItemLine] {
-        var out: [ItemLine] = []
-        if let via = direction.viaDistrictNames, !via.isEmpty { out.append(ItemLine(strings.t("dir.via", ("names", via.joined(separator: ", "))))) }
+    private func pill(_ title: String, bg: Color, fg: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(ElchiFont.poppins(12.5, .semibold)).foregroundStyle(fg)
+                .padding(.horizontal, 12).frame(height: 34)
+                .background(bg, in: Capsule())
+                .frame(minHeight: 44)
+        }
+        .buttonStyle(PressFade())
+    }
+
+    private var lines: [(text: String, blue: Bool)] {
+        var out: [(String, Bool)] = []
+        if let via = direction.viaDistrictNames, !via.isEmpty { out.append((strings.t("dir.via", ("names", via.joined(separator: ", "))), false)) }
         if let trip = direction.activeTrip {
-            out.append(ItemLine(strings.t("dir.trip", ("date", DirectionFeed.dayClock(trip.plannedStartAt)), ("status", strings.tripStatus(trip.status)),
-                                          ("seats", trip.seatsBooked)), tone: .blue))
+            out.append((strings.t("dir.trip", ("date", DirectionFeed.dayClock(trip.plannedStartAt)), ("status", strings.tripStatus(trip.status)),
+                                  ("seats", trip.seatsBooked)), true))
         } else {
-            out.append(ItemLine(strings.t("dir.noTrip")))
+            out.append((strings.t("dir.noTrip"), false))
         }
         return out
     }
@@ -317,21 +360,25 @@ struct PlacePickerSheet: View {
     }
 }
 
-// MARK: - The direction feed (top of Moslar)
+// MARK: - The direction feed (the first segment of Moslar, design v3)
 
-/// Q151: the requests along the chosen direction, cut into the three answers the server gave - the trip reaches them on
-/// time, a first offer plans a trip around them, or the car is there at another time (a time proposal).
+/// Q151: the requests along the chosen direction - one flat list of those the trip reaches on time or a first offer
+/// plans a trip for (Safar 5.4), then, under their own heading, those where the car is there at another time (a time
+/// proposal, Q153/Q157). Chips Bugun / Ertaga / 3 kun / 14 kun. A card opens the listing detail.
 struct DirectionFeedSection: View {
     let model: DirectionsModel
     let service: ServiceType
+    /// The driver's offers: "Siz taklif yubordingiz: {price}" / "Mijoz qabul qildi" (Safar 5.7).
+    let proposals: DriverProposalsModel
     let onAdd: () -> Void
+    let onOpen: (DirectionRequestItemDTO) -> Void
     let onOffer: (DirectionRequestItemDTO) -> Void
     let onThread: (String) -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             switch model.list {
             case .loading:
                 SkeletonCards(count: 1)
@@ -360,12 +407,16 @@ struct DirectionFeedSection: View {
             Text(DirectionEndName.route(only, ru: strings.locale == .ru)).font(ElchiFont.poppins(15, .semibold)).foregroundStyle(c.text)
                 .accessibilityIdentifier("elchi.dirFeed.direction")
         }
-        HStack(spacing: 8) {
-            ForEach(DirectionFeedDay.allCases, id: \.self) { day in
-                Chip(strings.t(day.labelKey), selected: model.day == day, filled: true) { model.day = day }
-                    .accessibilityIdentifier("elchi.dirFeed.day.\(day.rawValue)")
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(DirectionFeedDay.allCases, id: \.self) { day in
+                    V3Chip(title: strings.t(day.labelKey), selected: model.day == day, height: 36) { model.day = day }
+                        .accessibilityIdentifier("elchi.dirFeed.day.\(day.rawValue)")
+                }
             }
+            .padding(.horizontal, 16)
         }
+        .padding(.horizontal, -16)
         if let active = model.active, active.status != "active" {
             Note(strings.t("dir.paused"), tone: .gray).accessibilityIdentifier("elchi.dirFeed.paused")
         } else {
@@ -388,30 +439,35 @@ struct DirectionFeedSection: View {
                     .accessibilityIdentifier("elchi.dirFeed.trip")
             }
             let groups = DirectionFeed.groups(page.items)
-            group("dir.group.fits", "dir.group.fitsNote", groups.fits, id: "fits")
-            group("dir.group.new", "dir.group.newNote", groups.fresh, id: "new")
-            group("dir.group.time", "dir.group.timeNote", groups.otherTime, id: "time")
+            ForEach(groups.fits + groups.fresh, id: \.listing.id) { card($0) }
+            if !groups.otherTime.isEmpty {
+                SectionTitle(strings.t("dir.group.time"), description: strings.t("dir.group.timeNote"))
+                    .accessibilityIdentifier("elchi.dirFeed.group.time")
+                ForEach(groups.otherTime, id: \.listing.id) { card($0) }
+            }
             if page.items.isEmpty {
-                Text(strings.t("dir.feedEmpty")).font(ElchiFont.poppins(13)).foregroundStyle(c.muted)
+                EmptyState(icon: .radar, title: strings.t("driverFeed.emptyTitle"), description: strings.t("driver.v3trip.feedEmptyHint"))
                     .accessibilityIdentifier("elchi.dirFeed.empty")
             }
         }
     }
 
-    @ViewBuilder
-    private func group(_ title: String, _ note: String, _ items: [DirectionRequestItemDTO], id: String) -> some View {
-        if !items.isEmpty {
-            SectionTitle(strings.t(title), description: strings.t(note)).accessibilityIdentifier("elchi.dirFeed.group.\(id)")
-            ForEach(items, id: \.listing.id) { DirectionRequestCard(item: $0, onOffer: onOffer, onThread: onThread) }
-        }
+    private func card(_ item: DirectionRequestItemDTO) -> some View {
+        DirectionRequestCard(item: item, mark: FeedOfferMark.of(listingId: item.listing.id, open: proposals.lists[.open]?.value,
+                                                                accepted: proposals.lists[.accepted]?.value,
+                                                                versions: { proposals.versions($0) }),
+                             onOpen: { onOpen(item) }, onOffer: onOffer, onThread: onThread)
     }
 }
 
-/// One request along the direction: the places (address or district - never a stop, Q158), the match badge, the
-/// client's window, the car's ETA (warn colour for another time), the planned departure for a new trip, the parcel /
-/// people line, the price, and "Taklif yuborish" - or, once offered, "Taklifingiz yuborilgan" with the thread.
+/// One request along the direction (Safar 5.5): the kind icon, the places (address or district - never a stop, Q158),
+/// the match badge, the client's window, the car's ETA (warn colour for another time), the planned departure for a new
+/// trip, the parcel / people line, then "Siz taklif yubordingiz: {price}" / "Mijoz qabul qildi" (Safar 5.7) and the
+/// price, and one full-width button. The card opens the listing detail.
 struct DirectionRequestCard: View {
     let item: DirectionRequestItemDTO
+    var mark: FeedOfferMark = .none
+    var onOpen: () -> Void = {}
     let onOffer: (DirectionRequestItemDTO) -> Void
     let onThread: (String) -> Void
     @Environment(LocaleStore.self) private var strings
@@ -419,47 +475,84 @@ struct DirectionRequestCard: View {
 
     var body: some View {
         let listing = item.listing
-        let card = ItemCard(title: strings.route(listing), icon: .pin, badge: badge, lines: lines,
-                            meta: item.myThreadId == nil ? nil : strings.t("dir.card.myOffer"),
-                            right: strings.money(listing.totalMinor), metaAccent: item.myThreadId != nil) {
-            if let thread = item.myThreadId {
+        let otherTime = item.fit == "time_differs"
+        let thread = mark.threadId ?? item.myThreadId
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 10) {
+                ListingKindIcon.of(listing).image(size: 18).foregroundStyle(c.accentText)
+                    .frame(width: 36, height: 36)
+                    .background(c.iconTint, in: Circle())
+                Text(strings.route(listing)).font(ElchiFont.poppins(15, .semibold)).foregroundStyle(c.text)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 7)
+                if let tag = strings.matchTag(item) {
+                    Badge(tag.text, tone: tag.tone)
+                }
+            }
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(line.text).font(ElchiFont.poppins(12.5)).foregroundStyle(line.warn ? c.tone(.warn).fg : c.tone(.gray).noteText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(meta ?? "").font(ElchiFont.poppins(12, meta == nil ? .regular : .semibold)).foregroundStyle(c.accentText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(strings.money(listing.totalMinor)).font(ElchiFont.poppins(16, .semibold)).foregroundStyle(c.text)
+            }
+            .padding(.top, 2)
+            if let thread {
                 ElchiButton(strings.t("driver.feed.viewOffer"), variant: .neutral, size: .medium) { onThread(thread) }
-                    .padding(.top, 6)
+                    .padding(.top, 4)
                     .accessibilityIdentifier("elchi.dirFeed.viewOffer.\(listing.id)")
             } else {
-                ElchiButton(strings.t("driverFeed.sendOffer"), variant: item.fit == "time_differs" ? .outline : .primary, size: .medium) { onOffer(item) }
-                    .padding(.top, 6)
-                    .accessibilityIdentifier("elchi.dirFeed.offer.\(listing.id)")
+                // The design's feed button is the brand one (azure, navy text); another time: outlined.
+                Button { onOffer(item) } label: {
+                    Text(strings.t("driverFeed.sendOffer")).font(ElchiFont.buttonSmall).lineLimit(1)
+                        .foregroundStyle(otherTime ? c.text : c.onBrand)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .background(otherTime ? Color.clear : c.brand, in: Capsule())
+                        .overlay { if otherTime { Capsule().strokeBorder(c.outline, lineWidth: 1.5) } }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(PressFade())
+                .padding(.top, 4)
+                .accessibilityIdentifier("elchi.dirFeed.offer.\(listing.id)")
             }
         }
-        if item.fit == "time_differs" {
-            card.overlay {
-                RoundedRectangle(cornerRadius: ElchiShape.card).strokeBorder(c.tone(.warn).fg.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .background(c.card, in: RoundedRectangle(cornerRadius: ElchiShape.cardV3))
+        .overlay {
+            if otherTime {
+                RoundedRectangle(cornerRadius: ElchiShape.cardV3).strokeBorder(c.tone(.warn).fg.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
             }
-        } else {
-            card
+        }
+        .shadow(color: c.softShadow, radius: 12, y: 6)
+        .contentShape(RoundedRectangle(cornerRadius: ElchiShape.cardV3))
+        .onTapGesture(perform: onOpen)
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: Text(strings.t("driver.v3trip.openListing")), onOpen)
+        .accessibilityIdentifier("elchi.dirFeed.card.\(listing.id)")
+    }
+
+    /// The driver's own offer (Safar 5.7), the same join as Android: price, the client's counter, or accepted.
+    private var meta: String? {
+        switch mark {
+        case .offered(_, let total): strings.t("driver.feed.myOffer", ("price", strings.money(total)))
+        case .countered: strings.t("negotiation.clientCountered")
+        case .accepted: strings.t("driver.feed.clientAccepted")
+        case .none: item.myThreadId == nil ? nil : strings.t("dir.card.myOffer")
         }
     }
 
-    private var badge: (text: String, tone: Tone)? {
-        switch item.matchType {
-        case .exact: (strings.t("match.exact"), .ok)
-        case .onRoute: (strings.t("match.on_route"), .blue)
-        default: nil
-        }
-    }
-
-    private var lines: [ItemLine] {
+    private var lines: [(text: String, warn: Bool)] {
         let listing = item.listing
-        var out = [ItemLine(strings.t("dir.card.asked", ("start", DirectionFeed.dayClock(listing.departureWindowStart)),
-                                      ("end", DirectionFeed.clock(listing.departureWindowEnd))))]
+        var out: [(String, Bool)] = [(strings.t("dir.card.asked", ("start", DirectionFeed.dayClock(listing.departureWindowStart)),
+                                              ("end", DirectionFeed.clock(listing.departureWindowEnd))), false)]
         if let eta = item.pickupEta {
-            out.append(ItemLine(strings.t("dir.card.eta", ("time", DirectionFeed.dayClock(eta))), tone: item.fit == "time_differs" ? .warn : nil))
+            out.append((strings.t("dir.card.eta", ("time", DirectionFeed.dayClock(eta))), item.fit == "time_differs"))
         }
         if item.fit == "no_trip", let departure = item.suggestedDepartureAt {
-            out.append(ItemLine(strings.t("dir.card.departure", ("time", DirectionFeed.dayClock(departure)))))
+            out.append((strings.t("dir.card.departure", ("time", DirectionFeed.dayClock(departure))), false))
         }
-        if let parcel = strings.parcelLine(listing) { out.append(ItemLine(parcel)) }
+        if let parcel = strings.parcelLine(listing) { out.append((parcel, false)) }
         return out
     }
 }
@@ -468,7 +561,7 @@ struct DirectionRequestCard: View {
 
 /// Pricing one request from a direction: no trip picker (the server takes, re-times or plans the trip). The summary,
 /// the car's time, the time-proposal sentence when the car is there at another time, the rival board, the price (or
-/// the client's price in one tap), the commission estimate, an optional message, the no-hold note.
+/// the client's price in one tap), the commission estimate, the no-hold note.
 struct DirectionOfferView: View {
     let model: DirectionOfferModel
     let onBack: () -> Void
@@ -476,7 +569,6 @@ struct DirectionOfferView: View {
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @State private var priceText = ""
-    @State private var message = ""
     /// "Taklif yuborish" was tapped with no price (DESIGN07 7.11).
     @State private var priceMissing = false
 
@@ -525,7 +617,6 @@ struct DirectionOfferView: View {
             .disabled(model.sending)
             .accessibilityIdentifier("elchi.dirOffer.acceptClientPrice")
             CommissionCard(quote: model.quote, totalMinor: model.totalMinor)
-            ElchiField(text: $message, label: strings.t("listingOwner.commentLabel"), multiline: true)
             if let refusal = model.refusal {
                 Note(refusalText(refusal, seats: max(listing.quantity, 1)), tone: refusalTone(refusal)).accessibilityIdentifier("elchi.dirOffer.error")
             }
@@ -550,7 +641,8 @@ struct DirectionOfferView: View {
     }
 
     private func send(_ unitPriceMinor: Int) async {
-        if let result = await model.send(unitPriceMinor: unitPriceMinor, message: message) { onSent(result) }
+        // Safar 7.11: no message field (the design and Android have none; chat opens with the booking, Q100).
+        if let result = await model.send(unitPriceMinor: unitPriceMinor, message: nil) { onSent(result) }
     }
 
     private func refusalText(_ refusal: DirectionOfferRefusal, seats: Int) -> String {

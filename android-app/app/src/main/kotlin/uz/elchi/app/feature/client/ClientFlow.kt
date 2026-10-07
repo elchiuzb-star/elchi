@@ -97,7 +97,10 @@ import uz.elchi.app.ui.theme.Elchi
 @Serializable private data class LegacyDetail(val id: Long)
 @Serializable private data class LegacyBids(val id: Long)
 @Serializable private data class LegacyRating(val id: Long)
-@Serializable private data class LegacyDispute(val id: Long)
+/** DESIGN10 §0: the v1 archive list; [fromDrawer] = a top-level screen with the menu, else pushed from the orders row. */
+@Serializable private data class LegacyList(val fromDrawer: Boolean = false)
+/** Yordam with a ticket already started: the v1 archive's "Muammo haqida xabar" (Q141, "{order_number}: "). */
+@Serializable private data class HelpPrefilled(val prefill: String)
 
 /**
  * Signed in as a client. Stage 02 (design "Buyurtma yaratish"): home (map + sheet) -> place picker (region ->
@@ -110,8 +113,10 @@ import uz.elchi.app.ui.theme.Elchi
  * [BookingViewModel] per opened booking, shared the same way, and a model of its own for each polling screen.
  * Stage 05: the drawer's notifications (with the unread dot, [InboxViewModel], one per person), profile, help,
  * settings; from the profile the bonus screen, the operator conversations and the safety centre; account deletion.
- * Stage 06: a v1 order from the orders list (Q4, an archive) -> its bids, rating and problem report; one
- * [LegacyOrderViewModel] per opened order, on its detail entry, shared the same way. Outcomes show in the app banner.
+ * Stage 06 / DESIGN10: the v1 archive (Q4) - its own list (drawer row while there are v1 orders, and one row on the
+ * orders list) -> a v1 order -> its bids and rating; "Muammo haqida xabar" opens Yordam with a ticket about the order
+ * (Q141: no dispute form). One [LegacyOrderViewModel] per opened order, on its detail entry, shared the same way.
+ * Outcomes show in the app banner.
  */
 @Composable
 fun ClientFlow(container: AppContainer, session: Session) {
@@ -140,6 +145,9 @@ fun ClientFlow(container: AppContainer, session: Session) {
         factory = viewModelFactory { initializer { InboxViewModel(container.api) } },
     )
     val inboxState by inbox.state.collectAsStateWithLifecycle()
+    val ordersState by orders.state.collectAsStateWithLifecycle()
+    // The drawer's archive row needs to know whether this client has v1 orders at all.
+    LaunchedEffect(session.user.id) { orders.ensureLegacy() }
     LaunchedEffect(session.user.id) { request.prefillSender(session.user.fullName, session.user.phone) }
     val toOrders: () -> Unit = { nav.navigate(Orders) { popUpTo<Home> { inclusive = false } } }
     val backToOrders: () -> Unit = { if (!nav.popBackStack<Orders>(inclusive = false)) toOrders() }
@@ -196,6 +204,8 @@ fun ClientFlow(container: AppContainer, session: Session) {
         onProfile = { nav.navigate(Profile) { launchSingleTop = true } },
         onHelp = { nav.navigate(Help) { launchSingleTop = true } },
         onSettings = { nav.navigate(Settings) { launchSingleTop = true } },
+        legacyCount = if (ordersState.legacy.items.isNotEmpty()) ordersState.legacyTotal else 0,
+        onLegacy = { nav.navigate(LegacyList(fromDrawer = true)) { popUpTo<Home> { inclusive = false }; launchSingleTop = true } },
         onSignOut = signOut,
         onOpened = inbox::refreshUnread,
     )
@@ -404,9 +414,17 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 onHome = { nav.popBackStack<Home>(inclusive = false) },
                 onListing = { id -> nav.navigate(ListingDetail(id)) },
                 onBooking = { id -> nav.navigate(BookingDetail(id)) },
-                onLegacy = { id -> nav.navigate(LegacyDetail(id)) },
+                onLegacyList = { nav.navigate(LegacyList()) { launchSingleTop = true } },
                 onNotifications = { nav.navigate(NotificationsPushed) { launchSingleTop = true } },
                 drawer = drawer,
+            )
+        }
+        composable<LegacyList> { entry ->
+            LegacyListScreen(
+                vm = orders,
+                onLegacy = { id -> nav.navigate(LegacyDetail(id)) },
+                onBack = { nav.popBackStack() },
+                drawer = if (entry.toRoute<LegacyList>().fromDrawer) drawer else null,
             )
         }
         composable<LegacyDetail> { entry ->
@@ -417,9 +435,9 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 onBack = { nav.popBackStack() },
                 onBids = { nav.navigate(LegacyBids(vm.orderId)) },
                 onRate = { nav.navigate(LegacyRating(vm.orderId)) },
-                onDispute = { nav.navigate(LegacyDispute(vm.orderId)) },
+                onReport = { prefill -> if (prefill != null) nav.navigate(HelpPrefilled(prefill)) else nav.navigate(Help) },
                 // The list reads itself again when it comes back into view.
-                onCancelled = backToOrders,
+                onCancelled = { if (!nav.popBackStack<LegacyList>(inclusive = false)) backToOrders() },
             )
         }
         composable<LegacyBids> { entry ->
@@ -431,11 +449,6 @@ fun ClientFlow(container: AppContainer, session: Session) {
             val owner = remember(entry) { nav.getBackStackEntry<LegacyDetail>() }
             val vm = legacyViewModel(owner, entry.toRoute<LegacyRating>().id, container, legacyCancelReason)
             LegacyRatingScreen(vm = vm, onBack = { nav.popBackStack() }, onDone = { nav.popBackStack() })
-        }
-        composable<LegacyDispute> { entry ->
-            val owner = remember(entry) { nav.getBackStackEntry<LegacyDetail>() }
-            val vm = legacyViewModel(owner, entry.toRoute<LegacyDispute>().id, container, legacyCancelReason)
-            LegacyDisputeScreen(vm = vm, onBack = { nav.popBackStack() }, onDone = { nav.popBackStack() })
         }
         composable<Proposals> {
             ProposalsScreen(vm = orders, ru = ru, onBack = { nav.popBackStack() }, onAccepted = accepted)
@@ -525,15 +538,11 @@ fun ClientFlow(container: AppContainer, session: Session) {
                 session = session,
                 onBack = { nav.popBackStack() },
                 nav = ProfileNav(
-                    onOrders = toOrdersTop,
-                    onProposals = { nav.navigate(Proposals) },
                     onBonus = { nav.navigate(Bonus) },
                     onNotifications = drawer.onNotifications,
                     onThreads = { nav.navigate(SupportThreads) },
                     onSafety = { nav.navigate(SafetyCenter) },
                     onHelp = { nav.navigate(Help) },
-                    onSettings = { nav.navigate(Settings) },
-                    onHome = { nav.popBackStack<Home>(inclusive = false) },
                     onSignOut = signOut,
                 ),
                 notificationsDot = drawer.unread > 0,
@@ -550,6 +559,16 @@ fun ClientFlow(container: AppContainer, session: Session) {
         composable<Help> {
             val vm: HelpViewModel = viewModel(factory = viewModelFactory { initializer { HelpViewModel(container.api) } })
             HelpScreen(vm = vm, onBack = { nav.popBackStack() }, onThreads = { nav.navigate(SupportThreads) }, onThread = { id -> nav.navigate(SupportThread(id)) })
+        }
+        composable<HelpPrefilled> { entry ->
+            val vm: HelpViewModel = viewModel(factory = viewModelFactory { initializer { HelpViewModel(container.api) } })
+            HelpScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onThreads = { nav.navigate(SupportThreads) },
+                onThread = { id -> nav.navigate(SupportThread(id)) },
+                prefill = entry.toRoute<HelpPrefilled>().prefill,
+            )
         }
         composable<SupportThreads> {
             val vm: SupportThreadsViewModel = viewModel(factory = viewModelFactory { initializer { SupportThreadsViewModel(container.api, container.banners) } })

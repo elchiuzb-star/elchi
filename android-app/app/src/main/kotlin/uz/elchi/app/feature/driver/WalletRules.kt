@@ -8,12 +8,19 @@ import uz.elchi.app.feature.client.ParcelRules
 import uz.elchi.app.ui.theme.Tone
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 
 /** The four tiles under the balance (web ConnectedApp.tsx:6862): sums of what the ledger really recorded. */
 data class WalletTiles(val capturedMinor: Long, val reversedMinor: Long, val topupsMinor: Long)
 
 /** One bar of the 7-day chart: a Tashkent day and the commission captured on it. */
 data class ChartDay(val day: LocalDate, val minor: Long)
+
+/** The chart's period toggle "7 kun / 6 oy" (design 09 2.3, web ConnectedApp.tsx:7180). */
+enum class ChartPeriod { DAILY, MONTHLY }
+
+/** One bar of the 6-month chart: a Tashkent calendar month and the commission captured in it (loaded pages only). */
+data class ChartMonth(val month: YearMonth, val minor: Long)
 
 /**
  * "Komissiya balansi" (§9.1-9.3): only the commission account is money here. `commission_capture` is what ELCHI took,
@@ -52,6 +59,47 @@ object WalletRules {
             .mapNotNull { line -> OrderRules.parseInstant(line.occurredAt)?.atZone(ParcelRules.TASHKENT)?.toLocalDate()?.let { it to line.amountMinor } }
             .groupBy({ it.first }, { it.second })
         return range.map { day -> ChartDay(day, byDay[day]?.sum() ?: 0L) }
+    }
+
+    const val CHART_MONTHS = 6
+
+    /**
+     * The last [months] Tashkent calendar months, oldest first, each with the commission captured in it - summed from
+     * the movements already loaded (as the web does): nothing is said about older pages that were not read.
+     */
+    fun monthly(lines: List<LedgerLineDTO>, now: Instant, months: Int = CHART_MONTHS): List<ChartMonth> {
+        val current = YearMonth.from(now.atZone(ParcelRules.TASHKENT))
+        val range = (months - 1 downTo 0).map { current.minusMonths(it.toLong()) }
+        val byMonth = lines.filter { it.kind == KIND_CAPTURE && it.direction == DEBIT }
+            .mapNotNull { line -> OrderRules.parseInstant(line.occurredAt)?.atZone(ParcelRules.TASHKENT)?.let { YearMonth.from(it) to line.amountMinor } }
+            .groupBy({ it.first }, { it.second })
+        return range.map { month -> ChartMonth(month, byMonth[month]?.sum() ?: 0L) }
+    }
+
+    /**
+     * `TWO_PERSON_APPROVAL_THRESHOLD_MINOR` (`app/contracts/money.py`, Q17): a top-up above 1 000 000 so'm needs a second
+     * finance approver. The API does not expose it, so it is mirrored here - keep the two equal.
+     */
+    const val TWO_PERSON_APPROVAL_THRESHOLD_MINOR = 100_000_000L
+
+    /** "Katta summa: ikki moliya xodimi tasdiqlaydi." under the amount (design 09 2.10). */
+    fun largeAmount(amountDigits: String): Boolean = (ParcelRules.soumToMinor(amountDigits) ?: 0L) > TWO_PERSON_APPROVAL_THRESHOLD_MINOR
+
+    /** The preset chips (design 09 2.11), whole so'm. */
+    val PRESETS: List<Long> = listOf(50_000L, 100_000L, 200_000L, 500_000L)
+
+    /**
+     * "To'lov maqsadi: 90 777 11 22" (design 09 2.7): the driver's own number without the country code, grouped
+     * 2-3-2-2; null for a number that is not an Uzbek mobile one (then the line is not shown).
+     */
+    fun paymentPurposePhone(phone: String?): String? {
+        val digits = phone?.filter(Char::isDigit) ?: return null
+        val national = when {
+            digits.length == 12 && digits.startsWith("998") -> digits.substring(3)
+            digits.length == 9 -> digits
+            else -> return null
+        }
+        return "${national.substring(0, 2)} ${national.substring(2, 5)} ${national.substring(5, 7)} ${national.substring(7, 9)}"
     }
 
     /** No capture in the window: the chart's empty state (in dev parcel commissions stay held until finance acts). */

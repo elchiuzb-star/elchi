@@ -42,7 +42,7 @@ class DirectionsViewModel(
         val directions: Load<List<DriverDirectionDTO>> = Load.Loading,
         val refreshing: Boolean = false,
         val selectedId: String? = null,
-        val day: DirectionDay = DirectionDay.WEEK,
+        val day: DirectionDay = DirectionDay.DAYS14,
         val service: ServiceType = ServiceType.PARCEL,
         /** Null = no direction to read (none yet). */
         val feed: Load<DirectionRequestsDTO>? = null,
@@ -128,7 +128,8 @@ class DirectionsViewModel(
             val result = tryCall { api.patchDriverDirection(direction.id, DriverDirectionPatch(expectedVersion = direction.version, status = status)).data }
             banners.endAction()
             result
-                .onSuccess { banners.show(BannerTone.OK, BannerText.Key(if (status == DirectionRules.ARCHIVED) "dir.archived" else "dir.updated")) }
+                // Safar v3 2.2: pausing says the feed now shows nothing for it; resuming / deleting say so.
+                .onSuccess { banners.show(BannerTone.OK, BannerText.Key(DirectionRules.statusToastKey(status))) }
                 .onFailure { e -> banners.show(BannerTone.ERR, BannerText.Error(e)) }
             _state.update { it.copy(busy = it.busy - direction.id) }
             refresh()

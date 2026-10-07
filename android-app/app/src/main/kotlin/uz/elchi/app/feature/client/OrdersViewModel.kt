@@ -47,6 +47,9 @@ class OrdersViewModel(
         val bookings: Paged<BookingClientDTO> = Paged(),
         val listings: Paged<ListingDTO> = Paged(),
         val legacy: Paged<LegacyOrder> = Paged(),
+        /** v1 `pagination.total` of the first page (at least the rows loaded): the "Eski buyurtmalar (n)" row and the drawer row. */
+        val legacyTotal: Int = 0,
+        val legacyRefreshing: Boolean = false,
         /** Per listing id; missing = not asked (not live, beyond the first few) or the call failed. */
         val stats: Map<String, OfferStats> = emptyMap(),
         val refreshing: Boolean = false,
@@ -84,13 +87,41 @@ class OrdersViewModel(
         viewModelScope.launch {
             val bookings = async { page { api.listMyBookings(role = CLIENT, limit = PAGE).let { r -> r.data.mapNotNull(BookingClientDTO::fromJson) to r.meta?.nextCursor } } }
             val listings = async { page { api.listMyListings(limit = PAGE).let { r -> r.data to r.meta?.nextCursor } } }
-            val old = async { page { legacy.clientOrders(1).let { p -> p.items to (if (p.pagination.page < p.pagination.totalPages) "2" else null) } } }
+            val old = async { legacyFirstPage() }
             val b = bookings.await()
             val l = listings.await()
-            val o = old.await()
-            _state.update { it.copy(bookings = b, listings = l, legacy = o, refreshing = false) }
+            val (o, total) = old.await()
+            _state.update { it.copy(bookings = b, listings = l, legacy = o, legacyTotal = total, refreshing = false) }
             loadStats(l.items)
         }
+    }
+
+    private suspend fun legacyFirstPage(): Pair<Paged<LegacyOrder>, Int> {
+        var total = 0
+        val paged = page {
+            legacy.clientOrders(1).let { p ->
+                total = p.pagination.total
+                p.items to (if (p.pagination.page < p.pagination.totalPages) "2" else null)
+            }
+        }
+        return paged to maxOf(total, paged.items.size)
+    }
+
+    /** DESIGN10 §0: the archive screen's own pull to refresh - only the v1 list from its first page. */
+    fun refreshLegacy() {
+        if (_state.value.legacyRefreshing) return
+        _state.update { it.copy(legacyRefreshing = true) }
+        viewModelScope.launch {
+            val (o, total) = legacyFirstPage()
+            // A failed re-read keeps the rows on screen.
+            _state.update { if (o.error != null && it.legacy.items.isNotEmpty()) it.copy(legacyRefreshing = false) else it.copy(legacy = o, legacyTotal = total, legacyRefreshing = false) }
+        }
+    }
+
+    /** The drawer's "Eski buyurtmalar" row shows only for a client with v1 orders: read the first page once. */
+    fun ensureLegacy() {
+        if (_state.value.legacy.loaded || _state.value.legacyRefreshing) return
+        refreshLegacy()
     }
 
     /**

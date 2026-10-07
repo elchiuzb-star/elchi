@@ -14,6 +14,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -122,6 +123,33 @@ object ElchiShape {
     val sheet = 32.dp
 }
 
+/**
+ * A screen family's look on top of the shared tokens. The default changes nothing; the driver flow wears the Claude
+ * Design v3 look (Royxat / Safar v3 §0): navy primary buttons with white labels, 48dp grey round buttons without a
+ * shadow, cards with a 26dp radius, 24sp tab titles.
+ */
+@Immutable
+data class ElchiLook(
+    /** Primary button fill / label; null = the brand pair (azure with navy text). */
+    val primary: Color? = null,
+    val onPrimary: Color? = null,
+    /** Round icon buttons (back, bell, refresh): size, flat grey fill instead of a white disc with a shadow. */
+    val roundButton: Dp = 44.dp,
+    val flatRoundButtons: Boolean = false,
+    val cardRadius: Dp = ElchiShape.card,
+)
+
+/** Driver v3: navy #0E2350 + white in light; in dark a lighter navy so the fill still separates from the page. */
+fun driverV3Look(dark: Boolean): ElchiLook = ElchiLook(
+    primary = if (dark) Color(0xFF2A4A86) else Color(0xFF0E2350),
+    onPrimary = Color.White,
+    roundButton = 48.dp,
+    flatRoundButtons = true,
+    cardRadius = 26.dp,
+)
+
+val LocalElchiLook = staticCompositionLocalOf { ElchiLook() }
+
 val LocalElchiColors = staticCompositionLocalOf { LightColors }
 val LocalElchiType = staticCompositionLocalOf { ElchiType() }
 
@@ -129,6 +157,7 @@ val LocalElchiType = staticCompositionLocalOf { ElchiType() }
 object Elchi {
     val colors: ElchiColors @Composable get() = LocalElchiColors.current
     val type: ElchiType @Composable get() = LocalElchiType.current
+    val look: ElchiLook @Composable get() = LocalElchiLook.current
 }
 
 /** The person's choice from the theme switch; SYSTEM follows the phone. */

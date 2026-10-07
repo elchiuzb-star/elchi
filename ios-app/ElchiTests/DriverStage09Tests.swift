@@ -241,7 +241,7 @@ struct DriverProfileStage09Tests {
     }
 
     @Test func quickActionsInTheDesignsOrder() {
-        #expect(DriverProfileAction.allCases == [.form, .documents, .routes, .proposals, .bonus, .orders, .threads, .safety, .help, .settings, .logout])
+        #expect(DriverProfileAction.allCases == [.form, .documents, .routes, .proposals, .bonus, .wallet, .orders, .threads, .safety, .help, .settings, .logout])
         #expect(DriverProfileAction.form.hintKey == "driver.profile.editHint")
         #expect(DriverProfileAction.settings.hintKey == "driver.profile.settingsHint")
     }

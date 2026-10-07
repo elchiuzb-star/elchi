@@ -56,6 +56,8 @@ public struct ElchiButton: View {
     let action: () -> Void
     @Environment(\.elchi) private var c
     @Environment(\.isEnabled) private var enabled
+    /// Design v3: the primary button is navy with white text.
+    @Environment(\.elchiV3) private var v3
 
     public init(_ title: String, variant: ButtonVariant = .primary, size: ButtonSize = .large, icon: ElchiIcon? = nil,
                 loading: Bool = false, dimmed: Bool = false, action: @escaping () -> Void) {
@@ -70,7 +72,7 @@ public struct ElchiButton: View {
 
     public var body: some View {
         let colors = enabled && !dimmed
-            ? buttonColors(variant, c)
+            ? (v3 && variant == .primary ? ButtonColors(bg: c.primaryV3, fg: c.onPrimaryV3, border: nil) : buttonColors(variant, c))
             : ButtonColors(bg: c.isDark ? Color(hex: 0x24272E) : Color(hex: 0xE4E9EF), fg: c.isDark ? Color(hex: 0x6B7482) : Color(hex: 0x8A96A6), border: nil)
         Button(action: action) {
             HStack(spacing: 8) {
@@ -108,6 +110,8 @@ public struct RoundIconButton: View {
     let dotLabel: String?
     let action: () -> Void
     @Environment(\.elchi) private var c
+    /// Design v3: 48 pt on the flat grey fill, no shadow.
+    @Environment(\.elchiV3) private var v3
 
     public init(_ icon: ElchiIcon, label: String, dot: Bool = false, dotLabel: String? = nil, action: @escaping () -> Void) {
         self.icon = icon
@@ -120,16 +124,16 @@ public struct RoundIconButton: View {
     public var body: some View {
         Button(action: action) {
             icon.image().foregroundStyle(c.text)
-                .frame(width: 44, height: 44)
-                .background(c.card, in: Circle())
+                .frame(width: v3 ? 48 : 44, height: v3 ? 48 : 44)
+                .background(v3 ? c.iconFill : c.card, in: Circle())
                 .overlay(alignment: .topTrailing) {
                     if dot {
                         Circle().fill(c.danger).frame(width: 10, height: 10)
-                            .overlay { Circle().strokeBorder(c.card, lineWidth: 2) }
+                            .overlay { Circle().strokeBorder(v3 ? c.iconFill : c.card, lineWidth: 2) }
                             .offset(x: -6, y: 6)
                     }
                 }
-                .shadow(color: c.shadow, radius: 12, y: 6)
+                .shadow(color: v3 ? .clear : c.shadow, radius: 12, y: 6)
         }
         .buttonStyle(PressFade())
         .accessibilityLabel(label)
@@ -241,6 +245,8 @@ public struct ElchiCard<Content: View>: View {
     let tint: Tint
     let content: Content
     @Environment(\.elchi) private var c
+    /// Design v3: 26 pt corners.
+    @Environment(\.elchiV3) private var v3
 
     public init(padding: EdgeInsets = EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16), tint: Tint = .none,
                 @ViewBuilder content: () -> Content) {
@@ -250,7 +256,7 @@ public struct ElchiCard<Content: View>: View {
     }
 
     public var body: some View {
-        let shape = RoundedRectangle(cornerRadius: ElchiShape.card)
+        let shape = RoundedRectangle(cornerRadius: v3 ? ElchiShape.cardV3 : ElchiShape.card)
         VStack(alignment: .leading, spacing: 0) { content }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -500,6 +506,8 @@ public struct Segmented<Value: Hashable>: View {
 public struct Chip: View {
     let text: String, selected: Bool, icon: ElchiIcon?, filled: Bool, action: () -> Void
     @Environment(\.elchi) private var c
+    /// Design v3: the chosen filled chip is navy with white text.
+    @Environment(\.elchiV3) private var v3
 
     public init(_ text: String, selected: Bool, icon: ElchiIcon? = nil, filled: Bool = false, action: @escaping () -> Void) {
         self.text = text
@@ -515,10 +523,10 @@ public struct Chip: View {
                 if let icon { icon.image(size: 14) }
                 Text(text).font(ElchiFont.label)
             }
-            .foregroundStyle(selected ? (filled ? c.onBrand : c.softText) : c.text)
+            .foregroundStyle(selected ? (filled ? (v3 ? c.onPrimaryV3 : c.onBrand) : c.softText) : c.text)
             .padding(.horizontal, 14).padding(.vertical, 8)
             .frame(minHeight: 36)
-            .background(selected ? (filled ? c.brand : c.soft) : c.card, in: Capsule())
+            .background(selected ? (filled ? (v3 ? c.primaryV3 : c.brand) : c.soft) : c.card, in: Capsule())
             .overlay { Capsule().strokeBorder(selected ? .clear : c.line, lineWidth: 1) }
         }
         .buttonStyle(.plain)
@@ -732,6 +740,8 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
     @Environment(BannerCenter.self) private var banners: BannerCenter?
     /// A line the screen's owner puts under the bar (the driver's GPS bar on a running trip's screens).
     @Environment(\.screenAccessory) private var accessory
+    /// Design v3: 20 / 600 title (24 / 600 for the large one).
+    @Environment(\.elchiV3) private var v3
 
     public init(title: String, right: String? = nil, rightIcon: ElchiIcon? = nil, onRight: (() -> Void)? = nil, leading: ElchiIcon = .back,
                 backLabel: String, onBack: (() -> Void)?, showsFooter: Bool = true, banner: (text: String, tone: Tone)? = nil,
@@ -766,7 +776,8 @@ public struct ScreenScaffold<Content: View, Footer: View>: View {
             HStack(spacing: 12) {
                 if let onBack { RoundIconButton(leading, label: backLabel, action: onBack) }
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(title).font(largeTitle ? ElchiFont.poppins(26, .medium, relativeTo: .title) : ElchiFont.poppins(18, .medium, relativeTo: .headline))
+                    Text(title).font(v3 ? (largeTitle ? ElchiFont.h1V3 : ElchiFont.titleV3)
+                                     : largeTitle ? ElchiFont.poppins(26, .medium, relativeTo: .title) : ElchiFont.poppins(18, .medium, relativeTo: .headline))
                         .foregroundStyle(c.text)
                         .lineLimit(1).minimumScaleFactor(0.8).accessibilityAddTraits(.isHeader)
                     if let subtitle {
@@ -1953,6 +1964,7 @@ public struct BarAction: Identifiable {
 struct BarActionButton: View {
     let action: BarAction
     @Environment(\.elchi) private var c
+    @Environment(\.elchiV3) private var v3
 
     var body: some View {
         Button(action: action.action) {
@@ -1966,8 +1978,8 @@ struct BarActionButton: View {
                 }
             }
             .foregroundStyle(c.text)
-            .frame(width: 44, height: 44)
-            .background(c.card, in: Circle())
+            .frame(width: v3 ? 48 : 44, height: v3 ? 48 : 44)
+            .background(v3 ? c.iconFill : c.card, in: Circle())
             .overlay(alignment: .topTrailing) {
                 if let badge = action.badge {
                     Text(badge).font(ElchiFont.poppins(11, .bold)).foregroundStyle(.white).lineLimit(1)
@@ -1978,7 +1990,7 @@ struct BarActionButton: View {
                         .offset(x: 4, y: -4)
                 }
             }
-            .shadow(color: c.shadow, radius: 12, y: 6)
+            .shadow(color: v3 ? .clear : c.shadow, radius: 12, y: 6)
         }
         .buttonStyle(PressFade())
         .disabled(action.loading)

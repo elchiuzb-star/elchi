@@ -25,21 +25,24 @@ public struct EmptyListState: View {
     public var body: some View { EmptyState(icon: icon, title: title, description: description) }
 }
 
-/// Not found (someone else's, or gone): the search icon, "Ma'lumot topilmadi" and a back button.
+/// Not found (someone else's, or gone): the search icon, "Ma'lumot topilmadi", one line why (BOSQICH 10 6.3: the
+/// screens pass `client.v3archive.notFoundHint`; nil leaves it out) and a neutral back button.
 public struct NotFoundState: View {
     let title: String
+    let description: String?
     let backLabel: String
     let onBack: () -> Void
 
-    public init(title: String, backLabel: String, onBack: @escaping () -> Void) {
+    public init(title: String, description: String? = nil, backLabel: String, onBack: @escaping () -> Void) {
         self.title = title
+        self.description = description
         self.backLabel = backLabel
         self.onBack = onBack
     }
 
     public var body: some View {
         VStack(spacing: 4) {
-            EmptyState(icon: .search, title: title)
+            EmptyState(icon: .search, title: title, description: description)
             ElchiButton(backLabel, variant: .neutral, size: .medium, action: onBack)
         }
         .accessibilityIdentifier("elchi.state.notFound")

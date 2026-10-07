@@ -284,12 +284,24 @@ struct TripDetailView: View {
         }
     }
 
+    /// Safar v3 4.1: the direction's ends; without a direction the first and last manifest place (interim, until the
+    /// trip carries its ends), else "Safar tafsilotlari" - never two dates.
+    private func title(_ trip: TripDTO) -> String {
+        if let direction = trips.directions.first(where: { $0.activeTrip?.id == trip.id }) {
+            return DirectionEndName.route(direction, ru: strings.locale == .ru)
+        }
+        let places = (model.manifest.value?.places ?? []).sorted { $0.seq < $1.seq }
+            .filter { !$0.pickups.isEmpty || !$0.dropoffs.isEmpty }
+            .map { strings.placeText($0.point) }
+        return TripDetailRules.placesTitle(places) ?? strings.t("trip.detailsTitle")
+    }
+
     @ViewBuilder
     private func content(_ trip: TripDTO) -> some View {
         let actions = TripActions.of(trip.status)
         header(trip)
         stops(trip)
-        availability
+        availability(trip)
         manifest(trip)
         if let error = trips.refusals[trip.id] {
             Note(strings.tripRefusalText(error), tone: TripRefusal.of(error) == .other ? .err : .warn).accessibilityIdentifier("elchi.trip.refusal")
@@ -312,7 +324,7 @@ struct TripDetailView: View {
 
     private func header(_ trip: TripDTO) -> some View {
         ElchiCard {
-            CardTitle(strings.route(trip, directions: trips.directions), badge: (strings.tripStatus(trip.status), TripStatusStyle.tone(trip.status)))
+            CardTitle(title(trip), badge: (strings.tripStatus(trip.status), TripStatusStyle.tone(trip.status)))
             CardRow(strings.t("tripDetail.departure"), time(trip.plannedStartAt))
             CardRow(strings.t("tripDetail.arrival"), time(trip.plannedEndAt))
             CardRow(strings.t("tripDetail.vehicle"), "\(trip.vehicle.makeModel), \(trip.vehicle.color) · \(trip.vehicle.plateMasked)")
@@ -348,10 +360,12 @@ struct TripDetailView: View {
     }
 
     /// Free capacity per stretch of the trip's road, named by kilometres along the trip (`0–120 km`, web
-    /// `tripDetail.stretchKm`).
+    /// `tripDetail.stretchKm`). Safar v3 4.5 / 4.6: stretches under a kilometre are read with their neighbour (never
+    /// "a–a km"); one stretch, or none yet (an empty trip), is "Butun yo'l" with the trip's own capacity - never
+    /// "not computed" for an empty trip.
     @ViewBuilder
-    private var availability: some View {
-        let startM = model.trip.value?.routeStartM ?? 0
+    private func availability(_ trip: TripDTO) -> some View {
+        let startM = trip.routeStartM ?? 0
         ElchiCard {
             CardTitle(strings.t("tripDetail.availabilityTitle"))
             switch model.availability {
@@ -359,17 +373,18 @@ struct TripDetailView: View {
                 SkeletonCards(count: 1).padding(.vertical, 8)
             case .failed(let error):
                 Text(strings.errorText(error)).font(ElchiFont.caption).foregroundStyle(c.tone(.err).fg).padding(.vertical, 8)
-            case .loaded(let dto) where dto.stretches.isEmpty:
-                Text(strings.t("tripDetail.availabilityEmpty")).font(ElchiFont.caption).foregroundStyle(c.muted).padding(.vertical, 8)
             case .loaded(let dto):
-                let stretches = dto.stretches.sorted { $0.fromM < $1.fromM }
-                ForEach(Array(stretches.enumerated()), id: \.offset) { index, stretch in
-                    CardRow(strings.t("tripDetail.stretchKm", ("from", TripStretch.km(stretch.fromM, startM: startM)),
-                                      ("to", TripStretch.km(stretch.toM, startM: startM))),
-                            strings.segmentLine(stretch),
-                            detail: index == stretches.count - 1
+                let rows = dto.stretches.isEmpty
+                    ? [TripStretchRow(fromKm: nil, toKm: nil, stretch: TripDetailRules.wholeTrip(trip))]
+                    : TripDetailRules.rows(dto.stretches, startM: startM)
+                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                    CardRow(row.fromKm.map { from in strings.t("tripDetail.stretchKm", ("from", from), ("to", row.toKm ?? from)) }
+                                ?? strings.t("driver.v3trip.wholeTrip"),
+                            row.stretch.map(strings.segmentLine) ?? "",
+                            detail: index == rows.count - 1
                                 ? strings.t("tripDetail.computedNote", ("time", ServerTime.parse(dto.computedAt).map(strings.clock) ?? "?")) : nil)
                 }
+                .accessibilityIdentifier("elchi.trip.stretches")
             }
         }
         .accessibilityIdentifier("elchi.trip.availability")
@@ -405,7 +420,7 @@ struct TripDetailView: View {
                             CardRow("\(place) · \(when) · \(strings.t(pickup ? "tripDetail.pickups" : "tripDetail.dropoffs"))",
                                     "\(item.clientFirstName) — \(what)\(status.map { " · \($0)" } ?? "")",
                                     detail: item.contactPhone.map { UzPhone.display($0) }
-                                        ?? strings.t(item.serviceType == .parcel ? "driver.trip.phoneAfterDepart" : "driver.trip.phoneAfterBoard"))
+                                        ?? (pickup ? strings.t(item.serviceType == .parcel ? "driver.trip.phoneAfterDepart" : "driver.trip.phoneAfterBoard") : nil))
                             Button { onChat(item.bookingId) } label: {
                                 HStack(spacing: 6) {
                                     ElchiIcon.chat.image(size: 15)
@@ -473,7 +488,11 @@ struct DriverWorkSummary: View {
     let trips: TripsModel
     let proposals: DriverProposalsModel
     let bookings: DriverBookingsModel
-    let onTab: (DriverTab) -> Void
+    /// Safar v3 1.11: Safarlar -> Moslar · Yo'nalishlarim, Takliflar -> Moslar, Bronlar -> Buyurtmalar.
+    let onTrips: () -> Void
+    let onOffers: () -> Void
+    let onBookings: () -> Void
+    /// Safar v3 1.12: "Yangi safar rejalashtirish" opens the direction form (Q150: the system plans the trips).
     let onPlanTrip: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
@@ -485,9 +504,9 @@ struct DriverWorkSummary: View {
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("elchi.driver.home.noHold")
         HStack(spacing: 8) {
-            tile("driver.dash.statTrips", stats.trips, tab: .routes)
-            tile("client.listing.stepOffers", stats.offers, tab: .matches)
-            tile("client.orders.bookings", stats.bookings, tab: .orders)
+            tile("driver.dash.statTrips", stats.trips, id: "routes", action: onTrips)
+            tile("client.listing.stepOffers", stats.offers, id: "matches", action: onOffers)
+            tile("client.orders.bookings", stats.bookings, id: "orders", action: onBookings)
         }
         .accessibilityIdentifier("elchi.driver.home.stats")
         ElchiButton(strings.t("driver.dash.planTrip"), variant: .soft, icon: .plus, action: onPlanTrip)
@@ -499,8 +518,8 @@ struct DriverWorkSummary: View {
             }
     }
 
-    private func tile(_ key: String, _ count: Int?, tab: DriverTab) -> some View {
-        Button { onTab(tab) } label: {
+    private func tile(_ key: String, _ count: Int?, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(strings.t(key)).font(ElchiFont.caption).foregroundStyle(c.muted).lineLimit(1).minimumScaleFactor(0.8)
                 Text(DriverHomeStats.text(count)).font(ElchiFont.poppins(20, .semibold)).foregroundStyle(c.text).lineLimit(1)
@@ -508,12 +527,12 @@ struct DriverWorkSummary: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(c.card, in: RoundedRectangle(cornerRadius: 18))
-            .shadow(color: c.shadow.opacity(0.7), radius: 12, y: 6)
+            .shadow(color: c.softShadow, radius: 12, y: 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(PressFade())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("elchi.driver.home.stat.\(tab.rawValue)")
+        .accessibilityIdentifier("elchi.driver.home.stat.\(id)")
     }
 }

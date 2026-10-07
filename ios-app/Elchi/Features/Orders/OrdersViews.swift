@@ -13,8 +13,8 @@ struct OrdersView: View {
     let onNewOrder: () -> Void
     let onOpenListing: (String) -> Void
     let onOpenBooking: (String) -> Void
-    /// A v1 order's archive detail (Stage 06).
-    let onOpenLegacy: (Int) -> Void
+    /// "Eski buyurtmalar": the v1 archive list (BOSQICH 10; the orders list shows one row for it).
+    let onOpenLegacy: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
@@ -87,20 +87,17 @@ struct OrdersView: View {
         }
     }
 
+    /// BOSQICH 10: the v2 lists come first; the client's v1 orders are one row "Eski buyurtmalar (N)" into their own
+    /// screen (none when the client has no v1 orders).
     @ViewBuilder
     private var legacy: some View {
         if let items = model.legacy.value, !items.isEmpty {
-            SectionTitle(strings.t("orders.legacy"))
-            ForEach(items) { order in
-                // Bids matter only while the order still takes them.
-                let bids = LegacyActions.bidsOpen(order.status) ? order.bidsCount ?? 0 : 0
-                ItemCard(title: strings.route(order), badge: strings.status(.legacy(order.status)),
-                         lines: bids > 0 ? [ItemLine(strings.t("app.orderCard.bids", ("count", bids)))] : [],
-                         meta: ServerTime.parse(order.createdAt).map { "\(strings.dayMonth($0)) · \(strings.t("client.listing.legacyArchive"))" },
-                         right: order.priceMinor.map(strings.money),
-                         action: { onOpenLegacy(order.id) })
-                .accessibilityIdentifier("elchi.legacy.\(order.id)")
+            ElchiList {
+                ListRow(icon: .archive, title: strings.t("client.v3archive.listRow", ("count", model.legacyCount)),
+                        description: strings.t("client.v3archive.drawerHint"), first: true, action: onOpenLegacy)
+                    .accessibilityIdentifier("elchi.orders.legacyRow")
             }
+            .padding(.top, 4)
         }
     }
 }

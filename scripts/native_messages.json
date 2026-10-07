@@ -2324,5 +2324,560 @@
     "uz": "Kamida 2 ta harf kiriting.",
     "ru": "Введите не менее 2 букв.",
     "_why": "Profile name check; replaces the retired stopSearch.minChars."
+  },
+  "client.v3.bonusNotMoney": {
+    "uz": "Bonus — chegirma, naqd pul emas.",
+    "ru": "Бонус — это скидка, а не деньги.",
+    "_why": "Design v3 — Profil v3, elchi-dev/DESIGN-V3-CLIENT-DIFF.md."
+  },
+  "client.v3.supportCard": {
+    "uz": "Operator ilova ichida javob beradi.",
+    "ru": "Оператор ответит прямо в приложении.",
+    "_why": "Design v3 — Profil v3, elchi-dev/DESIGN-V3-CLIENT-DIFF.md."
+  },
+  "client.v3.faq1Answer": {
+    "uz": "Manzil, vaqt va narxni kiriting — haydovchilar taklif yuboradi.",
+    "ru": "Укажите адрес, время и цену — водители пришлют предложения.",
+    "_why": "Design v3 — Profil v3, elchi-dev/DESIGN-V3-CLIENT-DIFF.md."
+  },
+  "client.v3.faq4Answer": {
+    "uz": "Xizmat boshlanganda. Undan oldin — chat orqali.",
+    "ru": "Когда начнётся услуга. До этого — через чат.",
+    "_why": "Design v3 — Profil v3, elchi-dev/DESIGN-V3-CLIENT-DIFF.md."
+  },
+  "client.v3.threadsNote": {
+    "uz": "Murojaatlar shu yerda ko'rinadi.",
+    "ru": "Здесь отображаются ваши обращения.",
+    "_why": "Design v3 — Profil v3, elchi-dev/DESIGN-V3-CLIENT-DIFF.md."
+  },
+  "client.v3.deleteCheck": {
+    "uz": "Akkauntim o'chirilsin",
+    "ru": "Удалить мой аккаунт",
+    "_why": "Design v3 — Profil v3, elchi-dev/DESIGN-V3-CLIENT-DIFF.md."
+  },
+  "client.v3.loggedOutText": {
+    "uz": "Telefon raqamingiz bilan qayta kiring.",
+    "ru": "Войдите снова по номеру телефона.",
+    "_why": "Design v3 — Profil v3, elchi-dev/DESIGN-V3-CLIENT-DIFF.md."
+  },
+  "driver.v3reg.balanceLabel": {
+    "uz": "Balans",
+    "ru": "Баланс",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.greeting": {
+    "uz": "Salom, {name}!",
+    "ru": "Здравствуйте, {name}!",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.greetingNoName": {
+    "uz": "Salom!",
+    "ru": "Здравствуйте!",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.badgeApproved": {
+    "uz": "Tasdiqlangan haydovchi",
+    "ru": "Проверенный водитель",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.badgePending": {
+    "uz": "Tasdiqlash kutilmoqda — hujjatlarni yuboring",
+    "ru": "Ожидает проверки — отправьте документы",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.badgeUnverified": {
+    "uz": "Tasdiqlanmagan",
+    "ru": "Не подтверждён",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.searchPlaceholder": {
+    "uz": "Yo'nalish yoki joy qidiring",
+    "ru": "Поиск по направлению или месту",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.searchA11y": {
+    "uz": "Qidiruv",
+    "ru": "Поиск",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.searchScope": {
+    "uz": "Yo'nalishlaringiz bo'yicha",
+    "ru": "По вашим направлениям",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.searchResults": {
+    "uz": "{count} ta natija",
+    "ru": "Найдено: {count}",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.clear": {
+    "uz": "Tozalash",
+    "ru": "Очистить",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.filter": {
+    "uz": "Filtr",
+    "ru": "Фильтр",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.chipAll": {
+    "uz": "Hammasi",
+    "ru": "Все",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.listingsTitle": {
+    "uz": "Mijozlar e'lonlari",
+    "ru": "Заявки клиентов",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.seeAll": {
+    "uz": "Barchasi",
+    "ru": "Все",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.offer": {
+    "uz": "Taklif",
+    "ru": "Предложить",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.perPerson": {
+    "uz": "kishi boshiga",
+    "ru": "за человека",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.emptyCategory": {
+    "uz": "Bu toifada hozircha e'lon yo'q",
+    "ru": "В этой категории пока нет заявок",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.emptyFiltered": {
+    "uz": "Hech narsa topilmadi — filtrni o'zgartiring",
+    "ru": "Ничего не найдено — измените фильтр",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.filterPeriod": {
+    "uz": "Muddat",
+    "ru": "Период",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.filterSort": {
+    "uz": "Saralash",
+    "ru": "Сортировка",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.sortNearest": {
+    "uz": "Eng yaqin sana",
+    "ru": "Ближайшая дата",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.sortCheap": {
+    "uz": "Arzon",
+    "ru": "Сначала дешевле",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.sortExpensive": {
+    "uz": "Qimmat",
+    "ru": "Сначала дороже",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.priceAny": {
+    "uz": "Har qanday",
+    "ru": "Любая",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.priceFrom": {
+    "uz": "{amount}+",
+    "ru": "от {amount}",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.exactOnly": {
+    "uz": "Faqat aniq yo'nalish",
+    "ru": "Только точное направление",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.exactOnlyHint": {
+    "uz": "Ikkala joy ham yo'nalishingiz hududlarida",
+    "ru": "Оба места — в районах вашего направления",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.showCount": {
+    "uz": "{count} ta e'lonni ko'rsatish",
+    "ru": "Показать заявки: {count}",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.noResults": {
+    "uz": "Natija yo'q",
+    "ru": "Нет результатов",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3reg.creditAmount": {
+    "uz": "{amount} kredit",
+    "ru": "Кредит: {amount}",
+    "_why": "Design v3 — Haydovchi Royxat v3, elchi-dev/DESIGN-V3-ROYXAT-DIFF.md."
+  },
+  "driver.v3trip.greeting": {
+    "uz": "Salom, {name}!",
+    "ru": "Здравствуйте, {name}!",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.balance": {
+    "uz": "Balans",
+    "ru": "Баланс",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.searchPlaceholder": {
+    "uz": "Yo'nalish yoki joy qidiring",
+    "ru": "Поиск по направлению или месту",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.searchAny": {
+    "uz": "Har qanday yo'nalish",
+    "ru": "Любое направление",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.searchResults": {
+    "uz": "{count} ta natija",
+    "ru": "Найдено: {count}",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.filter": {
+    "uz": "Filtr",
+    "ru": "Фильтр",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.filterReset": {
+    "uz": "Tozalash",
+    "ru": "Сбросить",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.filterPeriod": {
+    "uz": "Muddat",
+    "ru": "Период",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.filterSort": {
+    "uz": "Saralash",
+    "ru": "Сортировка",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.sortNearest": {
+    "uz": "Eng yaqin sana",
+    "ru": "Ближайшая дата",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.sortCheap": {
+    "uz": "Arzonroq",
+    "ru": "Сначала дешёвые",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.sortExpensive": {
+    "uz": "Qimmatroq",
+    "ru": "Сначала дорогие",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.priceAny": {
+    "uz": "Har qanday",
+    "ru": "Любая",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.priceFrom": {
+    "uz": "{amount} so'mdan",
+    "ru": "от {amount} сум",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.onlyExact": {
+    "uz": "Faqat aniq yo'nalish",
+    "ru": "Только точное направление",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.onlyExactHint": {
+    "uz": "Ikkala uchi yo'nalishingiz hududida",
+    "ru": "Оба конца в районах вашего направления",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.showCount": {
+    "uz": "{count} ta e'lonni ko'rsatish",
+    "ru": "Показать заказы: {count}",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.noResultsShort": {
+    "uz": "Natija yo'q",
+    "ru": "Ничего не найдено",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.chipAll": {
+    "uz": "Hammasi",
+    "ru": "Все",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.clientListings": {
+    "uz": "Mijozlar e'lonlari",
+    "ru": "Заказы клиентов",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.seeAll": {
+    "uz": "Barchasi",
+    "ru": "Все",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.offerShort": {
+    "uz": "Taklif",
+    "ru": "Предложить",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.perPerson": {
+    "uz": "kishi boshiga",
+    "ru": "за человека",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.noResults": {
+    "uz": "Hech narsa topilmadi — filtrni o'zgartiring",
+    "ru": "Ничего не найдено — измените фильтр",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.noListingsInChip": {
+    "uz": "Bu toifada hozircha e'lon yo'q",
+    "ru": "В этой категории пока нет заказов",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.verifyFirst": {
+    "uz": "Avval tasdiqdan o'ting",
+    "ru": "Сначала пройдите проверку",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.creditAmount": {
+    "uz": "{amount} kredit",
+    "ru": "Кредит: {amount}",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.pickFrom": {
+    "uz": "Qayerdan ekanini tanlang.",
+    "ru": "Выберите, откуда.",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.pickTo": {
+    "uz": "Qayerga ekanini tanlang.",
+    "ru": "Выберите, куда.",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.wholeTrip": {
+    "uz": "Butun yo'l",
+    "ru": "Весь путь",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.feedEmptyHint": {
+    "uz": "Sana oralig'ini kengaytiring yoki keyinroq qayta qarang.",
+    "ru": "Расширьте период или загляните позже.",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.listingTitle": {
+    "uz": "E'lon tafsiloti",
+    "ru": "Детали заказа",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.clientPriceLabel": {
+    "uz": "Mijoz narxi",
+    "ru": "Цена клиента",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.openListing": {
+    "uz": "E'lonni ochish",
+    "ru": "Открыть заказ",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.clientAcceptedPrice": {
+    "uz": "Mijoz qabul qildi: {price}",
+    "ru": "Клиент принял: {price}",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.timeWindow": {
+    "uz": "Vaqt oralig'i",
+    "ru": "Время",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3trip.photoAfterBooking": {
+    "uz": "Posilka rasmi bron qilingandan keyin ko'rinadi.",
+    "ru": "Фото посылки будет видно после бронирования.",
+    "_why": "Design v3 — Haydovchi Safar v3, elchi-dev/DESIGN-V3-SAFAR-DIFF.md."
+  },
+  "driver.v3bkg.noShowReviewBadge": {
+    "uz": "Kelmadi · ko'rikda",
+    "ru": "Неявка · на проверке",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.noShowHintReady": {
+    "uz": "Xabarni operator ko'rib chiqadi. Tasdiqlansa, bron «Kelmadi» holatida yopiladi va komissiya ushlanmaydi.",
+    "ru": "Сообщение проверит оператор. Если он подтвердит, бронь закроется со статусом «Не явился», а комиссия не будет удержана.",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.noShowPendingNote": {
+    "uz": "«Mijoz kelmadi» xabari yuborildi. Operator ko'rib chiqmoqda — shu vaqtda bronni faqat operator bekor qila oladi.",
+    "ru": "Сообщение «Клиент не пришёл» отправлено. Его проверяет оператор — до решения отменить бронь может только он.",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.arrivedAction": {
+    "uz": "Manzilga yetib keldik",
+    "ru": "Приехали на место",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.arrivedNote": {
+    "uz": "Manzilga yetildi. Naqd to'lovni qayd qiling. Mijoz safarni yakunlagach, uni baholashingiz mumkin.",
+    "ru": "Вы на месте. Отметьте оплату наличными. Когда клиент завершит поездку, вы сможете его оценить.",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.gpsOffWarn": {
+    "uz": "Joylashuv yuborilmayapti — mijoz avtomobilingizni xaritada ko'rmaydi. Yuqoridagi paneldan yoqing.",
+    "ru": "Геолокация не передаётся — клиент не видит вашу машину на карте. Включите её на панели сверху.",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.chipLive": {
+    "uz": "Jonli",
+    "ru": "Онлайн",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.chipGpsOff": {
+    "uz": "GPS o'chiq",
+    "ru": "GPS выключен",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.pickupOn": {
+    "uz": "Olib ketish, {date}",
+    "ru": "Подача, {date}",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.phoneClosedShort": {
+    "uz": "raqam yopiq",
+    "ru": "номер скрыт",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.amendPending": {
+    "uz": "Yangi narx taklifi yuborildi: {price} · Sabab: {reason} — mijoz javobi kutilmoqda.",
+    "ru": "Новая цена отправлена: {price} · Причина: {reason} — ждём ответа клиента.",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.amendAccepted": {
+    "uz": "Mijoz yangi narxni qabul qildi: {price}",
+    "ru": "Клиент принял новую цену: {price}",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.cashDiffWarn": {
+    "uz": "Kelishilgan summadan farq qiladi — mijoz tasdiqlamasa, operator ko'rib chiqadi.",
+    "ru": "Сумма отличается от согласованной — если клиент не подтвердит, вопрос рассмотрит оператор.",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.trackingTitle": {
+    "uz": "Kuzatuv (siz yuborayotgan)",
+    "ru": "Отслеживание (ваша геолокация)",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3bkg.trackingNote": {
+    "uz": "Mijoz sizning avtomobilingizni shu nuqta bo'yicha ko'radi.",
+    "ru": "Клиент видит вашу машину по этой точке.",
+    "_why": "Design v3 — Haydovchi Bron (BOSQICH 08), elchi-dev/DESIGN08-DIFF.md."
+  },
+  "driver.v3wallet.confirmTitle": {
+    "uz": "{amount} so'rov yuborilsinmi?",
+    "ru": "Отправить запрос на {amount}?",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "driver.v3wallet.confirmText": {
+    "uz": "Pul o'tkazilganini tekshiring.",
+    "ru": "Проверьте, что деньги действительно переведены.",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "driver.v3wallet.confirmYes": {
+    "uz": "Ha, yuborish",
+    "ru": "Да, отправить",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "driver.v3wallet.largeAmount": {
+    "uz": "Katta summa: ikki moliya xodimi tasdiqlaydi.",
+    "ru": "Крупная сумма: её подтверждают два сотрудника финансового отдела.",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "driver.v3wallet.paymentPurpose": {
+    "uz": "To'lov maqsadi: {phone}",
+    "ru": "Назначение платежа: {phone}",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "driver.v3wallet.linkCopied": {
+    "uz": "Havola nusxalandi",
+    "ru": "Ссылка скопирована",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "driver.v3wallet.creditHome": {
+    "uz": "{amount} kredit",
+    "ru": "Кредит: {amount}",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "driver.v3wallet.logoutText": {
+    "uz": "Shu qurilmada joylashuv yuborish to'xtaydi. Qayta kirish uchun telefoningizga yangi kod yuboriladi.",
+    "ru": "На этом устройстве перестанет передаваться местоположение. Для повторного входа на телефон придёт новый код.",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "driver.v3wallet.loggedOutGps": {
+    "uz": "Joylashuv yuborish to'xtatildi.",
+    "ru": "Передача местоположения остановлена.",
+    "_why": "Design v3 — Haydovchi Hamyon (BOSQICH 09), elchi-dev/DESIGN09-DIFF.md."
+  },
+  "client.v3archive.drawerHint": {
+    "uz": "Eski tizimdagi buyurtmalar",
+    "ru": "Заказы из старой системы",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.listNote": {
+    "uz": "Bu buyurtmalar eski tizimda berilgan: boshlanganlarini shu yerda yakunlash mumkin. Yangi buyurtma bosh sahifadan beriladi.",
+    "ru": "Эти заказы оформлены в старой системе: начатые можно завершить здесь. Новый заказ оформляется на главном экране.",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.listRow": {
+    "uz": "Eski buyurtmalar ({count})",
+    "ru": "Старые заказы ({count})",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.filterAll": {
+    "uz": "Hammasi",
+    "ru": "Все",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.filterDisputed": {
+    "uz": "Nizoli",
+    "ru": "Спорные",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.selectDriverText": {
+    "uz": "{name} · {price}. Tanlaganingizdan keyin boshqa takliflar yopiladi.",
+    "ru": "{name} · {price}. После выбора остальные предложения будут закрыты.",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.ratedNote": {
+    "uz": "Baho berildi: {stars}",
+    "ru": "Оценка поставлена: {stars}",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.openDropoff": {
+    "uz": "Yetkazish joyini Yandex Xaritada ochish",
+    "ru": "Открыть место доставки в Яндекс Картах",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.notFoundHint": {
+    "uz": "Havola eskirgan yoki bu ma'lumot sizga tegishli emas.",
+    "ru": "Ссылка устарела, или эти данные вам недоступны.",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.backOnline": {
+    "uz": "Internet aloqasi tiklandi",
+    "ru": "Соединение с интернетом восстановлено",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.newOffersCount": {
+    "uz": "Yangilandi — yangi takliflar: {count}",
+    "ru": "Обновлено — новых предложений: {count}",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
+  },
+  "client.v3archive.problemViaSupport": {
+    "uz": "Muammo bo'lsa, Yordam bo'limiga yozing — buyurtma raqamini ko'rsating.",
+    "ru": "Если возникла проблема, напишите в «Помощь» и укажите номер заказа.",
+    "_why": "Design v3 — Arxiv va Holatlar (BOSQICH 10), elchi-dev/DESIGN10-DIFF.md."
   }
 }

@@ -78,11 +78,14 @@ class DirectionRulesTest {
     }
 
     @Test
-    fun `tomorrow is the whole next Tashkent day and a week is seven days from now`() {
+    fun `tomorrow is the whole next Tashkent day and 3 or 14 days run from now`() {
         val (from, to) = DirectionRules.range(DirectionDay.TOMORROW, now)
         assertEquals(Instant.parse("2026-10-06T19:00:00Z"), java.time.OffsetDateTime.parse(from).toInstant())
         assertEquals(Instant.parse("2026-10-07T19:00:00Z"), java.time.OffsetDateTime.parse(to).toInstant())
-        assertEquals(Instant.parse("2026-10-13T08:30:00Z"), java.time.OffsetDateTime.parse(DirectionRules.range(DirectionDay.WEEK, now).second).toInstant())
+        assertEquals(Instant.parse("2026-10-09T08:30:00Z"), java.time.OffsetDateTime.parse(DirectionRules.range(DirectionDay.DAYS3, now).second).toInstant())
+        assertEquals(Instant.parse("2026-10-20T08:30:00Z"), java.time.OffsetDateTime.parse(DirectionRules.range(DirectionDay.DAYS14, now).second).toInstant())
+        // Safar v3 5.3: the four chips in the design's order.
+        assertEquals(listOf(DirectionDay.TODAY, DirectionDay.TOMORROW, DirectionDay.DAYS3, DirectionDay.DAYS14), DirectionDay.entries)
         // Sent with the Tashkent offset, like the corridor feed's range.
         assertTrue(from.endsWith("+05:00"))
     }
@@ -232,5 +235,23 @@ class DirectionRulesTest {
         // A retry of the same body keeps its key (same scope); the time proposal is a different request.
         assertEquals(DirectionRules.offerScope("drd_1", "l1", 12_000_000, null), DirectionRules.offerScope("drd_1", "l1", 12_000_000, null))
         assertFalse(DirectionRules.offerScope("drd_1", "l1", 12_000_000, null) == DirectionRules.offerScope("drd_1", "l1", 12_000_000, again.pickupAt))
+    }
+
+    @Test
+    fun `the main list is one flat list and another time stays apart`() {
+        val items = listOf(item("a", DirectionRules.NO_TRIP), item("b", DirectionRules.TIME_DIFFERS), item("c", DirectionRules.FITS_TRIP))
+        val (main, other) = DirectionRules.mainAndOtherTime(items)
+        assertEquals(listOf("c", "a"), main.map { it.listing.id })
+        assertEquals(listOf("b"), other.map { it.listing.id })
+        assertEquals(2, DirectionRules.mainCount(items))
+    }
+
+    @Test
+    fun `status toasts and the active count for the Moslar segment`() {
+        assertEquals("dir.paused", DirectionRules.statusToastKey(DirectionRules.PAUSED))
+        assertEquals("dir.updated", DirectionRules.statusToastKey(DirectionRules.ACTIVE))
+        assertEquals("dir.archived", DirectionRules.statusToastKey(DirectionRules.ARCHIVED))
+        assertEquals(1, DirectionRules.activeCount(listOf(direction("a", DirectionRules.ACTIVE), direction("b", DirectionRules.PAUSED))))
+        assertEquals(listOf("a"), HomeListingRules.activeDirections(listOf(direction("a", DirectionRules.ACTIVE), direction("b", DirectionRules.PAUSED))).map { it.id })
     }
 }

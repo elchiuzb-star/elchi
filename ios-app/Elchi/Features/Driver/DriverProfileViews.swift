@@ -30,7 +30,7 @@ public enum DriverProfileStats {
 
 /// The profile's quick actions in the design's order.
 public enum DriverProfileAction: String, CaseIterable, Sendable {
-    case form, documents, routes, proposals, bonus, orders, threads, safety, help, settings, logout
+    case form, documents, routes, proposals, bonus, wallet, orders, threads, safety, help, settings, logout
 
     var icon: ElchiIcon {
         switch self {
@@ -38,7 +38,8 @@ public enum DriverProfileAction: String, CaseIterable, Sendable {
         case .documents: .file
         case .routes: .route
         case .proposals: .tag
-        case .bonus: .tag
+        case .bonus: .gift
+        case .wallet: .wallet
         case .orders: .clip
         case .threads: .chat
         case .safety: .block
@@ -55,6 +56,7 @@ public enum DriverProfileAction: String, CaseIterable, Sendable {
         case .routes: "driverProfile.action.routes"
         case .proposals: "driverProfile.action.proposals"
         case .bonus: "driverProfile.action.bonus"
+        case .wallet: "income.title"
         case .orders: "driverProfile.action.orders"
         case .threads: "support.myThreads"
         case .safety: "safety.centerTitle"
@@ -71,9 +73,10 @@ public enum DriverProfileAction: String, CaseIterable, Sendable {
         case .routes: "driverProfile.action.routesHint"
         case .proposals: "driverProfile.action.proposalsHint"
         case .bonus: "driverProfile.action.bonusHint"
+        case .wallet: "income.topupTitle"
         case .orders: "driverProfile.action.ordersHint"
         case .threads: "support.myThreadsHint"
-        case .safety: nil
+        case .safety: "safety.centerDescription"
         case .help: "driverProfile.action.supportHint"
         case .settings: "driver.profile.settingsHint"
         case .logout: "driverProfile.action.logoutHint"
@@ -175,9 +178,8 @@ struct DriverProfileView: View {
     private func badges(_ profile: DriverProfileV1?, _ status: DriverVerification?) -> [(text: String, tone: Tone)] {
         var out: [(text: String, tone: Tone)] = []
         if let state = driver.homeState { out.append((strings.homeStateLabel(state), state.tone)) }
-        if profile != nil {
-            out.append(driver.isAvailable ? (strings.t("driverProfile.active"), .blue) : (strings.t("driverProfile.inactive"), .gray))
-        }
+        // DESIGN09 5.1: "Faol" only when on (the switch below already says when it is off).
+        if profile != nil && driver.isAvailable { out.append((strings.t("driverProfile.active"), .blue)) }
         return out
     }
 
@@ -202,5 +204,26 @@ struct DriverProfileView: View {
             .disabled(!enabled)
             .opacity(enabled || driver.availabilityPending != nil ? 1 : 0.6)
             .accessibilityIdentifier("elchi.driver.profile.availability")
+    }
+}
+
+// MARK: - Chiqish (driver)
+
+/// "Chiqasizmi?" for the driver (DESIGN09 6.1): signing out also stops sending the location from this phone, so the
+/// sentence says it (and keeps the OTP fact). "Qolish" and the scrim keep the session.
+struct DriverLogoutDialog: View {
+    let onLogout: () -> Void
+    let onStay: () -> Void
+    @Environment(LocaleStore.self) private var strings
+
+    var body: some View {
+        DialogOverlay(dismissLabel: strings.t("client.logout.stay"), onDismiss: onStay) {
+            Heading(strings.t("client.logout.confirmTitle"), subtitle: strings.t("driver.v3wallet.logoutText"))
+            HStack(spacing: 10) {
+                ElchiButton(strings.t("nav.logout"), variant: .danger, size: .pair, action: onLogout)
+                    .accessibilityIdentifier("elchi.logout.confirm")
+                ElchiButton(strings.t("client.logout.stay"), variant: .neutral, size: .pair, action: onStay)
+            }
+        }
     }
 }

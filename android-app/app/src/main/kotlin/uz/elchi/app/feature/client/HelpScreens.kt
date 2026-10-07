@@ -69,8 +69,17 @@ enum class FaqSet { CLIENT, DRIVER }
  * conversations, and the FAQ.
  */
 @Composable
-fun HelpScreen(vm: HelpViewModel, onBack: () -> Unit, onThreads: () -> Unit, onThread: (String) -> Unit, faq: FaqSet = FaqSet.CLIENT) {
+fun HelpScreen(
+    vm: HelpViewModel,
+    onBack: () -> Unit,
+    onThreads: () -> Unit,
+    onThread: (String) -> Unit,
+    faq: FaqSet = FaqSet.CLIENT,
+    /** Starts an empty ticket with this text: Arxiv's "Muammo haqida xabar" passes "{order_number}: " (Q141). */
+    prefill: String? = null,
+) {
     val s by vm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(prefill) { if (prefill != null && s.draft.isBlank()) vm.setDraft(prefill) }
     val context = LocalContext.current
     val activity = LocalActivity.current
     StepScaffold(title = t(R.string.support_title), onBack = onBack, onRefresh = vm::refresh, refreshing = s.refreshing && s.tickets !is Load.Loading) {
@@ -86,7 +95,8 @@ fun HelpScreen(vm: HelpViewModel, onBack: () -> Unit, onThreads: () -> Unit, onT
                 }
             }
         } else {
-            Note(t(R.string.support_noPhoneLine), tone = Tone.BLUE, title = t(R.string.support_cardTitle))
+            // Profil v3 6.1: the client's card says only that the operator answers in the app (Q87: no time promised).
+            Note(t(if (faq == FaqSet.CLIENT) R.string.client_v3_supportCard else R.string.support_noPhoneLine), tone = Tone.BLUE, title = t(R.string.support_cardTitle))
         }
 
         SectionTitle(t(R.string.support_newTicket))
@@ -137,11 +147,12 @@ fun HelpScreen(vm: HelpViewModel, onBack: () -> Unit, onThreads: () -> Unit, onT
         Faq(
             when (faq) {
                 FaqSet.CLIENT -> listOf(
-                    t(R.string.support_faq1Question) to t(R.string.support_faq1Answer),
+                    // Profil v3 6.2: drivers publish no listings (Q138), so the answer no longer sends clients to bid on them.
+                    t(R.string.support_faq1Question) to t(R.string.client_v3_faq1Answer),
                     t(R.string.support_faq2Question) to t(R.string.support_faq2Answer),
                     t(R.string.support_faq3Question) to t(R.string.support_faq3Answer),
-                    // Q142: a parcel's phones open when the trip departs, not at pick-up.
-                    t(R.string.support_faq4Question) to t(R.string.client_help_faq4Answer),
+                    // Profil v3 6.4 (consistent with Q142: phones open when the service starts).
+                    t(R.string.support_faq4Question) to t(R.string.client_v3_faq4Answer),
                 )
                 FaqSet.DRIVER -> listOf(
                     t(R.string.driver_faq1Question) to t(R.string.driver_faq1Answer),
@@ -204,8 +215,8 @@ fun SupportThreadsScreen(vm: SupportThreadsViewModel, onBack: () -> Unit, onThre
                 EmptyState(ElchiIcon.HEAD, t(R.string.support_noThreadsTitle), Modifier.padding(top = 24.dp), description = t(R.string.support_noThreadsHint))
             } else {
                 threads.value.forEach { thread -> SupportThreadCard(thread, onClick = { onThread(thread.id) }) }
-                // Design 05: the booking button's note stays under a list too, not only on the empty state.
-                Note(t(R.string.support_noThreadsHint), tone = Tone.GRAY)
+                // Profil v3 6.5: a short note under a list; the empty state keeps the booking-button hint.
+                Note(t(R.string.client_v3_threadsNote), tone = Tone.GRAY)
             }
         }
     }

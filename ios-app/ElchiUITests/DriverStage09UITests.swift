@@ -31,9 +31,14 @@ final class DriverStage09UITests: ClientUITestCase {
     }
 
     private func tab(_ name: String) {
-        let item = app.buttons["elchi.tab.\(name)"]
+        // Design v3: Yo'nalishlar is the second segment of Moslar.
+        let item = app.buttons["elchi.tab.\(name == "routes" ? "matches" : name)"]
         XCTAssertTrue(item.waitForExistence(timeout: 15), "no tab \(name)")
         item.tap()
+        if name == "routes" {
+            let segment = app.buttons["elchi.matches.segment.directions"]
+            if segment.waitForExistence(timeout: 10) { segment.tap() }
+        }
     }
 
     private func byId(_ id: String, timeout: TimeInterval = 15) -> XCUIElement {
@@ -124,7 +129,7 @@ final class DriverStage09UITests: ClientUITestCase {
         tapId("elchi.driver.booking.arrive")
         waitFor("Keldim — mijozga xabar yuborildi", timeout: 20)
         snap("05-keldim-sent")
-        tapId("elchi.driver.booking.chat")
+        tapId("elchi.booking.chat")
         waitFor("5 daqiqada yetaman", timeout: 20)
         tap("5 daqiqada yetaman")
         Thread.sleep(forTimeInterval: 2)
@@ -283,7 +288,7 @@ final class DriverStage09UITests: ClientUITestCase {
         waitBar("Joylashuv yuborilmoqda")
         waitFor("operator qayd etadi", timeout: 20)
         snap("30-booking-in-transit")
-        tapId("elchi.driver.booking.chat")
+        tapId("elchi.booking.chat")
         waitFor("Bekatdaman", timeout: 20)
         snap("31-chat-with-gps-bar")
     }

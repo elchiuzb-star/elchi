@@ -10490,6 +10490,329 @@
         }
       }
     },
+    "client.v3.bonusNotMoney": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Бонус — это скидка, а не деньги."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bonus — chegirma, naqd pul emas."
+          }
+        }
+      }
+    },
+    "client.v3.deleteCheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить мой аккаунт"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akkauntim o'chirilsin"
+          }
+        }
+      }
+    },
+    "client.v3.faq1Answer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите адрес, время и цену — водители пришлют предложения."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manzil, vaqt va narxni kiriting — haydovchilar taklif yuboradi."
+          }
+        }
+      }
+    },
+    "client.v3.faq4Answer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Когда начнётся услуга. До этого — через чат."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xizmat boshlanganda. Undan oldin — chat orqali."
+          }
+        }
+      }
+    },
+    "client.v3.loggedOutText": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войдите снова по номеру телефона."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon raqamingiz bilan qayta kiring."
+          }
+        }
+      }
+    },
+    "client.v3.supportCard": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оператор ответит прямо в приложении."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operator ilova ichida javob beradi."
+          }
+        }
+      }
+    },
+    "client.v3.threadsNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Здесь отображаются ваши обращения."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Murojaatlar shu yerda ko'rinadi."
+          }
+        }
+      }
+    },
+    "client.v3archive.backOnline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Соединение с интернетом восстановлено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Internet aloqasi tiklandi"
+          }
+        }
+      }
+    },
+    "client.v3archive.drawerHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заказы из старой системы"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eski tizimdagi buyurtmalar"
+          }
+        }
+      }
+    },
+    "client.v3archive.filterAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hammasi"
+          }
+        }
+      }
+    },
+    "client.v3archive.filterDisputed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Спорные"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nizoli"
+          }
+        }
+      }
+    },
+    "client.v3archive.listNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Эти заказы оформлены в старой системе: начатые можно завершить здесь. Новый заказ оформляется на главном экране."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu buyurtmalar eski tizimda berilgan: boshlanganlarini shu yerda yakunlash mumkin. Yangi buyurtma bosh sahifadan beriladi."
+          }
+        }
+      }
+    },
+    "client.v3archive.listRow": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Старые заказы ({count})"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eski buyurtmalar ({count})"
+          }
+        }
+      }
+    },
+    "client.v3archive.newOffersCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновлено — новых предложений: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yangilandi — yangi takliflar: {count}"
+          }
+        }
+      }
+    },
+    "client.v3archive.notFoundHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ссылка устарела, или эти данные вам недоступны."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Havola eskirgan yoki bu ma'lumot sizga tegishli emas."
+          }
+        }
+      }
+    },
+    "client.v3archive.openDropoff": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть место доставки в Яндекс Картах"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yetkazish joyini Yandex Xaritada ochish"
+          }
+        }
+      }
+    },
+    "client.v3archive.problemViaSupport": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Если возникла проблема, напишите в «Помощь» и укажите номер заказа."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muammo bo'lsa, Yordam bo'limiga yozing — buyurtma raqamini ko'rsating."
+          }
+        }
+      }
+    },
+    "client.v3archive.ratedNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оценка поставлена: {stars}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baho berildi: {stars}"
+          }
+        }
+      }
+    },
+    "client.v3archive.selectDriverText": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name} · {price}. После выбора остальные предложения будут закрыты."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name} · {price}. Tanlaganingizdan keyin boshqa takliflar yopiladi."
+          }
+        }
+      }
+    },
     "clientProfile.accountBadge": {
       "extractionState": "manual",
       "localizations": {
@@ -15807,6 +16130,1570 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chiqish oynasi {time} da ochiladi."
+          }
+        }
+      }
+    },
+    "driver.v3bkg.amendAccepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент принял новую цену: {price}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz yangi narxni qabul qildi: {price}"
+          }
+        }
+      }
+    },
+    "driver.v3bkg.amendPending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новая цена отправлена: {price} · Причина: {reason} — ждём ответа клиента."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yangi narx taklifi yuborildi: {price} · Sabab: {reason} — mijoz javobi kutilmoqda."
+          }
+        }
+      }
+    },
+    "driver.v3bkg.arrivedAction": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приехали на место"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manzilga yetib keldik"
+          }
+        }
+      }
+    },
+    "driver.v3bkg.arrivedNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы на месте. Отметьте оплату наличными. Когда клиент завершит поездку, вы сможете его оценить."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manzilga yetildi. Naqd to'lovni qayd qiling. Mijoz safarni yakunlagach, uni baholashingiz mumkin."
+          }
+        }
+      }
+    },
+    "driver.v3bkg.cashDiffWarn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сумма отличается от согласованной — если клиент не подтвердит, вопрос рассмотрит оператор."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kelishilgan summadan farq qiladi — mijoz tasdiqlamasa, operator ko'rib chiqadi."
+          }
+        }
+      }
+    },
+    "driver.v3bkg.chipGpsOff": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPS выключен"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPS o'chiq"
+          }
+        }
+      }
+    },
+    "driver.v3bkg.chipLive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Онлайн"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jonli"
+          }
+        }
+      }
+    },
+    "driver.v3bkg.gpsOffWarn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Геолокация не передаётся — клиент не видит вашу машину на карте. Включите её на панели сверху."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joylashuv yuborilmayapti — mijoz avtomobilingizni xaritada ko'rmaydi. Yuqoridagi paneldan yoqing."
+          }
+        }
+      }
+    },
+    "driver.v3bkg.noShowHintReady": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сообщение проверит оператор. Если он подтвердит, бронь закроется со статусом «Не явился», а комиссия не будет удержана."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xabarni operator ko'rib chiqadi. Tasdiqlansa, bron «Kelmadi» holatida yopiladi va komissiya ushlanmaydi."
+          }
+        }
+      }
+    },
+    "driver.v3bkg.noShowPendingNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сообщение «Клиент не пришёл» отправлено. Его проверяет оператор — до решения отменить бронь может только он."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Mijoz kelmadi» xabari yuborildi. Operator ko'rib chiqmoqda — shu vaqtda bronni faqat operator bekor qila oladi."
+          }
+        }
+      }
+    },
+    "driver.v3bkg.noShowReviewBadge": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неявка · на проверке"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kelmadi · ko'rikda"
+          }
+        }
+      }
+    },
+    "driver.v3bkg.phoneClosedShort": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "номер скрыт"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "raqam yopiq"
+          }
+        }
+      }
+    },
+    "driver.v3bkg.pickupOn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подача, {date}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Olib ketish, {date}"
+          }
+        }
+      }
+    },
+    "driver.v3bkg.trackingNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент видит вашу машину по этой точке."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz sizning avtomobilingizni shu nuqta bo'yicha ko'radi."
+          }
+        }
+      }
+    },
+    "driver.v3bkg.trackingTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отслеживание (ваша геолокация)"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kuzatuv (siz yuborayotgan)"
+          }
+        }
+      }
+    },
+    "driver.v3reg.badgeApproved": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверенный водитель"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tasdiqlangan haydovchi"
+          }
+        }
+      }
+    },
+    "driver.v3reg.badgePending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидает проверки — отправьте документы"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tasdiqlash kutilmoqda — hujjatlarni yuboring"
+          }
+        }
+      }
+    },
+    "driver.v3reg.badgeUnverified": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не подтверждён"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tasdiqlanmagan"
+          }
+        }
+      }
+    },
+    "driver.v3reg.balanceLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Баланс"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balans"
+          }
+        }
+      }
+    },
+    "driver.v3reg.chipAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hammasi"
+          }
+        }
+      }
+    },
+    "driver.v3reg.clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tozalash"
+          }
+        }
+      }
+    },
+    "driver.v3reg.creditAmount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кредит: {amount}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{amount} kredit"
+          }
+        }
+      }
+    },
+    "driver.v3reg.emptyCategory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этой категории пока нет заявок"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu toifada hozircha e'lon yo'q"
+          }
+        }
+      }
+    },
+    "driver.v3reg.emptyFiltered": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ничего не найдено — измените фильтр"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hech narsa topilmadi — filtrni o'zgartiring"
+          }
+        }
+      }
+    },
+    "driver.v3reg.exactOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только точное направление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faqat aniq yo'nalish"
+          }
+        }
+      }
+    },
+    "driver.v3reg.exactOnlyHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оба места — в районах вашего направления"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikkala joy ham yo'nalishingiz hududlarida"
+          }
+        }
+      }
+    },
+    "driver.v3reg.filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Фильтр"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtr"
+          }
+        }
+      }
+    },
+    "driver.v3reg.filterPeriod": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Период"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muddat"
+          }
+        }
+      }
+    },
+    "driver.v3reg.filterSort": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сортировка"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saralash"
+          }
+        }
+      }
+    },
+    "driver.v3reg.greeting": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Здравствуйте, {name}!"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salom, {name}!"
+          }
+        }
+      }
+    },
+    "driver.v3reg.greetingNoName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Здравствуйте!"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salom!"
+          }
+        }
+      }
+    },
+    "driver.v3reg.listingsTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заявки клиентов"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijozlar e'lonlari"
+          }
+        }
+      }
+    },
+    "driver.v3reg.noResults": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет результатов"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Natija yo'q"
+          }
+        }
+      }
+    },
+    "driver.v3reg.offer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklif"
+          }
+        }
+      }
+    },
+    "driver.v3reg.perPerson": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "за человека"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kishi boshiga"
+          }
+        }
+      }
+    },
+    "driver.v3reg.priceAny": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Любая"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Har qanday"
+          }
+        }
+      }
+    },
+    "driver.v3reg.priceFrom": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "от {amount}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{amount}+"
+          }
+        }
+      }
+    },
+    "driver.v3reg.searchA11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qidiruv"
+          }
+        }
+      }
+    },
+    "driver.v3reg.searchPlaceholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск по направлению или месту"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish yoki joy qidiring"
+          }
+        }
+      }
+    },
+    "driver.v3reg.searchResults": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найдено: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta natija"
+          }
+        }
+      }
+    },
+    "driver.v3reg.searchScope": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "По вашим направлениям"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalishlaringiz bo'yicha"
+          }
+        }
+      }
+    },
+    "driver.v3reg.seeAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barchasi"
+          }
+        }
+      }
+    },
+    "driver.v3reg.showCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать заявки: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta e'lonni ko'rsatish"
+          }
+        }
+      }
+    },
+    "driver.v3reg.sortCheap": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала дешевле"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arzon"
+          }
+        }
+      }
+    },
+    "driver.v3reg.sortExpensive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала дороже"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qimmat"
+          }
+        }
+      }
+    },
+    "driver.v3reg.sortNearest": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ближайшая дата"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eng yaqin sana"
+          }
+        }
+      }
+    },
+    "driver.v3trip.balance": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Баланс"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balans"
+          }
+        }
+      }
+    },
+    "driver.v3trip.chipAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hammasi"
+          }
+        }
+      }
+    },
+    "driver.v3trip.clientAcceptedPrice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Клиент принял: {price}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz qabul qildi: {price}"
+          }
+        }
+      }
+    },
+    "driver.v3trip.clientListings": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заказы клиентов"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijozlar e'lonlari"
+          }
+        }
+      }
+    },
+    "driver.v3trip.clientPriceLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цена клиента"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mijoz narxi"
+          }
+        }
+      }
+    },
+    "driver.v3trip.creditAmount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кредит: {amount}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{amount} kredit"
+          }
+        }
+      }
+    },
+    "driver.v3trip.feedEmptyHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расширьте период или загляните позже."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sana oralig'ini kengaytiring yoki keyinroq qayta qarang."
+          }
+        }
+      }
+    },
+    "driver.v3trip.filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Фильтр"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtr"
+          }
+        }
+      }
+    },
+    "driver.v3trip.filterPeriod": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Период"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muddat"
+          }
+        }
+      }
+    },
+    "driver.v3trip.filterReset": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сбросить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tozalash"
+          }
+        }
+      }
+    },
+    "driver.v3trip.filterSort": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сортировка"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saralash"
+          }
+        }
+      }
+    },
+    "driver.v3trip.greeting": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Здравствуйте, {name}!"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salom, {name}!"
+          }
+        }
+      }
+    },
+    "driver.v3trip.listingTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Детали заказа"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E'lon tafsiloti"
+          }
+        }
+      }
+    },
+    "driver.v3trip.noListingsInChip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этой категории пока нет заказов"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu toifada hozircha e'lon yo'q"
+          }
+        }
+      }
+    },
+    "driver.v3trip.noResults": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ничего не найдено — измените фильтр"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hech narsa topilmadi — filtrni o'zgartiring"
+          }
+        }
+      }
+    },
+    "driver.v3trip.noResultsShort": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ничего не найдено"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Natija yo'q"
+          }
+        }
+      }
+    },
+    "driver.v3trip.offerShort": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklif"
+          }
+        }
+      }
+    },
+    "driver.v3trip.onlyExact": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только точное направление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faqat aniq yo'nalish"
+          }
+        }
+      }
+    },
+    "driver.v3trip.onlyExactHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оба конца в районах вашего направления"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikkala uchi yo'nalishingiz hududida"
+          }
+        }
+      }
+    },
+    "driver.v3trip.openListing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть заказ"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E'lonni ochish"
+          }
+        }
+      }
+    },
+    "driver.v3trip.perPerson": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "за человека"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kishi boshiga"
+          }
+        }
+      }
+    },
+    "driver.v3trip.photoAfterBooking": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Фото посылки будет видно после бронирования."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posilka rasmi bron qilingandan keyin ko'rinadi."
+          }
+        }
+      }
+    },
+    "driver.v3trip.pickFrom": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите, откуда."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qayerdan ekanini tanlang."
+          }
+        }
+      }
+    },
+    "driver.v3trip.pickTo": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите, куда."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qayerga ekanini tanlang."
+          }
+        }
+      }
+    },
+    "driver.v3trip.priceAny": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Любая"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Har qanday"
+          }
+        }
+      }
+    },
+    "driver.v3trip.priceFrom": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "от {amount} сум"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{amount} so'mdan"
+          }
+        }
+      }
+    },
+    "driver.v3trip.searchAny": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Любое направление"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Har qanday yo'nalish"
+          }
+        }
+      }
+    },
+    "driver.v3trip.searchPlaceholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск по направлению или месту"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yo'nalish yoki joy qidiring"
+          }
+        }
+      }
+    },
+    "driver.v3trip.searchResults": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найдено: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta natija"
+          }
+        }
+      }
+    },
+    "driver.v3trip.seeAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barchasi"
+          }
+        }
+      }
+    },
+    "driver.v3trip.showCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать заказы: {count}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} ta e'lonni ko'rsatish"
+          }
+        }
+      }
+    },
+    "driver.v3trip.sortCheap": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала дешёвые"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arzonroq"
+          }
+        }
+      }
+    },
+    "driver.v3trip.sortExpensive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала дорогие"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qimmatroq"
+          }
+        }
+      }
+    },
+    "driver.v3trip.sortNearest": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ближайшая дата"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eng yaqin sana"
+          }
+        }
+      }
+    },
+    "driver.v3trip.timeWindow": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vaqt oralig'i"
+          }
+        }
+      }
+    },
+    "driver.v3trip.verifyFirst": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сначала пройдите проверку"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avval tasdiqdan o'ting"
+          }
+        }
+      }
+    },
+    "driver.v3trip.wholeTrip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Весь путь"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Butun yo'l"
+          }
+        }
+      }
+    },
+    "driver.v3wallet.confirmText": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверьте, что деньги действительно переведены."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pul o'tkazilganini tekshiring."
+          }
+        }
+      }
+    },
+    "driver.v3wallet.confirmTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить запрос на {amount}?"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{amount} so'rov yuborilsinmi?"
+          }
+        }
+      }
+    },
+    "driver.v3wallet.confirmYes": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Да, отправить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ha, yuborish"
+          }
+        }
+      }
+    },
+    "driver.v3wallet.creditHome": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кредит: {amount}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{amount} kredit"
+          }
+        }
+      }
+    },
+    "driver.v3wallet.largeAmount": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Крупная сумма: её подтверждают два сотрудника финансового отдела."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Katta summa: ikki moliya xodimi tasdiqlaydi."
+          }
+        }
+      }
+    },
+    "driver.v3wallet.linkCopied": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ссылка скопирована"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Havola nusxalandi"
+          }
+        }
+      }
+    },
+    "driver.v3wallet.loggedOutGps": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Передача местоположения остановлена."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joylashuv yuborish to'xtatildi."
+          }
+        }
+      }
+    },
+    "driver.v3wallet.logoutText": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом устройстве перестанет передаваться местоположение. Для повторного входа на телефон придёт новый код."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shu qurilmada joylashuv yuborish to'xtaydi. Qayta kirish uchun telefoningizga yangi kod yuboriladi."
+          }
+        }
+      }
+    },
+    "driver.v3wallet.paymentPurpose": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Назначение платежа: {phone}"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To'lov maqsadi: {phone}"
           }
         }
       }

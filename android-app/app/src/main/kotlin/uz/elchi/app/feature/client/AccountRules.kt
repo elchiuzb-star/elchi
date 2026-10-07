@@ -12,6 +12,7 @@ import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.NotificationDTO
 import uz.elchi.app.api.generated.PromoBucketDTO
 import uz.elchi.app.api.generated.PromoInstrument
+import uz.elchi.app.api.generated.ProgressDTO
 import uz.elchi.app.api.generated.ProposalThreadDTO
 import uz.elchi.app.api.generated.ReferralCodeDTO
 import uz.elchi.app.api.generated.ReportStatus
@@ -251,6 +252,20 @@ object PromoRules {
 
     /** What "Havolani ulashish" hands over: the working link when there is one, else the code. "Kodni nusxalash" copies the code only. */
     fun shareText(code: ReferralCodeDTO): String = shareUrl(code) ?: code.code
+
+    /** A referee's milestone line (DESIGN09 3.9): the dictionary key by unit, done / required, and the bar's fill. */
+    data class ProgressLine(val key: String, val done: Long, val required: Long, val fraction: Float, val inReview: Boolean)
+
+    /**
+     * Only the referee's own progress: the referrer never sees the other person's activity (ADR-0023, DESIGN09 3.8).
+     * Null without a progress block or with nothing required. "In review" is never counted as done.
+     */
+    fun progressLine(side: String, progress: ProgressDTO?): ProgressLine? {
+        if (side != "referee" || progress == null || progress.required <= 0) return null
+        val done = progress.done.coerceIn(0, progress.required)
+        val key = if (progress.unit == "distinct_trip") "promo.progress.doneTrips" else "promo.progress.doneServices"
+        return ProgressLine(key, done, progress.required, done.toFloat() / progress.required, progress.inReview > 0)
+    }
 
     /**
      * Why the typed friend's code cannot be sent yet, as a dictionary key; null = fine (or not finished: the button

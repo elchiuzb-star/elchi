@@ -8,6 +8,7 @@ import uz.elchi.app.api.generated.DriverDirectionDTO
 import uz.elchi.app.api.generated.ManifestPlaceDTO
 import uz.elchi.app.api.generated.PointEndDTO
 import uz.elchi.app.api.generated.RouteVersionDTO
+import uz.elchi.app.api.generated.StretchAvailabilityDTO
 import uz.elchi.app.api.generated.TripCreate
 import uz.elchi.app.api.generated.TripDTO
 import uz.elchi.app.api.generated.TripStatus
@@ -119,6 +120,51 @@ object TripRules {
         direction?.let { return DirectionRules.title(it, ru) }
         fun at(iso: String) = OrderRules.parseInstant(iso)?.let(DriverTime::dayClock) ?: "?"
         return "${at(trip.plannedStartAt)} → ${at(trip.plannedEndAt)}"
+    }
+
+    /**
+     * Safar v3 4.1 (interim until `TripDTO` names its ends): the trip detail's title - the direction while the trip is
+     * its active one, else the first and the last client place of the manifest; null = nothing to name it by (the
+     * screen keeps "Safar tafsilotlari", never two dates).
+     */
+    fun detailTitle(direction: DriverDirectionDTO?, places: List<ManifestPlaceDTO>, ru: Boolean): String? {
+        direction?.let { return DirectionRules.title(it, ru) }
+        val named = places.sortedBy { it.seq }.mapNotNull { placeName(it.point) }
+        if (named.isEmpty()) return null
+        val first = named.first()
+        val last = named.last()
+        return if (first == last) first else "$first → $last"
+    }
+
+    /**
+     * Safar v3 4.5 / 4.6: the free-room rows. A stretch shorter than a kilometre ("a–a km") is folded into its
+     * neighbour (the smaller remainder wins, it is the binding one); one row left - or none computed yet, as on a trip
+     * with no booking - is the whole road, "Butun yo'l", with the trip's own capacity when nothing is computed.
+     */
+    fun stretchRows(trip: TripDTO, stretches: List<StretchAvailabilityDTO>): List<StretchRow> {
+        val startM = trip.routeStartM ?: 0L
+        if (stretches.isEmpty()) {
+            return listOf(StretchRow(null, null, trip.seatCapacity, trip.cargoCapacityWeightG, trip.cargoCapacityVolumeMl, trip.baggageCapacityMl))
+        }
+        val rows = stretches.sortedBy { it.fromM }.map {
+            StretchRow(kmAlong(it.fromM, startM), kmAlong(it.toM, startM), it.seatsRemaining, it.cargoRemainingWeightG, it.cargoRemainingVolumeMl, it.baggageRemainingMl)
+        }
+        val merged = mutableListOf<StretchRow>()
+        var carry: StretchRow? = null // zero-length rows before the first real one
+        rows.forEach { row ->
+            val zero = row.fromKm == row.toKm
+            when {
+                zero && merged.isNotEmpty() -> merged[merged.lastIndex] = merged.last().absorb(row)
+                zero -> carry = carry?.absorb(row) ?: row
+                else -> {
+                    merged += carry?.let { row.absorb(it) } ?: row
+                    carry = null
+                }
+            }
+        }
+        if (merged.isEmpty()) merged += requireNotNull(carry)
+        if (merged.size == 1) return listOf(merged.single().copy(fromKm = null, toKm = null))
+        return merged
     }
 
     /** The direction whose active trip this is (web `tripDirectionName`), or null. */
@@ -247,4 +293,24 @@ object TripRules {
     const val MAX_DETOUR_MINUTES = 15L
     const val MAX_DETOUR_M = 5_000L
     const val PICKUP_WAIT_MINUTES = 10L
+}
+
+/** One free-room row of the trip detail; [fromKm] null = the whole road ("Butun yo'l"). */
+data class StretchRow(
+    val fromKm: Long?,
+    val toKm: Long?,
+    val seats: Long,
+    val weightG: Long,
+    val volumeMl: Long,
+    val baggageMl: Long,
+) {
+    /** This row widened over [other]; the smaller remainder of each kind is the one that binds. */
+    fun absorb(other: StretchRow): StretchRow = StretchRow(
+        fromKm = listOfNotNull(fromKm, other.fromKm).minOrNull(),
+        toKm = listOfNotNull(toKm, other.toKm).maxOrNull(),
+        seats = minOf(seats, other.seats),
+        weightG = minOf(weightG, other.weightG),
+        volumeMl = minOf(volumeMl, other.volumeMl),
+        baggageMl = minOf(baggageMl, other.baggageMl),
+    )
 }

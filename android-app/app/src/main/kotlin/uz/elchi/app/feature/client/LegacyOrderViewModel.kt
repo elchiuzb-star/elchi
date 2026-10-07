@@ -22,11 +22,12 @@ import uz.elchi.app.ui.components.BannerText
 import uz.elchi.app.ui.components.BannerTone
 
 /** A step of a v1 order that finished; the screen moves on once and consumes it. */
-enum class LegacyDone { SELECTED, CONFIRMED, CANCELLED, RATED, DISPUTED }
+enum class LegacyDone { SELECTED, CONFIRMED, CANCELLED, RATED }
 
 /**
  * One v1 order (Q4, an archive): its detail and the steps left in its life cycle - choose a driver, confirm delivery,
- * rate, cancel, report a problem. Lives on the detail screen's back-stack entry; bids, rating and dispute borrow it.
+ * rate, cancel. A problem goes to a Yordam ticket (Q141: no dispute form). Lives on the detail screen's back-stack
+ * entry; bids and rating borrow it.
  * Outcomes go to the app's [BannerCenter]; [rated] remembers ratings sent in this session across orders.
  */
 class LegacyOrderViewModel(
@@ -54,8 +55,6 @@ class LegacyOrderViewModel(
         val ratedHere: Boolean = false,
         val stars: Int = 0,
         val ratingComment: String = "",
-        val disputeReason: String = LegacyRules.DEFAULT_DISPUTE_REASON,
-        val disputeDetails: String = "",
         val done: LegacyDone? = null,
         /** Counts refused commands: the screen closes its confirmation sheet so the banner is seen, not dimmed. */
         val failures: Int = 0,
@@ -168,7 +167,8 @@ class LegacyOrderViewModel(
 
     fun setStars(value: Int) = _state.update { it.copy(stars = value.coerceIn(1, 5)) }
 
-    fun setRatingComment(value: String) = _state.update { it.copy(ratingComment = value) }
+    /** DESIGN10 5.5: at most [COMMENT_MAX] characters. */
+    fun setRatingComment(value: String) = _state.update { it.copy(ratingComment = value.take(COMMENT_MAX)) }
 
     fun rate() {
         val s = _state.value
@@ -186,21 +186,6 @@ class LegacyOrderViewModel(
         rated += orderId
         _state.update { it.copy(ratedHere = true, done = LegacyDone.RATED) }
         banners.ok(R.string.legacyOrder_ratingSent)
-    }
-
-    // -- dispute ------------------------------------------------------------------------------------------------
-
-    fun setDisputeReason(code: String) = _state.update { it.copy(disputeReason = LegacyRules.disputeReason(code)) }
-
-    fun setDisputeDetails(value: String) = _state.update { it.copy(disputeDetails = value) }
-
-    fun openDispute() {
-        val s = _state.value
-        command {
-            api.openDispute(orderId, LegacyRules.disputeReason(s.disputeReason), s.disputeDetails.trim().ifEmpty { null })
-            _state.update { it.copy(done = LegacyDone.DISPUTED, disputeDetails = "") }
-            banners.ok(R.string.legacyOrder_dispute_opened)
-        }
     }
 
     fun consumeDone() = _state.update { it.copy(done = null) }
@@ -231,8 +216,9 @@ class LegacyOrderViewModel(
         }
     }
 
-    private companion object {
-        const val PHOTO_MAX_PX = 1600
+    companion object {
+        private const val PHOTO_MAX_PX = 1600
+        const val COMMENT_MAX = 300
     }
 }
 

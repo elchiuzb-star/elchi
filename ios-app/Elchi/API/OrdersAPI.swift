@@ -262,9 +262,11 @@ public struct LegacyOrderPage: Decodable, Sendable {
     public struct Pagination: Decodable, Sendable {
         public let page: Int
         public let totalPages: Int
+        /// All the client's v1 orders (BOSQICH 10: "Eski buyurtmalar (N)").
+        public let total: Int?
 
         enum CodingKeys: String, CodingKey {
-            case page
+            case page, total
             case totalPages = "total_pages"
         }
     }

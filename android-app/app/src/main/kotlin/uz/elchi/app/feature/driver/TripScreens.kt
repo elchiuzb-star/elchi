@@ -289,6 +289,9 @@ fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.el
     // Design 07 §4.7: a cancelled trip goes back to the list (the banner says the open offers were closed).
     LaunchedEffect(s.cancelled) { if (s.cancelled) onBack() }
     val running = (s.trip as? Load.Ready)?.value?.takeIf { TripRules.publishable(it.status) }?.id
+    // Safar v3 4.1 (interim): the direction, else the first → last client place; never two dates.
+    val places = (s.manifest as? Load.Ready)?.value?.places.orEmpty()
+    val headTitle = TripRules.detailTitle(direction, places, appRu())
     StepScaffold(
         title = t(R.string.trip_detailsTitle),
         onBack = onBack,
@@ -301,7 +304,7 @@ fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.el
             Load.Loading -> LoadingState(count = 3)
             is Load.Failed -> LoadFailed(t(R.string.trip_detailsTitle), trip.error) { vm.refresh() }
             is Load.Ready -> {
-                TripHeader(trip.value, direction)
+                TripHeader(trip.value, headTitle)
                 TripStops(trip.value, s)
                 Availability(s, trip.value)
                 Manifest(s, onBooking)
@@ -323,13 +326,12 @@ fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.el
 }
 
 @Composable
-private fun TripHeader(trip: TripDTO, direction: DriverDirectionDTO?) {
-    val ru = appRu()
+private fun TripHeader(trip: TripDTO, title: String?) {
     val start = OrderRules.parseInstant(trip.plannedStartAt)
     val end = OrderRules.parseInstant(trip.plannedEndAt)
     val cutoff = OrderRules.parseInstant(trip.bookingCutoffAt)
     ElchiCard {
-        CardHeader(TripRules.routeTitle(trip, direction, ru), badge = tripStatusText(trip.status), badgeTone = TripRules.statusTone(trip.status))
+        CardHeader(title ?: t(R.string.trip_detailsTitle), badge = tripStatusText(trip.status), badgeTone = TripRules.statusTone(trip.status))
         CardRow(t(R.string.tripDetail_departure), start?.let(DriverTime::dayClock) ?: "—", first = true, strong = true)
         CardRow(t(R.string.tripDetail_arrival), end?.let(DriverTime::dayClock) ?: "—")
         CardRow(t(R.string.tripDetail_vehicle), "${trip.vehicle.makeModel}, ${trip.vehicle.color} · ${trip.vehicle.plateMasked}")
@@ -360,30 +362,29 @@ private fun TripStops(trip: TripDTO, s: TripDetailViewModel.State) {
 
 @Composable
 private fun Availability(s: TripDetailViewModel.State, trip: TripDTO) {
-    val startM = trip.routeStartM ?: 0L
     ElchiCard {
         CardHeader(t(R.string.tripDetail_availabilityTitle))
         when (val a = s.availability) {
             Load.Loading -> LoadingLine(t(R.string.common_loading))
             is Load.Failed -> Note(uz.elchi.app.i18n.errorText(a.error), Modifier.padding(vertical = 8.dp), tone = Tone.ERR)
-            is Load.Ready -> if (a.value.stretches.isEmpty()) {
-                Text(t(R.string.tripDetail_availabilityEmpty), Modifier.padding(vertical = 10.dp), style = Elchi.type.label, color = Elchi.colors.muted)
-            } else {
-                // ADR-0028: capacity per stretch of road, in km along this trip (web `tripDetail.stretchKm`).
-                val stretches = a.value.stretches.sortedBy { it.fromM }
+            is Load.Ready -> {
+                // Safar v3 4.5/4.6: stretches in km along this trip, sub-kilometre ones folded; one row (or a trip with no
+                // booking yet) = "Butun yo'l" with the full room - never "not computed" for an empty trip.
+                val rows = TripRules.stretchRows(trip, a.value.stretches)
                 val computed = OrderRules.parseInstant(a.value.computedAt)?.let(DriverTime::clock) ?: "—"
-                stretches.forEachIndexed { i, seg ->
+                rows.forEachIndexed { i, row ->
                     CardRow(
-                        t(R.string.tripDetail_stretchKm, "from" to TripRules.kmAlong(seg.fromM, startM), "to" to TripRules.kmAlong(seg.toM, startM)),
+                        if (row.fromKm == null) t(R.string.driver_v3trip_wholeTrip)
+                        else t(R.string.tripDetail_stretchKm, "from" to row.fromKm, "to" to (row.toKm ?: row.fromKm)),
                         t(
                             R.string.tripDetail_segmentLine,
-                            "seats" to seg.seatsRemaining,
-                            "weight" to t(R.string.tripDetail_kg, "value" to seg.cargoRemainingWeightG / 1000),
-                            "volume" to t(R.string.tripDetail_litres, "value" to seg.cargoRemainingVolumeMl / 1000),
-                            "baggage" to t(R.string.tripDetail_litres, "value" to seg.baggageRemainingMl / 1000),
+                            "seats" to row.seats,
+                            "weight" to t(R.string.tripDetail_kg, "value" to row.weightG / 1000),
+                            "volume" to t(R.string.tripDetail_litres, "value" to row.volumeMl / 1000),
+                            "baggage" to t(R.string.tripDetail_litres, "value" to row.baggageMl / 1000),
                         ),
                         first = i == 0,
-                        detail = if (i == stretches.lastIndex) t(R.string.tripDetail_computedNote, "time" to computed) else null,
+                        detail = if (i == rows.lastIndex) t(R.string.tripDetail_computedNote, "time" to computed) else null,
                     )
                 }
             }

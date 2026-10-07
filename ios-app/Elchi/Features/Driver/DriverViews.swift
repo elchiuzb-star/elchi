@@ -5,7 +5,8 @@ import SwiftUI
 /// A tab root (the prototype's `h1` top): large title, optional bell with the unread count, the app banner under it,
 /// then the scrolling body on the page colour. The tab bar sits below (DriverFlow).
 struct DriverTabScreen<Content: View>: View {
-    let title: String
+    /// nil: no bar (design v3 home draws its own header row in the content).
+    let title: String?
     let bell: BellButton?
     /// The top-right "+" (Yo'nalishlar: add a trip).
     let plus: (label: String, action: () -> Void)?
@@ -16,8 +17,9 @@ struct DriverTabScreen<Content: View>: View {
     @Environment(BannerCenter.self) private var banners: BannerCenter?
     /// The GPS bar on the trips tab while a trip runs (Stage 09).
     @Environment(\.screenAccessory) private var accessory
+    @Environment(\.elchiV3) private var v3
 
-    init(title: String, bell: BellButton? = nil, plus: (label: String, action: () -> Void)? = nil, trailing: AnyView? = nil,
+    init(title: String?, bell: BellButton? = nil, plus: (label: String, action: () -> Void)? = nil, trailing: AnyView? = nil,
          @ViewBuilder content: () -> Content) {
         self.title = title
         self.bell = bell
@@ -28,24 +30,38 @@ struct DriverTabScreen<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Text(title).font(ElchiFont.poppins(26, .medium, relativeTo: .title)).foregroundStyle(c.text)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
-                if let bell { bell }
-                if let plus {
-                    RoundIconButton(.plus, label: plus.label, action: plus.action).accessibilityIdentifier("elchi.driver.plus")
+            if let title {
+                HStack(spacing: 10) {
+                    Text(title).font(v3 ? ElchiFont.h1V3 : ElchiFont.poppins(26, .medium, relativeTo: .title)).foregroundStyle(c.text)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    if let bell { bell }
+                    if let plus {
+                        if v3 {
+                            // Design v3: the add button is the brand circle with a navy plus.
+                            Button(action: plus.action) {
+                                ElchiIcon.plus.image(size: 20).foregroundStyle(c.navy)
+                                    .frame(width: 44, height: 44)
+                                    .background(c.brand, in: Circle())
+                            }
+                            .buttonStyle(PressFade())
+                            .accessibilityLabel(plus.label)
+                            .accessibilityIdentifier("elchi.driver.plus")
+                        } else {
+                            RoundIconButton(.plus, label: plus.label, action: plus.action).accessibilityIdentifier("elchi.driver.plus")
+                        }
+                    }
+                    if let trailing { trailing }
                 }
-                if let trailing { trailing }
+                .frame(height: 64)
+                .padding(.horizontal, 16)
             }
-            .frame(height: 64)
-            .padding(.horizontal, 16)
             if let accessory { accessory }
             if let banners { BannerHost(center: banners) }
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) { content }
-                    .padding(EdgeInsets(top: 6, leading: 16, bottom: 18, trailing: 16))
+                VStack(alignment: .leading, spacing: v3 ? 14 : 12) { content }
+                    .padding(EdgeInsets(top: title == nil ? 10 : 6, leading: 16, bottom: 18, trailing: 16))
             }
         }
         .background(c.page.ignoresSafeArea())
@@ -60,13 +76,14 @@ struct BellButton: View {
     let action: () -> Void
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(\.elchiV3) private var v3
 
     var body: some View {
         Button(action: action) {
             ElchiIcon.bell.image(size: 20).foregroundStyle(c.text)
-                .frame(width: 44, height: 44)
-                .background(c.card, in: Circle())
-                .shadow(color: c.shadow, radius: 12, y: 6)
+                .frame(width: v3 ? 48 : 44, height: v3 ? 48 : 44)
+                .background(v3 ? c.iconFill : c.card, in: Circle())
+                .shadow(color: v3 ? .clear : c.shadow, radius: 12, y: 6)
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
                         Text(more ? "\(count)+" : "\(count)").font(ElchiFont.poppins(11, .bold)).foregroundStyle(.white)
@@ -85,13 +102,21 @@ struct BellButton: View {
     }
 }
 
-// MARK: - Home
+// MARK: - Home (design v3: Royxat 1.x, Safar 1.x)
 
-/// Driver home: balance (Q22: visible before approval), the verification status in words (never the raw code), the
-/// availability switch (locked until approved) and the next step. The balance row opens "Komissiya balansi" (Stage 09).
+/// Driver home: the header row (avatar, "Balans" pill - Q22: visible before approval -, bell with a dot), "Salom,
+/// {name}!" with the verification seal, then - until approved - the warning, the checklist and the next step; once
+/// approved the search, the chips and "Mijozlar e'lonlari" built from the driver's directions, the work tiles and
+/// "Yangi safar rejalashtirish" (the direction form, Q150). "Kredit va taklif kodi" closes the page for every status.
+/// The status card and the availability switch are gone from home (the switch stays on Profil).
 struct DriverHomeView: View {
     let driver: DriverModel
     let inbox: InboxModel
+    let listings: HomeListingsModel
+    /// The `passenger_enabled` flag (the "Yo'lovchi" chip, K7 / Q89).
+    let feed: FeedModel
+    /// The driver's offers: "already offered" on the cards (Safar 5.7).
+    let proposals: DriverProposalsModel
     /// A referral code kept from an `elchigo.uz/r/<code>` link, waiting for the driver's tap.
     var referralCode: String? = nil
     var applyingReferral = false
@@ -103,20 +128,29 @@ struct DriverHomeView: View {
     let onDocuments: () -> Void
     let onSupport: () -> Void
     let onMatches: () -> Void
-    /// Stage 08: "Takliflarim" (the offers the driver sent).
-    var onProposals: () -> Void = {}
+    /// The avatar: the Profil tab.
+    var onProfileTab: () -> Void = {}
     /// Stage 09: "Komissiya balansi".
     var onWallet: () -> Void = {}
-    /// DESIGN07 1.1-1.3 (approved drivers): the work summary under the home's own blocks (DriverWorkSummary).
+    /// "Kredit va taklif kodi".
+    var onBonus: () -> Void = {}
+    /// A card: the listing detail; "Taklif": the direction offer; an offered one: its thread.
+    var onOpenListing: (String) -> Void = { _ in }
+    var onOffer: (HomeListing) -> Void = { _ in }
+    var onThread: (String) -> Void = { _ in }
+    /// No direction yet: the add form / the directions segment.
+    var onAddDirection: () -> Void = {}
+    /// DESIGN07 1.1-1.3 (approved drivers): the work tiles and "Yangi safar rejalashtirish" (DriverWorkSummary).
     var work: AnyView? = nil
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
+    @Environment(BannerCenter.self) private var banners: BannerCenter?
+    @State private var filterOpen = false
 
     var body: some View {
-        let approved = driver.status?.isApproved == true
-        DriverTabScreen(title: strings.t(approved ? "clientProfile.home" : "driverHome.completeProfileTitle"),
-                        bell: BellButton(count: inbox.unread, more: inbox.unreadMore, action: onBell)) {
-            if let referralCode { pendingReferral(referralCode) }
+        DriverTabScreen(title: nil) {
+            HomeHeaderRow(initials: Initials.of(name), balance: balance, unread: inbox.unread, unreadMore: inbox.unreadMore,
+                          onProfile: onProfileTab, onWallet: onWallet, onBell: onBell)
             switch driver.profile {
             case .loading:
                 SkeletonCards(count: 3)
@@ -128,26 +162,69 @@ struct DriverHomeView: View {
                 content(status, state: DriverHomeState.derive(status: status, vehicleLocked: driver.vehicleLocked,
                                                               slots: driver.documents.value.map(DocumentSlots.derive)))
             }
+            HomeCreditCard(creditMinor: listings.creditMinor, onOpen: onBonus)
         }
         .refreshable {
-            await driver.refresh()
-            await inbox.refreshUnread()
+            async let profile: Void = driver.refresh()
+            async let unread: Void = inbox.refreshUnread()
+            async let credit: Void = listings.loadCredit()
+            _ = await (profile, unread, credit)
+            if driver.status?.isApproved == true { await loadListings() }
         }
         .task {
-            await driver.refresh()
-            await inbox.refreshUnread()
+            async let profile: Void = driver.refresh()
+            async let unread: Void = inbox.refreshUnread()
+            async let credit: Void = listings.loadCredit()
+            _ = await (profile, unread, credit)
         }
+        .task(id: "\(driver.status?.isApproved == true)|\(listings.filter.period.rawValue)") {
+            guard driver.status?.isApproved == true else { return }
+            await loadListings()
+        }
+        #if DEBUG
+        // Screenshots: `-uiTestHomeFilter YES` opens the filter sheet once the list is in.
+        .task(id: listings.listings?.value?.count) {
+            if UserDefaults.standard.bool(forKey: "uiTestHomeFilter"), listings.listings?.value != nil { filterOpen = true }
+        }
+        #endif
+        .sheet(isPresented: $filterOpen) {
+            @Bindable var listings = listings
+            HomeFilterSheet(filter: $listings.filter, resultCount: shown.count) { filterOpen = false }
+        }
+    }
+
+    private func loadListings() async {
+        await feed.loadFlags()
+        async let read: Void = listings.load(passengerAllowed: feed.passengerAllowed)
+        async let open: Void = proposals.load(.open)
+        async let accepted: Void = proposals.load(.accepted)
+        _ = await (read, open, accepted)
+    }
+
+    private var name: String? {
+        let profile = driver.profile.value
+        return [profile?.fullName, profile?.user?.fullName].compactMap { $0?.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
     }
 
     @ViewBuilder
     private func content(_ status: DriverVerification, state: DriverHomeState) -> some View {
-        ElchiList {
-            ListRow(icon: .wallet, title: strings.t("driverHome.commissionBalance"), description: balance, first: true, action: onWallet)
+        let seal = HomeSeal.of(state)
+        HomeGreeting(firstName: HomeListingLogic.firstName(name), seal: seal, stateWord: strings.t(state.labelKey)) {
+            if let key = seal.toastKey { banners?.show(.key(key), tone: seal == .approved ? .ok : .warn) } else {
+                banners?.show(.key(state.labelKey), tone: .err)
+            }
         }
-        .accessibilityIdentifier("elchi.driver.balance")
-        StatusCard(label: strings.t("driver.home.verificationLabel"), value: strings.t(state.labelKey), tone: state.tone,
-                   hint: strings.t(state.hintKey))
-        if !status.isApproved {
+        if let referralCode { pendingReferral(referralCode) }
+        if status.isApproved {
+            listingsSection
+            if let work { work }
+        } else {
+            // Royxat 1.6: not decided -> the design's warning; rejected / blocked -> the reason and support (Q96).
+            if status.gate == .decided {
+                Note(strings.t("app.driverGate.decided"), tone: .err).accessibilityIdentifier("elchi.driver.home.decided")
+            } else {
+                Note(strings.t("driverHome.availabilityLocked"), tone: .warn).accessibilityIdentifier("elchi.driver.home.locked")
+            }
             DriverChecklistCard(steps: DriverChecklist.steps(state: state, profile: driver.profile.value, slots: driver.slots)) { target in
                 switch target {
                 case .form: onProfile()
@@ -155,13 +232,6 @@ struct DriverHomeView: View {
                 case .gate: onMatches()
                 }
             }
-        }
-        availability(status)
-        if status.isApproved {
-            ElchiButton(strings.t("driverHome.viewMatchingOrders"), variant: .soft, icon: .radar, action: onMatches)
-            ElchiButton(strings.t("proposals.title"), variant: .outline, icon: .tag, action: onProposals)
-                .accessibilityIdentifier("elchi.driver.home.proposals")
-        } else {
             ElchiButton(strings.t(driver.vehicleLocked ? "driverHome.viewProfile" : "driverHome.completeProfile"), action: onProfile)
                 .accessibilityIdentifier("elchi.driver.home.profile")
             ElchiButton(strings.t("driverHome.uploadDocuments"), variant: .soft, action: onDocuments)
@@ -169,7 +239,101 @@ struct DriverHomeView: View {
                 ElchiButton(strings.t("app.driverGate.support"), variant: .outline, icon: .head, action: onSupport)
             }
         }
-        if status.isApproved, let work { work }
+    }
+
+    // MARK: Listings
+
+    /// What the search, chips and filter leave, sorted.
+    private var shown: [HomeListing] {
+        HomeListingLogic.apply(listings.listings?.value ?? [], chip: listings.chip, filter: listings.filter, query: listings.query) {
+            strings.listingSearchText($0)
+        }
+    }
+
+    private var hasActiveDirection: Bool { !HomeListingLogic.readable(listings.directions.directions).isEmpty }
+
+    @ViewBuilder
+    private var listingsSection: some View {
+        @Bindable var listings = listings
+        let shown = shown
+        HomeSearchPill(query: $listings.query, subline: subline(count: shown.count), filterCount: listings.filter.activeCount) {
+            filterOpen = true
+        }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(HomeChip.shown(passengerAllowed: feed.passengerAllowed), id: \.self) { chip in
+                    V3Chip(title: strings.t(chip.labelKey), selected: listings.chip == chip, height: 48) { listings.chip = chip }
+                        .accessibilityIdentifier("elchi.driver.home.chip.\(chip.rawValue)")
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.horizontal, -16)
+        HStack(alignment: .firstTextBaseline) {
+            Text(strings.t("driver.v3reg.listingsTitle")).font(ElchiFont.poppins(19, .medium)).foregroundStyle(c.text)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            Button(strings.t("driver.v3reg.seeAll"), action: onMatches)
+                .font(ElchiFont.poppins(13.5, .semibold)).foregroundStyle(c.accentText)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("elchi.driver.home.seeAll")
+        }
+        .padding(.top, 2)
+        switch listings.listings {
+        case nil, .loading?:
+            SkeletonCards(count: 2)
+        case .failed(let error)?:
+            Note(strings.errorText(error), tone: .err)
+            ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await loadListings() } }
+        case .loaded?:
+            if listings.directions.list.value != nil && !hasActiveDirection {
+                // No (active) direction: what a direction does, and the way to add one (Royxat 1.12).
+                if listings.directions.directions.isEmpty {
+                    NoDirectionsCard(onAdd: onAddDirection)
+                } else {
+                    Note(strings.t("dir.paused"), tone: .gray)
+                    ElchiButton(strings.t("driverRoutes.title"), variant: .soft, icon: .route, action: onAddDirection)
+                }
+            } else if shown.isEmpty {
+                Text(strings.t(HomeListingLogic.emptyKey(query: listings.query, filter: listings.filter)))
+                    .font(ElchiFont.poppins(13.5)).foregroundStyle(c.muted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24).padding(.horizontal, 16)
+                    .background(c.card, in: RoundedRectangle(cornerRadius: 22))
+                    .accessibilityIdentifier("elchi.driver.home.listingsEmpty")
+            } else {
+                ForEach(Array(shown.prefix(HomeListingLogic.shownCount)), id: \.id) { entry in
+                    HomeListingCard(entry: entry, mark: mark(entry), onOpen: { onOpenListing(entry.id) },
+                                    onOffer: { onOffer(entry) }, onThread: onThread)
+                }
+            }
+        }
+    }
+
+    private func mark(_ entry: HomeListing) -> FeedOfferMark {
+        FeedOfferMark.of(listingId: entry.id, open: proposals.lists[.open]?.value, accepted: proposals.lists[.accepted]?.value,
+                         versions: { proposals.versions($0) })
+    }
+
+    /// "Yo'nalishlaringiz bo'yicha · 14 kun" (the single direction's name when there is one), or "{n} ta natija · …"
+    /// while searching; then the filter's choices.
+    private func subline(count: Int) -> String {
+        let filter = listings.filter
+        var parts: [String] = []
+        if !listings.query.trimmingCharacters(in: .whitespaces).isEmpty {
+            parts.append(strings.t("driver.v3reg.searchResults", ("count", count)))
+        } else {
+            let active = HomeListingLogic.readable(listings.directions.directions)
+            parts.append(active.count == 1 ? DirectionEndName.route(active[0], ru: strings.locale == .ru) : strings.t("driver.v3reg.searchScope"))
+        }
+        parts.append(strings.t(filter.period.labelKey))
+        if filter.sort != .nearest { parts.append(strings.t(filter.sort.labelKey)) }
+        if filter.minPrice != .any {
+            parts.append(strings.t("driver.v3reg.priceFrom", ("amount", Money.grouped(String(filter.minPrice.minor / 100)))))
+        }
+        if filter.exactOnly { parts.append(strings.t("match.exact")) }
+        return parts.joined(separator: " · ")
     }
 
     /// "Taklif kodi saqlandi: …" / "Tasdiqlash uchun bosing" (the design's first row); the tap sends it as the
@@ -210,17 +374,6 @@ struct DriverHomeView: View {
     /// "—" while the balance loads or when it failed: never a zero nobody measured.
     private var balance: String {
         driver.wallet.value.map { strings.money($0.availableMinor) } ?? "—"
-    }
-
-    private func availability(_ status: DriverVerification) -> some View {
-        let isOn = driver.isAvailable
-        let enabled = DriverAvailability.canToggle(status: status, isOn: isOn) && driver.availabilityPending == nil
-        return ToggleRow(strings.t("driverHome.availabilityTitle"),
-                         description: strings.t(DriverAvailability.subtitleKey(status: status, isOn: isOn)),
-                         isOn: Binding(get: { driver.isAvailable }, set: { on in Task { await driver.setAvailability(on) } }))
-            .disabled(!enabled)
-            .opacity(enabled || driver.availabilityPending != nil ? 1 : 0.6)
-            .accessibilityIdentifier("elchi.driver.availability")
     }
 }
 

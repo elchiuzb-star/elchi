@@ -36,7 +36,6 @@ import uz.elchi.app.feature.client.BonusViewModel
 import uz.elchi.app.feature.client.BookingChatScreen
 import uz.elchi.app.feature.client.BookingChatViewModel
 import uz.elchi.app.feature.client.BookingSide
-import uz.elchi.app.feature.client.BookingTrackingScreen
 import uz.elchi.app.feature.client.BookingViewModel
 import uz.elchi.app.feature.client.RatingScreen
 import uz.elchi.app.feature.client.SafetyScreen
@@ -75,6 +74,7 @@ import uz.elchi.app.session.Session
 @Serializable private data object AddTrip
 @Serializable private data object AddDirection
 @Serializable private data class DirectionBid(val directionId: String, val listingId: String)
+@Serializable private data class DirectionListing(val directionId: String, val listingId: String)
 @Serializable private data class TripDetail(val id: String)
 @Serializable private data object SavedSearches
 @Serializable private data class Bid(val listingId: String)
@@ -129,7 +129,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
     // Stage 09: the bookings and the profile's numbers.
     val bookings: DriverBookingsViewModel = viewModel(
         key = "driver-bookings-${session.user.id}",
-        factory = viewModelFactory { initializer { DriverBookingsViewModel(container.api) } },
+        factory = viewModelFactory { initializer { DriverBookingsViewModel(container.api, container.tracker) } },
     )
     val stats: DriverStatsViewModel = viewModel(
         key = "driver-stats-${session.user.id}",
@@ -140,12 +140,19 @@ fun DriverFlow(container: AppContainer, session: Session) {
         key = "driver-directions-${session.user.id}",
         factory = viewModelFactory { initializer { DirectionsViewModel(container.api, container.banners) } },
     )
-    val work = DriverWork(trips, feed, proposals, bookings, stats, container.tracker, directions)
+    // Royxat / Safar v3 §1: the home's listings from every active direction, and the credit card.
+    val home: HomeViewModel = viewModel(
+        key = "driver-home-${session.user.id}",
+        factory = viewModelFactory { initializer { HomeViewModel(container.api) } },
+    )
+    val work = DriverWork(trips, feed, proposals, bookings, stats, container.tracker, directions, home)
     // Q148: a trip already running when the app starts publishes again without a tap where the permission is given.
     val tripList by trips.state.collectAsStateWithLifecycle()
     val running = TripRules.trackable(tripList.list)?.id
     LaunchedEffect(running) { running?.let { container.tracker.resume(it) } }
     var tab by rememberSaveable { mutableStateOf(DriverTab.HOME) }
+    // Safar v3 0.1: Moslar's segment ("Buyurtmalar" | "Yo'nalishlarim").
+    var segment by rememberSaveable { mutableStateOf(MatchesSegment.FEED) }
 
     val signOut: () -> Unit = {
         scope.launch {
@@ -198,14 +205,20 @@ fun DriverFlow(container: AppContainer, session: Session) {
         onBooking = { id -> nav.navigate(DriverBooking(id)) },
         onWallet = { nav.navigate(Wallet) { launchSingleTop = true } },
         onBonus = { nav.navigate(DriverBonus) { launchSingleTop = true } },
-        onRoutes = { tab = DriverTab.ROUTES },
+        // Royxat v3 6.3 / Safar v3 10.1: "Yo'nalishlarim" is Moslar's second segment now (the gate stays there, Q96).
+        onRoutes = {
+            segment = MatchesSegment.ROUTES
+            tab = DriverTab.MATCHES
+        },
         onOrders = { tab = DriverTab.ORDERS },
         onAddDirection = { nav.navigate(AddDirection) { launchSingleTop = true } },
         onDirectionFeed = { id ->
             directions.select(id)
+            segment = MatchesSegment.FEED
             tab = DriverTab.MATCHES
         },
         onDirectionOffer = { directionId, listingId -> nav.navigate(DirectionBid(directionId, listingId)) },
+        onListing = { directionId, listingId -> nav.navigate(DirectionListing(directionId, listingId)) },
     )
 
     // A link from outside (cold or warm start, or kept through sign-in, a push or the GPS notification's tap): the
@@ -244,6 +257,8 @@ fun DriverFlow(container: AppContainer, session: Session) {
         container.push.received.collect { if (inbox.state.value.loaded) inbox.refresh() else inbox.refreshUnread() }
     }
 
+    // Royxat / Safar v3 §0: the driver screens wear the v3 look (navy primary, flat 48dp round buttons, 26dp cards).
+    androidx.compose.runtime.CompositionLocalProvider(uz.elchi.app.ui.theme.LocalElchiLook provides uz.elchi.app.ui.theme.driverV3Look(uz.elchi.app.ui.theme.Elchi.colors.isDark)) {
     NavHost(nav, startDestination = Tabs) {
         composable<Tabs> {
             AskNotificationsOnce(container.push)
@@ -255,6 +270,8 @@ fun DriverFlow(container: AppContainer, session: Session) {
                 tab = tab,
                 onTab = { tab = it },
                 nav = routes,
+                segment = segment,
+                onSegment = { segment = it },
             )
         }
         composable<ProfileForm> {
@@ -323,7 +340,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
             val route = entry.toRoute<DirectionBid>()
             val vm: DirectionBidViewModel = viewModel(key = "direction-bid-${route.directionId}-${route.listingId}", factory = viewModelFactory {
                 initializer {
-                    DirectionBidViewModel(container.api, container.banners, route.directionId, directions.item(route.listingId), proposals) {
+                    DirectionBidViewModel(container.api, container.banners, route.directionId, directions.item(route.listingId) ?: home.item(route.listingId), proposals) {
                         directions.refresh()
                         trips.refresh()
                     }
@@ -333,6 +350,19 @@ fun DriverFlow(container: AppContainer, session: Session) {
                 vm = vm, driver = driver, nav = routes,
                 onBack = { nav.popBackStack() },
                 onThread = { threadId -> nav.navigate(ProposalThread(threadId)) { popUpTo<DirectionBid> { inclusive = true } } },
+            )
+        }
+        composable<DirectionListing> { entry ->
+            val route = entry.toRoute<DirectionListing>()
+            val vm: DirectionListingViewModel = viewModel(key = "direction-listing-${route.directionId}-${route.listingId}", factory = viewModelFactory {
+                initializer { DirectionListingViewModel(container.api, directions.item(route.listingId) ?: home.item(route.listingId)) }
+            })
+            val ps by proposals.state.collectAsStateWithLifecycle()
+            val mine = Design07Rules.myFeedOffers(ps.open, (ps.lists[ProposalTab.ACCEPTED] as? uz.elchi.app.feature.client.Load.Ready)?.value.orEmpty(), ps.mine)[route.listingId]
+            DirectionListingScreen(
+                vm = vm, driver = driver, nav = routes, mine = mine,
+                onBack = { nav.popBackStack() },
+                onOffer = { nav.navigate(DirectionBid(route.directionId, route.listingId)) },
             )
         }
         composable<TripDetail> { entry ->
@@ -397,12 +427,28 @@ fun DriverFlow(container: AppContainer, session: Session) {
                     onSupport = { nav.navigate(DriverBookingSupport(id)) },
                     onSafety = { nav.navigate(DriverBookingSafety(id)) },
                     onTrip = { tripId -> nav.navigate(TripDetail(tripId)) },
+                    // Design 08 2.8: the contact bar's unread badge (`message_count` against what this phone saw).
+                    chatCount = {
+                        try {
+                            container.api.getBookingChatState(id).data.messageCount
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            null
+                        }
+                    },
                 ),
             )
         }
         composable<DriverBookingAmendment> { entry ->
             val owner = remember(entry) { nav.getBackStackEntry<DriverBooking>() }
-            AmendmentScreen(vm = driverBookingViewModel(owner, entry.toRoute<DriverBookingAmendment>().id, container), onBack = { nav.popBackStack() })
+            val amendId = entry.toRoute<DriverBookingAmendment>().id
+            val amendVm = driverBookingViewModel(owner, amendId, container)
+            // Design 08 7.4: the detail repeats the reason of a proposal sent from this phone (the DTO has none).
+            LaunchedEffect(amendVm) {
+                amendVm.state.collect { st -> DriverAmendReasons.observe(amendId, st.amendReason, st.notice == uz.elchi.app.feature.client.BookingNotice.AMENDMENT_SENT) }
+            }
+            AmendmentScreen(vm = amendVm, onBack = { nav.popBackStack() })
         }
         composable<DriverBookingRating> { entry ->
             val owner = remember(entry) { nav.getBackStackEntry<DriverBooking>() }
@@ -434,11 +480,12 @@ fun DriverFlow(container: AppContainer, session: Session) {
                     initializer { TrackingViewModel(container.api, id, container.liveSockets, container.trackingSocketUrl) { container.sessions.current()?.accessToken } }
                 },
             )
-            BookingTrackingScreen(vm = vm, onBack = { nav.popBackStack() })
+            // Design 08 11.1/11.2: the driver's own title and note ("Kuzatuv (siz yuborayotgan)").
+            DriverBookingTrackingScreen(vm = vm, tracker = container.tracker, onBack = { nav.popBackStack() })
         }
         composable<Wallet> {
             val vm: WalletViewModel = viewModel(factory = viewModelFactory { initializer { WalletViewModel(container.api, container.banners, driver::refresh) } })
-            WalletScreen(vm = vm, onBack = { nav.popBackStack() }, onHelp = { nav.navigate(Help) })
+            WalletScreen(vm = vm, onBack = { nav.popBackStack() }, onHelp = { nav.navigate(Help) }, phone = session.user.phone)
         }
         composable<DriverBonus> {
             val vm: BonusViewModel = viewModel(factory = viewModelFactory { initializer { BonusViewModel(container.api, container.referral, BonusViewModel.DRIVER_AUDIENCE, container.banners) } })
@@ -451,6 +498,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
                 tab = DriverTab.ORDERS
             })
         }
+    }
     }
 }
 
@@ -480,6 +528,8 @@ data class DriverNav(
     val onAddDirection: () -> Unit = {},
     val onDirectionFeed: (String) -> Unit = {},
     val onDirectionOffer: (directionId: String, listingId: String) -> Unit = { _, _ -> },
+    /** Safar v3 §6: "E'lon tafsiloti" for a request found by that direction. */
+    val onListing: (directionId: String, listingId: String) -> Unit = { _, _ -> },
 )
 
 /** A driver booking's model lives on its detail entry; the amendment, rating, safety and chat screens borrow it. */

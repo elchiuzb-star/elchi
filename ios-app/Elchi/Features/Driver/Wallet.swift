@@ -47,6 +47,49 @@ public enum WalletLogic {
 
     public static func chartIsEmpty(_ bars: [Bar]) -> Bool { bars.allSatisfy { $0.minor == 0 } }
 
+    /// DESIGN09 2.3: the chart's "7 kun / 6 oy" toggle.
+    public enum Period: String, CaseIterable, Sendable {
+        case daily, monthly
+
+        public var labelKey: String { "income.period.\(rawValue)" }
+    }
+
+    /// The last 6 Tashkent months (oldest first, each bar dated the month's first day) of `commission_capture`
+    /// debits - from the pages already loaded only (as the web does; nothing is said about pages not loaded).
+    public static func monthlyChart(_ lines: [LedgerLineDTO], now: Date = Date()) -> [Bar] {
+        let calendar = DepartureWindow.calendar
+        guard let thisMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) else { return [] }
+        let months = (0..<6).reversed().compactMap { calendar.date(byAdding: .month, value: -$0, to: thisMonth) }
+        var totals = Dictionary(uniqueKeysWithValues: months.map { ($0, 0) })
+        for line in lines where line.kind == "commission_capture" && line.direction == "debit" {
+            guard let at = ServerTime.parse(line.occurredAt),
+                  let month = calendar.date(from: calendar.dateComponents([.year, .month], from: at)) else { continue }
+            if totals[month] != nil { totals[month]! += line.amountMinor }
+        }
+        return months.map { Bar(day: $0, minor: totals[$0] ?? 0) }
+    }
+
+    public static func chart(_ lines: [LedgerLineDTO], period: Period, now: Date = Date()) -> [Bar] {
+        period == .daily ? chart(lines, now: now) : monthlyChart(lines, now: now)
+    }
+
+    /// Mirrors `app/contracts/money.py` `TWO_PERSON_APPROVAL_THRESHOLD_MINOR` (1 000 000 so'm): a top-up above it is
+    /// approved by two different finance people (Q17). The API does not expose it - keep the two in step.
+    public static let twoPersonThresholdMinor = 100_000_000
+
+    /// "Katta summa: ikki moliya xodimi tasdiqlaydi." under the amount.
+    public static func largeAmount(_ amountText: String) -> Bool { Money.minor(fromSoum: amountText) > twoPersonThresholdMinor }
+
+    /// DESIGN09 2.11: the preset chips (whole so'm).
+    public static let presetsSoum = [50_000, 100_000, 200_000, 500_000]
+
+    /// DESIGN09 2.7: "To'lov maqsadi: 90 777 11 22" - the driver's own phone in national format (nil without one).
+    public static func paymentPurposePhone(_ phone: String?) -> String? {
+        guard let phone else { return nil }
+        let local = UzPhone.localDigits(fromE164: phone)
+        return local.count == 9 ? UzPhone.formatLocal(local) : nil
+    }
+
     public static let methods = ["bank_transfer", "cash_desk"]
 
     /// `POST /wallet/topups`: a positive whole-so'm amount; optional text fields go only when typed (≤ 128 / 500).
@@ -94,6 +137,7 @@ final class WalletModel {
     private(set) var loadingMore = false
     private(set) var topups: Loadable<[TopupDTO]> = .loading
 
+    var period: WalletLogic.Period = .daily
     var amountText = ""
     var method = "bank_transfer"
     var payerReference = ""
@@ -109,7 +153,7 @@ final class WalletModel {
     }
 
     var tiles: WalletLogic.Tiles? { wallet.value.map { WalletLogic.tiles(wallet: $0, lines: lines) } }
-    var chart: [WalletLogic.Bar] { WalletLogic.chart(lines) }
+    var chart: [WalletLogic.Bar] { WalletLogic.chart(lines, period: period) }
     var body: TopupCreate? { WalletLogic.topupBody(amountText: amountText, method: method, payerReference: payerReference, note: note) }
 
     func load() async {

@@ -9,6 +9,10 @@ import SwiftUI
 struct BookingTrackingView<Host: BookingScreenHost>: View {
     let booking: Host
     let onBack: () -> Void
+    /// The driver's own title ("Kuzatuv (siz yuborayotgan)", DESIGN08 11.1); nil = the client's "Kuzatuv".
+    var title: String?
+    /// The driver's note above the live section (what the client sees and when this phone sends, DESIGN08 11.2).
+    var note: String?
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @Environment(\.scenePhase) private var scenePhase
@@ -18,13 +22,14 @@ struct BookingTrackingView<Host: BookingScreenHost>: View {
     private var model: BookingTrackingModel { booking.tracking }
 
     var body: some View {
-        ScreenScaffold(title: strings.t("bookingTracking.title"), backLabel: strings.t("common.back"), onBack: onBack,
+        ScreenScaffold(title: title ?? strings.t("bookingTracking.title"), backLabel: strings.t("common.back"), onBack: onBack,
                        actions: [BarAction(id: "refresh", icon: .refresh, label: strings.t("support.refresh")) {
                            Task {
                                await refresh()
                                banners?.show(.key("client.booking.refreshed"), tone: .info, hideAfter: .seconds(2))
                            }
                        }]) {
+            if let note { Note(note, tone: .blue).accessibilityIdentifier("elchi.tracking.driverNote") }
             if let dto = booking.bookingBase { ladder(dto) }
             SectionTitle(strings.t("bookingTracking.liveTitle"))
             live

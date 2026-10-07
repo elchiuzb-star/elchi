@@ -31,16 +31,19 @@ enum ClientRoute: Hashable {
     case supportThread(String)
     case settings
     case accountDelete
-    // Stage 06: a legacy (v1) order's archive and what it still allows (Q4).
+    // Stage 06: a legacy (v1) order's archive and what it still allows (Q4). BOSQICH 10: the archive list; no dispute
+    // form (Q141: "Muammo haqida xabar" opens Yordam).
+    case legacyList
     case legacyOrder(Int)
     case legacyBids(Int)
     case legacyRating(Int)
-    case legacyDispute(Int)
 }
 
 /// The drawer's sections: each is a root with the menu button.
 enum ClientSection: Hashable {
     case home, orders, notifications, profile, support, settings
+    /// BOSQICH 10: "Eski buyurtmalar" (only for a client with v1 orders).
+    case archive
 }
 
 /// The operator chats opened by thread id ("Murojaatlarim", a notification), one model per thread for the session.
@@ -146,6 +149,8 @@ struct ClientFlow: View {
         // A link (cold or warm start, or one that waited for sign-in): the same screens as a notification; a referral
         // link opens "Bonuslar va taklif kodi" with the code filled in.
         .onChange(of: container.links.serial, initial: true) { _, _ in takeLinks() }
+        // BOSQICH 10: the drawer's "Eski buyurtmalar" row needs to know whether there are v1 orders (read once, quietly).
+        .task { await orders.ensureLegacy() }
         .overlay { drawer }
         .overlay {
             if confirmLogout {
@@ -170,7 +175,9 @@ struct ClientFlow: View {
         case .orders:
             OrdersView(model: orders, inbox: inbox, onMenu: openDrawer, onNotifications: { path.append(.notifications) },
                        onNewOrder: { section = .home },
-                       onOpenListing: { openListing($0) }, onOpenBooking: openBooking, onOpenLegacy: { path.append(.legacyOrder($0)) })
+                       onOpenListing: { openListing($0) }, onOpenBooking: openBooking, onOpenLegacy: { path.append(.legacyList) })
+        case .archive:
+            LegacyListView(model: orders, leading: .menu, onLeading: openDrawer, onOpen: { path.append(.legacyOrder($0)) })
         case .notifications:
             NotificationsView(model: inbox, leading: .menu, onLeading: openDrawer, readAll: true, onOpen: openTarget)
         case .profile:
@@ -188,7 +195,8 @@ struct ClientFlow: View {
     @ViewBuilder
     private var drawer: some View {
         if drawerOpen {
-            ClientDrawer(session: session, section: section, unread: inbox.unread, unreadMore: inbox.unreadMore, onSelect: { choice in
+            ClientDrawer(session: session, section: section, unread: inbox.unread, unreadMore: inbox.unreadMore,
+                         hasLegacy: orders.legacy.value?.isEmpty == false, onSelect: { choice in
                 section = choice
                 path = []
                 closeDrawer()
@@ -307,9 +315,15 @@ struct ClientFlow: View {
             SupportChatView(model: supportChats.model(id), onBack: back, title: strings.t("support.threadTitle"))
         case .settings:
             settingsView(leading: .back, onLeading: back)
+        case .legacyList:
+            LegacyListView(model: orders, leading: .back, onLeading: back, onOpen: { path.append(.legacyOrder($0)) })
         case .legacyOrder(let id):
             LegacyOrderDetailView(model: orders.legacyOrder(id), onBack: back, onBids: { path.append(.legacyBids(id)) },
-                                  onRate: { path.append(.legacyRating(id)) }, onDispute: { path.append(.legacyDispute(id)) },
+                                  onRate: { path.append(.legacyRating(id)) }, onReport: { order in
+                                      // USER DECISION (Q141): a Yordam ticket that names the order, never a dispute form.
+                                      support.draft = LegacySupport.prefill(orderNumber: order.orderNumber, id: order.id)
+                                      path.append(.support)
+                                  },
                                   onCancelled: {
                                       back()
                                       Task { await orders.refresh() }
@@ -318,8 +332,6 @@ struct ClientFlow: View {
             LegacyBidsView(model: orders.legacyOrder(id), onBack: back, onSelected: back)
         case .legacyRating(let id):
             LegacyRatingView(model: orders.legacyOrder(id), onBack: back)
-        case .legacyDispute(let id):
-            LegacyDisputeView(model: orders.legacyOrder(id), onBack: back)
         case .accountDelete:
             AccountDeleteView(model: accountDelete, onBack: back, onOrders: {
                 section = .orders
@@ -417,19 +429,11 @@ struct ClientFlow: View {
 
     private func profileAction(_ action: ProfileView.ProfileAction) {
         switch action {
-        case .orders:
-            section = .orders
-            path = []
-        case .proposals: path.append(.proposals)
         case .bonus: path.append(.bonus)
         case .notifications: path.append(.notifications)
         case .threads: path.append(.supportThreads)
         case .safety: path.append(.safetyCenter)
         case .help: path.append(.support)
-        case .settings: path.append(.settings)
-        case .home:
-            section = .home
-            path = []
         case .logout: confirmLogout = true
         }
     }
@@ -835,6 +839,8 @@ private struct ClientDrawer: View {
     let section: ClientSection
     let unread: Int
     let unreadMore: Bool
+    /// The client has v1 orders: "Eski buyurtmalar" is listed (most v2 clients have none, so no empty row).
+    let hasLegacy: Bool
     let onSelect: (ClientSection) -> Void
     let onProposals: () -> Void
     let onClose: () -> Void
@@ -862,6 +868,9 @@ private struct ClientDrawer: View {
                     ElchiList {
                         item(.home, .home, "nav.home", "nav.homeHint", first: true)
                         item(.orders, .pkg, "nav.orders", "nav.ordersHint")
+                        if hasLegacy {
+                            item(.archive, .archive, "orders.legacy", "client.v3archive.drawerHint")
+                        }
                         item(.notifications, .bell, "app.nav.messages", "notifications.title",
                              trailing: unread > 0 ? (unreadMore ? "\(unread)+" : "\(unread)") : nil)
                         // BOSQICH 03: "Takliflarim / Narx kelishuvlari" (a screen over the orders, not a section).

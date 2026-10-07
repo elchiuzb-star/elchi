@@ -18,11 +18,15 @@ public enum BannerTone: Sendable, CaseIterable {
 }
 
 public enum BannerPolicy {
-    /// Success, info and warnings go by themselves after 4 s; an error stays until it is dismissed or the next action
-    /// starts (a sentence about a failure must not vanish before it is read).
+    /// BOSQICH 10 (7.2): only success goes by itself after 4 s (the loading line goes when its work ends). Errors,
+    /// warnings and info stay until they are tapped or closed, or the next action starts: a sentence about a problem
+    /// or something new must not vanish before it is read. A caller's own `hideAfter` still wins.
     public static func autoHide(_ tone: BannerTone) -> Duration? {
-        tone == .err ? nil : .seconds(4)
+        tone == .ok ? .seconds(4) : nil
     }
+
+    /// The close mark (×) on every banner that stays.
+    public static func closable(_ tone: BannerTone) -> Bool { autoHide(tone) == nil }
 }
 
 /// What a banner says. Resolved when drawn, so a language switch re-says it.
@@ -114,9 +118,9 @@ public final class BannerCenter {
         current = nil
     }
 
-    /// The next action starts: a standing error is no longer news.
+    /// The next action starts: a standing error, warning or note is no longer news (success leaves by itself).
     public func clearError() {
-        if current?.tone == .err { dismiss() }
+        if let tone = current?.tone, tone != .ok { dismiss() }
     }
 
     /// Runs `work` with the loading line shown.
@@ -127,8 +131,8 @@ public final class BannerCenter {
     }
 }
 
-/// Draws `BannerCenter`: the loading line and the message strip (tap to act or to close; errors carry a close
-/// button). Announced to VoiceOver. `ScreenScaffold` puts it in the flow under its top bar (the design's place, so it
+/// Draws `BannerCenter`: the loading line and the message strip (tap to act or to close; every banner that stays
+/// carries a close button). Announced to VoiceOver. `ScreenScaffold` puts it in the flow under its top bar (the design's place, so it
 /// never covers the first card); `floating` is the app-level fallback for screens without that bar (sign-in).
 struct BannerHost: View {
     let center: BannerCenter
@@ -167,7 +171,7 @@ struct BannerHost: View {
             icon(item.tone).image(size: 18).padding(.top, 1)
             Text(text).font(ElchiFont.poppins(13.5, .medium)).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if item.tone == .err {
+            if BannerPolicy.closable(item.tone) {
                 Button { center.dismiss() } label: {
                     ElchiIcon.x.image(size: 16).frame(width: 28, height: 28).contentShape(Rectangle())
                 }

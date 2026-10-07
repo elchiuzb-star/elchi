@@ -23,11 +23,12 @@ import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
-/** The direction feed's day chips (web `FeedDay`). */
+/** The direction feed's day chips (Safar v3 5.3: "Bugun · Ertaga · 3 kun · 14 kun"; DD5 serves ≤ 14 days). */
 enum class DirectionDay(val key: String) {
     TODAY("dir.day.today"),
     TOMORROW("dir.day.tomorrow"),
-    WEEK("dir.day.week"),
+    DAYS3("driver.feed.date3"),
+    DAYS14("driver.feed.date14"),
 }
 
 /** The feed page cut into the three answers the server gave (web `DirectionGroups`). */
@@ -99,6 +100,13 @@ object DirectionRules {
     /** The live directions (an archived one is gone for the driver). */
     fun live(list: List<DriverDirectionDTO>): List<DriverDirectionDTO> = list.filter { it.status != ARCHIVED }
 
+    /** The banner after a status change: deleted / paused ("no requests shown for it") / updated. */
+    fun statusToastKey(status: String): String = when (status) {
+        ARCHIVED -> "dir.archived"
+        PAUSED -> "dir.paused"
+        else -> "dir.updated"
+    }
+
     /** Pause ↔ resume. */
     fun toggledStatus(direction: DriverDirectionDTO): String = if (direction.status == ACTIVE) PAUSED else ACTIVE
 
@@ -149,6 +157,20 @@ object DirectionRules {
 
     // -- the feed -----------------------------------------------------------------------------------------------
 
+    /**
+     * Safar v3 5.4: one untitled main list (fits the trip, then needs a trip) and the "another time" block apart
+     * (Q153/Q157: an offer there is a time proposal). The server's order is kept inside each part.
+     */
+    fun mainAndOtherTime(items: List<DirectionRequestItemDTO>): Pair<List<DirectionRequestItemDTO>, List<DirectionRequestItemDTO>> {
+        val g = group(items)
+        return (g.fits + g.fresh) to g.otherTime
+    }
+
+    /** Safar v3 0.2: the Moslar segment counts - main cards (fits + no trip) and active directions; 0 hides the badge. */
+    fun mainCount(items: List<DirectionRequestItemDTO>): Int = items.count { it.fit != TIME_DIFFERS }
+
+    fun activeCount(list: List<DriverDirectionDTO>): Int = list.count { it.status == ACTIVE }
+
     /** The server's order is kept inside each group (it sorts by time already). */
     fun group(items: List<DirectionRequestItemDTO>): DirectionGroups = DirectionGroups(
         fits = items.filter { it.fit == FITS_TRIP },
@@ -159,7 +181,7 @@ object DirectionRules {
     private fun iso(instant: Instant): String =
         instant.atZone(ParcelRules.TASHKENT).toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
-    /** The Tashkent day(s) a chip means: today = now → midnight, tomorrow = the whole next day, week = now → +7 days. */
+    /** The Tashkent day(s) a chip means: today = now → midnight, tomorrow = the whole next day, n days = now → +n days. */
     fun range(day: DirectionDay, now: Instant): Pair<String, String> {
         val midnight = now.atZone(ParcelRules.TASHKENT).toLocalDate().atStartOfDay(ParcelRules.TASHKENT).toInstant()
         val dayLength = Duration.ofDays(1)
@@ -167,7 +189,8 @@ object DirectionRules {
         val end = when (day) {
             DirectionDay.TODAY -> midnight.plus(dayLength)
             DirectionDay.TOMORROW -> midnight.plus(dayLength.multipliedBy(2))
-            DirectionDay.WEEK -> now.plus(Duration.ofDays(7))
+            DirectionDay.DAYS3 -> now.plus(Duration.ofDays(3))
+            DirectionDay.DAYS14 -> now.plus(Duration.ofDays(14))
         }
         return iso(start) to iso(end)
     }

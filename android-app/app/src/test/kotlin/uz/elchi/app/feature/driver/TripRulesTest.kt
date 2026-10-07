@@ -174,4 +174,60 @@ class TripRulesTest {
         assertEquals(0L, TripRules.kmAlong(1_000, 5_000))
         assertEquals(12L, TripRules.kmAlong(17_400, 5_000))
     }
+
+    // -- Safar v3 §4 ------------------------------------------------------------------------------------------------
+
+    private fun stretch(from: Long, to: Long, seats: Long, kgG: Long = 20_000) = uz.elchi.app.api.generated.StretchAvailabilityDTO(
+        baggageRemainingMl = 0, cargoRemainingVolumeMl = 100_000, cargoRemainingWeightG = kgG, fromM = from, seatsRemaining = seats, toM = to,
+    )
+
+    private fun place(seq: Long, address: String?) = uz.elchi.app.api.generated.ManifestPlaceDTO(
+        dropoffs = emptyList(), pickups = emptyList(), plannedArrivalAt = "2026-10-02T05:00:00Z",
+        point = address?.let { uz.elchi.app.api.generated.PointEndDTO(address = it, lat = 41.0, lng = 69.0) }, seq = seq,
+    )
+
+    @Test
+    fun `an empty trip shows one whole-road row with its own capacity`() {
+        val rows = TripRules.stretchRows(S08.trip(), emptyList())
+        assertEquals(1, rows.size)
+        assertNull(rows.single().fromKm)
+        assertEquals(3L, rows.single().seats)
+        assertEquals(20_000L, rows.single().weightG)
+    }
+
+    @Test
+    fun `zero-length stretches fold into a neighbour and never print a-a km`() {
+        val rows = TripRules.stretchRows(
+            S08.trip(),
+            listOf(stretch(0, 200, seats = 3), stretch(200, 120_000, seats = 2), stretch(120_000, 120_300, seats = 1), stretch(120_300, 300_000, seats = 3)),
+        )
+        assertEquals(2, rows.size)
+        assertEquals(0L, rows[0].fromKm)
+        assertEquals(120L, rows[0].toKm)
+        // A short piece joins the stretch before it (the first one joins the next); the smaller remainder binds.
+        assertEquals(1L, rows[0].seats)
+        assertEquals(120L, rows[1].fromKm)
+        assertEquals(300L, rows[1].toKm)
+        assertEquals(3L, rows[1].seats)
+        assertTrue(rows.none { it.fromKm == it.toKm })
+    }
+
+    @Test
+    fun `one stretch left is the whole road`() {
+        val rows = TripRules.stretchRows(S08.trip(), listOf(stretch(0, 300, seats = 2), stretch(300, 400, seats = 3)))
+        assertEquals(1, rows.size)
+        assertNull(rows.single().fromKm)
+        assertEquals(2L, rows.single().seats)
+    }
+
+    @Test
+    fun `the detail title names the first and last client place, else nothing`() {
+        assertNull(TripRules.detailTitle(null, emptyList(), ru = false))
+        assertNull(TripRules.detailTitle(null, listOf(place(1, null)), ru = false))
+        assertEquals("Chilonzor 5", TripRules.detailTitle(null, listOf(place(1, "Chilonzor 5")), ru = false))
+        assertEquals(
+            "Chilonzor 5 → Samarqand, Registon",
+            TripRules.detailTitle(null, listOf(place(3, "Samarqand, Registon"), place(1, "Chilonzor 5"), place(2, "Guliston")), ru = false),
+        )
+    }
 }

@@ -44,6 +44,51 @@ public struct ElchiColors: Sendable {
     }
 }
 
+/// Design v3 (driver designs "Royxat" / "Safar" / "Hamyon" / "Bron", 07.10.2026): additive tokens. The driver shell
+/// turns them on with `.elchiV3()`; every other screen keeps the tokens above.
+extension ElchiColors {
+    /// The v3 primary fill: navy with white text (the brand azure stays for the active tab and the brand chips).
+    public var primaryV3: Color { isDark ? Color(hex: 0x1B3563) : navy }
+    public var onPrimaryV3: Color { .white }
+    /// The flat grey of the v3 round buttons (back, bell, refresh) - no shadow.
+    public var iconFill: Color { isDark ? Color(hex: 0x24272E) : Color(hex: 0xE9EDF2) }
+    /// The segmented track and the empty-state circle.
+    public var track: Color { isDark ? Color(hex: 0x24272E) : Color(hex: 0xE4E9EF) }
+    /// The navy of the floating tab bar and the balance pill (a lifted navy on the dark page).
+    public var navyBar: Color { isDark ? Color(hex: 0x1B2A4A) : navy }
+    /// The light blue round behind a card's kind icon (box, envelope, person).
+    public var iconTint: Color { isDark ? Color(hex: 0x0E2A45) : Color(hex: 0xEAF5FF) }
+    /// The v3 card shadow (`0 6 24 rgba(14,27,51,.08)`).
+    public var softShadow: Color { isDark ? Color.black.opacity(0.35) : Color(hex: 0x0E1B33, opacity: 0.08) }
+}
+
+extension ElchiShape {
+    /// v3 cards (the list and detail cards): 26 instead of 22.
+    public static let cardV3: CGFloat = 26
+}
+
+extension ElchiFont {
+    /// v3 tab-root title (24 / 600) and pushed-screen title (20 / 600).
+    public static let h1V3 = poppins(24, .semibold, relativeTo: .title)
+    public static let titleV3 = poppins(20, .semibold, relativeTo: .title2)
+}
+
+private struct ElchiV3Key: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Design v3 look (navy primary, 48 pt grey round buttons, 26 pt cards, 24/20 semibold titles). Off by default.
+    public var elchiV3: Bool {
+        get { self[ElchiV3Key.self] }
+        set { self[ElchiV3Key.self] = newValue }
+    }
+}
+
+extension View {
+    public func elchiV3(_ on: Bool = true) -> some View { environment(\.elchiV3, on) }
+}
+
 public enum Tone: Sendable { case gray, blue, warn, ok, err }
 
 public struct ToneColors: Sendable {

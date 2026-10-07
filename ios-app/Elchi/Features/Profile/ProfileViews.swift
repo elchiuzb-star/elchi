@@ -32,7 +32,7 @@ struct NotificationsView: View {
                 Note(strings.errorText(error), tone: .err)
                 ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await model.load() } }
             case .loaded(let items) where items.isEmpty:
-                EmptyState(icon: .bell, title: strings.t("notifications.empty"), description: strings.t("client.notifications.emptyHint"))
+                EmptyState(icon: .bell, title: strings.t("notifications.empty"))
             case .loaded(let items):
                 if readAll && items.contains(where: { !$0.isRead }) {
                     Button { Task { await model.readAll() } } label: {
@@ -68,8 +68,8 @@ struct NotificationsView: View {
 
 // MARK: - Profil
 
-/// Who is signed in, what the client's orders look like (from v2), the name form and the quick actions in the design's
-/// order. No "Nizolarim" (Q141: there are no dispute screens).
+/// Who is signed in, what the client's orders look like (from v2), the name form and the six quick actions of Profil
+/// v3 (no hints). No "Nizolarim" (Q141: there are no dispute screens).
 struct ProfileView: View {
     let model: ProfileModel
     let session: Session
@@ -80,7 +80,7 @@ struct ProfileView: View {
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
 
-    enum ProfileAction { case orders, proposals, bonus, notifications, threads, safety, help, settings, home, logout }
+    enum ProfileAction { case bonus, notifications, threads, safety, help, logout }
 
     var body: some View {
         @Bindable var model = model
@@ -106,20 +106,15 @@ struct ProfileView: View {
             }
             .disabled(!model.canSave)
             SectionTitle(strings.t("clientProfile.quickActions"))
+            // Profil v3: six rows, no hints. Buyurtmalar, Takliflarim, Sozlamalar and Bosh sahifa live in the drawer.
             ElchiList {
-                row(.pkg, "clientProfile.myOrders", "clientProfile.myOrdersHint", .orders, first: true)
-                row(.tag, "clientProfile.myProposals", "client.profile.myProposalsHint", .proposals)
-                row(.gift, "clientProfile.bonus", "clientProfile.bonusHint", .bonus)
-                ListRow(icon: .bell, title: strings.t("notifications.title"), description: strings.t("clientProfile.notificationsHint"),
-                        dot: unread > 0) { onAction(.notifications) }
+                row(.gift, "clientProfile.bonus", .bonus, first: true)
+                ListRow(icon: .bell, title: strings.t("notifications.title"), dot: unread > 0) { onAction(.notifications) }
                     .accessibilityValue(unread > 0 ? strings.t("client.notifications.new") : "")
-                row(.file, "support.myThreads", "support.myThreadsHint", .threads)
-                row(.block, "safety.centerTitle", "safety.centerDescription", .safety)
-                row(.head, "clientProfile.help", "clientProfile.helpHint", .help)
-                row(.settings, "clientProfile.settings", "driver.profile.settingsHint", .settings)
-                row(.home, "clientProfile.home", "clientProfile.homeHint", .home)
-                ListRow(icon: .logout, title: strings.t("clientProfile.logout"), description: strings.t("clientProfile.logoutHint"),
-                        danger: true) { onAction(.logout) }
+                row(.file, "support.myThreads", .threads)
+                row(.block, "safety.centerTitle", .safety)
+                row(.head, "clientProfile.help", .help)
+                ListRow(icon: .logout, title: strings.t("clientProfile.logout"), danger: true) { onAction(.logout) }
             }
         } footer: {
             EmptyView()
@@ -129,8 +124,8 @@ struct ProfileView: View {
         .onChange(of: model.name) { _, _ in if model.saveResult != nil && !model.saving { model.clearResult() } }
     }
 
-    private func row(_ icon: ElchiIcon, _ title: String, _ hint: String, _ action: ProfileAction, first: Bool = false) -> some View {
-        ListRow(icon: icon, title: strings.t(title), description: strings.t(hint), first: first) { onAction(action) }
+    private func row(_ icon: ElchiIcon, _ title: String, _ action: ProfileAction, first: Bool = false) -> some View {
+        ListRow(icon: icon, title: strings.t(title), first: first) { onAction(action) }
     }
 
     /// Jami / Faol / Taklif, then "Buyurtmalar holati". "—" when the figures could not be loaded (never zeros).
@@ -219,7 +214,7 @@ struct BonusView: View {
     @ViewBuilder
     private var content: some View {
         @Bindable var model = model
-        Note(strings.t(driver ? "promoScreen.creditNotMoney" : "promoScreen.bonusNotMoney"), tone: .warn)
+        Note(strings.t(driver ? "promoScreen.creditNotMoney" : "client.v3.bonusNotMoney"), tone: .warn)
         SectionTitle(strings.t(driver ? "promoScreen.myCredit" : "promoScreen.myBonuses"))
         balance
         if model.programOff {
@@ -227,7 +222,8 @@ struct BonusView: View {
         } else {
             SectionTitle(strings.t("promoScreen.myCode"))
             if driver { driverCodeCard } else { codeCard }
-            Text(strings.t("promoScreen.rewardNote")).font(ElchiFont.caption).foregroundStyle(c.muted)
+            // Profil v3 5.3: the client's caption under the code is gone; the driver keeps it (DESIGN09 3.6, spec E).
+            if driver { Text(strings.t("promoScreen.rewardNote")).font(ElchiFont.caption).foregroundStyle(c.muted) }
             if model.accepted {
                 Note(strings.t("promoScreen.codeOnce"), tone: .ok,
                      title: model.acceptedCode.map { strings.t("client.bonus.codeAcceptedValue", ("code", $0)) })
@@ -235,7 +231,8 @@ struct BonusView: View {
             if !model.hasAttribution && model.referrals.value != nil {
                 SectionTitle(strings.t("promoScreen.enterCode"))
                 ElchiField(text: $model.entered, label: strings.t("promoScreen.friendCode"), placeholder: strings.t("promoScreen.codeExample"),
-                           hint: strings.t("promoScreen.codeOnce"), error: model.entryErrorKey.map { strings.t($0) },
+                           // Profil v3 5.5: no hint under the client's field (only the error); the driver keeps it.
+                           hint: driver ? strings.t("promoScreen.codeOnce") : nil, error: model.entryErrorKey.map { strings.t($0) },
                            keyboard: .asciiCapable, monospaced: true)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
@@ -343,7 +340,11 @@ struct BonusView: View {
                                 .padding(10).background(.white, in: RoundedRectangle(cornerRadius: 12))
                                 .accessibilityLabel(strings.t("promoScreen.qrAria"))
                         }
-                        Text(url).font(ElchiFont.poppins(13)).foregroundStyle(c.accentText).multilineTextAlignment(.center)
+                        // DESIGN09 3.4 NICE: the link in a grey box.
+                        Text(url).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(c.accentText).multilineTextAlignment(.center)
+                            .textSelection(.enabled)
+                            .padding(.horizontal, 12).padding(.vertical, 10).frame(maxWidth: .infinity)
+                            .background(c.field, in: RoundedRectangle(cornerRadius: 12))
                         Text(strings.t("promoScreen.qrNote")).font(ElchiFont.caption).foregroundStyle(c.muted).multilineTextAlignment(.center)
                     } else {
                         Text(strings.t("promoScreen.linkNotReady")).font(ElchiFont.caption).foregroundStyle(c.muted)
@@ -354,6 +355,10 @@ struct BonusView: View {
                                     icon: copied ? .check : .copy) {
                             UIPasteboard.general.string = PromoLogic.shareText(code)
                             copied = true
+                            // DESIGN09 3.5: "Havola nusxalandi" when a link went to the clipboard (the code alone: the label only).
+                            if PromoLogic.showsLink(code) {
+                                banners?.show(.key("driver.v3wallet.linkCopied"), tone: .ok, hideAfter: .seconds(3))
+                            }
                         }
                         ShareLink(item: PromoLogic.shareText(code)) {
                             HStack(spacing: 8) {
@@ -373,6 +378,29 @@ struct BonusView: View {
         } else if !model.loadedCode {
             SkeletonCards(count: 1)
         }
+    }
+
+    /// "3 / 10 safar" and a bar; services still being checked are said in grey and never counted as done.
+    private func progressBlock(_ progress: PromoLogic.Progress) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(strings.t(progress.key, ("done", progress.done), ("required", progress.required)))
+                .font(ElchiFont.poppins(13, .semibold)).foregroundStyle(c.text)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(c.field)
+                    Capsule().fill(c.brand).frame(width: max(progress.fraction > 0 ? 8 : 0, geo.size.width * progress.fraction))
+                }
+            }
+            .frame(height: 8)
+            .accessibilityHidden(true)
+            if progress.inReview {
+                Text(strings.t("promo.progress.inReviewHint")).font(ElchiFont.caption).foregroundStyle(c.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("elchi.bonus.progress")
     }
 
     /// Each campaign: its name and status badge, whose side the person is on, and "Kodim orqali qo'shilganlar: N ta ·
@@ -395,7 +423,10 @@ struct BonusView: View {
                     let deadline = strings.t("promoScreen.deadline", ("date", strings.dateOnly(item.qualificationDeadline) ?? ""))
                     ItemCard(title: item.campaignName, badge: (strings.enrollmentStatus(item), PromoLogic.enrollmentTone(item)),
                              sub: strings.t(referee ? "promoScreen.youAreInvited" : "promoScreen.youInvited"),
-                             meta: referee ? deadline : "\(strings.t("promoScreen.invitedCount", ("count", invited))) · \(deadline)")
+                             meta: referee ? deadline : "\(strings.t("promoScreen.invitedCount", ("count", invited))) · \(deadline)") {
+                        // DESIGN09 3.9: the referee's own progress only (never the inviter's view of someone else).
+                        if let progress = PromoLogic.progress(item) { progressBlock(progress) }
+                    }
                 }
             }
         }

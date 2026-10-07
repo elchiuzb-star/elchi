@@ -116,7 +116,7 @@ struct AccountDeleteView: View {
                 .accessibilityElement(children: .contain)
             }
             if let error = model.error { Note(strings.errorText(error), tone: .err) }
-            CheckRow(strings.t("client.accountDelete.confirm"), on: $model.confirmed, danger: true)
+            CheckRow(strings.t("client.v3.deleteCheck"), on: $model.confirmed, danger: true)
         } footer: {
             ElchiButton(strings.t("client.accountDelete.submit"), variant: .danger, loading: model.submitting) { confirming = true }
                 .disabled(!model.confirmed)

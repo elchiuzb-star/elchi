@@ -9,11 +9,19 @@ import Foundation
 
 // MARK: - The feed: days, groups, times
 
-/// The feed's day chips (`dir.day.*`).
+/// The feed's day chips (Safar v3 5.3): Bugun · Ertaga · 3 kun · 14 kun (DD5 takes at most 14 days). 14 kun is the
+/// default on the feed and the home filter.
 enum DirectionFeedDay: String, CaseIterable, Hashable, Sendable {
-    case today, tomorrow, week
+    case today, tomorrow, days3, days14
 
-    var labelKey: String { "dir.day.\(rawValue)" }
+    var labelKey: String {
+        switch self {
+        case .today: "dir.day.today"
+        case .tomorrow: "dir.day.tomorrow"
+        case .days3: "driver.feed.date3"
+        case .days14: "driver.feed.date14"
+        }
+    }
 }
 
 enum DirectionFeed {
@@ -45,7 +53,10 @@ enum DirectionFeed {
         let end: TimeInterval = switch day {
         case .today: midnight + dayLength
         case .tomorrow: midnight + 2 * dayLength
-        case .week: nowSeconds + 7 * dayLength
+        // Today and the next two calendar days.
+        case .days3: midnight + 3 * dayLength
+        // Exactly 14 days from now: the server refuses a longer range.
+        case .days14: nowSeconds + 14 * dayLength
         }
         return (iso(Date(timeIntervalSince1970: start)), iso(Date(timeIntervalSince1970: end)))
     }

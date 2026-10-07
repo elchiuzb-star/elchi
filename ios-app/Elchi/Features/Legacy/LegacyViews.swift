@@ -10,7 +10,8 @@ struct LegacyOrderDetailView: View {
     let onBack: () -> Void
     let onBids: () -> Void
     let onRate: () -> Void
-    let onDispute: () -> Void
+    /// "Muammo haqida xabar berish" (USER DECISION, Q141): Yordam with a ticket about this order; no dispute form.
+    let onReport: (LegacyOrderDetail) -> Void
     /// Cancelled: back to the refreshed list.
     let onCancelled: () -> Void
     @Environment(LocaleStore.self) private var strings
@@ -26,7 +27,8 @@ struct LegacyOrderDetailView: View {
     var body: some View {
         ScreenScaffold(title: strings.t("orders.detailTitle"), backLabel: strings.t("common.back"), onBack: onBack) {
             if model.notFound {
-                NotFoundState(title: strings.t("driverProfile.notFound"), backLabel: strings.t("common.back"), onBack: onBack)
+                NotFoundState(title: strings.t("driverProfile.notFound"), description: strings.t("client.v3archive.notFoundHint"),
+                              backLabel: strings.t("common.back"), onBack: onBack)
             } else {
                 switch model.order {
                 case .loading:
@@ -59,19 +61,26 @@ struct LegacyOrderDetailView: View {
     private func content(_ order: LegacyOrderDetail) -> some View {
         let actions = LegacyActions.of(order.status, rated: model.rated)
         Note(strings.t("client.legacy.archiveNote"), tone: .gray)
-        ItemCard(title: strings.route(order), icon: .pkg, badge: strings.status(.legacy(order.status)), sub: order.orderNumber,
-                 meta: LegacyTime.display(order.createdAt), right: order.priceMinor.map(strings.money))
+        // BOSQICH 10 2.2: one line "number · dd.MM.yyyy", no icon (as Android and the design).
+        ItemCard(title: strings.route(order), badge: strings.status(.legacy(order.status)),
+                 meta: LegacyListMeta.line(orderNumber: order.orderNumber, createdAt: order.createdAt), right: order.priceMinor.map(strings.money))
+        // BOSQICH 10 2.3: "Olib ketish" / "Yetkazish", like Android and the design.
         ElchiCard {
-            CardRow(strings.t("orderForm.review.pickupPlace"), strings.legacyPlace(order.pickupAddress, order.fromDistrict), first: true)
-            CardRow(strings.t("orderForm.review.dropoffPlace"), strings.legacyPlace(order.dropoffAddress, order.toDistrict))
+            CardRow(strings.t("routeSummary.pickup"), strings.legacyPlace(order.pickupAddress, order.fromDistrict), first: true)
+            CardRow(strings.t("routeSummary.dropoff"), strings.legacyPlace(order.dropoffAddress, order.toDistrict))
         }
         parties(order)
         photo
         driver(order)
         if order.pickup != nil || order.dropoff != nil {
-            ElchiList {
-                ListRow(icon: .pin, title: strings.t("orders.mapPoints"), description: strings.markedLine(order), first: true) { sheet = .map }
-            }
+            // BOSQICH 10 2.4: a white pill with the pin.
+            ElchiButton(strings.t("orders.mapPoints"), variant: .neutral, size: .medium, icon: .pin) { sheet = .map }
+                .accessibilityHint(strings.markedLine(order))
+                .accessibilityIdentifier("elchi.legacy.mapPoints")
+        }
+        if let stars = model.ratedStars {
+            // BOSQICH 10 2.8: what was just sent, for this session (v1 has no rating field to show it later).
+            Note(strings.t("client.v3archive.ratedNote", ("stars", "\(String(repeating: "★", count: stars)) (\(stars) / 5)")), tone: .ok)
         }
         if actions.viewBids {
             ElchiButton(bidsLabel(order), variant: .soft, icon: .tag, action: onBids)
@@ -81,19 +90,19 @@ struct LegacyOrderDetailView: View {
                 .disabled(model.running != nil)
         }
         if actions.rate {
-            ElchiButton(strings.t("rating.titleDriver"), action: onRate)
+            ElchiButton(strings.t("rating.rateDriver"), action: onRate)
         }
         if actions.report && actions.cancel {
             // The design's pair: report (neutral) and cancel (danger), side by side.
             HStack(spacing: 8) {
-                ElchiButton(strings.t("orders.reportProblem"), variant: .neutral, size: .pair, action: onDispute)
+                ElchiButton(strings.t("orders.reportProblem"), variant: .neutral, size: .pair) { onReport(order) }
                 ElchiButton(strings.t("common.cancel"), variant: .dangerSoft, size: .pair) { sheet = .cancel }
                     .accessibilityLabel(strings.t("orders.cancel"))
                     .frame(width: 128) // the report label is the long one: it gets the rest of the row
             }
             .disabled(model.running != nil)
         } else if actions.report {
-            ElchiButton(strings.t("orders.reportProblem"), variant: .neutral, icon: .alert, action: onDispute)
+            ElchiButton(strings.t("orders.reportProblem"), variant: .neutral, icon: .alert) { onReport(order) }
         } else if actions.cancel {
             ElchiButton(strings.t("orders.cancel"), variant: .dangerSoft) { sheet = .cancel }
                 .disabled(model.running != nil)
@@ -102,7 +111,7 @@ struct LegacyOrderDetailView: View {
 
     private func bidsLabel(_ order: LegacyOrderDetail) -> String {
         let count = order.bidsCount ?? 0
-        return count > 0 ? "\(strings.t("orders.viewBids")) (\(count))" : strings.t("orders.viewBids")
+        return count > 0 ? strings.t("client.listingDetail.viewOffers", ("count", count)) : strings.t("orders.viewBids")
     }
 
     @ViewBuilder
@@ -173,7 +182,7 @@ struct LegacyOrderDetailView: View {
 
     private func cancelSheet(_ order: LegacyOrderDetail) -> some View {
         LegacyConfirmSheet(title: strings.t("confirmDialog.cancelOrder.title"), text: strings.t(LegacyActions.of(order.status).cancelTextKey),
-                           confirm: strings.t("common.cancel"), variant: .danger, working: model.running == .cancel,
+                           confirm: strings.t("bookingCancel.confirm"), variant: .danger, working: model.running == .cancel,
                            onConfirm: {
                                // The stored reason is Uzbek text whatever the app's language (the web client's too).
                                let reason = strings.uzbek("client.legacy.cancelReason")
@@ -230,35 +239,62 @@ struct LegacyConfirmSheet: View {
 // MARK: - Xarita nuqtalari
 
 /// The two ends on a small still map (origin ring, destination pin, fitted; one point: centred on it) - v1 has no
-/// route line - and "open in Yandex" for the pickup and, when marked, the dropoff.
+/// route line (Q159: no invented geometry). BOSQICH 10: "Olib ketish" / "Yetkazish" tabs (a missing end has none), a
+/// grey card with the chosen end's address and coordinates, one "open in Yandex" button that follows the tab (the
+/// dropoff keeps the route from here, the old app's behaviour), then "Yopish".
 struct LegacyMapSheet: View {
     let order: LegacyOrderDetail
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: LegacyMapPoints.End?
 
     var body: some View {
         let markers = [order.pickup.map { MapMarker($0, .origin) }, order.dropoff.map { MapMarker($0, .destination) }].compactMap { $0 }
+        let ends = LegacyMapPoints.ends(pickup: order.pickup, dropoff: order.dropoff)
+        let end = selected.flatMap { ends.contains($0) ? $0 : nil } ?? ends.first
         VStack(alignment: .leading, spacing: 14) {
             Text(strings.t("mapSheet.title")).font(ElchiFont.poppins(20, .medium, relativeTo: .title2)).foregroundStyle(c.text)
                 .accessibilityAddTraits(.isHeader)
             ElchiMap(markers: markers, focus: markers.count == 1 ? markers[0].point : nil, zoom: 14, interactive: false,
                      placeholder: strings.markedLine(order))
-                .frame(height: 180)
+                .frame(height: 190)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .accessibilityIdentifier("elchi.legacy.map")
-            if let pickup = order.pickup {
-                ElchiButton(strings.t("mapSheet.openPickup"), variant: .soft, icon: .pin) { openURL(YandexMapLinks.point(pickup)) }
+            if ends.count > 1 {
+                Segmented(ends.map { ($0, strings.t($0 == .pickup ? "routeSummary.pickup" : "routeSummary.dropoff")) },
+                          selected: end ?? .pickup) { selected = $0 }
+                    .accessibilityIdentifier("elchi.legacy.mapTabs")
             }
-            if let dropoff = order.dropoff {
-                ElchiButton(strings.t("mapSheet.open"), variant: .neutral, icon: .nav) { openURL(YandexMapLinks.route(to: dropoff)) }
+            if let end, let point = end == .pickup ? order.pickup : order.dropoff {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(strings.t(end == .pickup ? "orderForm.review.pickupPlace" : "orderForm.review.dropoffPlace"))
+                        .font(ElchiFont.caption).foregroundStyle(c.muted)
+                    Text(end == .pickup ? strings.legacyPlace(order.pickupAddress, order.fromDistrict)
+                                        : strings.legacyPlace(order.dropoffAddress, order.toDistrict))
+                        .font(ElchiFont.poppins(14, .semibold)).foregroundStyle(c.text).fixedSize(horizontal: false, vertical: true)
+                    Text(LegacyMapPoints.coordinates(point)).font(.system(size: 12.5, design: .monospaced)).foregroundStyle(c.muted)
+                        .textSelection(.enabled)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(c.field, in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityElement(children: .combine)
+                if end == .pickup {
+                    ElchiButton(strings.t("mapSheet.openPickup"), variant: .soft, icon: .pin) { openURL(YandexMapLinks.point(point)) }
+                } else {
+                    ElchiButton(strings.t("client.v3archive.openDropoff"), variant: .soft, icon: .nav) { openURL(YandexMapLinks.route(to: point)) }
+                }
             }
+            ElchiButton(strings.t("common.close"), variant: .neutral) { dismiss() }
+                .accessibilityIdentifier("elchi.legacy.mapClose")
             Spacer(minLength: 0)
         }
         .padding(EdgeInsets(top: 28, leading: 20, bottom: 12, trailing: 20))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(c.card.ignoresSafeArea())
-        .presentationDetents([.height(order.dropoff != nil && order.pickup != nil ? 440 : 380)])
+        .presentationDetents([.height(ends.count > 1 ? 640 : 580), .large])
         .presentationCornerRadius(ElchiShape.sheet)
         .presentationDragIndicator(.visible)
     }
@@ -279,7 +315,8 @@ struct LegacyBidsView: View {
     var body: some View {
         ScreenScaffold(title: strings.t("listingBids.title"), backLabel: strings.t("common.back"), onBack: onBack) {
             if model.notFound {
-                NotFoundState(title: strings.t("driverProfile.notFound"), backLabel: strings.t("common.back"), onBack: onBack)
+                NotFoundState(title: strings.t("driverProfile.notFound"), description: strings.t("client.v3archive.notFoundHint"),
+                              backLabel: strings.t("common.back"), onBack: onBack)
             } else if let order = model.order.value, !LegacyActions.bidsOpen(order.status) {
                 Note(strings.t("client.legacy.archiveNote"), tone: .gray)
                 Note(strings.t("client.legacy.bidsClosed"), tone: .gray)
@@ -308,8 +345,11 @@ struct LegacyBidsView: View {
         .refreshable { await model.loadBidsScreen() }
         .task { await model.loadBidsScreen() }
         .sheet(item: $choosing) { bid in
-            LegacyConfirmSheet(title: strings.t("confirmDialog.selectDriver.title"), text: strings.t("confirmDialog.selectDriver.text"),
-                               confirm: strings.t("confirmDialog.selectDriver.confirm"), variant: .primary, working: model.selecting == bid.id,
+            // BOSQICH 10 4.3: who and for how much, then "Ha, tanlayman".
+            LegacyConfirmSheet(title: strings.t("confirmDialog.selectDriver.title"),
+                               text: strings.t("client.v3archive.selectDriverText", ("name", bid.driver?.fullName ?? "—"),
+                                               ("price", bid.priceMinor.map(strings.money) ?? "—")),
+                               confirm: strings.t("client.accept.confirm"), variant: .primary, working: model.selecting == bid.id,
                                onConfirm: {
                                    Task {
                                        let done = await model.select(bid)
@@ -353,39 +393,14 @@ struct LegacyRatingView: View {
             StarsInput(value: $stars) { strings.t("legacyOrder.stars", ("value", $0)) }
             Text(strings.t("legacyOrder.ratingHint")).font(ElchiFont.caption).foregroundStyle(c.muted).frame(maxWidth: .infinity)
             ElchiField(text: $comment, label: strings.t("legacyOrder.ratingComment"), hint: strings.t("bookingChat.autoMaskNote"), multiline: true)
+                // BOSQICH 10 5.5: the design's 300-character cap.
+                .onChange(of: comment) { _, value in if value.count > 300 { comment = String(value.prefix(300)) } }
         } footer: {
             ElchiButton(strings.t("legacyOrder.ratingSubmit"), loading: model.running == .rate) {
                 Task { if await model.rate(stars: stars, comment: comment) { onBack() } }
             }
             .disabled(stars == 0 || model.running != nil)
             ElchiButton(strings.t("legacyOrder.later"), variant: .ghost, size: .medium, action: onBack)
-        }
-    }
-}
-
-// MARK: - Muammo haqida xabar berish (v1)
-
-/// The v1 dispute: a reason from the server's eight codes (default "delayed"), optional details, submit. The order
-/// becomes `disputed`; the detail shows it on return.
-struct LegacyDisputeView: View {
-    let model: LegacyOrderModel
-    let onBack: () -> Void
-    @Environment(LocaleStore.self) private var strings
-    @State private var reason: LegacyDisputeReason = .default
-    @State private var details = ""
-
-    var body: some View {
-        ScreenScaffold(title: strings.t("legacyOrder.dispute.title"), backLabel: strings.t("common.back"), onBack: onBack) {
-            Note(strings.t("client.legacy.archiveNote"), tone: .gray)
-            SelectField(label: strings.t("legacyOrder.dispute.typeLabel"),
-                        options: LegacyDisputeReason.allCases.map { ($0, strings.t($0.key)) },
-                        selected: reason, placeholder: strings.t("blockReport.chooseReason")) { reason = $0 }
-            ElchiField(text: $details, label: strings.t("client.legacy.dispute.details"), hint: strings.t("bookingChat.autoMaskNote"), multiline: true)
-        } footer: {
-            ElchiButton(strings.t("common.send"), icon: .send, loading: model.running == .dispute) {
-                Task { if await model.dispute(reason, comment: details) { onBack() } }
-            }
-            .disabled(model.running != nil)
         }
     }
 }

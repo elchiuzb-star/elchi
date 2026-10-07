@@ -28,7 +28,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import uz.elchi.app.R
 import uz.elchi.app.api.BookingClientDTO
-import uz.elchi.app.api.LegacyOrder
 import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.ProposalThreadDTO
 import uz.elchi.app.i18n.t
@@ -40,6 +39,8 @@ import uz.elchi.app.ui.components.ElchiButton
 import uz.elchi.app.ui.components.EmptyState
 import uz.elchi.app.ui.components.ItemCard
 import uz.elchi.app.ui.components.ItemLine
+import uz.elchi.app.ui.components.ListCard
+import uz.elchi.app.ui.components.ListRow
 import uz.elchi.app.ui.components.Note
 import uz.elchi.app.ui.components.SectionTitle
 import uz.elchi.app.ui.components.SystemBarIcons
@@ -66,7 +67,8 @@ fun ClientOrdersScreen(
     onHome: () -> Unit,
     onListing: (String) -> Unit,
     onBooking: (String) -> Unit,
-    onLegacy: (Long) -> Unit,
+    /** DESIGN10 §0: the "Eski buyurtmalar (n)" row opens the archive screen. */
+    onLegacyList: () -> Unit,
     onNotifications: () -> Unit,
     drawer: DrawerNav,
 ) {
@@ -111,7 +113,6 @@ fun ClientOrdersScreen(
             }
             val bookingsTitle = t(R.string.client_orders_bookings)
             val listingsTitle = t(R.string.client_orders_listings)
-            val legacyTitle = t(R.string.orders_legacy)
             PullToRefreshBox(isRefreshing = s.refreshing && s.loaded, onRefresh = vm::refresh, modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     Modifier.fillMaxSize(),
@@ -128,7 +129,15 @@ fun ClientOrdersScreen(
                     section(listingsTitle, s.listings, "listing", { it.id }, vm::loadMoreListings) { listing ->
                         ListingRow(listing, s.stats[listing.id], ru, languageTag) { onListing(listing.id) }
                     }
-                    section(legacyTitle, s.legacy, "legacy", { it.id.toString() }, vm::loadMoreLegacy) { LegacyRow(it, languageTag) { onLegacy(it.id) } }
+                    // DESIGN10 §0: the v2 lists first, the v1 archive as one row to its own screen.
+                    if (s.legacy.items.isNotEmpty()) item(key = "legacy-row") {
+                        ListCard {
+                            ListRow(
+                                t(R.string.client_v3archive_listRow, "count" to s.legacyTotal), icon = ElchiIcon.ARCHIVE,
+                                description = t(R.string.client_v3archive_drawerHint), first = true, onClick = onLegacyList,
+                            )
+                        }
+                    }
                     item { Box(Modifier.navigationBarsPadding()) }
                 }
             }
@@ -186,24 +195,6 @@ private fun ListingRow(listing: ListingDTO, stats: OfferStats?, ru: Boolean, lan
         null -> null
     }
     ListingItem(listing, stats, ru, languageTag, meta = meta, onClick = onClick)
-}
-
-/**
- * A v1 order (Q4, an archive): route, status, day, price (agreed, else the client's, else the suggested one - DECIMAL
- * so'm on the wire) and the bids while there are any. Opens its archive detail.
- */
-@Composable
-private fun LegacyRow(order: LegacyOrder, languageTag: String, onClick: () -> Unit) {
-    val bids = order.bidsCount ?: 0
-    ItemCard(
-        title = "${order.fromCity ?: order.fromDistrict?.nameUz ?: "?"} → ${order.toCity ?: order.toDistrict?.nameUz ?: "?"}",
-        badge = (tOrNull(OrderRules.legacyStatusKey(order.status)) ?: order.status) to OrderRules.statusTone(order.status),
-        lines = if (bids > 0 && LegacyRules.bidsOpen(order.status)) listOf(ItemLine(t(R.string.app_orderCard_bids, "count" to bids), Elchi.colors.accentText)) else emptyList(),
-        // v1 may send a naive timestamp (Q9: timestamptz migration pending); it is read as UTC, only the day is shown.
-        meta = OrderRules.dayMonth(LegacyRules.isoInstant(order.createdAt), languageTag)?.let { "$it · ${t(R.string.client_listing_legacyArchive)}" },
-        right = OrderRules.legacyPriceMinor(order.finalPrice, order.suggestedPrice, order.clientPrice)?.let { soum(it) },
-        onClick = onClick,
-    )
 }
 
 private const val NOTICE_MS = 4_000L

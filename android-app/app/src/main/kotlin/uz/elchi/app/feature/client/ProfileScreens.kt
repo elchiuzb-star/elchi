@@ -144,15 +144,11 @@ private fun AvatarCard(name: String?, phone: String, badge: String) {
 
 /** Where the profile's quick actions go. */
 data class ProfileNav(
-    val onOrders: () -> Unit,
-    val onProposals: () -> Unit,
     val onBonus: () -> Unit,
     val onNotifications: () -> Unit,
     val onThreads: () -> Unit,
     val onSafety: () -> Unit,
     val onHelp: () -> Unit,
-    val onSettings: () -> Unit,
-    val onHome: () -> Unit,
     val onSignOut: () -> Unit,
 )
 
@@ -205,17 +201,14 @@ fun ProfileScreen(vm: ProfileViewModel, session: Session, onBack: () -> Unit, na
         )
 
         SectionTitle(t(R.string.clientProfile_quickActions))
+        // Profil v3 4.1/4.2: six rows, no hints. Orders, proposals, settings and home stay in the drawer.
         ListCard {
-            ListRow(t(R.string.clientProfile_myOrders), icon = ElchiIcon.PKG, description = t(R.string.clientProfile_myOrdersHint), first = true, onClick = nav.onOrders)
-            ListRow(t(R.string.clientProfile_myProposals), icon = ElchiIcon.TAG, description = t(R.string.client_profile_myProposalsHint), onClick = nav.onProposals)
-            ListRow(t(R.string.clientProfile_bonus), icon = ElchiIcon.GIFT, description = t(R.string.clientProfile_bonusHint), onClick = nav.onBonus)
-            ListRow(t(R.string.notifications_title), icon = ElchiIcon.BELL, description = t(R.string.clientProfile_notificationsHint), iconDot = notificationsDot, onClick = nav.onNotifications)
-            ListRow(t(R.string.support_myThreads), icon = ElchiIcon.FILE, description = t(R.string.support_myThreadsHint), onClick = nav.onThreads)
-            ListRow(t(R.string.safety_centerTitle), icon = ElchiIcon.BLOCK, description = t(R.string.safety_centerDescription), onClick = nav.onSafety)
-            ListRow(t(R.string.clientProfile_help), icon = ElchiIcon.HEAD, description = t(R.string.clientProfile_helpHint), onClick = nav.onHelp)
-            ListRow(t(R.string.clientProfile_settings), icon = ElchiIcon.SETTINGS, description = t(R.string.driver_profile_settingsHint), onClick = nav.onSettings)
-            ListRow(t(R.string.clientProfile_home), icon = ElchiIcon.HOME, description = t(R.string.clientProfile_homeHint), onClick = nav.onHome)
-            ListRow(t(R.string.clientProfile_logout), icon = ElchiIcon.LOGOUT, description = t(R.string.clientProfile_logoutHint), style = ListRowStyle.DANGER, onClick = { confirmLogout = true })
+            ListRow(t(R.string.clientProfile_bonus), icon = ElchiIcon.GIFT, first = true, onClick = nav.onBonus)
+            ListRow(t(R.string.notifications_title), icon = ElchiIcon.BELL, iconDot = notificationsDot, onClick = nav.onNotifications)
+            ListRow(t(R.string.support_myThreads), icon = ElchiIcon.FILE, onClick = nav.onThreads)
+            ListRow(t(R.string.safety_centerTitle), icon = ElchiIcon.BLOCK, onClick = nav.onSafety)
+            ListRow(t(R.string.clientProfile_help), icon = ElchiIcon.HEAD, onClick = nav.onHelp)
+            ListRow(t(R.string.clientProfile_logout), icon = ElchiIcon.LOGOUT, style = ListRowStyle.DANGER, onClick = { confirmLogout = true })
         }
     }
     if (confirmLogout) LogoutConfirm(onConfirm = { confirmLogout = false; nav.onSignOut() }, onDismiss = { confirmLogout = false })
@@ -239,7 +232,8 @@ fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
             EmptyState(ElchiIcon.GIFT, t(R.string.promoScreen_programOff), Modifier.padding(top = 24.dp), description = t(R.string.client_bonus_programOffHint))
             return@StepScaffold
         }
-        Note(t(if (driver) R.string.promoScreen_creditNotMoney else R.string.promoScreen_bonusNotMoney), tone = Tone.WARN)
+        // Profil v3 5.2: the client's short line; the driver keeps the longer credit text (DESIGN09 3.1).
+        Note(t(if (driver) R.string.promoScreen_creditNotMoney else R.string.client_v3_bonusNotMoney), tone = Tone.WARN)
 
         SectionTitle(t(if (driver) R.string.promoScreen_myCredit else R.string.promoScreen_myBonuses))
         when (val balance = s.balance) {
@@ -261,11 +255,11 @@ fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
         SectionTitle(t(R.string.promoScreen_myCode))
         val code = s.code
         when {
-            code != null -> CodeCard(code, vm::markCopied)
+            code != null -> if (driver) DriverCodeCard(code, onCopied = { link -> if (link) vm.markLinkCopied() else vm.markCopied(code.code) }) else CodeCard(code, vm::markCopied)
             s.codeLoading -> SkeletonCard(t(R.string.common_loading), lines = 2)
             else -> s.codeError?.let { LoadFailed(t(R.string.promoScreen_myCode), it, vm::loadCode) }
         }
-        Text(t(R.string.promoScreen_rewardNote), style = Elchi.type.caption, color = Elchi.colors.muted)
+        // Profil v3 5.3: no reward caption under the code card.
 
         // Never an amount or a parcel reward here (Q131/Q147, Q103): the accepted code and "it is not replaced".
         if (s.accepted) Note(t(R.string.promoScreen_codeOnce), tone = Tone.OK, title = t(R.string.client_bonus_codeAcceptedValue, "code" to s.acceptedCode.orEmpty()))
@@ -276,7 +270,7 @@ fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
                 onValueChange = vm::setEntered,
                 label = t(R.string.promoScreen_friendCode),
                 placeholder = t(R.string.promoScreen_codeExample),
-                hint = t(R.string.promoScreen_codeOnce),
+                // Profil v3 5.5: no hint, only the error (the "once only" line shows on the accepted card).
                 error = when {
                     s.entryErrorKey != null -> tOrNull(s.entryErrorKey!!) ?: t(R.string.promoScreen_codeFormat)
                     s.enterError != null -> errorText(s.enterError!!)
@@ -303,17 +297,31 @@ fun BonusScreen(vm: BonusViewModel, onBack: () -> Unit) {
                         t(R.string.promoScreen_invitedCount, "count" to invited).takeIf { item.side != "referee" },
                         PromoRules.date(item.qualificationDeadline)?.let { t(R.string.promoScreen_deadline, "date" to it) },
                     ).joinToString(" · ").takeIf { it.isNotEmpty() }
+                    // DESIGN09 3.9: the referee's own progress (never the referrer's view of someone else, 3.8).
+                    val progress = PromoRules.progressLine(item.side, item.progress)
                     ItemCard(
                         title = item.campaignName,
                         badge = status to PromoRules.enrollmentTone(item.qualificationStatus, item.status),
                         sub = role,
                         lines = listOfNotNull(meta?.let { ItemLine(it) }),
+                        footer = if (progress != null) ({ ProgressFooter(progress) }) else null,
                     )
                 }
                 if (referrals.value.enrollments.isEmpty() && invited > 0) Text(t(R.string.promoScreen_invitedCount, "count" to invited), style = Elchi.type.caption, color = Elchi.colors.muted)
             }
         }
     }
+}
+
+/** "2 / 10 safar" and a bar; the grey in-review line when something waits (never counted as done). */
+@Composable
+private fun ProgressFooter(line: PromoRules.ProgressLine) {
+    val c = Elchi.colors
+    Text(tOrNull(line.key, "done" to line.done, "required" to line.required) ?: "${line.done} / ${line.required}", style = Elchi.type.label, color = c.text)
+    Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(c.field)) {
+        Box(Modifier.fillMaxWidth(line.fraction).height(6.dp).clip(CircleShape).background(c.brand))
+    }
+    if (line.inReview) Text(t(R.string.promo_progress_inReviewHint), style = Elchi.type.caption, color = c.muted)
 }
 
 @Composable
@@ -375,6 +383,62 @@ private fun CodeCard(code: ReferralCodeDTO, onCopied: (String) -> Unit) {
                     activity?.startActivity(chooser) ?: context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 },
                 Modifier.weight(1f).height(44.dp), ButtonVariant.NAVY_LIGHT, ButtonSize.MEDIUM, horizontalPadding = 10.dp, maxLines = 2,
+            )
+        }
+    }
+}
+
+/**
+ * DESIGN09 3.4: the driver's white card (iOS's `driverCodeCard`): the code centred in big mono, the link in a grey
+ * box with "Nusxa olish" (the link when there is one, else the code), then a full-width "Ulashish". No QR on Android:
+ * the project has no QR encoder and this stage adds no dependency (reported deviation). [onCopied] gets true when the
+ * link was copied.
+ */
+@Composable
+private fun DriverCodeCard(code: ReferralCodeDTO, onCopied: (Boolean) -> Unit) {
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    val c = Elchi.colors
+    val shareTitle = t(R.string.client_share_send)
+    val url = PromoRules.shareUrl(code)
+    var copied by remember(code.code) { mutableStateOf(false) }
+    ElchiCard(padding = PaddingValues(16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                code.code,
+                style = Elchi.type.title.copy(fontFamily = FontFamily.Monospace, fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp),
+                color = c.text,
+                textAlign = TextAlign.Center,
+            )
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.field).padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    url ?: t(R.string.promoScreen_linkNotReady),
+                    Modifier.weight(1f),
+                    style = if (url != null) Elchi.type.label.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal) else Elchi.type.caption,
+                    color = if (url != null) c.accentText else c.muted,
+                )
+                ElchiButton(
+                    t(if (copied) R.string.promoScreen_copied else R.string.promoScreen_copy),
+                    {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("ELCHI", PromoRules.shareText(code)))
+                        copied = true
+                        onCopied(url != null)
+                    },
+                    Modifier.height(40.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, horizontalPadding = 12.dp, icon = if (copied) ElchiIcon.CHECK else ElchiIcon.COPY,
+                )
+            }
+            ElchiButton(
+                shareTitle,
+                {
+                    val chooser = Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PromoRules.shareText(code)), shareTitle)
+                    activity?.startActivity(chooser) ?: context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                },
+                Modifier.fillMaxWidth(), ButtonVariant.PRIMARY, ButtonSize.MEDIUM, icon = ElchiIcon.SHARE,
             )
         }
     }
@@ -539,7 +603,7 @@ fun AccountDeleteScreen(vm: AccountDeleteViewModel, onBack: () -> Unit, onDelete
         s.error?.let { Note(errorText(it), tone = Tone.ERR) }
         val border = Elchi.colors.line
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(1.dp, border, RoundedCornerShape(14.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
-            CheckRow(t(R.string.client_accountDelete_confirm), s.confirmed, vm::setConfirmed)
+            CheckRow(t(R.string.client_v3_deleteCheck), s.confirmed, vm::setConfirmed)
         }
     }
     // Design 05's last question before `DELETE /me`; the text is the app's (deletion is immediate, no 30 days).

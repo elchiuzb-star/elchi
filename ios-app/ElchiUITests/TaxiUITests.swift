@@ -39,9 +39,14 @@ final class TaxiUITests: ClientUITestCase {
     }
 
     private func tab(_ name: String) {
-        let item = app.buttons["elchi.tab.\(name)"]
+        // Design v3: Yo'nalishlar is the second segment of Moslar.
+        let item = app.buttons["elchi.tab.\(name == "routes" ? "matches" : name)"]
         XCTAssertTrue(item.waitForExistence(timeout: 15), "no tab \(name)")
         item.tap()
+        if name == "routes" {
+            let segment = app.buttons["elchi.matches.segment.directions"]
+            if segment.waitForExistence(timeout: 10) { segment.tap() }
+        }
     }
 
     private func byId(_ id: String, timeout: TimeInterval = 15) -> XCUIElement {

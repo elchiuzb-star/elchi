@@ -228,6 +228,24 @@ public enum PromoLogic {
         }
     }
 
+    /// The referee's own progress on a campaign card (DESIGN09 3.9): the line key by unit, the bar's fraction and
+    /// whether "still being checked" applies. Nil on the inviter's side (ADR-0023: the referrer never sees the other
+    /// person's activity) or when the server sent no progress. Services in review never count as done.
+    public struct Progress: Equatable, Sendable {
+        public let key: String
+        public let done: Int
+        public let required: Int
+        public let fraction: Double
+        public let inReview: Bool
+    }
+
+    public static func progress(_ enrollment: EnrollmentDTO) -> Progress? {
+        guard enrollment.side == "referee", let p = enrollment.progress, p.required > 0 else { return nil }
+        let done = max(0, min(p.done, p.required))
+        return Progress(key: p.unit == "distinct_trip" ? "promo.progress.doneTrips" : "promo.progress.doneServices",
+                        done: done, required: p.required, fraction: Double(done) / Double(p.required), inReview: p.inReview > 0)
+    }
+
     /// The share link is shown only once the server says it is configured (it may still be unverified).
     public static func showsLink(_ code: ReferralCodeDTO) -> Bool {
         code.shareUrl != nil && code.linkStatus == "configured_unverified"
@@ -291,9 +309,15 @@ public enum SupportText {
 
     public static func typed(_ raw: String) -> String { String(raw.prefix(maxTicketLength)) }
 
-    /// The FAQ answer key: the client's fourth answer is the corrected one (Q142: parcel phones open at departure).
+    /// The FAQ answer key. The client's first and fourth answers are Profil v3's: the first no longer tells clients to
+    /// bid on drivers' listings (Q138: drivers publish none), the fourth keeps Q142 (phones open when the service starts).
     public static func faqAnswerKey(prefix: String, index: Int) -> String {
-        prefix == "support.faq" && index == 4 ? "client.help.faq4Answer" : "\(prefix)\(index)Answer"
+        guard prefix == "support.faq" else { return "\(prefix)\(index)Answer" }
+        switch index {
+        case 1: return "client.v3.faq1Answer"
+        case 4: return "client.v3.faq4Answer"
+        default: return "\(prefix)\(index)Answer"
+        }
     }
 
     /// "Kamida 5 ta belgi yozing" under the field while something, but too little, is written.

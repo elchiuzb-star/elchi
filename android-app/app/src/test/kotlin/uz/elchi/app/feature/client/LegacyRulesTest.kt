@@ -74,21 +74,64 @@ class LegacyRulesTest {
         assertNull(LegacyRules.driverPhone("accepted", null))
     }
 
-    // -- dispute --------------------------------------------------------------------------------------------------
+    // -- problem report = a Yordam ticket (Q141) -------------------------------------------------------------------
 
     @Test
-    fun `the dispute sends the server's enum code, never a sentence`() {
-        assertEquals(
-            listOf("delayed", "lost", "damaged", "receiver_denied", "wrong_address", "payment_issue", "prohibited_item", "other"),
-            LegacyRules.DISPUTE_REASONS,
-        )
-        assertEquals("delayed", LegacyRules.DEFAULT_DISPUTE_REASON)
-        assertEquals("lost", LegacyRules.disputeReason("lost"))
-        // The web client's Uzbek text is refused by the server with 400: it falls back to the default code.
-        assertEquals("delayed", LegacyRules.disputeReason("Haydovchi kelmadi"))
-        assertEquals("delayed", LegacyRules.disputeReason(null))
-        assertEquals("client.legacy.dispute.reason.receiver_denied", LegacyRules.disputeReasonKey("receiver_denied"))
+    fun `a problem report starts a Yordam ticket with the order number`() {
+        assertEquals("EL-10422: ", LegacyRules.supportPrefill("EL-10422"))
+        assertEquals("EL-7: ", LegacyRules.supportPrefill("  EL-7 "))
+        assertNull(LegacyRules.supportPrefill(null))
+        assertNull(LegacyRules.supportPrefill(" "))
     }
+
+    // -- archive list (DESIGN10 1.2) ------------------------------------------------------------------------------
+
+    @Test
+    fun `the chips filter on the phone, completed is delivered and confirmed`() {
+        val all = listOf("draft", "published", "bidding", "accepted", "picked_up", "in_transit", "delivered", "confirmed", "paid_manual", "cancelled", "disputed")
+        assertEquals(all, all.filter { LegacyRules.matches(LegacyRules.Filter.ALL, it) })
+        assertEquals(listOf("delivered", "confirmed", "paid_manual"), all.filter { LegacyRules.matches(LegacyRules.Filter.COMPLETED, it) })
+        assertEquals(listOf("cancelled"), all.filter { LegacyRules.matches(LegacyRules.Filter.CANCELLED, it) })
+        assertEquals(listOf("disputed"), all.filter { LegacyRules.matches(LegacyRules.Filter.DISPUTED, it) })
+        assertEquals(
+            listOf("client.v3archive.filterAll", "status.completed", "status.cancelled", "client.v3archive.filterDisputed"),
+            LegacyRules.Filter.entries.map { it.labelKey },
+        )
+    }
+
+    @Test
+    fun `the meta line is the number and the Tashkent day`() {
+        assertEquals("EL-10422 · 04.08.2026", LegacyRules.numberAndDate("EL-10422", "2026-08-03T20:30:00Z"))
+        assertEquals("04.08.2026", LegacyRules.numberAndDate(null, "2026-08-04T10:00:00"))
+        assertEquals("EL-1", LegacyRules.numberAndDate("EL-1", null))
+        assertNull(LegacyRules.numberAndDate(" ", "nonsense"))
+    }
+
+    @Test
+    fun `the rated note shows only a real star count`() {
+        assertEquals("★★★★ (4 / 5)", LegacyRules.starsText(4))
+        assertNull(LegacyRules.starsText(0))
+        assertNull(LegacyRules.starsText(6))
+    }
+
+    @Test
+    fun `the map sheet has a tab only for an end with a point`() {
+        val both = detail(pickupLat = 41.3, pickupLng = 69.2, dropoffLat = 39.6, dropoffLng = 66.9)
+        assertEquals(listOf(LegacyRules.MapEnd.PICKUP, LegacyRules.MapEnd.DROPOFF), LegacyRules.mapEnds(both))
+        assertEquals(listOf(LegacyRules.MapEnd.DROPOFF), LegacyRules.mapEnds(detail(dropoffLat = 39.6, dropoffLng = 66.9)))
+        assertEquals(emptyList<LegacyRules.MapEnd>(), LegacyRules.mapEnds(detail(pickupLat = 0.0, pickupLng = 0.0)))
+        assertEquals("41.31108, 69.27974", LegacyRules.coordinates(41.311081, 69.279737))
+        val saved = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("ru"))
+            assertEquals("41.30000, 69.20000", LegacyRules.coordinates(41.3, 69.2))
+        } finally {
+            Locale.setDefault(saved)
+        }
+    }
+
+    private fun detail(pickupLat: Double? = null, pickupLng: Double? = null, dropoffLat: Double? = null, dropoffLng: Double? = null) =
+        LegacyOrderDetail(id = 1, status = "bidding", pickupLat = pickupLat, pickupLng = pickupLng, dropoffLat = dropoffLat, dropoffLng = dropoffLng)
 
     // -- Yandex links -------------------------------------------------------------------------------------------
 
@@ -183,7 +226,8 @@ class LegacyRulesTest {
         listOf("DRIVER_NOT_APPROVED", "DRIVER_BLOCKED", "DRIVER_NOT_AVAILABLE").forEach {
             assertEquals(it, "client.legacy.error.driverUnavailable", LegacyRules.errorKey(ApiException(400, it, "x")))
         }
-        assertEquals("client.legacy.dispute.exists", LegacyRules.errorKey(ApiException(409, "ALREADY_EXISTS", "x")))
+        // No dispute form any more (Q141): ALREADY_EXISTS is only the repeated rating, handled as "done".
+        assertNull(LegacyRules.errorKey(ApiException(409, "ALREADY_EXISTS", "x")))
         // Offline and 429 keep the app-wide mapping (BannerPolicy).
         assertNull(LegacyRules.errorKey(ApiException(429, "RATE_LIMITED", "x")))
         assertNull(LegacyRules.errorKey(IllegalStateException()))

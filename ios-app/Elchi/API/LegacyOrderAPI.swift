@@ -143,11 +143,6 @@ extension LegacyOrdersAPI {
         let reason: String
     }
 
-    private struct Dispute: Encodable, Sendable {
-        let reason: String
-        let comment: String?
-    }
-
     public func order(_ id: Int) async throws -> LegacyOrderDetail {
         try await transport.sendV1(method: "GET", path: "/client/orders/\(id)", body: Optional<JSONValue>.none, auth: true,
                                    as: LegacyOrderDetail.self).data
@@ -177,11 +172,5 @@ extension LegacyOrdersAPI {
     public func cancel(_ id: Int, reason: String) async throws {
         _ = try await transport.sendV1(method: "POST", path: "/client/orders/\(id)/cancel", body: Cancel(reason: reason), auth: true,
                                        as: JSONValue.self)
-    }
-
-    /// `POST /api/v1/orders/{id}/disputes` with the reason's enum code (the web sends a sentence and always gets 400).
-    public func openDispute(_ id: Int, reason: LegacyDisputeReason, comment: String?) async throws {
-        _ = try await transport.sendV1(method: "POST", path: "/orders/\(id)/disputes", body: Dispute(reason: reason.rawValue, comment: comment),
-                                       auth: true, as: JSONValue.self)
     }
 }

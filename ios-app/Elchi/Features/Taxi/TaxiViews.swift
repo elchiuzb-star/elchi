@@ -186,6 +186,8 @@ struct CashRecordSection: View {
             }
             .onAppear { if amountText.isEmpty { amountText = Money.grouped(String(dueMinor / 100)) } }
         if needsNote {
+            // DESIGN08 6.3 (NICE, driver only): say what a different amount leads to; the client's form is unchanged.
+            if driver { Note(strings.t("driver.v3bkg.cashDiffWarn"), tone: .warn) }
             ElchiField(text: $note, label: strings.t("listingOwner.commentLabel"), hint: strings.t("app.cash.noteRequired"), multiline: true)
         }
         ElchiButton(strings.t(driver ? "app.cash.markReceived" : "app.cash.markGiven"), loading: model.running == .report) {
@@ -281,9 +283,11 @@ struct DriverTaxiSection: View {
             }
         }
         if actions.showNoShow { noShow(version: version) }
-        if actions.noShowPending { Note(strings.t("driver.noShow.pending"), tone: .warn) }
+        // DESIGN08 5.5: the pending report also says that only the operator may cancel now (Q75).
+        if actions.noShowPending { Note(strings.t("driver.v3bkg.noShowPendingNote"), tone: .warn) }
         if actions.canDropOff {
-            ElchiButton(strings.t("driverBooking.action.dropOff"), loading: model.running == .dropOff) {
+            // DESIGN08 3.4: the same `drop_off` command, worded "Manzilga yetib keldik".
+            ElchiButton(strings.t("driver.v3bkg.arrivedAction"), loading: model.running == .dropOff) {
                 Task { _ = await model.dropOff(version: version) }
             }
             .disabled(model.running != nil)
@@ -297,7 +301,8 @@ struct DriverTaxiSection: View {
     private func noShow(version: Int) -> some View {
         let unlocks = model.unlocksAt(windowStart: ServerTime.parse(booking.base.pickup.windowStart))
         let open = unlocks.map { now >= $0 } ?? false
-        ElchiButton(strings.t("driver.noShow.button"), variant: .neutral, icon: .clock) {
+        // DESIGN08 5.2: red-soft once it may be sent.
+        ElchiButton(strings.t("driver.noShow.button"), variant: open ? .dangerSoft : .neutral, icon: .clock) {
             model.clear()
             noShowSheet = true
         }
@@ -312,7 +317,9 @@ struct DriverTaxiSection: View {
             }
         }
         .font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
-        Text(strings.t("driver.noShow.hint")).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
+        // DESIGN08 5.3: once open, what the operator's decision does (the server sets `no_show` and releases the hold).
+        Text(strings.t(open ? "driver.v3bkg.noShowHintReady" : "driver.noShow.hint")).font(ElchiFont.caption).foregroundStyle(c.muted)
+            .fixedSize(horizontal: false, vertical: true)
         if let error = model.error, model.failed == .noShow, !noShowSheet { Note(strings.noShowErrorText(error, unlocksAt: unlocks), tone: .err) }
         Color.clear.frame(height: 0)
             .task(id: unlocks) {

@@ -76,4 +76,37 @@ class WalletRulesTest {
         assertEquals("+", WalletRules.signed(lines[0]))
         assertEquals("−", WalletRules.signed(lines[1]))
     }
+
+    // -- design 09 (v3) --------------------------------------------------------------------------------------------
+
+    @Test
+    fun `the 6-month chart sums captured commission per Tashkent month from the loaded lines`() {
+        val more = lines + line("commission_capture", "debit", 700_000, "2026-05-31T20:00:00Z") + // 1 June in Tashkent
+            line("commission_capture", "debit", 50_000, "2026-03-10T10:00:00Z") // older than six months
+        val months = WalletRules.monthly(more, Instant.parse("2026-10-01T06:00:00Z"))
+        assertEquals(6, months.size)
+        assertEquals(java.time.YearMonth.of(2026, 5), months.first().month)
+        assertEquals(java.time.YearMonth.of(2026, 10), months.last().month)
+        assertEquals(700_000L, months.first { it.month == java.time.YearMonth.of(2026, 6) }.minor)
+        assertEquals(0L, months.first().minor)
+        assertEquals(2_700_000L, months.first { it.month == java.time.YearMonth.of(2026, 9) }.minor)
+        assertEquals(600_000L, months.last().minor)
+    }
+
+    @Test
+    fun `a top-up above the two-person threshold says two approvers will check it (Q17)`() {
+        assertEquals(100_000_000L, WalletRules.TWO_PERSON_APPROVAL_THRESHOLD_MINOR)
+        assertFalse(WalletRules.largeAmount(""))
+        assertFalse(WalletRules.largeAmount("1000000")) // exactly 1 000 000 so'm: one approver
+        assertTrue(WalletRules.largeAmount("1000001"))
+        assertEquals(listOf(50_000L, 100_000L, 200_000L, 500_000L), WalletRules.PRESETS)
+    }
+
+    @Test
+    fun `the payment purpose is the driver's own national number`() {
+        assertEquals("90 777 11 22", WalletRules.paymentPurposePhone("+998907771122"))
+        assertEquals("90 777 11 22", WalletRules.paymentPurposePhone("907771122"))
+        assertNull(WalletRules.paymentPurposePhone(null))
+        assertNull(WalletRules.paymentPurposePhone("+7 900 000 00 00"))
+    }
 }

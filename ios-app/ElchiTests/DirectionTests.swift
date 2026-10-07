@@ -67,8 +67,12 @@ struct DirectionFeedTests {
         #expect(range.to == "2026-10-07T19:00:00.000Z")
     }
 
-    @Test func aWeekIsSevenDaysFromNow() {
-        #expect(DirectionFeed.range(.week, now: now).to == "2026-10-13T08:30:00.000Z")
+    @Test func threeAndFourteenDays() {
+        // Safar v3 5.3: "3 kun" = today and the next two Tashkent days; "14 kun" = exactly 14 days from now.
+        #expect(DirectionFeed.range(.days3, now: now).from == "2026-10-06T08:30:00.000Z")
+        #expect(DirectionFeed.range(.days3, now: now).to == "2026-10-08T19:00:00.000Z")
+        #expect(DirectionFeed.range(.days14, now: now).to == "2026-10-20T08:30:00.000Z")
+        #expect(DirectionFeedDay.allCases.map(\.labelKey) == ["dir.day.today", "dir.day.tomorrow", "driver.feed.date3", "driver.feed.date14"])
         // Late evening in Tashkent (00:30 next day local) still counts the local day.
         let late = ISO8601DateFormatter().date(from: "2026-10-06T19:30:00Z")!
         #expect(DirectionFeed.range(.today, now: late).to == "2026-10-07T19:00:00.000Z")

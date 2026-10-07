@@ -9,7 +9,8 @@ import XCTest
 ///    and the phone.
 /// 2. `test2_PublishedCancel` - no bids yet; cancel through the confirm sheet -> the list with the banner.
 /// 3. `test3_AcceptedMap` - the driver card with the phone, the map sheet, "open in Yandex" leaves for Safari.
-/// 4. `test4_TransitDispute` - the reason picker, details, submit -> disputed.
+/// 4. `test4_TransitReport` - "Muammo haqida xabar berish" opens Yordam with a ticket naming the order (Q141; the v1
+///    dispute form is gone, BOSQICH 10).
 /// 5. `test5_DeliveredConfirmRate` - confirm sheet -> rating -> sent -> confirmed.
 /// 6. `test6_NotFound` - someone else's order.
 /// 7. `test7_ErrorBanner` - the driver is chosen behind the app's back; "Tanlash" then says the bids are closed.
@@ -41,8 +42,16 @@ final class ClientLegacyUITests: ClientUITestCase {
         row.tap()
     }
 
-    /// Scrolls the orders list to a v1 row (the next page loads as the end comes on screen) and opens it.
+    /// Buyurtmalar -> "Eski buyurtmalar (N)" -> the archive list, scrolled to a v1 row (the next page loads as the end
+    /// comes on screen), opened.
     private func openLegacy(_ orderId: Int, snapAs: String? = nil) {
+        let archive = app.buttons["elchi.orders.legacyRow"]
+        var down = 0
+        while !(archive.exists && archive.isHittable) && down < 30 {
+            app.swipeUp()
+            down += 1
+        }
+        if archive.exists { archive.tap() }
         let row = app.buttons["elchi.legacy.\(orderId)"]
         var swipes = 0
         while !(row.exists && row.isHittable) && swipes < 30 {
@@ -162,24 +171,13 @@ final class ClientLegacyUITests: ClientUITestCase {
         add(note)
     }
 
-    func test4_TransitDispute() {
+    func test4_TransitReport() {
         detail(id("TRANSIT"))
         waitFor("Yo'lda")
         snap("30-detail-in-transit")
         scrollTap("Muammo haqida xabar berish")
-        waitFor("Muammo turi", timeout: 15)
-        snap("31-dispute")
-        app.buttons["Muammo turi"].firstMatch.tap()
-        waitFor("Posilka yo'qoldi")
-        snap("32-dispute-reasons")
-        app.buttons["Posilka yo'qoldi"].firstMatch.tap()
-        type("Posilka hali yetib kelmadi", into: "Tafsilot")
-        app.swipeDown()
-        snap("33-dispute-filled")
-        tap("Yuborish")
-        banner("Nizo ochildi")
-        waitFor("Nizo ochilgan", timeout: 20)
-        snap("34-detail-disputed")
+        waitFor("Qo'llab-quvvatlash", timeout: 15)
+        snap("31-report-opens-support")
     }
 
     func test5_DeliveredConfirmRate() {
@@ -263,13 +261,13 @@ final class ClientLegacyUITests: ClientUITestCase {
         detail(id("TRANSIT2"), locale: locale, theme: theme)
         scrollTap(ru ? "Сообщить о проблеме" : "Muammo haqida xabar berish")
         sleep(1)
-        snap("\(prefix)5-\(locale)-\(theme)-dispute")
+        snap("\(prefix)5-\(locale)-\(theme)-report-support")
         detail(id("DELIVERED2"), locale: locale, theme: theme)
         scrollTap(ru ? "Подтвердить доставку" : "Yetkazilganini tasdiqlash")
         sleep(1)
         snap("\(prefix)6-\(locale)-\(theme)-confirm-sheet")
         detail(id("CONFIRMED"), locale: locale, theme: theme)
-        scrollTap(ru ? "Оцените водителя" : "Haydovchini baholang")
+        scrollTap(ru ? "Оценить водителя" : "Haydovchini baholash")
         sleep(1)
         snap("\(prefix)7-\(locale)-\(theme)-rating")
         launch(locale: locale, theme: theme, reset: false, extra: ["-uiTestOpenLegacy", "1"])

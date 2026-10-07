@@ -10,12 +10,17 @@ import kotlinx.coroutines.launch
 import uz.elchi.app.api.DriverBookingDTO
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.feature.client.Load
+import uz.elchi.app.gps.DriverTracker
 
 /**
  * "Buyurtmalar": the driver's bookings (`GET /me/bookings?role=driver`, cursor pages), live first, then the history.
  * One per driver flow (the tab and the profile's "Buyurtmalarim" read the same list).
  */
-class DriverBookingsViewModel(private val api: ElchiApi) : ViewModel() {
+class DriverBookingsViewModel(
+    private val api: ElchiApi,
+    /** This phone's GPS publisher: the Orders tab shows its bar like every other driver screen (design 08 0.2). */
+    val tracker: DriverTracker? = null,
+) : ViewModel() {
     data class State(
         val bookings: Load<List<DriverBookingDTO>> = Load.Loading,
         val cursor: String? = null,

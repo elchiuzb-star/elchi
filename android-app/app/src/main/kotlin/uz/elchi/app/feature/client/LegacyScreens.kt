@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.TextUnit
@@ -58,7 +60,7 @@ import uz.elchi.app.ui.components.ListRow
 import uz.elchi.app.ui.components.LoadingState
 import uz.elchi.app.ui.components.NotFoundState
 import uz.elchi.app.ui.components.Note
-import uz.elchi.app.ui.components.SelectField
+import uz.elchi.app.ui.components.Segmented
 import uz.elchi.app.ui.components.StarRating
 import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.map.ElchiMap
@@ -91,7 +93,8 @@ fun LegacyDetailScreen(
     onBack: () -> Unit,
     onBids: () -> Unit,
     onRate: () -> Unit,
-    onDispute: () -> Unit,
+    /** "Muammo haqida xabar": Yordam with a ticket started as "{order_number}: " (Q141, user decision). */
+    onReport: (prefill: String?) -> Unit,
     onCancelled: () -> Unit,
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -129,7 +132,7 @@ fun LegacyDetailScreen(
             else -> when (val load = s.order) {
                 Load.Loading -> LoadingState(count = 3)
                 is Load.Failed -> LoadFailed(t(R.string.orders_detailTitle), load.error, vm::refresh)
-                is Load.Ready -> LegacyBody(s, load.value, languageTag, onBids, onRate, onDispute, onSheet = { sheet = it })
+                is Load.Ready -> LegacyBody(s, load.value, languageTag, onBids, onRate, onReport, onSheet = { sheet = it })
             }
         }
     }
@@ -148,7 +151,8 @@ fun LegacyDetailScreen(
         LegacySheet.CANCEL -> CancelSheet(
             title = t(R.string.confirmDialog_cancelOrder_title),
             text = tOrNull(LegacyRules.cancelTextKey(order?.status.orEmpty())) ?: t(R.string.confirmDialog_cancelOrder_text),
-            confirm = t(R.string.common_cancel),
+            // DESIGN10 5.3: "Ha, bekor qilish" in red; the texts stay the app's (the accepted one names the chosen driver).
+            confirm = t(R.string.bookingCancel_confirm),
             back = t(R.string.confirmDialog_back),
             busy = s.busy,
             onConfirm = vm::cancel,
@@ -168,18 +172,20 @@ private fun LegacyBody(
     languageTag: String,
     onBids: () -> Unit,
     onRate: () -> Unit,
-    onDispute: () -> Unit,
+    onReport: (String?) -> Unit,
     onSheet: (LegacySheet) -> Unit,
 ) {
     val status = order.status
     val actions = LegacyRules.actions(status, s.ratedHere)
+    // DESIGN10 2.2: one "EL-10422 · 04.08.2026" line under the route.
     ItemCard(
         title = LegacyRules.route(order),
         badge = (tOrNull(OrderRules.legacyStatusKey(status)) ?: status) to OrderRules.statusTone(status),
-        sub = order.orderNumber,
-        meta = LegacyRules.displayTime(order.createdAt),
+        meta = LegacyRules.numberAndDate(order.orderNumber, order.createdAt),
         right = LegacyRules.priceMinor(order)?.let { soum(it) },
     )
+    // DESIGN10 2.8: after a rating in this session, the stars just sent (the server keeps no rating field to read).
+    if (s.ratedHere) LegacyRules.starsText(s.stars)?.let { Note(t(R.string.client_v3archive_ratedNote, "stars" to it), tone = Tone.OK) }
     ElchiCard {
         CardRow(t(R.string.routeSummary_pickup), order.pickupAddress?.takeIf { it.isNotBlank() } ?: "—", first = true, detail = order.fromDistrict?.nameUz)
         CardRow(t(R.string.routeSummary_dropoff), order.dropoffAddress?.takeIf { it.isNotBlank() } ?: "—", detail = order.toDistrict?.nameUz)
@@ -211,16 +217,19 @@ private fun LegacyBody(
         ElchiButton(t(R.string.orders_confirmDelivered), { onSheet(LegacySheet.CONFIRM) }, Modifier.fillMaxWidth(), enabled = !s.busy)
     }
     if (actions.rate) ElchiButton(t(R.string.rating_rateDriver), onRate, Modifier.fillMaxWidth())
+    // Q141 (user decision): the report is a Yordam ticket about this order, never a dispute form.
+    val report = { onReport(LegacyRules.supportPrefill(order.orderNumber)) }
     if (actions.cancel && actions.report) {
         // The design's pair: "Muammo haqida xabar" beside "Bekor qilish".
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ElchiButton(t(R.string.orders_reportProblem), onDispute, Modifier.weight(1f).height(52.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, horizontalPadding = 12.dp, maxLines = 2)
+            ElchiButton(t(R.string.orders_reportProblem), report, Modifier.weight(1f).height(52.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, horizontalPadding = 12.dp, maxLines = 2)
             ElchiButton(t(R.string.common_cancel), { onSheet(LegacySheet.CANCEL) }, Modifier.weight(1f).height(52.dp), ButtonVariant.DANGER_SOFT, ButtonSize.MEDIUM, enabled = !s.busy, horizontalPadding = 12.dp, maxLines = 2)
         }
     } else {
-        if (actions.report) ElchiButton(t(R.string.orders_reportProblem), onDispute, Modifier.fillMaxWidth(), ButtonVariant.NEUTRAL)
+        if (actions.report) ElchiButton(t(R.string.orders_reportProblem), report, Modifier.fillMaxWidth(), ButtonVariant.NEUTRAL)
         if (actions.cancel) ElchiButton(t(R.string.orders_cancel), { onSheet(LegacySheet.CANCEL) }, Modifier.fillMaxWidth(), ButtonVariant.DANGER_SOFT, enabled = !s.busy)
     }
+    if (actions.report) Text(t(R.string.client_v3archive_problemViaSupport), style = Elchi.type.caption, color = Elchi.colors.muted)
 }
 
 /** The driver v1 put on the order: name, car and plate, rating (never an invented one); the phone from `accepted` on. */
@@ -259,9 +268,10 @@ private fun vehicleLine(car: String?, plate: String?): String? =
 // -- map-sheet ---------------------------------------------------------------------------------------------------
 
 /**
- * "Xarita nuqtalari": a small still map with the pickup ring and the drop-off pin (fitted; one point is centred),
- * no route line (v1 has none), and the old app's Yandex Maps links. Strings are resolved here - the sheet is its own
- * window.
+ * "Xarita nuqtalari" (DESIGN10 3.x): a small still map with the pickup ring and the drop-off pin (fitted; one point is
+ * centred), no route line (v1 has none); "Olib ketish" / "Yetkazish" tabs (only for an end with a point), a grey card
+ * with the selected end's place, address and coordinates, one Yandex button that follows the tab (the drop-off one is
+ * still the old app's drive from here), and "Yopish". Strings are resolved here - the sheet is its own window.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -275,14 +285,25 @@ private fun LegacyMapSheet(order: LegacyOrderDetail, onDismiss: () -> Unit) {
     val focus = remember(markers) {
         if (markers.size == 1) MapFocus.At(markers.single().point, SINGLE_POINT_ZOOM) else MapFocus.Fit(markers.map { it.point })
     }
+    val ends = remember(order) { LegacyRules.mapEnds(order) }
+    var selected by rememberSaveable { mutableStateOf(ends.firstOrNull() ?: LegacyRules.MapEnd.PICKUP) }
+    val labels = mapOf(LegacyRules.MapEnd.PICKUP to t(R.string.routeSummary_pickup), LegacyRules.MapEnd.DROPOFF to t(R.string.routeSummary_dropoff))
+    val placeLabel = t(if (selected == LegacyRules.MapEnd.PICKUP) R.string.orderForm_review_pickupPlace else R.string.orderForm_review_dropoffPlace)
     val title = t(R.string.mapSheet_title)
     val openPickup = t(R.string.mapSheet_openPickup)
-    val openRoute = t(R.string.mapSheet_open)
+    val openDropoff = t(R.string.client_v3archive_openDropoff)
+    val close = t(R.string.common_close)
     val unavailable = t(R.string.client_map_unavailable)
+    val point = if (selected == LegacyRules.MapEnd.PICKUP) pickup else dropoff
+    val address = if (selected == LegacyRules.MapEnd.PICKUP) {
+        order.pickupAddress?.takeIf { it.isNotBlank() } ?: order.fromDistrict?.nameUz
+    } else {
+        order.dropoffAddress?.takeIf { it.isNotBlank() } ?: order.toDistrict?.nameUz
+    }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = c.card) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = Elchi.type.title.copy(fontSize = TextUnit(20f, TextUnitType.Sp), lineHeight = TextUnit(24f, TextUnitType.Sp)), color = c.text)
-            Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(20.dp))) {
+            Box(Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(20.dp))) {
                 ElchiMap(
                     Modifier.fillMaxSize(),
                     markers = markers,
@@ -292,12 +313,25 @@ private fun LegacyMapSheet(order: LegacyOrderDetail, onDismiss: () -> Unit) {
                     placeholderTitle = unavailable,
                 )
             }
-            if (pickup != null) {
-                ElchiButton(openPickup, { openExternal(context, activity, LegacyRules.yandexPointUrl(pickup.lat, pickup.lng)) }, Modifier.fillMaxWidth(), ButtonVariant.SOFT)
+            if (ends.size > 1) Segmented(ends.map { it to labels.getValue(it) }, selected, onSelect = { end: LegacyRules.MapEnd -> selected = end })
+            if (point != null) {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.field).padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(placeLabel, style = Elchi.type.caption, color = c.muted)
+                    address?.let { Text(it, style = Elchi.type.bodyStrong, color = c.text) }
+                    Text(LegacyRules.coordinates(point.lat, point.lng), style = Elchi.type.caption.copy(fontFamily = FontFamily.Monospace), color = c.muted)
+                }
+                val url = if (selected == LegacyRules.MapEnd.PICKUP) LegacyRules.yandexPointUrl(point.lat, point.lng) else LegacyRules.yandexRouteUrl(point.lat, point.lng)
+                ElchiButton(
+                    if (selected == LegacyRules.MapEnd.PICKUP) openPickup else openDropoff,
+                    { openExternal(context, activity, url) },
+                    // The long "…joyini Yandex Xaritada ochish" wraps instead of being cut.
+                    Modifier.fillMaxWidth(), ButtonVariant.SOFT, icon = ElchiIcon.PIN, maxLines = 2,
+                )
             }
-            if (dropoff != null) {
-                ElchiButton(openRoute, { openExternal(context, activity, LegacyRules.yandexRouteUrl(dropoff.lat, dropoff.lng)) }, Modifier.fillMaxWidth(), ButtonVariant.NEUTRAL)
-            }
+            ElchiButton(close, onDismiss, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM)
         }
     }
 }
@@ -359,10 +393,14 @@ fun LegacyBidsScreen(vm: LegacyOrderViewModel, languageTag: String, onBack: () -
         }
     }
     if (s.selecting != null) {
+        // DESIGN10 4.3: who and for how much, then "Ha, tanlayman".
+        val bid = (s.bids as? Load.Ready)?.value?.firstOrNull { it.id == s.selecting }
+        val name = bid?.driver?.fullName?.takeIf { it.isNotBlank() } ?: t(R.string.dispute_side_driver)
+        val price = bid?.let { LegacyRules.bidPriceMinor(it.price) }?.let { soum(it) }
         CancelSheet(
             title = t(R.string.confirmDialog_selectDriver_title),
-            text = t(R.string.confirmDialog_selectDriver_text),
-            confirm = t(R.string.confirmDialog_selectDriver_confirm),
+            text = if (price != null) t(R.string.client_v3archive_selectDriverText, "name" to name, "price" to price) else t(R.string.confirmDialog_selectDriver_text),
+            confirm = t(R.string.client_accept_confirm),
             back = t(R.string.confirmDialog_back),
             busy = s.busy,
             onConfirm = vm::select,
@@ -417,46 +455,12 @@ fun LegacyRatingScreen(vm: LegacyOrderViewModel, onBack: () -> Unit, onDone: () 
         ElchiField(
             s.ratingComment,
             vm::setRatingComment,
+            // DESIGN10 5.5: at most 300 characters (the view model cuts the rest).
             label = t(R.string.legacyOrder_ratingComment),
             singleLine = false,
             minHeight = 96.dp,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             hint = t(R.string.app_bookingCancel_commentHint),
-        )
-    }
-}
-
-// -- client-dispute (v1) -----------------------------------------------------------------------------------------
-
-/**
- * `client-dispute` "Muammo haqida xabar berish" (v1): one of the server's reason codes (labels from the dictionary,
- * the code on the wire) and optional details; the order becomes `disputed`.
- */
-@Composable
-fun LegacyDisputeScreen(vm: LegacyOrderViewModel, onBack: () -> Unit, onDone: () -> Unit) {
-    val s by vm.state.collectAsStateWithLifecycle()
-    LaunchedEffect(s.done) {
-        if (s.done == LegacyDone.DISPUTED) {
-            vm.consumeDone()
-            onDone()
-        }
-    }
-    val reasons = LegacyRules.DISPUTE_REASONS.map { it to (tOrNull(LegacyRules.disputeReasonKey(it)) ?: it) }
-    StepScaffold(
-        title = t(R.string.legacyOrder_dispute_title),
-        onBack = onBack,
-        footer = { ElchiButton(t(R.string.common_send), vm::openDispute, Modifier.fillMaxWidth(), loading = s.busy) },
-    ) {
-        ArchiveNote()
-        SelectField(t(R.string.common_reason), s.disputeReason, reasons, vm::setDisputeReason, placeholder = t(R.string.common_reason))
-        ElchiField(
-            s.disputeDetails,
-            vm::setDisputeDetails,
-            label = t(R.string.client_legacy_dispute_details),
-            singleLine = false,
-            minHeight = 110.dp,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            hint = t(R.string.blockReport_detailsHint),
         )
     }
 }

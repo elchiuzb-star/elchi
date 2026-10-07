@@ -32,17 +32,15 @@ import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.theme.Elchi
 
 /**
- * What design 07 adds to an approved driver's home, under the 06 content: the "offers hold nothing" line (§1.1),
- * three tiles counted on the client from the lists the tabs already read (§1.2; no stats endpoint) and "Yangi
- * safar rejalashtirish" (§1.3).
+ * Under the home listings (Safar v3 1.11-1.14): three tiles counted on the client from the lists the tabs already read
+ * (no stats endpoint), "Yangi safar rejalashtirish" - which now adds a direction (Q150: the system plans the trips) -
+ * and the "offers hold nothing" line (§9 "Taklif berdim ≠ bron", kept although the design dropped it).
  */
 @Composable
-internal fun DriverHomeWork(work: DriverWork, nav: DriverNav) {
+internal fun DriverHomeWork(work: DriverWork, nav: DriverNav, onMatches: () -> Unit) {
     val trips by work.trips.state.collectAsStateWithLifecycle()
     val proposals by work.proposals.state.collectAsStateWithLifecycle()
     val bookings by work.bookings.state.collectAsStateWithLifecycle()
-    // §9 "Taklif berdim ≠ bron": the commission is held at accept, never at proposal.
-    Text(t(R.string.driver_dash_balanceNoHold), style = Elchi.type.caption, color = Elchi.colors.muted)
     val bookingStatuses: Load<List<String>> = when (val b = bookings.bookings) {
         Load.Loading -> Load.Loading
         is Load.Failed -> Load.Failed(b.error)
@@ -50,11 +48,14 @@ internal fun DriverHomeWork(work: DriverWork, nav: DriverNav) {
     }
     val stats = Design07Rules.homeStats(trips.trips, proposals.lists[ProposalTab.OPEN], bookingStatuses)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Safarlar → "Yo'nalishlarim" (Moslar segment 2, where the trips are); Takliflar → Moslar (as on iOS).
         StatTile(t(R.string.driver_dash_statTrips), stats.trips, Modifier.weight(1f), nav.onRoutes)
-        StatTile(t(R.string.client_listing_stepOffers), stats.offers, Modifier.weight(1f), nav.onProposals)
+        StatTile(t(R.string.client_listing_stepOffers), stats.offers, Modifier.weight(1f), onMatches)
         StatTile(t(R.string.client_orders_bookings), stats.bookings, Modifier.weight(1f), nav.onOrders)
     }
-    ElchiButton(t(R.string.driver_dash_planTrip), nav.onAddTrip, Modifier.fillMaxWidth(), ButtonVariant.SOFT, icon = ElchiIcon.PLUS)
+    ElchiButton(t(R.string.driver_dash_planTrip), nav.onAddDirection, Modifier.fillMaxWidth(), ButtonVariant.SOFT, icon = ElchiIcon.PLUS)
+    // §9 "Taklif berdim ≠ bron": the commission is held at accept, never at proposal.
+    Text(t(R.string.driver_dash_balanceNoHold), style = Elchi.type.caption, color = Elchi.colors.muted)
 }
 
 /** One tile: the label over the count ("—" while it cannot be counted); a tap opens its place. */

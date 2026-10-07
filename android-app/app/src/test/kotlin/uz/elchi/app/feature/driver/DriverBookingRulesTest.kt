@@ -159,4 +159,136 @@ class DriverBookingRulesTest {
         val now = Instant.parse("2026-10-01T10:00:00Z")
         assertEquals(listOf("c", "b", "s", "d", "a"), DriverBookingRules.ordered(listOf(a, stale, b, c, d), now).map { it.id })
     }
+
+    // -- design 08 (v3) --------------------------------------------------------------------------------------------
+
+    private val pending = uz.elchi.app.api.BookingNoShowReviewDTO(status = "pending")
+
+    @Test
+    fun `list badges are short, detail badges long, and a pending no-show review is said in both`() {
+        assertEquals("status.in_transit", DriverBookingRules.badgeKey(ServiceType.PARCEL, "in_transit", short = true))
+        assertEquals("status.in_transit", DriverBookingRules.badgeKey(ServiceType.PARCEL, "picked_up", short = true))
+        assertEquals("status.delivered", DriverBookingRules.badgeKey(ServiceType.PARCEL, "delivered", short = true))
+        assertEquals("parcel.status.driverDeparted", DriverBookingRules.badgeKey(ServiceType.PARCEL, "in_transit"))
+        assertEquals("status.onboard", DriverBookingRules.badgeKey(ServiceType.PASSENGER, "onboard", short = true))
+        // Q7: never "Kelmadi" before the operator decided - "Kelmadi · ko'rikda", red, in the list and the detail.
+        assertEquals("driver.v3bkg.noShowReviewBadge", DriverBookingRules.badgeKey(ServiceType.PASSENGER, "awaiting_pickup", short = true, review = pending))
+        assertEquals("driver.v3bkg.noShowReviewBadge", DriverBookingRules.badgeKey(ServiceType.PASSENGER, "awaiting_pickup", review = pending))
+        assertEquals(Tone.ERR, DriverBookingRules.badgeTone(ServiceType.PASSENGER, "awaiting_pickup", pending))
+        assertEquals(Tone.WARN, DriverBookingRules.badgeTone(ServiceType.PASSENGER, "awaiting_pickup", uz.elchi.app.api.BookingNoShowReviewDTO(status = "rejected")))
+        assertEquals("status.no_show", DriverBookingRules.badgeKey(ServiceType.PASSENGER, "no_show", review = pending))
+    }
+
+    @Test
+    fun `row icon, price basis and dimming follow the service`() {
+        assertEquals(uz.elchi.app.ui.icons.ElchiIcon.PKG, DriverBookingRules.rowIcon(ServiceType.PARCEL))
+        assertEquals(uz.elchi.app.ui.icons.ElchiIcon.PIN, DriverBookingRules.rowIcon(ServiceType.PASSENGER))
+        assertFalse(DriverBookingRules.seatsPriced(booking()))
+        assertTrue(DriverBookingRules.seatsPriced(booking().copy(serviceType = ServiceType.PASSENGER)))
+        assertFalse(DriverBookingRules.seatsPriced(booking(promo = driverPromo).copy(serviceType = ServiceType.PASSENGER)))
+        assertTrue(DriverBookingRules.dimmed("completed"))
+        assertTrue(DriverBookingRules.dimmed("cancelled"))
+        assertFalse(DriverBookingRules.dimmed("onboard"))
+    }
+
+    @Test
+    fun `the hero pill and the GPS-off note read this phone's tracker`() {
+        val off = uz.elchi.app.gps.TrackerSnapshot()
+        val on = uz.elchi.app.gps.TrackerSnapshot(phase = uz.elchi.app.gps.TrackerPhase.ACTIVE, tripId = "trp_9")
+        val otherTrip = on.copy(tripId = "trp_1")
+        assertEquals(HeroChip.TRACKING, DriverBookingRules.heroChip("confirmed", "trp_9", on))
+        assertEquals(HeroChip.TRACKING, DriverBookingRules.heroChip("awaiting_pickup", "trp_9", off))
+        assertEquals(HeroChip.LIVE, DriverBookingRules.heroChip("onboard", "trp_9", on))
+        assertEquals(HeroChip.LIVE, DriverBookingRules.heroChip("in_transit", "trp_9", on.copy(phase = uz.elchi.app.gps.TrackerPhase.STARTING)))
+        assertEquals(HeroChip.GPS_OFF, DriverBookingRules.heroChip("onboard", "trp_9", off))
+        assertEquals(HeroChip.GPS_OFF, DriverBookingRules.heroChip("in_transit", "trp_9", otherTrip))
+        assertEquals(HeroChip.GPS_OFF, DriverBookingRules.heroChip("onboard", "trp_9", on.copy(phase = uz.elchi.app.gps.TrackerPhase.PERMISSION_DENIED)))
+        assertTrue(DriverBookingRules.gpsOffWarn("onboard", "trp_9", off))
+        assertFalse(DriverBookingRules.gpsOffWarn("onboard", "trp_9", on))
+        assertFalse(DriverBookingRules.gpsOffWarn("arrived", "trp_9", off))
+        assertFalse(DriverBookingRules.gpsOffWarn("onboard", null, off))
+    }
+
+    @Test
+    fun `the arrived note is passenger only (Q139)`() {
+        assertTrue(DriverBookingRules.arrivedNote(ServiceType.PASSENGER, "arrived"))
+        assertFalse(DriverBookingRules.arrivedNote(ServiceType.PARCEL, "delivered"))
+        assertFalse(DriverBookingRules.arrivedNote(ServiceType.PASSENGER, "onboard"))
+    }
+
+    private fun amendment(id: String, side: String, status: String, expires: String) = uz.elchi.app.api.generated.AmendmentDTO(
+        authorSide = side, bookingId = "bkg_1", changes = ElchiJson.parseToJsonElement("{}"), expiresAt = expires, id = id,
+        newQuantity = 2, newTotalMinor = 30000000, newUnitPriceMinor = 15000000, status = status, version = 1,
+    )
+
+    @Test
+    fun `the detail says the driver's newest proposal - open or accepted - and nothing else`() {
+        val now = Instant.parse("2026-10-01T10:00:00Z")
+        val open = amendment("a1", "driver", "proposed", "2026-10-01T12:00:00Z")
+        assertEquals(DriverAmendNotice.Pending(open), DriverBookingRules.amendNotice(listOf(open), "confirmed", now))
+        // Expired, someone else's, or the booking moved on: no line.
+        assertNull(DriverBookingRules.amendNotice(listOf(open.copy(expiresAt = "2026-10-01T09:00:00Z")), "confirmed", now))
+        assertNull(DriverBookingRules.amendNotice(listOf(open.copy(authorSide = "client")), "confirmed", now))
+        assertNull(DriverBookingRules.amendNotice(listOf(open), "awaiting_pickup", now))
+        val accepted = amendment("a2", "driver", "accepted", "2026-10-01T11:00:00Z")
+        assertEquals(DriverAmendNotice.Accepted(accepted), DriverBookingRules.amendNotice(listOf(accepted), "awaiting_pickup", now))
+        assertNull(DriverBookingRules.amendNotice(listOf(accepted), "completed", now))
+        // The newest (latest expiry) wins.
+        val rejected = amendment("a3", "driver", "rejected", "2026-10-01T13:00:00Z")
+        assertNull(DriverBookingRules.amendNotice(listOf(accepted, rejected), "confirmed", now))
+        assertEquals(DriverAmendNotice.Pending(open), DriverBookingRules.amendNotice(listOf(accepted, open), "confirmed", now))
+    }
+
+    @Test
+    fun `the proposal sentence drops the reason the amendment does not carry`() {
+        val m = "\u2063"
+        assertEquals(
+            "Yangi narx taklifi yuborildi: 2 × 150 000 so'm — mijoz javobi kutilmoqda.",
+            DriverBookingRules.dropReason("Yangi narx taklifi yuborildi: 2 × 150 000 so'm · Sabab: $m — mijoz javobi kutilmoqda.", m),
+        )
+        assertEquals(
+            "Новая цена отправлена: 300 000 сум — ждём ответа клиента.",
+            DriverBookingRules.dropReason("Новая цена отправлена: 300 000 сум · Причина: $m — ждём ответа клиента.", m),
+        )
+        assertEquals("no marker", DriverBookingRules.dropReason("no marker", m))
+    }
+
+    @Test
+    fun `the call button rings the client after boarding, the receiver after departure, never the sender`() {
+        val visibleContact = "{\"phones_visible\":true,\"support_available\":true}"
+        val parcel = booking(status = "confirmed")
+        assertEquals(ClientCall.AtDeparture, DriverBookingRules.clientCall(parcel))
+        val departed = booking(status = "in_transit", contacts = "{\"receiver_name\":\"Dilshod\",\"receiver_phone\":\"+998901234567\"}")
+        assertEquals(ClientCall.Open("+998901234567"), DriverBookingRules.clientCall(departed))
+        assertEquals(ClientCall.Closed, DriverBookingRules.clientCall(booking(status = "completed")))
+        val taxi = booking(status = "awaiting_pickup").copy(serviceType = ServiceType.PASSENGER)
+        assertEquals(ClientCall.AfterBoard, DriverBookingRules.clientCall(taxi))
+        val withPhone = taxi.copy(client = taxi.client!!.copy(contactPhone = "+998911112233"))
+        // The server sent a number but says phones are hidden: still closed.
+        assertEquals(ClientCall.AfterBoard, DriverBookingRules.clientCall(withPhone))
+        val boarded = withPhone.copy(serviceStatus = "onboard", contact = ElchiJson.decodeFromString(uz.elchi.app.api.BookingContactDTO.serializer(), visibleContact))
+        assertEquals(ClientCall.Open("+998911112233"), DriverBookingRules.clientCall(boarded))
+    }
+
+    @Test
+    fun `tracking note claims background sending only while the service runs`() {
+        val active = uz.elchi.app.gps.TrackerSnapshot(phase = uz.elchi.app.gps.TrackerPhase.ACTIVE, tripId = "trp_9")
+        assertEquals("driverTracking.foregroundOnly", DriverBookingRules.trackingNoteKey(active))
+        assertEquals("driver.gps.backgroundOn", DriverBookingRules.trackingNoteKey(active.copy(serviceRunning = true)))
+        assertEquals("driverTracking.foregroundOnly", DriverBookingRules.trackingNoteKey(active.copy(phase = uz.elchi.app.gps.TrackerPhase.IDLE, serviceRunning = true)))
+    }
+
+    @Test
+    fun `a proposal's reason is kept only once this phone sent it`() {
+        DriverAmendReasons.clear()
+        DriverAmendReasons.observe("bkg_r", "Yuk og'irroq", justSent = false)
+        assertNull(DriverAmendReasons.sent("bkg_r"))
+        DriverAmendReasons.observe("bkg_r", "", justSent = true)
+        assertEquals("Yuk og'irroq", DriverAmendReasons.sent("bkg_r"))
+        // A later emission of the same notice keeps it; another booking knows nothing.
+        DriverAmendReasons.observe("bkg_r", "", justSent = true)
+        assertEquals("Yuk og'irroq", DriverAmendReasons.sent("bkg_r"))
+        assertNull(DriverAmendReasons.sent("bkg_other"))
+        DriverAmendReasons.clear()
+    }
 }

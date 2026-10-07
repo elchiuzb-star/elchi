@@ -60,21 +60,50 @@ struct LegacyActionsTests {
     }
 }
 
-struct LegacyDisputeTests {
-    @Test func reasonsAreTheServerEnumCodes() {
-        #expect(LegacyDisputeReason.allCases.map(\.rawValue) == [
-            "delayed", "lost", "damaged", "receiver_denied", "wrong_address", "payment_issue", "prohibited_item", "other",
-        ])
-        #expect(LegacyDisputeReason.default == .delayed)
-        #expect(LegacyDisputeReason.receiverDenied.key == "client.legacy.dispute.reason.receiver_denied")
+struct LegacyArchiveTests {
+    private func order(_ id: Int, _ status: String) -> LegacyOrder {
+        Fixture.decode(LegacyOrder.self, #"{"id":\#(id),"status":"\#(status)"}"#)
     }
 
-    @Test func everyReasonHasALabel() {
-        let uz = Bundle.main.path(forResource: "uz", ofType: "lproj").flatMap(Bundle.init(path:))
-        for reason in LegacyDisputeReason.allCases {
-            let text = uz?.localizedString(forKey: reason.key, value: "\u{0}", table: nil)
-            #expect(text != nil && text != "\u{0}", "\(reason.key)")
-        }
+    @Test func chipsFilterTheLoadedRows() {
+        let rows = [order(1, "bidding"), order(2, "delivered"), order(3, "confirmed"), order(4, "cancelled"), order(5, "disputed")]
+        #expect(LegacyFilter.all.apply(rows).map(\.id) == [1, 2, 3, 4, 5])
+        #expect(LegacyFilter.completed.apply(rows).map(\.id) == [2, 3])
+        #expect(LegacyFilter.cancelled.apply(rows).map(\.id) == [4])
+        #expect(LegacyFilter.disputed.apply(rows).map(\.id) == [5])
+        #expect(LegacyFilter.allCases.map(\.labelKey) == ["client.v3archive.filterAll", "status.completed", "status.cancelled",
+                                                           "client.v3archive.filterDisputed"])
+    }
+
+    @Test func aShortFilteredListAsksForMorePages() {
+        #expect(LegacyFilter.wantsMore(filtered: 2, hasMore: true))
+        #expect(!LegacyFilter.wantsMore(filtered: 2, hasMore: false))
+        #expect(!LegacyFilter.wantsMore(filtered: LegacyFilter.screenful, hasMore: true))
+    }
+
+    @Test func metaIsNumberAndDay() {
+        #expect(LegacyListMeta.line(orderNumber: "EL-10422", createdAt: "2026-08-04T10:00:00") == "EL-10422 · 04.08.2026")
+        #expect(LegacyListMeta.line(orderNumber: nil, createdAt: "2026-08-04T22:30:00Z") == "05.08.2026") // Tashkent day
+        #expect(LegacyListMeta.line(orderNumber: nil, createdAt: nil) == nil)
+    }
+
+    /// USER DECISION (Q141): "Muammo haqida xabar" opens a Yordam ticket that names the order; no dispute form.
+    @Test func supportTicketNamesTheOrder() {
+        #expect(LegacySupport.prefill(orderNumber: "EL-10422", id: 7) == "EL-10422: ")
+        #expect(LegacySupport.prefill(orderNumber: " ", id: 7) == "#7: ")
+    }
+
+    @Test func mapSheetTabsAndCoordinates() {
+        let a = GeoPoint(lat: 41.311081, lng: 69.279737)
+        #expect(LegacyMapPoints.ends(pickup: a, dropoff: nil) == [.pickup])
+        #expect(LegacyMapPoints.ends(pickup: nil, dropoff: a) == [.dropoff])
+        #expect(LegacyMapPoints.ends(pickup: a, dropoff: a) == [.pickup, .dropoff])
+        #expect(LegacyMapPoints.coordinates(a) == "41.31108, 69.27974")
+    }
+
+    @Test func pageTotalIsRead() {
+        let page = Fixture.decode(LegacyOrderPage.self, #"{"items":[],"pagination":{"page":1,"limit":20,"total":41,"total_pages":3}}"#)
+        #expect(page.pagination?.total == 41)
     }
 }
 
@@ -145,8 +174,7 @@ struct LegacyErrorTests {
         }
     }
 
-    @Test func disputeExistsAndStatusRefusals() {
-        #expect(LegacyErrors.key(error("ALREADY_EXISTS", 409), for: .dispute) == "client.legacy.dispute.exists")
+    @Test func statusRefusals() {
         #expect(LegacyErrors.key(error("ORDER_INVALID_STATUS"), for: .cancel) == "client.legacy.error.orderChanged")
         #expect(LegacyErrors.key(error("VALIDATION_ERROR"), for: .rate) == nil)
         #expect(LegacyErrors.key(error("ANY", 429), for: .confirm) == "error.RATE_LIMITED")
@@ -203,11 +231,26 @@ struct LegacyPagingTests {
 }
 
 struct BannerPolicyTests {
-    @Test func successInfoWarnHideAfterFourSecondsErrorsStay() {
+    /// BOSQICH 10 7.2: ok leaves after 4 s; err, warn and info stay (with ×) until closed.
+    @Test func successHidesAfterFourSecondsOthersStay() {
         #expect(BannerPolicy.autoHide(.ok) == .seconds(4))
-        #expect(BannerPolicy.autoHide(.info) == .seconds(4))
-        #expect(BannerPolicy.autoHide(.warn) == .seconds(4))
+        #expect(BannerPolicy.autoHide(.info) == nil)
+        #expect(BannerPolicy.autoHide(.warn) == nil)
         #expect(BannerPolicy.autoHide(.err) == nil)
+        #expect(!BannerPolicy.closable(.ok))
+        #expect(BannerTone.allCases.filter(BannerPolicy.closable) == [.err, .warn, .info])
+    }
+
+    @MainActor @Test func callerTimingStillWinsAndNextActionClearsAStandingWarning() async {
+        let center = BannerCenter()
+        center.show(.key("client.booking.refreshed"), tone: .info, hideAfter: .milliseconds(50))
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(center.current == nil)
+        center.show(.key("warning.CONTACT_INFO_MASKED"), tone: .warn)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(center.current?.tone == .warn)
+        center.clearError()
+        #expect(center.current == nil)
     }
 
     @MainActor @Test func nextActionClearsAStandingErrorButNotSuccess() {

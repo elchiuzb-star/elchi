@@ -21,7 +21,10 @@ data class LegacyActions(
     val rate: Boolean = false,
     /** `draft` / `published` / `bidding` / `accepted`. */
     val cancel: Boolean = false,
-    /** `accepted` / `picked_up` / `in_transit` / `delivered`. */
+    /**
+     * `accepted` / `picked_up` / `in_transit` / `delivered`: "Muammo haqida xabar" - a Yordam ticket about the order
+     * (Q141, user decision: no dispute form any more).
+     */
     val report: Boolean = false,
 )
 
@@ -36,10 +39,6 @@ object LegacyRules {
 
     /** From `accepted` on the client needs to reach the driver, and v1 has no chat: the phone shows from then on. */
     private val PHONE_VISIBLE = setOf("accepted", "picked_up", "in_transit", "delivered", "confirmed", "disputed")
-
-    /** The server's reason enum for `POST /orders/{id}/disputes`, in the picker's order; labels `client.legacy.dispute.reason.<code>`. */
-    val DISPUTE_REASONS = listOf("delayed", "lost", "damaged", "receiver_denied", "wrong_address", "payment_issue", "prohibited_item", "other")
-    const val DEFAULT_DISPUTE_REASON = "delayed"
 
     fun actions(status: String, ratedThisSession: Boolean): LegacyActions = LegacyActions(
         viewBids = status in BIDS_OPEN,
@@ -62,10 +61,56 @@ object LegacyRules {
     fun cancelTextKey(status: String): String =
         if (status == "accepted") "confirmDialog.cancelOrder.acceptedText" else "confirmDialog.cancelOrder.text"
 
-    fun disputeReasonKey(code: String): String = "client.legacy.dispute.reason.$code"
+    /**
+     * The Yordam ticket's first words for "Muammo haqida xabar" (Q141): the order number and a colon, so the operator
+     * knows which v1 order it is about (v1 orders have no v2 booking, so there is no booking-bound chat). Null without
+     * a number: the ticket starts empty.
+     */
+    fun supportPrefill(orderNumber: String?): String? = orderNumber?.trim()?.takeIf { it.isNotEmpty() }?.let { "$it: " }
 
-    /** Only a known enum code goes to the server (it refuses text with 400); anything else falls back to the default. */
-    fun disputeReason(code: String?): String = code?.takeIf { it in DISPUTE_REASONS } ?: DEFAULT_DISPUTE_REASON
+    // -- the archive list (DESIGN10 1.2) ------------------------------------------------------------------------------
+
+    /** The list's chips. `GET /client/orders` takes one status, and "Yakunlangan" is two, so they filter on the phone. */
+    enum class Filter(val labelKey: String) {
+        ALL("client.v3archive.filterAll"),
+        COMPLETED("status.completed"),
+        CANCELLED("status.cancelled"),
+        DISPUTED("client.v3archive.filterDisputed"),
+    }
+
+    private val COMPLETED = setOf("delivered", "confirmed", "paid_manual")
+
+    fun matches(filter: Filter, status: String): Boolean = when (filter) {
+        Filter.ALL -> true
+        Filter.COMPLETED -> status in COMPLETED
+        Filter.CANCELLED -> status == "cancelled"
+        Filter.DISPUTED -> status == "disputed"
+    }
+
+    /** With fewer rows than this after a filter, the list asks for the next page by itself (v1 history is small). */
+    const val FILL_ROWS = 8
+
+    /** The row's and the detail's meta: "EL-10422 · 04.08.2026" (either half alone when the other is missing). */
+    fun numberAndDate(orderNumber: String?, createdAt: String?): String? =
+        listOfNotNull(orderNumber?.takeIf { it.isNotBlank() }, tashkent(createdAt)?.format(DATE)).joinToString(" · ").ifEmpty { null }
+
+    private val DATE = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
+    /** "★★★★ (4 / 5)": the stars just sent (DESIGN10 2.8 - only in this session, the server keeps no rating field). */
+    fun starsText(stars: Int): String? = stars.takeIf { it in 1..5 }?.let { "★".repeat(it) + " ($it / 5)" }
+
+    // -- the map sheet (DESIGN10 3.4) -------------------------------------------------------------------------------
+
+    /** The sheet's tabs: only an end with a point gets one. */
+    enum class MapEnd { PICKUP, DROPOFF }
+
+    fun mapEnds(detail: LegacyOrderDetail): List<MapEnd> = listOfNotNull(
+        MapEnd.PICKUP.takeIf { hasPoint(detail.pickupLat, detail.pickupLng) },
+        MapEnd.DROPOFF.takeIf { hasPoint(detail.dropoffLat, detail.dropoffLng) },
+    )
+
+    /** "41.31108, 69.27974": five decimals, a dot whatever the language. */
+    fun coordinates(lat: Double, lng: Double): String = String.format(Locale.US, "%.5f, %.5f", lat, lng)
 
     // -- the order's words ----------------------------------------------------------------------------------------
 
@@ -144,7 +189,6 @@ object LegacyRules {
         "BID_NOT_ACTIVE" -> "client.legacy.error.bidGone"
         // The dictionary's DRIVER_* sentences speak to the driver ("Faol holatni yoqing"); the client reads this.
         "DRIVER_NOT_APPROVED", "DRIVER_BLOCKED", "DRIVER_NOT_AVAILABLE" -> "client.legacy.error.driverUnavailable"
-        "ALREADY_EXISTS", "DISPUTE_ALREADY_OPEN" -> "client.legacy.dispute.exists"
         else -> null
     }
 }

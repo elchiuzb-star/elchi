@@ -40,7 +40,6 @@ import uz.elchi.app.api.generated.TripDTO
 import uz.elchi.app.feature.client.BookingRules
 import uz.elchi.app.feature.client.Load
 import uz.elchi.app.feature.client.LoadFailed
-import uz.elchi.app.feature.client.LogoutConfirm
 import uz.elchi.app.feature.client.ProfileRules
 import uz.elchi.app.feature.client.StatTiles
 import uz.elchi.app.feature.client.displayPhone
@@ -48,7 +47,9 @@ import uz.elchi.app.i18n.t
 import uz.elchi.app.session.Session
 import uz.elchi.app.ui.components.Badge
 import uz.elchi.app.ui.components.CardRow
+import uz.elchi.app.ui.components.ButtonVariant
 import uz.elchi.app.ui.components.ElchiCard
+import uz.elchi.app.ui.components.ElchiDialog
 import uz.elchi.app.ui.components.ElchiIconView
 import uz.elchi.app.ui.components.ListCard
 import uz.elchi.app.ui.components.ListRow
@@ -209,7 +210,24 @@ internal fun DriverProfileBody(driver: DriverViewModel, stats: DriverStatsViewMo
             }
         }
     }
-    if (confirmLogout) LogoutConfirm(onConfirm = { confirmLogout = false; nav.onSignOut() }, onDismiss = { confirmLogout = false })
+    if (confirmLogout) DriverLogoutConfirm(onConfirm = { confirmLogout = false; nav.onSignOut() }, onDismiss = { confirmLogout = false })
+}
+
+/**
+ * "Chiqasizmi?" for the driver (design 09 6.1): sign-out also stops this phone's location sending (the tracker is
+ * closed on sign-out), then the client's sentence about the new code. "Qolish" stays (DESIGN05 10.1).
+ */
+@Composable
+internal fun DriverLogoutConfirm(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    ElchiDialog(
+        title = t(R.string.client_logout_confirmTitle),
+        text = t(R.string.driver_v3wallet_logoutText),
+        confirm = t(R.string.nav_logout),
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+        confirmVariant = ButtonVariant.DANGER,
+        dismiss = t(R.string.client_logout_stay),
+    )
 }
 
 @Composable
@@ -250,7 +268,8 @@ private fun Avatar(name: String?, phone: String, profile: DriverProfileDTO?, ver
                         // The derived word (design 06 §6.1); the server's until the record is fully read.
                         if (verify != null) Badge(uz.elchi.app.i18n.tOrNull(verify.labelKey) ?: statusText(status), verify.tone)
                         else Badge(statusText(status), DriverRules.statusTone(status))
-                        Badge(t(if (profile.isAvailable) R.string.driverProfile_active else R.string.driverProfile_inactive), if (profile.isAvailable) Tone.BLUE else Tone.GRAY)
+                        // Design 09 5.1: "Faol" only while active (the switch below already says "Faol emasman").
+                        if (profile.isAvailable) Badge(t(R.string.driverProfile_active), Tone.BLUE)
                     }
                 }
             }

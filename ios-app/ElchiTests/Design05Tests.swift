@@ -86,8 +86,11 @@ struct Design05Tests {
         #expect(SupportText.showsMinHint("abcd"))
         #expect(!SupportText.showsMinHint("abcde"))
         #expect(SupportText.typed(String(repeating: "x", count: 1200)).count == 1000)
-        #expect(SupportText.faqAnswerKey(prefix: "support.faq", index: 4) == "client.help.faq4Answer")
-        #expect(SupportText.faqAnswerKey(prefix: "support.faq", index: 1) == "support.faq1Answer")
+        // Profil v3 6.2 / 6.4: the client's FAQ1 (Q138: no bidding on drivers' listings) and FAQ4 (Q142).
+        #expect(SupportText.faqAnswerKey(prefix: "support.faq", index: 4) == "client.v3.faq4Answer")
+        #expect(SupportText.faqAnswerKey(prefix: "support.faq", index: 1) == "client.v3.faq1Answer")
+        #expect(SupportText.faqAnswerKey(prefix: "support.faq", index: 2) == "support.faq2Answer")
+        #expect(SupportText.faqAnswerKey(prefix: "driver.faq", index: 1) == "driver.faq1Answer")
         #expect(SupportText.faqAnswerKey(prefix: "driver.faq", index: 4) == "driver.faq4Answer")
     }
 

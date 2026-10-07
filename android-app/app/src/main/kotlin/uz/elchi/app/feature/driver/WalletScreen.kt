@@ -1,6 +1,10 @@
 package uz.elchi.app.feature.driver
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,14 +14,21 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -47,11 +58,13 @@ import uz.elchi.app.ui.components.ButtonVariant
 import uz.elchi.app.ui.components.Chip
 import uz.elchi.app.ui.components.ElchiButton
 import uz.elchi.app.ui.components.ElchiCard
+import uz.elchi.app.ui.components.ElchiDialog
 import uz.elchi.app.ui.components.ElchiField
 import uz.elchi.app.ui.components.EmptyState
 import uz.elchi.app.ui.components.ItemCard
 import uz.elchi.app.ui.components.Note
 import uz.elchi.app.ui.components.SectionTitle
+import uz.elchi.app.ui.components.Segmented
 import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.theme.Elchi
 import uz.elchi.app.ui.theme.Tone
@@ -66,7 +79,13 @@ import java.time.format.DateTimeFormatter
  * the requests and the movements.
  */
 @Composable
-fun WalletScreen(vm: WalletViewModel, onBack: () -> Unit, onHelp: () -> Unit) {
+fun WalletScreen(
+    vm: WalletViewModel,
+    onBack: () -> Unit,
+    onHelp: () -> Unit,
+    /** The signed-in driver's phone: the transfer's payment purpose (design 09 2.7). */
+    phone: String? = null,
+) {
     val s by vm.state.collectAsStateWithLifecycle()
     LifecycleResumeEffect(vm) {
         vm.refresh()
@@ -75,7 +94,7 @@ fun WalletScreen(vm: WalletViewModel, onBack: () -> Unit, onHelp: () -> Unit) {
     StepScaffold(title = t(R.string.income_title), onBack = onBack, onRefresh = vm::refresh, refreshing = s.refreshing && s.wallet is Load.Ready) {
         Balance(s)
         Chart(s)
-        TopupForm(vm, s, onHelp)
+        TopupForm(vm, s, onHelp, phone)
         Requests(s)
         Movements(vm, s)
     }
@@ -112,37 +131,70 @@ private fun Balance(s: WalletViewModel.State) {
     )
 }
 
-/** Seven bars of captured commission (Tashkent days); empty state when nothing was captured. */
+/**
+ * "Ushlangan komissiya" with the "7 kun / 6 oy" toggle (design 09 2.3): seven Tashkent days or six calendar months of
+ * captured commission, summed from the movements already loaded. A tap on a bar says its value (2.4).
+ */
 @Composable
 private fun Chart(s: WalletViewModel.State) {
     val c = Elchi.colors
+    var period by rememberSaveable { mutableStateOf(ChartPeriod.DAILY) }
+    var picked by rememberSaveable(period) { mutableStateOf<Int?>(null) }
     ElchiCard(padding = PaddingValues(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(t(R.string.driver_wallet_chartTitle), Modifier.weight(1f), style = Elchi.type.bodyStrong, color = c.text)
-        }
-        // The sum of the movements read (the ledger's own captures), "—" until they are read.
-        (s.lines as? Load.Ready)?.value?.let { lines ->
-            Text(soum(WalletRules.tiles(lines).capturedMinor), style = Elchi.type.section.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(t(R.string.income_capturedTitle), Modifier.weight(1f), style = Elchi.type.bodyStrong, color = c.text)
+            Segmented(
+                listOf(ChartPeriod.DAILY to t(R.string.income_period_daily), ChartPeriod.MONTHLY to t(R.string.income_period_monthly)),
+                selected = period,
+                onSelect = { period = it },
+                modifier = Modifier.width(150.dp),
+            )
         }
         when (val lines = s.lines) {
             Load.Loading -> LoadingLine(t(R.string.common_loading))
             is Load.Failed -> Note(errorText(lines.error), Modifier.padding(top = 8.dp), tone = Tone.ERR)
             is Load.Ready -> {
-                val chart = WalletRules.chart(lines.value, Instant.now())
-                if (WalletRules.chartEmpty(chart)) {
+                val now = Instant.now()
+                val bars: List<Pair<String, Long>> = if (period == ChartPeriod.DAILY) {
+                    val dayFormat = DateTimeFormatter.ofPattern("dd.MM")
+                    WalletRules.chart(lines.value, now).map { it.day.format(dayFormat) to it.minor }
+                } else {
+                    val monthFormat = DateTimeFormatter.ofPattern("MM.yy")
+                    WalletRules.monthly(lines.value, now).map { it.month.format(monthFormat) to it.minor }
+                }
+                // The sum of the bars shown (the ledger's own captures in this period).
+                Text(soum(bars.sumOf { it.second }), Modifier.padding(top = 4.dp), style = Elchi.type.section.copy(fontWeight = FontWeight.SemiBold), color = c.text)
+                if (bars.all { it.second == 0L }) {
                     Text(t(R.string.income_chartEmpty), Modifier.fillMaxWidth().padding(vertical = 24.dp), style = Elchi.type.label, color = c.muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 } else {
-                    val max = chart.maxOf { it.minor }.coerceAtLeast(1)
-                    val dayFormat = DateTimeFormatter.ofPattern("dd.MM")
-                    Row(Modifier.fillMaxWidth().height(120.dp).padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                        chart.forEach { day ->
-                            val label = "${day.day.format(dayFormat)}: ${soum(day.minor)}"
-                            Column(Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = label }, verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally) {
-                                val fraction = (day.minor.toFloat() / max).coerceIn(0.03f, 1f)
+                    val max = bars.maxOf { it.second }.coerceAtLeast(1)
+                    Row(Modifier.fillMaxWidth().height(140.dp).padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
+                        bars.forEachIndexed { i, (label, minor) ->
+                            val described = "$label: ${soum(minor)}"
+                            val selected = picked == i
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight().semantics { contentDescription = described }
+                                    .clickable(role = Role.Button) { picked = if (selected) null else i },
+                                verticalArrangement = Arrangement.Bottom,
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(
+                                    if (selected) soum(minor) else "",
+                                    style = Elchi.type.caption.copy(fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold),
+                                    color = c.text,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                                val fraction = (minor.toFloat() / max).coerceIn(0.03f, 1f)
                                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.BottomCenter) {
-                                    Box(Modifier.fillMaxWidth().fillMaxHeight(fraction).clip(RoundedCornerShape(6.dp)).background(if (day.minor > 0) c.brand else c.field))
+                                    val color = when {
+                                        minor == 0L -> c.field
+                                        selected -> c.navy
+                                        else -> c.brand
+                                    }
+                                    Box(Modifier.fillMaxWidth().fillMaxHeight(fraction).clip(RoundedCornerShape(6.dp)).background(color))
                                 }
-                                Text(day.day.format(dayFormat), Modifier.padding(top = 4.dp), style = Elchi.type.caption.copy(fontSize = 10.sp), color = c.muted, maxLines = 1)
+                                Text(label, Modifier.padding(top = 4.dp), style = Elchi.type.caption.copy(fontSize = 10.sp), color = c.muted, maxLines = 1)
                             }
                         }
                     }
@@ -154,10 +206,14 @@ private fun Chart(s: WalletViewModel.State) {
 }
 
 @Composable
-private fun TopupForm(vm: WalletViewModel, s: WalletViewModel.State, onHelp: () -> Unit) {
+private fun TopupForm(vm: WalletViewModel, s: WalletViewModel.State, onHelp: () -> Unit, phone: String?) {
+    val c = Elchi.colors
+    var confirm by rememberSaveable { mutableStateOf(false) }
     SectionTitle(t(R.string.income_topupTitle), description = t(R.string.income_topupNote))
-    // No bank details exist in the system: the operator gives them (never invented here).
+    // No bank details exist in the system: the operator gives them (never invented here, 2.6 BLOCKED).
     Note(t(R.string.driver_wallet_requisitesNote), tone = Tone.BLUE)
+    // The part of the design's requisites card that is real: the driver's own number as the payment purpose (2.7).
+    WalletRules.paymentPurposePhone(phone)?.let { purpose -> PaymentPurpose(purpose) }
     ElchiButton(t(R.string.driverProfile_action_support), onHelp, Modifier.fillMaxWidth().height(46.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, icon = ElchiIcon.HEAD)
     val form = s.form
     ElchiField(
@@ -167,10 +223,21 @@ private fun TopupForm(vm: WalletViewModel, s: WalletViewModel.State, onHelp: () 
         placeholder = "100 000",
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
         visualTransformation = ThousandsTransformation,
+        suffix = t(R.string.common_soum),
         // Only a typed amount the request cannot carry is refused in words; an empty field just waits.
         error = if (form.amount.isNotEmpty() && WalletRules.topupBody(form.amount, form.method, "", "") == null) t(R.string.driver_wallet_amountInvalid) else null,
     )
-    Text(t(R.string.driver_wallet_methodLabel), style = Elchi.type.label, color = Elchi.colors.text)
+    // Q17: above the two-person threshold a second finance approver is needed (design 09 2.10).
+    if (WalletRules.largeAmount(form.amount)) {
+        Text(t(R.string.driver_v3wallet_largeAmount), style = Elchi.type.caption, color = c.tone(Tone.WARN).fg)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        WalletRules.PRESETS.forEach { preset ->
+            val digits = preset.toString()
+            Chip(soumPlain(preset), form.amount == digits, { vm.edit { it.copy(amount = digits) } }, filled = true)
+        }
+    }
+    Text(t(R.string.driver_wallet_methodLabel), style = Elchi.type.label, color = c.text)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         WalletRules.METHODS.forEach { method ->
             Chip(methodLabel(method), form.method == method, { vm.edit { it.copy(method = method) } }, filled = true)
@@ -191,13 +258,57 @@ private fun TopupForm(vm: WalletViewModel, s: WalletViewModel.State, onHelp: () 
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
     )
     s.sendError?.let { Note(errorText(it), tone = Tone.ERR) }
+    val body = WalletRules.topupBody(form.amount, form.method, form.payerReference, form.note)
     ElchiButton(
         t(R.string.income_topupSend),
-        vm::sendTopup,
+        { confirm = true },
         Modifier.fillMaxWidth(),
-        enabled = WalletRules.topupBody(form.amount, form.method, form.payerReference, form.note) != null,
+        enabled = body != null,
         loading = s.sending,
     )
+    // Design 09 2.14: the request reaches a finance person - one check before it goes.
+    if (confirm && body != null) {
+        ElchiDialog(
+            title = t(R.string.driver_v3wallet_confirmTitle, "amount" to soum(body.amountMinor)),
+            text = t(R.string.driver_v3wallet_confirmText),
+            confirm = t(R.string.driver_v3wallet_confirmYes),
+            onConfirm = {
+                confirm = false
+                vm.sendTopup()
+            },
+            onDismiss = { confirm = false },
+            dismiss = t(R.string.confirmDialog_back),
+        )
+    }
+}
+
+/** "50 000" - a preset chip's number without the currency (design 09 2.11). */
+private fun soumPlain(soum: Long): String = String.format(java.util.Locale.ROOT, "%,d", soum).replace(',', ' ')
+
+/** "To'lov maqsadi: 90 777 11 22" with a copy action. */
+@Composable
+private fun PaymentPurpose(purpose: String) {
+    val c = Elchi.colors
+    val context = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.field).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(t(R.string.driver_v3wallet_paymentPurpose, "phone" to purpose), Modifier.weight(1f), style = Elchi.type.label, color = c.text)
+        ElchiButton(
+            t(if (copied) R.string.promoScreen_copied else R.string.promoScreen_copy),
+            {
+                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("ELCHI", purpose.replace(" ", "")))
+                copied = true
+            },
+            Modifier.height(40.dp),
+            ButtonVariant.GHOST,
+            ButtonSize.MEDIUM,
+            icon = ElchiIcon.COPY,
+            horizontalPadding = 10.dp,
+        )
+    }
 }
 
 @Composable
@@ -252,7 +363,8 @@ private fun MovementRow(line: LedgerLineDTO) {
         sub = OrderRules.tashkent(line.occurredAt)?.let(ParcelRules::displayShort),
         meta = t(R.string.driver_wallet_balanceAfter, "amount" to soum(line.balanceAfterMinor)),
         right = "${WalletRules.signed(line)}${soum(line.amountMinor)}",
-        rightColor = if (credit) Elchi.colors.tone(Tone.OK).fg else c.text,
+        // Design 09 2.20: what the balance gained in green, what it lost in red.
+        rightColor = if (credit) Elchi.colors.tone(Tone.OK).fg else c.tone(Tone.ERR).fg,
     )
 }
 

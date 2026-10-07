@@ -43,7 +43,7 @@ import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.theme.Elchi
 
 /** Which drawer destination the screen behind it is. */
-enum class DrawerPlace { HOME, ORDERS, NOTIFICATIONS }
+enum class DrawerPlace { HOME, ORDERS, NOTIFICATIONS, LEGACY }
 
 /**
  * Everything the side menu needs from the flow: who is signed in, the unread state (read when home appears and
@@ -61,6 +61,9 @@ data class DrawerNav(
     val onProfile: () -> Unit,
     val onHelp: () -> Unit,
     val onSettings: () -> Unit,
+    /** DESIGN10 §0: "Eski buyurtmalar" (the v1 archive); the row shows only while the client has v1 orders. */
+    val legacyCount: Int = 0,
+    val onLegacy: () -> Unit = {},
     /** Signs out right away; the confirmation is asked by whoever calls it ([LogoutConfirm]). */
     val onSignOut: () -> Unit,
     val onOpened: () -> Unit,
@@ -162,6 +165,12 @@ private fun ClientDrawer(nav: DrawerNav, current: DrawerPlace, go: (DrawerPlace?
                 style = style(DrawerPlace.NOTIFICATIONS), count = nav.unreadText, onClick = go(DrawerPlace.NOTIFICATIONS, nav.onNotifications),
             )
             ListRow(t(R.string.proposals_title), icon = ElchiIcon.TAG, description = t(R.string.client_offers_drawerHint), onClick = go(null, nav.onProposals))
+            if (nav.legacyCount > 0) {
+                ListRow(
+                    t(R.string.orders_legacy), icon = ElchiIcon.ARCHIVE, description = t(R.string.client_v3archive_drawerHint),
+                    style = style(DrawerPlace.LEGACY), onClick = go(DrawerPlace.LEGACY, nav.onLegacy),
+                )
+            }
             ListRow(t(R.string.nav_profile), icon = ElchiIcon.USER, description = t(R.string.nav_profileHint), onClick = go(null, nav.onProfile))
             ListRow(t(R.string.support_title), icon = ElchiIcon.HEAD, description = t(R.string.clientProfile_helpHint), onClick = go(null, nav.onHelp))
             ListRow(t(R.string.settingsScreen_title), icon = ElchiIcon.SETTINGS, description = t(R.string.driver_profile_settingsHint), onClick = go(null, nav.onSettings))

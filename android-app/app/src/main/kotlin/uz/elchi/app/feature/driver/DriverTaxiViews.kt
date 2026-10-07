@@ -56,7 +56,8 @@ internal fun PassengerActions(vm: BookingViewModel, s: BookingViewModel.State, v
     NoShowBlock(vm, s, view, now)
     if (DriverTaxiRules.showDropOff(view.serviceType, status)) {
         s.dropOffError?.let { Note(errorText(it), tone = Tone.ERR) }
-        ElchiButton(t(R.string.driverBooking_action_dropOff), vm::dropOff, Modifier.fillMaxWidth(), loading = s.droppingOff)
+        // Design 08 3.4: "Manzilga yetib keldik" (the same `drop_off` command → `arrived`).
+        ElchiButton(t(R.string.driver_v3bkg_arrivedAction), vm::dropOff, Modifier.fillMaxWidth(), loading = s.droppingOff)
     }
     if (TaxiRules.showCash(view.serviceType, status)) {
         CashRecordBlock(
@@ -127,20 +128,24 @@ private fun NoShowBlock(vm: BookingViewModel, s: BookingViewModel.State, view: D
     when (state) {
         NoShowState.Hidden -> return
         NoShowState.Pending -> {
-            Note(t(R.string.driver_noShow_pending), tone = Tone.WARN)
+            // Design 08 5.5: says it was sent and that only the operator may cancel meanwhile (Q7/Q75).
+            Note(t(R.string.driver_v3bkg_noShowPendingNote), tone = Tone.WARN)
             return
         }
         else -> Unit
     }
     ElchiButton(
-        t(R.string.driver_noShow_button), { vm.clearNoShowError(); sheet = true }, Modifier.fillMaxWidth(), ButtonVariant.NEUTRAL,
+        t(R.string.driver_noShow_button), { vm.clearNoShowError(); sheet = true }, Modifier.fillMaxWidth(),
+        if (state == NoShowState.Ready) ButtonVariant.DANGER_SOFT else ButtonVariant.NEUTRAL,
         icon = ElchiIcon.CLOCK, enabled = state == NoShowState.Ready,
     )
     val reason = (state as? NoShowState.Locked)?.let { locked ->
         val time = locked.unlocksAt?.let { DriverTime.clockOrDay(it, now) }
         if (time != null) tOrNull("driver.noShow.reason.${locked.reason}", "time" to time) else tOrNull("driver.noShow.reason.${locked.reason}")
     }
-    Text(listOfNotNull(reason, t(R.string.driver_noShow_hint)).joinToString(" "), style = Elchi.type.caption, color = Elchi.colors.muted)
+    // Unlocked: what the operator's decision means (design 08 5.3, the server's `no_show` + released hold).
+    val hint = if (state == NoShowState.Ready) t(R.string.driver_v3bkg_noShowHintReady) else t(R.string.driver_noShow_hint)
+    Text(listOfNotNull(reason, hint).joinToString(" "), style = Elchi.type.caption, color = Elchi.colors.muted)
     if (!sheet) s.noShowError?.let { Note(noShowErrorText(it, state), tone = Tone.ERR) }
     if (sheet) {
         // The sheet is its own window (the phone's language): every label is resolved here first.

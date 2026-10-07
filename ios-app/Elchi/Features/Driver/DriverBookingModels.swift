@@ -90,6 +90,8 @@ final class DriverBookingModel {
     private(set) var warnings: [ApiWarning] = []
     private(set) var arrivedSent: Bool
     private(set) var rating: RatingOutcome?
+    /// The stars sent from this screen session ("Baho berildi: ★★★★ (4 / 5)"); after a reload only "Baho berildi".
+    private(set) var ratedStars: Int?
     private(set) var report: ReportDTO?
     private(set) var blocked = false
 
@@ -143,6 +145,10 @@ final class DriverBookingModel {
         if reputation == nil, let client = booking.value?.client {
             reputation = try? await api.getReputation(userId: client.id, serviceType: booking.value?.base.serviceType ?? .parcel).data
         }
+        // DESIGN08 2.8 / 7.4: the contact bar's unread count and the open amendment on the detail.
+        async let chatState: Void = chat.refreshState()
+        async let amends: Void = amendments.load()
+        _ = await (chatState, amends)
         // Taksi before boarding: when "Keldim" was recorded and how long the trip waits (the no-show gate).
         if let dto = booking.value, dto.base.serviceType == .passenger, DriverBookingActions.preService.contains(dto.status) {
             await taxi.loadGate(tripId: dto.tripId)
@@ -153,6 +159,11 @@ final class DriverBookingModel {
     private func apply(_ dto: DriverBookingDTO) {
         booking = .loaded(dto)
         onChange?(dto)
+    }
+
+    /// The chat button's red count (no server unread count: messages counted minus those seen on this phone).
+    var unreadChat: Int {
+        BookingDetailRules.unread(messageCount: chat.state.value?.messageCount, seen: ChatSeen.count(id))
     }
 
     func clearNotice() {
@@ -230,7 +241,9 @@ final class DriverBookingModel {
             _ = try await api.createRating(bookingId: id, body: RatingCreate(comment: text.isEmpty ? nil : text, stars: stars, subjectSide: "client"),
                                            idempotencyKey: keys.key(action))
             keys.settle(action)
+            ratedStars = stars
             finishRating(.sent)
+            banners.ok("client.booking.rateThanks")
             return true
         } catch {
             keys.settle(action, after: error)

@@ -16,6 +16,7 @@
 		0968CCBD469E0B2A550AB0DA /* StringsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7384394017524FA15DF071D /* StringsTests.swift */; };
 		0B19439F2B8C1CC7920D3672 /* QRCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9686E5749DA84DBAE2EA4E4D /* QRCode.swift */; };
 		0B7E05AC2FD618CDDF238F9A /* ClientDesign04UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0491BF896CDFA0F2EBB510F5 /* ClientDesign04UITests.swift */; };
+		0BBD1C7BB50CE89CB82167B7 /* Design08DriverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D93EEBEC295B66C0D98B401 /* Design08DriverTests.swift */; };
 		0D0F8636B54D7904AC144FE4 /* DriverFollowUpUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D95D7506CA7B2EA68859F3A7 /* DriverFollowUpUITests.swift */; };
 		0F0BE7A1DAFDB2C143221FB7 /* OrdersViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3DF7FCD39ADC1768511A03B /* OrdersViews.swift */; };
 		1188EA6606967264F9176A3E /* DirectionLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F43F75F0DF107CCF80362E /* DirectionLogic.swift */; };
@@ -36,6 +37,7 @@
 		280414156FB9F22E8BE45C7E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27E951E104397C9F951A02 /* Models.swift */; };
 		2A6135E1CABC44E8EC1DF0DC /* ElchiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE637582601108DA0981BBD /* ElchiApp.swift */; };
 		2E9B2BFAD2DBDC3AEEAF7DDC /* BookingLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36CDA490A4A8FA703305BBC /* BookingLogic.swift */; };
+		2EDC7A86508945F4FC1F1F8E /* ClientDesignV3UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED51EBED58E87D69C35949A1 /* ClientDesignV3UITests.swift */; };
 		2EE9361493EBF0EE092CD319 /* BookingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87EA31F8CE0EA13DE5C57F5 /* BookingViews.swift */; };
 		2F334E68CE593793D8169447 /* PointPickerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FF81B38940E7B8F13E8755 /* PointPickerModel.swift */; };
 		3118C295576271A6CEA37F88 /* ClientUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014F359F72DDA715F36D9CC3 /* ClientUITestCase.swift */; };
@@ -51,11 +53,14 @@
 		45AC9D438CDA4E4C55B12E3A /* GpsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C9F1B14E8357CE3DE4F5ECC /* GpsBar.swift */; };
 		45D972A89EA2D6F6265ED798 /* TaxiLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8740C872ADD8F6E5B737B5FA /* TaxiLogic.swift */; };
 		45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */; };
+		468DC60AE0790BCFB31BD5E3 /* HomeListingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D6D072E4B0285CE4C576663 /* HomeListingsModel.swift */; };
 		485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD96CB85D338794F3AD1FF7 /* MarketModels.swift */; };
 		48962C87ADECC021F90F4C4B /* OrdersAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC50CE982A2746D3110960D /* OrdersAPI.swift */; };
 		4A50304D0DAA601C65A4BB88 /* DriverDesign06UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD64364E954001266CDDB258 /* DriverDesign06UITests.swift */; };
 		4B5647F4AABE57D928028C3D /* MyLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8DA8DCF66F9980504D3D867 /* MyLocation.swift */; };
 		4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */; };
+		4F877208F857EACECF6FE7BC /* MatchesTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BB0524A93D4C2ECF705E965 /* MatchesTabView.swift */; };
+		509FEC77B0C56C3FB87A51A7 /* LegacyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71DFA7831E120B93BFFAFDD /* LegacyListView.swift */; };
 		50B2F99841F6F5B65F94E8D2 /* ElchiIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AA28EAF962F62889B19611 /* ElchiIcon.swift */; };
 		5144AC33E12070F58FCD9810 /* ElchiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF39A6A56E7964BDFFD5A2FB /* ElchiTheme.swift */; };
 		53DD0E506972D8E9914D84CC /* OrderPieces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02226CC628A14106B90387D5 /* OrderPieces.swift */; };
@@ -66,6 +71,7 @@
 		620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */; };
 		65C1408142CCDF8F59B39234 /* BookingTrackingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E897E90FFF89087512394CC1 /* BookingTrackingView.swift */; };
 		6679748F2B6674DBEF88D56F /* ParcelRequestModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1522D0DF24E7C02341D3EF /* ParcelRequestModelTests.swift */; };
+		67110B0B7609B741D2D88F00 /* HomeListingLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F9299B8892CA3A0DE94533 /* HomeListingLogic.swift */; };
 		6A476D8B2D0697F39A6721CE /* MyLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C261C4C90D818622BF524E8A /* MyLocationTests.swift */; };
 		6B921A6811DE88D46A706954 /* AuthAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F2114B14B07FC499E89951 /* AuthAPI.swift */; };
 		6BBB2AFE7BCDB457D18104BD /* HTTPTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */; };
@@ -80,6 +86,7 @@
 		7FC274B688353984E37E1761 /* Poppins-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 091A2CC726EB7B80E35F6690 /* Poppins-SemiBold.ttf */; };
 		82BC2AF7760127F8021CE78E /* EntryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077C2D6194C60CE1DB103563 /* EntryViews.swift */; };
 		83F9D384A561FA388327AF8B /* ClientProfileUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CD57B4677B575A87DB33A2 /* ClientProfileUITests.swift */; };
+		8431D76E875B7491E0FBDC0E /* DriverBookingParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D20CF0A14BA0A8EB6D6C7DB /* DriverBookingParts.swift */; };
 		84E6A6702A68CFE941F1A450 /* GpsOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEF82F81B7E71899B5C69E12 /* GpsOutbox.swift */; };
 		86E0469A8C4B537C30B261F6 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A80FE97EF8890CC6CC4A553 /* DeepLinkTests.swift */; };
 		87258CB1D69D3566CC4E76B3 /* ElchiAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FE9A7EB2E109760A5E2B8B7 /* ElchiAPI.swift */; };
@@ -88,6 +95,7 @@
 		8ABBB5990D94801EFE8DE3FE /* Poppins-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 25ADC998933154BA1C02905E /* Poppins-OFL.txt */; };
 		8B153DC9951BE2E3408FB121 /* DriverLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */; };
 		8C754C7698344577FA059522 /* ClientOffersUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */; };
+		8D4D6E48ECA98E6047DAFF58 /* DriverV3BookingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4346BB2B31D52E945AE12459 /* DriverV3BookingUITests.swift */; };
 		8D6C2858EBBDD2B5E779DD1F /* LegacyLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B5C2D22B046E6A221A1F05D /* LegacyLogicTests.swift */; };
 		91665C4670147D367AAF7838 /* Banners.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20558F406539BB7C97D53D6 /* Banners.swift */; };
 		934C7D227EC8EB85B2E7ACB7 /* ProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3C7743DF12041A749F814C /* ProfileModels.swift */; };
@@ -104,6 +112,7 @@
 		A72D42C24DE898896AB96E17 /* OrdersLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFC26087742FF883E6A6FA6 /* OrdersLogic.swift */; };
 		A771E3F0BF8136F5CCCBE929 /* SessionEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E294ED9B0B7B264B55416A48 /* SessionEvents.swift */; };
 		A7C4E21730A9BF16EB0195E9 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE319893889166112F6E6BC /* SessionState.swift */; };
+		A7D72E7C4B797C60F49E0987 /* HomeListingLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500BD0CB236159130560807A /* HomeListingLogicTests.swift */; };
 		AB48E9D4591CE833644D5435 /* SignInModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1512BCC8B0C467AC0347376 /* SignInModel.swift */; };
 		ABC581163DC45FD17E329931 /* DriverBookingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E2BDBFD509B21B996A062B /* DriverBookingModels.swift */; };
 		AC7EBB138BDC371D56B0B027 /* ClientMyLocationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0D6DE1F2618F2B03471134 /* ClientMyLocationUITests.swift */; };
@@ -118,6 +127,7 @@
 		B960A9D5AD351B96A2ECD1F7 /* ClientBookingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A189282F9DE6787F410CC3 /* ClientBookingUITests.swift */; };
 		B96AFD77FAF4F12960E96CD8 /* LegacyLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = E566FCB6E874711B2522C06E /* LegacyLogic.swift */; };
 		BC54DA38319DFF91EFBCDC21 /* DirectionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E8B4018E7A8F6DC365F77F /* DirectionViews.swift */; };
+		BDC869187B9ADBBD4B1A0F51 /* HomeListingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67A25B2E803B04254FB46F3C /* HomeListingsView.swift */; };
 		BDD4CCB47FF04EDE3E54356A /* DriverFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B330F4CF98061BE16535668F /* DriverFlow.swift */; };
 		C15C8A4635209F5021CFF7F3 /* Poppins-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E80BAE3CABBA9AC149F68DC7 /* Poppins-Bold.ttf */; };
 		C1B5853E6A1B75CE95444A08 /* DriverLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C8702059432269606836EE /* DriverLogic.swift */; };
@@ -141,6 +151,7 @@
 		DF16308002BCC618A4738B76 /* DriverDocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C3F1ACD6E158E318E0EC72B /* DriverDocumentsView.swift */; };
 		E4F2F9D45B8AA53CB0BDDEED /* DirectionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB796DA3FBB0B5C384DDA00 /* DirectionModels.swift */; };
 		E69644298AECB07FA8E85953 /* DriverProfileViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F5E7B4176A9CB4B37D47A2F /* DriverProfileViews.swift */; };
+		E6BFEF8E719950ACBE163024 /* DriverListingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365DC8B50668A69086BD3D0C /* DriverListingDetailView.swift */; };
 		E81C117B111A29D67E3D1371 /* ClientOrderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 064E4F383CFE9E482273D83E /* ClientOrderUITests.swift */; };
 		E94205254D498B9F9FEFB373 /* ProfileFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF411664F7EACBB15965006 /* ProfileFormatting.swift */; };
 		E9D1358CC55A3F74366E4CF3 /* MarketLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D3AD394E58D0D62AE2987D8 /* MarketLogicTests.swift */; };
@@ -203,11 +214,13 @@
 		283497BEDB21D5D8D01F7231 /* ProfileLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLogic.swift; sourceTree = "<group>"; };
 		28BF64B36C44C615562BE806 /* GeoAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoAPI.swift; sourceTree = "<group>"; };
 		2C3C7743DF12041A749F814C /* ProfileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileModels.swift; sourceTree = "<group>"; };
+		2D20CF0A14BA0A8EB6D6C7DB /* DriverBookingParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverBookingParts.swift; sourceTree = "<group>"; };
 		31AC3EF77268DC310A40A626 /* Poppins-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Medium.ttf"; sourceTree = "<group>"; };
 		31DADCFCD83585D785D08BFC /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		325E8FEBC1D5E3466DFFE70F /* Design03Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design03Tests.swift; sourceTree = "<group>"; };
 		33C838A004FCEF7772A8382C /* SupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportViews.swift; sourceTree = "<group>"; };
 		34E2BDBFD509B21B996A062B /* DriverBookingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverBookingModels.swift; sourceTree = "<group>"; };
+		365DC8B50668A69086BD3D0C /* DriverListingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverListingDetailView.swift; sourceTree = "<group>"; };
 		36CC02CCBB6D8B641324DC52 /* MarketFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketFormatting.swift; sourceTree = "<group>"; };
 		374F3BCC7187A54274BE4158 /* Elchi.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Elchi.xcconfig; sourceTree = "<group>"; };
 		39B2ABA7C58DF674FEA29553 /* BookingMoreViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingMoreViews.swift; sourceTree = "<group>"; };
@@ -218,23 +231,30 @@
 		3D96E5FDD2494A0AC2D3230D /* DriverAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverAPI.swift; sourceTree = "<group>"; };
 		411F2B904B1638EB593ADE46 /* OrderLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderLogic.swift; sourceTree = "<group>"; };
 		41A189282F9DE6787F410CC3 /* ClientBookingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientBookingUITests.swift; sourceTree = "<group>"; };
+		4346BB2B31D52E945AE12459 /* DriverV3BookingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverV3BookingUITests.swift; sourceTree = "<group>"; };
 		435B25D2F7FEA8A1307C81B0 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
+		43F9299B8892CA3A0DE94533 /* HomeListingLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeListingLogic.swift; sourceTree = "<group>"; };
 		469F51B181B2BAD9B6CF303C /* DirectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionTests.swift; sourceTree = "<group>"; };
 		4A5119DDBF60496FF3D30DAE /* OrderFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderFormatting.swift; sourceTree = "<group>"; };
 		4B5C2D22B046E6A221A1F05D /* LegacyLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyLogicTests.swift; sourceTree = "<group>"; };
 		4CCE177C989B996DB4ACC0E5 /* ErrorText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorText.swift; sourceTree = "<group>"; };
 		4EFBC4032949B66CF63BE6E6 /* OrderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderViews.swift; sourceTree = "<group>"; };
+		500BD0CB236159130560807A /* HomeListingLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeListingLogicTests.swift; sourceTree = "<group>"; };
 		5187A5C380B98BE157A1B9B7 /* OrdersModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrdersModel.swift; sourceTree = "<group>"; };
 		5320FEF5E9CF0CCAC730936A /* ElchiMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiMap.swift; sourceTree = "<group>"; };
 		552D982C968E1E1E115906DF /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		5C800273FB70DBBE3B76B022 /* Elchi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Elchi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D3AD394E58D0D62AE2987D8 /* MarketLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketLogicTests.swift; sourceTree = "<group>"; };
+		5D93EEBEC295B66C0D98B401 /* Design08DriverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design08DriverTests.swift; sourceTree = "<group>"; };
 		63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientLegacyUITests.swift; sourceTree = "<group>"; };
 		64BF397B4CEEDD77C2732C46 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		669ECD705F94A11888AE2FD6 /* ElchiMapEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElchiMapEngine.swift; sourceTree = "<group>"; };
+		67A25B2E803B04254FB46F3C /* HomeListingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeListingsView.swift; sourceTree = "<group>"; };
 		688A71A2ABC3BBA5625256ED /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		6A39640B9AAE504BB4C3C507 /* DriverBookingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverBookingViews.swift; sourceTree = "<group>"; };
 		6A72B722AC59F1AB914DA87B /* BookingLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingLogicTests.swift; sourceTree = "<group>"; };
+		6BB0524A93D4C2ECF705E965 /* MatchesTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchesTabView.swift; sourceTree = "<group>"; };
+		6D6D072E4B0285CE4C576663 /* HomeListingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeListingsModel.swift; sourceTree = "<group>"; };
 		6E3829D24D17A5C141EDF00D /* TripViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripViews.swift; sourceTree = "<group>"; };
 		7403C98C99D03BBB70E64FD2 /* ProfileViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViews.swift; sourceTree = "<group>"; };
 		7466CF87C3D97F990ED95903 /* TaxiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaxiUITests.swift; sourceTree = "<group>"; };
@@ -273,6 +293,7 @@
 		B2160348ED04BD003F9E3DB5 /* DriverMarketUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverMarketUITests.swift; sourceTree = "<group>"; };
 		B2E8C396C9DAE29876250DB5 /* Design05Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design05Tests.swift; sourceTree = "<group>"; };
 		B330F4CF98061BE16535668F /* DriverFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverFlow.swift; sourceTree = "<group>"; };
+		B71DFA7831E120B93BFFAFDD /* LegacyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyListView.swift; sourceTree = "<group>"; };
 		B7384394017524FA15DF071D /* StringsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringsTests.swift; sourceTree = "<group>"; };
 		B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransportTests.swift; sourceTree = "<group>"; };
 		B9214E09679CBA104A5D1BDD /* DriverTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverTracker.swift; sourceTree = "<group>"; };
@@ -316,6 +337,7 @@
 		EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingOffersLogicTests.swift; sourceTree = "<group>"; };
 		EC713CBB7E59EA74606F7DF8 /* DriverDirectionsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverDirectionsUITests.swift; sourceTree = "<group>"; };
 		ECF62192F3C8768A3E34AE68 /* Design07Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design07Tests.swift; sourceTree = "<group>"; };
+		ED51EBED58E87D69C35949A1 /* ClientDesignV3UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientDesignV3UITests.swift; sourceTree = "<group>"; };
 		F129D51A637BCF9404EF251D /* MarketAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketAPI.swift; sourceTree = "<group>"; };
 		F1512BCC8B0C467AC0347376 /* SignInModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInModel.swift; sourceTree = "<group>"; };
 		FB09FB483669F7C8AC86DEA3 /* Poppins-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Regular.ttf"; sourceTree = "<group>"; };
@@ -345,6 +367,7 @@
 				D8331CA086DC262AEB215033 /* ClientDesign03UITests.swift */,
 				0491BF896CDFA0F2EBB510F5 /* ClientDesign04UITests.swift */,
 				77BC6C1EA4072D484C16CF07 /* ClientDesign05UITests.swift */,
+				ED51EBED58E87D69C35949A1 /* ClientDesignV3UITests.swift */,
 				63C393C3F9FB2B995562B186 /* ClientLegacyUITests.swift */,
 				1F0D6DE1F2618F2B03471134 /* ClientMyLocationUITests.swift */,
 				1843AB8D093EACE737C70665 /* ClientOffersUITests.swift */,
@@ -359,6 +382,7 @@
 				B2160348ED04BD003F9E3DB5 /* DriverMarketUITests.swift */,
 				AEF518C44CC1D2EF0004AE1A /* DriverStage09UITests.swift */,
 				9EC1A51C8AC6A8C2978AEF47 /* DriverUITests.swift */,
+				4346BB2B31D52E945AE12459 /* DriverV3BookingUITests.swift */,
 				E63E835CA798936FDFE88A31 /* EntryFlowUITests.swift */,
 				7466CF87C3D97F990ED95903 /* TaxiUITests.swift */,
 			);
@@ -430,6 +454,7 @@
 			children = (
 				8A221EB8F4FF967F4D54A6CB /* DriverBookingLogic.swift */,
 				34E2BDBFD509B21B996A062B /* DriverBookingModels.swift */,
+				2D20CF0A14BA0A8EB6D6C7DB /* DriverBookingParts.swift */,
 				6A39640B9AAE504BB4C3C507 /* DriverBookingViews.swift */,
 				0C3F1ACD6E158E318E0EC72B /* DriverDocumentsView.swift */,
 				B330F4CF98061BE16535668F /* DriverFlow.swift */,
@@ -439,6 +464,9 @@
 				1F5E7B4176A9CB4B37D47A2F /* DriverProfileViews.swift */,
 				C1F2E160F1AD7CFF4946D9AB /* DriverViews.swift */,
 				7A61A05C9B058156AB0D42B0 /* FeedViews.swift */,
+				43F9299B8892CA3A0DE94533 /* HomeListingLogic.swift */,
+				6D6D072E4B0285CE4C576663 /* HomeListingsModel.swift */,
+				67A25B2E803B04254FB46F3C /* HomeListingsView.swift */,
 				36CC02CCBB6D8B641324DC52 /* MarketFormatting.swift */,
 				D047FCEFA08241E03ACF52E2 /* MarketLogic.swift */,
 				FDD96CB85D338794F3AD1FF7 /* MarketModels.swift */,
@@ -535,6 +563,7 @@
 		85EFD881AF3C7D9C6A106C38 /* Legacy */ = {
 			isa = PBXGroup;
 			children = (
+				B71DFA7831E120B93BFFAFDD /* LegacyListView.swift */,
 				E566FCB6E874711B2522C06E /* LegacyLogic.swift */,
 				7F457FFC7CCF51309391A7A9 /* LegacyOrderModel.swift */,
 				774BCD9CFE33E4643559CF3B /* LegacyViews.swift */,
@@ -586,6 +615,8 @@
 				27F43F75F0DF107CCF80362E /* DirectionLogic.swift */,
 				CAB796DA3FBB0B5C384DDA00 /* DirectionModels.swift */,
 				C6E8B4018E7A8F6DC365F77F /* DirectionViews.swift */,
+				365DC8B50668A69086BD3D0C /* DriverListingDetailView.swift */,
+				6BB0524A93D4C2ECF705E965 /* MatchesTabView.swift */,
 			);
 			path = Directions;
 			sourceTree = "<group>";
@@ -667,10 +698,12 @@
 				B2E8C396C9DAE29876250DB5 /* Design05Tests.swift */,
 				7B7B654DD2671302E7FE66E6 /* Design06Tests.swift */,
 				ECF62192F3C8768A3E34AE68 /* Design07Tests.swift */,
+				5D93EEBEC295B66C0D98B401 /* Design08DriverTests.swift */,
 				469F51B181B2BAD9B6CF303C /* DirectionTests.swift */,
 				39F38D82A790C9F9EBA31A37 /* DriverLogicTests.swift */,
 				A14CCE13A35C7D26BBC2736D /* DriverStage09Tests.swift */,
 				FB254F9C42D41CE8DDC8E3B1 /* GpsTests.swift */,
+				500BD0CB236159130560807A /* HomeListingLogicTests.swift */,
 				B84CC2A1EB4470CB3E5FCCD2 /* HTTPTransportTests.swift */,
 				4B5C2D22B046E6A221A1F05D /* LegacyLogicTests.swift */,
 				EC07E903FC9E2FA445389D6F /* ListingOffersLogicTests.swift */,
@@ -880,10 +913,12 @@
 				3B5ACADCADEA3B0376AD4C3C /* DriverAPI.swift in Sources */,
 				AF45273097DBAA3D41ADA4F2 /* DriverBookingLogic.swift in Sources */,
 				ABC581163DC45FD17E329931 /* DriverBookingModels.swift in Sources */,
+				8431D76E875B7491E0FBDC0E /* DriverBookingParts.swift in Sources */,
 				700E8F51640E13EDD2C86638 /* DriverBookingViews.swift in Sources */,
 				DF16308002BCC618A4738B76 /* DriverDocumentsView.swift in Sources */,
 				BDD4CCB47FF04EDE3E54356A /* DriverFlow.swift in Sources */,
 				8A650DABB21BEDC65A7D3ACE /* DriverGpsBars.swift in Sources */,
+				E6BFEF8E719950ACBE163024 /* DriverListingDetailView.swift in Sources */,
 				C1B5853E6A1B75CE95444A08 /* DriverLogic.swift in Sources */,
 				C778706AB0715C2A921B1F2A /* DriverModels.swift in Sources */,
 				7D6E33DDB9198119029153E4 /* DriverProfileFormView.swift in Sources */,
@@ -904,7 +939,11 @@
 				45AC9D438CDA4E4C55B12E3A /* GpsBar.swift in Sources */,
 				84E6A6702A68CFE941F1A450 /* GpsOutbox.swift in Sources */,
 				EC90A314B89A88B502A2250C /* HTTPTransport.swift in Sources */,
+				67110B0B7609B741D2D88F00 /* HomeListingLogic.swift in Sources */,
+				468DC60AE0790BCFB31BD5E3 /* HomeListingsModel.swift in Sources */,
+				BDC869187B9ADBBD4B1A0F51 /* HomeListingsView.swift in Sources */,
 				C634812579808489491BC847 /* JSONValue.swift in Sources */,
+				509FEC77B0C56C3FB87A51A7 /* LegacyListView.swift in Sources */,
 				B96AFD77FAF4F12960E96CD8 /* LegacyLogic.swift in Sources */,
 				7E306CC355B11B288606940C /* LegacyOrderAPI.swift in Sources */,
 				D9255F19114537EF0B0B4193 /* LegacyOrderModel.swift in Sources */,
@@ -915,6 +954,7 @@
 				257023030B11077DA418BADB /* MarketFormatting.swift in Sources */,
 				02CF8DAC07EA1B56C3B4F6A0 /* MarketLogic.swift in Sources */,
 				485AD3AD61D52DAE7D8C0058 /* MarketModels.swift in Sources */,
+				4F877208F857EACECF6FE7BC /* MatchesTabView.swift in Sources */,
 				280414156FB9F22E8BE45C7E /* Models.swift in Sources */,
 				4B5647F4AABE57D928028C3D /* MyLocation.swift in Sources */,
 				9E0B75BF206ED89E08B0EA38 /* OrderFlowLogic.swift in Sources */,
@@ -965,11 +1005,13 @@
 				C4BA33D14FA7E39870BB8F60 /* Design05Tests.swift in Sources */,
 				A30E76298E9B1D6F7FA351DD /* Design06Tests.swift in Sources */,
 				CBA000A22EDD0BAB37FE192B /* Design07Tests.swift in Sources */,
+				0BBD1C7BB50CE89CB82167B7 /* Design08DriverTests.swift in Sources */,
 				D98FF35FCA738AEE4E77FBFA /* DirectionTests.swift in Sources */,
 				8B153DC9951BE2E3408FB121 /* DriverLogicTests.swift in Sources */,
 				F1C4BB9EB0C0CE5D084FE5A4 /* DriverStage09Tests.swift in Sources */,
 				5A0D0A4C44224BB5BADBAEDE /* GpsTests.swift in Sources */,
 				6BBB2AFE7BCDB457D18104BD /* HTTPTransportTests.swift in Sources */,
+				A7D72E7C4B797C60F49E0987 /* HomeListingLogicTests.swift in Sources */,
 				8D6C2858EBBDD2B5E779DD1F /* LegacyLogicTests.swift in Sources */,
 				620A327D6D6E271925476CC5 /* ListingOffersLogicTests.swift in Sources */,
 				E9D1358CC55A3F74366E4CF3 /* MarketLogicTests.swift in Sources */,
@@ -991,6 +1033,7 @@
 				9A0BE328C03D9456C19D4F08 /* ClientDesign03UITests.swift in Sources */,
 				0B7E05AC2FD618CDDF238F9A /* ClientDesign04UITests.swift in Sources */,
 				6D96AA504003D9DEC2FEB661 /* ClientDesign05UITests.swift in Sources */,
+				2EDC7A86508945F4FC1F1F8E /* ClientDesignV3UITests.swift in Sources */,
 				45DDA196A290E1F5CC83DB47 /* ClientLegacyUITests.swift in Sources */,
 				AC7EBB138BDC371D56B0B027 /* ClientMyLocationUITests.swift in Sources */,
 				8C754C7698344577FA059522 /* ClientOffersUITests.swift in Sources */,
@@ -1005,6 +1048,7 @@
 				1892199932721362DD3ED2A3 /* DriverMarketUITests.swift in Sources */,
 				D0A51D3A01375760DA1A9EAD /* DriverStage09UITests.swift in Sources */,
 				13C7C6513818905DAD73B95E /* DriverUITests.swift in Sources */,
+				8D4D6E48ECA98E6047DAFF58 /* DriverV3BookingUITests.swift in Sources */,
 				4E662F52BA4F47E9DABF3D35 /* EntryFlowUITests.swift in Sources */,
 				8A7DC6C444585548BAD01A27 /* TaxiUITests.swift in Sources */,
 			);

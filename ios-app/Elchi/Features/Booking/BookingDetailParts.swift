@@ -50,7 +50,7 @@ struct BookingMapHero: View {
 }
 
 /// Two ends joined by a curve on the map's grey: a picture of "from here to there", not a road.
-private struct RouteSketch: View {
+struct RouteSketch: View {
     @Environment(\.elchi) private var c
 
     var body: some View {

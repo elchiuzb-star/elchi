@@ -199,3 +199,134 @@ public enum ClientReputation {
         return (String(format: "%.1f", average).replacingOccurrences(of: ".", with: ","), reputation.ratingCount, reputation.completedBookings)
     }
 }
+
+// MARK: - BOSQICH 08 v3 ("Elchi Haydovchi Bron"): the driver's list rows and detail layout
+
+/// The driver's booking badge. The list uses the short words ("Yo'lda", "Yetkazildi"); the detail keeps the long
+/// parcel forms ("Haydovchi yo'lga chiqdi", "Operator yetkazilganini qayd etdi"). While a no-show report waits for
+/// the operator (Q7: only the operator sets `no_show`) both say "Kelmadi · ko'rikda", never a bare "Kelmadi".
+public enum DriverBookingBadge {
+    public static func label(_ service: ServiceType, _ status: String, noShowPending: Bool, short: Bool) -> StatusLabel {
+        if noShowPending && status == "awaiting_pickup" {
+            return StatusLabel(key: "driver.v3bkg.noShowReviewBadge", raw: status, tone: .err)
+        }
+        if short && service == .parcel {
+            switch status {
+            case "in_transit", "picked_up": return StatusLabel(key: "status.in_transit", raw: status, tone: .blue)
+            case "delivered": return StatusLabel(key: "status.delivered", raw: status, tone: .ok)
+            default: break
+            }
+        }
+        return .booking(service, status)
+    }
+
+    public static func of(_ booking: ClientBookingDTO, short: Bool) -> StatusLabel {
+        label(booking.serviceType, booking.serviceStatus, noShowPending: booking.noShowReview?.status == "pending", short: short)
+    }
+}
+
+/// The pieces of the driver's list row and detail that are decided, not drawn.
+public enum DriverBookingLayout {
+    /// The list's right column: "2 × 150 000 so'm" for a per-seat passenger booking without a promo, else the total.
+    public static func showsSeatPrice(_ booking: DriverBookingDTO) -> Bool {
+        booking.base.serviceType == .passenger && PassengerMoney.perSeat(booking.base.priceBasis) && booking.promo == nil
+    }
+
+    /// The map pill: "Jonli" only while the service runs **and** this phone is sending the trip's location (the local
+    /// tracker, never a server claim - §9/Q148); "GPS o'chiq" while it runs without sending; otherwise "Kuzatuv".
+    public enum Chip: Equatable, Sendable {
+        case live, gpsOff, tracking
+
+        public var key: String {
+            switch self {
+            case .live: "driver.v3bkg.chipLive"
+            case .gpsOff: "driver.v3bkg.chipGpsOff"
+            case .tracking: "bookingDetail.tracking"
+            }
+        }
+    }
+
+    /// Passenger aboard, a parcel on its way: the client watches the car on the map.
+    public static func serviceRunning(_ status: String) -> Bool { BookingDetailRules.liveDot(status) }
+
+    public static func chip(status: String, sending: Bool) -> Chip {
+        guard serviceRunning(status) else { return .tracking }
+        return sending ? .live : .gpsOff
+    }
+
+    /// "Joylashuv yuborilmayapti …" under the sheet: the service runs and the tracker is not sending.
+    public static func gpsOffWarning(status: String, sending: Bool) -> Bool { serviceRunning(status) && !sending }
+
+    /// "Manzilga yetildi. Naqd to'lovni qayd qiling …": a passenger dropped off (never a parcel, Q139).
+    public static func arrivedNote(_ service: ServiceType, _ status: String) -> Bool { service == .passenger && status == "arrived" }
+
+    /// The five dots: how far the booking got; a cancelled or no-show booking (and a no-show report under review) stops
+    /// with a red cross on the pickup step.
+    public struct Ladder: Equatable, Sendable {
+        public static let count = 5
+        /// The last reached step (nil: none, the cancelled picture).
+        public let current: Int?
+        /// The step that carries the red cross.
+        public let cross: Int?
+    }
+
+    public static func ladder(_ booking: ClientBookingDTO) -> Ladder? {
+        let status = booking.serviceStatus
+        if status == "cancelled" || status == "no_show" { return Ladder(current: nil, cross: 1) }
+        if booking.noShowReview?.status == "pending" && status == "awaiting_pickup" { return Ladder(current: 0, cross: 1) }
+        let position = booking.serviceType == .passenger ? PassengerStatus.position(status) : StatusLadder.position(status)
+        return position.map { Ladder(current: $0, cross: nil) }
+    }
+
+    /// The newest amendment this driver proposed, as the detail says it: still waiting for the client (the amend
+    /// button hides), or accepted. A rejected / expired one says nothing here (the amendment screen keeps the history).
+    public enum AmendNotice: Equatable, Sendable {
+        case pending(AmendmentDTO, reason: String?)
+        case accepted(AmendmentDTO)
+    }
+
+    public static func amendNotice(_ amendments: [AmendmentDTO]?, side: String = "driver") -> AmendNotice? {
+        guard let newest = amendments?.first(where: { $0.authorSide == side }) else { return nil }
+        switch newest.status {
+        case "proposed":
+            var reason: String?
+            if case .string(let text)? = newest.changes["reason"], !text.trimmingCharacters(in: .whitespaces).isEmpty { reason = text }
+            return .pending(newest, reason: reason)
+        case "accepted": return .accepted(newest)
+        default: return nil
+        }
+    }
+
+    /// The contact bar's phone: the client's once the passenger is aboard (Q44), the receiver's once the trip
+    /// departed with the parcel (Q142; the sender's never, Q44); closed for good when the server hides it again.
+    public enum Phone: Equatable, Sendable {
+        case visible(String)
+        case locked
+        case closed
+    }
+
+    public static func phone(_ booking: DriverBookingDTO) -> Phone {
+        let base = booking.base
+        if base.serviceType == .passenger {
+            if base.contact?.phonesVisible == true, let phone = booking.client?.contactPhone, !phone.isEmpty { return .visible(phone) }
+        } else if let receiver = ReceiverReveal.of(booking) {
+            return .visible(receiver.phone)
+        }
+        return BookingActions.of(base.serviceStatus).terminal ? .closed : .locked
+    }
+
+    /// "Kuzatuv (siz yuborayotgan)": what the client sees, then when this phone sends - in the background only while
+    /// updates really run with background delivery (iOS "Always"), else the foreground-only sentence (Q148).
+    public static func trackingNoteKeys(backgroundUpdates: Bool) -> [String] {
+        ["driver.v3bkg.trackingNote", backgroundUpdates ? "driver.gps.backgroundOn" : "driverTracking.foregroundOnly"]
+    }
+
+    /// The toast for a tap on the grey call button.
+    public static func callRefusalKey(_ phone: Phone, service: ServiceType) -> String? {
+        switch phone {
+        case .visible: nil
+        case .closed: "client.booking.callClosed"
+        case .locked: service == .passenger ? "driver.trip.phoneAfterBoard" : "client.booking.callLockedParcel"
+        }
+    }
+}

@@ -330,6 +330,11 @@ class BonusViewModel(
         banners?.show(BannerTone.OK, BannerText.Key("client.bonus.codeCopied", params = mapOf("code" to code)))
     }
 
+    /** DESIGN09 3.5: the driver's card copied the link (not only the code). */
+    fun markLinkCopied() {
+        banners?.show(BannerTone.OK, BannerText.Key("driver.v3wallet.linkCopied"))
+    }
+
     fun submitCode() {
         val s = _state.value
         val code = s.normalized ?: return

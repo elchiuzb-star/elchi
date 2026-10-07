@@ -53,7 +53,10 @@ struct BookingChatView: View {
                 } else if model.messages.isEmpty && model.pending.isEmpty {
                     EmptyState(icon: .chat, title: strings.t("bookingChat.emptyTitle"), description: strings.t("bookingChat.emptySubtitle"))
                 }
-                if model.loaded && model.olderCursor == nil, let agreedAt, !model.messages.isEmpty || !model.pending.isEmpty {
+                // DESIGN08 9.1 (NICE): the driver sees "Kelishuv tuzildi · …" from the start, as on Android; the client
+                // keeps it above the first message only.
+                if model.loaded && model.olderCursor == nil, let agreedAt,
+                   peerLabelKey != "safety.driverTitle" || !model.messages.isEmpty || !model.pending.isEmpty {
                     ChatBubble(.system, text: "\(strings.t("notification.booking.accepted.title")) · \(DepartureWindow.shortText(agreedAt))")
                 }
                 ForEach(model.messages, id: \.id) { message in
@@ -234,7 +237,7 @@ struct BookingChatView: View {
 
 // MARK: - Yordam / shikoyat
 
-/// The operator chat about this booking (Q141): the thread's status line, "Javob vaqti va'da qilinmaydi…", the
+/// The operator chat about this booking (Q141): the thread's status line, the
 /// messages (operator replies framed in brand azure), a text composer. Nothing exists until the first message; a
 /// closed thread says so and "Yangi murojaat" starts another. Polled while open. Never a support phone (Q87).
 struct SupportChatView: View {
@@ -272,8 +275,8 @@ struct SupportChatView: View {
                 case .loaded:
                     if let thread {
                         ElchiCard {
-                            CardRow(strings.t("support.statusLabel"), strings.t(SupportStatus.key(thread)), first: true,
-                                    detail: strings.t("support.noPromise"))
+                            // Profil v3 6.6: no "Javob vaqti va'da qilinmaydi" line here (Q87 forbids promising a time only).
+                            CardRow(strings.t("support.statusLabel"), strings.t(SupportStatus.key(thread)), first: true)
                         }
                         ForEach(sorted(thread), id: \.id) { message in
                             let kind: ChatBubble.Kind = message.author == "me" ? .mine : message.author == "operator" ? .operatorReply : .system
@@ -281,16 +284,19 @@ struct SupportChatView: View {
                                        time: strings.messageTime(message.createdAt))
                         }
                         if closed && !startingNew {
-                            Note(strings.t("client.support.closedText"), tone: .gray, title: strings.t("chat.closedTitle"))
+                            // Profil v3 6.8: one line, no title (same as Android).
+                            Note(strings.t("error.CHAT_CLOSED"), tone: .gray)
                             ElchiButton(strings.t("client.support.newThread"), variant: .soft, icon: .plus) { startingNew = true }
                         }
                     } else {
-                        // Before the first message: "Holat · Yangi murojaat" (design), then the intro (no phone, Q87).
+                        // Before the first message: "Holat · Yangi murojaat" (design), the support card (no phone, Q87;
+                        // Profil v3 6.1, as Android), the empty thread, then the intro caption.
                         ElchiCard {
                             CardRow(strings.t("support.statusLabel"), strings.t("client.support.newThread"), first: true)
                         }
-                        Note(strings.t("support.noPromise"), tone: .gray)
+                        Note(strings.t("client.v3.supportCard"), tone: .blue, title: strings.t("support.cardTitle"))
                         EmptyState(icon: .head, title: strings.t("support.threadTitle"), description: strings.t("support.emptyThread"))
+                        Text(strings.t("support.noPromise")).font(ElchiFont.caption).foregroundStyle(c.muted)
                     }
                     // "Aloqa ma'lumotlari yashirildi." (design's short line) for the masking warning; others as the server says.
                 ForEach(model.warnings, id: \.code) { warning in

@@ -78,8 +78,14 @@ data class AppBanner(val id: Long, val tone: BannerTone, val text: BannerText, v
 object BannerPolicy {
     const val AUTO_HIDE_MS = 4_000L
 
-    /** Success, info and warnings leave after 4 s; an error stays until it is dismissed or the next action starts. */
-    fun autoHideMs(tone: BannerTone): Long? = if (tone == BannerTone.ERR) null else AUTO_HIDE_MS
+    /**
+     * DESIGN10 7.2: only success leaves after 4 s. Errors, warnings and info stay until tapped (they carry a close
+     * mark); a standing error also goes when the next action starts.
+     */
+    fun autoHideMs(tone: BannerTone): Long? = if (tone == BannerTone.OK) AUTO_HIDE_MS else null
+
+    /** Every banner that stays shows the close mark. */
+    fun closable(tone: BannerTone): Boolean = autoHideMs(tone) == null
 
     /**
      * The dictionary key a failure maps to before its own code: no connection and 429 read the same everywhere.
@@ -160,7 +166,8 @@ private fun resolve(text: BannerText): String = when (text) {
 
 /**
  * Draws [center] over the whole app, just under the 64dp title bar every screen has: a floating card in the tone's
- * colours (tap: its action, else close; errors carry a close mark), and the loading line while a command runs.
+ * colours (tap: its action, else close; every banner that stays carries a close mark), and the loading line while a
+ * command runs.
  */
 @Composable
 fun AppBannerHost(center: BannerCenter, modifier: Modifier = Modifier) {
@@ -215,7 +222,7 @@ private fun BannerCard(banner: AppBanner, onClose: () -> Unit) {
     ) {
         ElchiIconView(icon, colors.fg, size = 18.dp)
         Text(text, Modifier.weight(1f), style = Elchi.type.label, color = colors.noteText)
-        if (banner.tone == BannerTone.ERR) {
+        if (BannerPolicy.closable(banner.tone)) {
             Box(Modifier.size(32.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
                 ElchiIconView(ElchiIcon.X, colors.fg, size = 16.dp, contentDescription = closeLabel)
             }

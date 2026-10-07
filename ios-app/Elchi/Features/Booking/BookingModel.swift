@@ -381,6 +381,8 @@ final class AmendmentsModel {
     /// The new unit price an accepted amendment set (`client.booking.amendAcceptedPrice` says it).
     private(set) var noticePrice: Int?
     private(set) var warnings: [ApiWarning] = []
+    /// The reason sent with this phone's last proposal (`AmendmentDTO` carries none): the driver's detail repeats it.
+    private(set) var sentReason: String?
 
     init(bookingId: String, api: ElchiAPI, keys: ActionKeys) {
         self.bookingId = bookingId
@@ -414,6 +416,7 @@ final class AmendmentsModel {
                                                                                     expectedVersion: booking.version, reason: text),
                                           idempotencyKey: key).warnings
         }
+        if ok { sentReason = text }
         if !ok, let code = (error as? APIError)?.code, ["VERSION_CONFLICT", "AMENDMENT_CONFLICT", "INVALID_STATE_TRANSITION"].contains(code) {
             await onBookingChanged?()
         }

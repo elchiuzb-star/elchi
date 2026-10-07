@@ -41,9 +41,14 @@ final class DriverDirectionsUITests: ClientUITestCase {
     }
 
     private func tab(_ name: String) {
-        let item = app.buttons["elchi.tab.\(name)"]
+        // Design v3: Yo'nalishlar is the second segment of Moslar.
+        let item = app.buttons["elchi.tab.\(name == "routes" ? "matches" : name)"]
         XCTAssertTrue(item.waitForExistence(timeout: 15), "no tab \(name)")
         item.tap()
+        if name == "routes" {
+            let segment = app.buttons["elchi.matches.segment.directions"]
+            if segment.waitForExistence(timeout: 10) { segment.tap() }
+        }
     }
 
     @discardableResult
@@ -155,7 +160,7 @@ final class DriverDirectionsUITests: ClientUITestCase {
         // 5. Moslar: the direction feed (Taksi, 7 days) above the district search.
         tab("matches")
         if app.buttons[t("Taksi", "Такси")].firstMatch.waitForExistence(timeout: 10) { app.buttons[t("Taksi", "Такси")].firstMatch.tap() }
-        tapId("elchi.dirFeed.day.week", timeout: 20)
+        tapId("elchi.dirFeed.day.days14", timeout: 20)
         byId("elchi.dirFeed.offer.\(r1)", timeout: 25)
         settle(2)
         snap("\(prefix)-07-feed")
@@ -249,7 +254,7 @@ final class DriverDirectionsUITests: ClientUITestCase {
         scrollTop()
         tab("matches")
         if app.buttons[t("Taksi", "Такси")].firstMatch.waitForExistence(timeout: 10) { app.buttons[t("Taksi", "Такси")].firstMatch.tap() }
-        tapId("elchi.dirFeed.day.week", timeout: 20)
+        tapId("elchi.dirFeed.day.days14", timeout: 20)
         let offered = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "elchi.dirFeed.")).firstMatch
         XCTAssertTrue(offered.waitForExistence(timeout: 25), "no direction feed")
         settle(3)
@@ -268,7 +273,7 @@ final class DriverDirectionsUITests: ClientUITestCase {
         let r4 = env("DIR_R4")
         tab("matches")
         if app.buttons[t("Taksi", "Такси")].firstMatch.waitForExistence(timeout: 10) { app.buttons[t("Taksi", "Такси")].firstMatch.tap() }
-        tapId("elchi.dirFeed.day.week", timeout: 20)
+        tapId("elchi.dirFeed.day.days14", timeout: 20)
         let offer = byId("elchi.dirFeed.offer.\(r4)", timeout: 25)
         scrollTo(offer)
         settle(2)
@@ -327,7 +332,7 @@ extension DriverDirectionsUITests {
         startDriver(reset: true)
         tab("matches")
         a28Service(true)
-        tapId("elchi.dirFeed.day.week", timeout: 20)
+        tapId("elchi.dirFeed.day.days14", timeout: 20)
         let offer = byId("elchi.dirFeed.offer.\(a28("A_TAXI"))", timeout: 30)
         scrollTo(offer)
         settle(2)
@@ -503,7 +508,7 @@ extension DriverDirectionsUITests {
         byId("elchi.driver.booking.card", timeout: 20)
         settle(2)
         snap("uz-70-driver-booking-boarded-\(a28("A_TAG"))")
-        tapId("elchi.driver.booking.chat")
+        tapId("elchi.booking.chat")
         settle(3)
         snap("uz-71-driver-booking-chat-\(a28("A_TAG"))")
     }

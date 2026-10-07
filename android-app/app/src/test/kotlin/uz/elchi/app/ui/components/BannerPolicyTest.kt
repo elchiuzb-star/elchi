@@ -10,11 +10,27 @@ import uz.elchi.app.api.ApiException
 class BannerPolicyTest {
 
     @Test
-    fun `success, info and warnings leave after 4 seconds, errors stay`() {
+    fun `only success leaves after 4 seconds, errors, warnings and info stay until tapped`() {
         assertEquals(4_000L, BannerPolicy.autoHideMs(BannerTone.OK))
-        assertEquals(4_000L, BannerPolicy.autoHideMs(BannerTone.INFO))
-        assertEquals(4_000L, BannerPolicy.autoHideMs(BannerTone.WARN))
+        assertNull(BannerPolicy.autoHideMs(BannerTone.INFO))
+        assertNull(BannerPolicy.autoHideMs(BannerTone.WARN))
         assertNull(BannerPolicy.autoHideMs(BannerTone.ERR))
+    }
+
+    @Test
+    fun `every banner that stays carries the close mark`() {
+        assertFalse(BannerPolicy.closable(BannerTone.OK))
+        assertTrue(BannerPolicy.closable(BannerTone.INFO))
+        assertTrue(BannerPolicy.closable(BannerTone.WARN))
+        assertTrue(BannerPolicy.closable(BannerTone.ERR))
+    }
+
+    @Test
+    fun `a starting action leaves a standing warning in place`() {
+        val center = BannerCenter()
+        center.warning("CONTACT_INFO_MASKED")
+        center.startAction()
+        assertEquals(BannerTone.WARN, center.banner.value?.tone)
     }
 
     @Test

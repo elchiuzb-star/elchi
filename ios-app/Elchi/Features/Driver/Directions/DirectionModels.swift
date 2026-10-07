@@ -14,7 +14,7 @@ final class DirectionsModel {
     private(set) var list: Loadable<[DriverDirectionDTO]> = .loading
     /// The direction whose requests the feed shows (`dir.feedPick` when there are several).
     var activeId: String?
-    var day: DirectionFeedDay = .today
+    var day: DirectionFeedDay = .days14
     private(set) var feed: Loadable<DirectionRequestsDTO>?
     /// The direction whose pause / resume / archive is in flight.
     private(set) var running: String?
@@ -26,6 +26,9 @@ final class DirectionsModel {
     private(set) var formError: Error?
 
     private var offers: [String: DirectionOfferModel] = [:]
+    /// Every request seen on the feed or the home list, with the direction that brought it: the listing detail and the
+    /// offer read it from memory (no extra request, Safar 6.1), whichever list it was opened from.
+    private var known: [String: HomeListing] = [:]
 
     init(api: ElchiAPI, banners: BannerCenter, keys: ActionKeys) {
         self.api = api
@@ -57,6 +60,7 @@ final class DirectionsModel {
         if feed?.value?.directionId != id { feed = .loading }
         do {
             let page = try await api.listDirectionRequests(directionId: id, serviceType: service, dateFrom: range.from, dateTo: range.to).data
+            remember(page.items.map { HomeListing(item: $0, directionId: page.directionId) })
             guard activeId == id else { return }
             feed = .loaded(page)
         } catch {
@@ -72,7 +76,12 @@ final class DirectionsModel {
         do {
             _ = try await api.patchDriverDirection(directionId: direction.id,
                                                    body: DriverDirectionPatch(expectedVersion: direction.version, status: status))
-            banners.ok(status == "archived" ? "dir.archived" : "dir.updated")
+            // Safar 2.2: pausing says what it means (the feed shows nothing for it).
+            switch status {
+            case "archived": banners.ok("dir.archived")
+            case "paused": banners.show(.key("dir.paused"), tone: .info)
+            default: banners.ok("dir.updated")
+            }
             await load()
         } catch {
             banners.error(error)
@@ -123,12 +132,20 @@ final class DirectionsModel {
 
     // MARK: Offers
 
-    func item(_ listingId: String) -> DirectionRequestItemDTO? { feed?.value?.items.first { $0.listing.id == listingId } }
+    func remember(_ list: [HomeListing]) {
+        for entry in list { known[entry.id] = entry }
+    }
 
-    /// The offer screen's model for a request in the direction feed (a fresh one each time the card is tapped).
+    func item(_ listingId: String) -> DirectionRequestItemDTO? { known[listingId]?.item }
+
+    /// The direction a request was read from (the offer goes from it).
+    func directionId(of listingId: String) -> String? { known[listingId]?.directionId }
+
+    /// The offer screen's model for a request in the direction feed or on the home list (a fresh one each time the
+    /// card is tapped).
     func offer(_ listingId: String) -> DirectionOfferModel? {
         if let model = offers[listingId] { return model }
-        guard let item = item(listingId), let directionId = activeId ?? feed?.value?.directionId else { return nil }
+        guard let item = item(listingId), let directionId = directionId(of: listingId) else { return nil }
         let model = DirectionOfferModel(item: item, directionId: directionId, api: api, keys: keys)
         offers[listingId] = model
         return model

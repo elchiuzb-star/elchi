@@ -13,6 +13,7 @@ import uz.elchi.app.api.BookingClientDTO
 import uz.elchi.app.api.ElchiJson
 import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.NotificationDTO
+import uz.elchi.app.api.generated.ProgressDTO
 import uz.elchi.app.api.generated.PromoBucketDTO
 import uz.elchi.app.api.generated.ProposalThreadDTO
 import uz.elchi.app.api.generated.ReferralCodeDTO
@@ -379,5 +380,25 @@ class AccountRulesTest {
         assertTrue(DeletionRules.leadsToOrders(DeletionRules.blockers(buildJsonObject { put("active_orders", 2) })))
         assertFalse(DeletionRules.leadsToOrders(DeletionRules.blockers(buildJsonObject { put("open_disputes", 1) })))
         assertFalse(DeletionRules.leadsToOrders(null))
+    }
+
+    @Test
+    fun `only the referee sees a progress line, in trips or services, never counting what is in review`() {
+        val trips = ProgressDTO(done = 3, inReview = 1, remaining = 7, required = 10, unit = "distinct_trip")
+        val line = PromoRules.progressLine("referee", trips)!!
+        assertEquals("promo.progress.doneTrips", line.key)
+        assertEquals(3L, line.done)
+        assertEquals(10L, line.required)
+        assertEquals(0.3f, line.fraction, 0.0001f)
+        assertTrue(line.inReview)
+        // The referrer never sees the other person's activity (ADR-0023, DESIGN09 3.8).
+        assertNull(PromoRules.progressLine("referrer", trips))
+        assertNull(PromoRules.progressLine("referee", null))
+        assertNull(PromoRules.progressLine("referee", trips.copy(required = 0)))
+        val services = PromoRules.progressLine("referee", ProgressDTO(done = 5, inReview = 0, remaining = 0, required = 2, unit = "service"))!!
+        assertEquals("promo.progress.doneServices", services.key)
+        assertEquals(2L, services.done)
+        assertEquals(1f, services.fraction, 0.0001f)
+        assertFalse(services.inReview)
     }
 }

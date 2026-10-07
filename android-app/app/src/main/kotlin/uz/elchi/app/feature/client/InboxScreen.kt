@@ -89,7 +89,8 @@ private fun InboxContent(vm: InboxViewModel, languageTag: String, onTarget: (Inb
                     !s.loaded && s.error != null -> item { LoadFailed(t(R.string.notifications_title), s.error!!, vm::refresh) }
                     !s.loaded -> items(3) { SkeletonCard(t(R.string.common_loading), lines = 2) }
                     s.items.isEmpty() -> item {
-                        EmptyState(ElchiIcon.BELL, t(R.string.notifications_empty), Modifier.padding(top = 40.dp), description = t(R.string.client_notifications_emptyHint))
+                        // Profil v3 7.1: the title only (Q82 still holds: no push).
+                        EmptyState(ElchiIcon.BELL, t(R.string.notifications_empty), Modifier.padding(top = 40.dp))
                     }
                     else -> {
                         if (s.items.any { !it.isRead }) item(key = "read-all") {

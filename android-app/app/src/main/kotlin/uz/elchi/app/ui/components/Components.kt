@@ -89,7 +89,7 @@ private data class ButtonColors(val bg: Color, val fg: Color, val border: Color?
 private fun buttonColors(variant: ButtonVariant): ButtonColors {
     val c = Elchi.colors
     return when (variant) {
-        ButtonVariant.PRIMARY -> ButtonColors(c.brand, c.onBrand, null)
+        ButtonVariant.PRIMARY -> Elchi.look.let { ButtonColors(it.primary ?: c.brand, it.onPrimary ?: c.onBrand, null) }
         ButtonVariant.SOFT -> ButtonColors(c.soft, c.softText, null)
         ButtonVariant.NEUTRAL -> ButtonColors(c.field, c.text, null)
         ButtonVariant.DANGER_SOFT -> c.tone(Tone.ERR).let { ButtonColors(it.bg, it.fg, null) }
@@ -177,13 +177,15 @@ fun RoundIconButton(
     count: String? = null,
 ) {
     val c = Elchi.colors
-    Box(modifier.size(44.dp)) {
+    // The screen family's look (driver v3: 48dp, flat grey, no shadow); the default is the 44dp white disc.
+    val look = Elchi.look
+    Box(modifier.size(look.roundButton)) {
         Box(
             Modifier
                 .fillMaxSize()
-                .shadow(12.dp, CircleShape, ambientColor = c.shadow, spotColor = c.shadow)
+                .then(if (look.flatRoundButtons) Modifier else Modifier.shadow(12.dp, CircleShape, ambientColor = c.shadow, spotColor = c.shadow))
                 .clip(CircleShape)
-                .background(c.card)
+                .background(if (look.flatRoundButtons) (if (c.isDark) c.field else Color(0xFFE9EDF2)) else c.card)
                 .clickable(role = Role.Button, onClick = onClick)
                 .semantics { this.contentDescription = contentDescription },
             contentAlignment = Alignment.Center,
@@ -294,7 +296,7 @@ fun ElchiCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Elchi.colors
-    val shape = RoundedCornerShape(ElchiShape.card)
+    val shape = RoundedCornerShape(Elchi.look.cardRadius)
     Column(
         modifier
             .fillMaxWidth()

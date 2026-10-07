@@ -32,7 +32,7 @@ struct SupportView: View {
                     }
                 }
             } else {
-                Note(strings.t("support.noPhoneLine"), tone: .blue, title: strings.t("support.cardTitle"))
+                Note(strings.t("client.v3.supportCard"), tone: .blue, title: strings.t("support.cardTitle"))
             }
             SectionTitle(strings.t("support.newTicket"))
             ElchiField(text: $model.draft, placeholder: strings.t("support.messagePlaceholder"),
@@ -131,8 +131,8 @@ struct SupportThreadsView: View {
                 ForEach(list, id: \.id) { thread in
                     SupportThreadCard(thread: thread) { onOpen(thread.id) }
                 }
-                // BOSQICH 05: where a booking's chat comes from, under the list too.
-                Note(strings.t("support.noThreadsHint"), tone: .gray)
+                // Profil v3 6.5: one short note under a non-empty list (the empty state keeps the booking hint).
+                Note(strings.t("client.v3.threadsNote"), tone: .gray)
             }
         } footer: {
             EmptyView()

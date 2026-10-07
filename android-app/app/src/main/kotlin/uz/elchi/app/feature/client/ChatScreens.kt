@@ -377,7 +377,8 @@ fun SupportChatScreen(vm: SupportViewModel, onBack: () -> Unit) {
             })
             else -> ({
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Note(t(R.string.client_support_closedText), tone = Tone.GRAY, title = t(R.string.support_status_closed))
+                    // Profil v3 6.8: one line, no title.
+                    Note(t(R.string.error_CHAT_CLOSED), tone = Tone.GRAY)
                     ElchiButton(t(R.string.client_support_newThread), vm::startNew, Modifier.fillMaxWidth(), icon = ElchiIcon.PLUS)
                 }
             })
@@ -392,7 +393,7 @@ fun SupportChatScreen(vm: SupportViewModel, onBack: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     // Design 04: "Holat · Yangi murojaat" before the first message.
                     ElchiCard { CardRow(t(R.string.support_statusLabel), t(R.string.client_support_newThread), first = true, strong = true) }
-                    Note(t(R.string.support_noPhoneLine), tone = Tone.BLUE, title = t(R.string.support_cardTitle))
+                    Note(t(R.string.client_v3_supportCard), tone = Tone.BLUE, title = t(R.string.support_cardTitle))
                     EmptyState(ElchiIcon.HEAD, t(R.string.support_threadTitle), description = t(R.string.support_emptyThread))
                     Text(t(R.string.support_noPromise), style = Elchi.type.caption, color = Elchi.colors.muted)
                 }
@@ -405,7 +406,7 @@ fun SupportChatScreen(vm: SupportViewModel, onBack: () -> Unit) {
                     t(R.string.support_statusLabel),
                     tOrNull(BookingRules.supportStatusKey(thread.staffStatus)) ?: thread.staffStatus,
                     first = true,
-                    detail = t(R.string.support_noPromise),
+                    // Profil v3 6.6: no "no answer time" line (Q87 forbids a promise, it does not require saying so).
                     strong = true,
                 )
             }

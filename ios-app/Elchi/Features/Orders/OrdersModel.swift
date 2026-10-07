@@ -30,6 +30,9 @@ final class ClientOrdersModel {
     private var legacyNextPage: Int?
     /// v1 rows per page (a UI test shrinks it to show paging with a handful of orders).
     var legacyPageSize = LegacyOrdersAPI.pageSize
+    /// All the client's v1 orders (`pagination.total`), for "Eski buyurtmalar (N)"; nil until the first page.
+    private(set) var legacyTotal: Int?
+    private(set) var loadingMoreLegacy = false
     /// Bumped by every `loadMore`, so the list's end marker asks again while pages remain.
     private(set) var pageMarker = 0
     private(set) var loadingMore = false
@@ -97,23 +100,52 @@ final class ClientOrdersModel {
 
     /// The first v1 page (the rest come with `loadMore`). A failure keeps the rows shown and says why in the banner
     /// (offline, too many requests).
-    private func loadLegacy() async -> Bool {
+    private func loadLegacy(announce: Bool = true) async -> Bool {
         do {
             let page = try await legacyAPI.clientOrders(page: 1, limit: legacyPageSize)
             legacy = .loaded(page.items)
             legacyNextPage = page.hasMore ? 2 : nil
+            legacyTotal = page.pagination?.total ?? (page.hasMore ? nil : page.items.count)
         } catch let error as APIError where error.status == 403 {
             legacy = .loaded([]) // not a v1 client: there is simply no history to show
             legacyNextPage = nil
+            legacyTotal = 0
         } catch {
             if legacy.value == nil { legacy = .failed(error) }
             // The screen went away mid-load (e.g. a link pushed a listing over the list at once): the cancelled
             // request is not "Internet aloqasi yo'q".
-            if !Task.isCancelled { banners.error(error) }
+            if announce && !Task.isCancelled { banners.error(error) }
             return false
         }
         return true
     }
+
+    /// The drawer's "Eski buyurtmalar" row shows only for a client with v1 orders: the first page is read once,
+    /// quietly, when the client flow starts (a failure just leaves the row out until the orders screen loads it).
+    func ensureLegacy() async {
+        guard legacy.value == nil else { return }
+        _ = await loadLegacy(announce: false)
+    }
+
+    /// The archive list's next v1 page (BOSQICH 10: the chips filter the loaded pages, so a short filtered list asks
+    /// for more). A failure stops paging until pull to refresh.
+    func loadMoreLegacy() async {
+        guard !loadingMoreLegacy, let next = legacyNextPage, let current = legacy.value else { return }
+        loadingMoreLegacy = true
+        defer { loadingMoreLegacy = false }
+        if let page = try? await legacyAPI.clientOrders(page: next, limit: legacyPageSize) {
+            legacy = .loaded(Self.appending(page.items, to: legacy.value ?? current))
+            legacyNextPage = page.hasMore ? next + 1 : nil
+            if let total = page.pagination?.total { legacyTotal = total }
+        } else {
+            legacyNextPage = nil
+        }
+    }
+
+    var legacyHasMore: Bool { legacyNextPage != nil }
+
+    /// How many v1 orders the client has: the server's total, else the rows loaded.
+    var legacyCount: Int { legacyTotal ?? legacy.value?.count ?? 0 }
 
     /// Just the legacy section again (after a v1 command: its row's status changed).
     func refreshLegacy() async {
@@ -161,17 +193,10 @@ final class ClientOrdersModel {
             bookings = .loaded(current + more.filter { item in !current.contains { $0.id == item.id } })
             bookingsCursor = page.meta?.nextCursor
         }
-        if let next = legacyNextPage, let current = legacy.value {
-            if let page = try? await legacyAPI.clientOrders(page: next, limit: legacyPageSize) {
-                legacy = .loaded(Self.appending(page.items, to: current))
-                legacyNextPage = page.hasMore ? next + 1 : nil
-            } else {
-                legacyNextPage = nil // shown again by pull to refresh; no endless retry at the list's end
-            }
-        }
+        // v1 pages are read by the archive screen itself (BOSQICH 10: the orders list shows one row for them).
     }
 
-    var hasMore: Bool { bookingsCursor != nil || listingsCursor != nil || legacyNextPage != nil }
+    var hasMore: Bool { bookingsCursor != nil || listingsCursor != nil }
 
     /// A v1 page after the ones shown: rows already listed (the list moved while paging) are not repeated.
     static func appending(_ page: [LegacyOrder], to current: [LegacyOrder]) -> [LegacyOrder] {

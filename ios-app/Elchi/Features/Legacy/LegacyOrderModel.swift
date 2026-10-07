@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// One v1 order's archive screens: the detail, its bids, and the commands left to it (choose a driver, confirm the
-/// delivery, rate, cancel, report a problem). Results and refusals go to the app's banner; the orders list is told
+/// delivery, rate, cancel; a problem goes to Yordam, Q141). Results and refusals go to the app's banner; the orders list is told
 /// when the order changed. One model per order for the session (created from its list row).
 @MainActor @Observable
 final class LegacyOrderModel {
@@ -22,6 +22,8 @@ final class LegacyOrderModel {
     private(set) var selecting: Int?
     /// Rated in this session: v1 has no "rated" flag on the order, so the entry goes once the rating is sent.
     private(set) var rated = false
+    /// The stars just sent (BOSQICH 10 2.8: "Baho berildi: ★★★★" for this session; a persisted note needs `my_rating`).
+    private(set) var ratedStars: Int?
 
     init(id: Int, api: LegacyOrdersAPI, banners: BannerCenter, mediaURL: @escaping @Sendable (String) -> URL?, orders: ClientOrdersModel) {
         self.id = id
@@ -95,20 +97,16 @@ final class LegacyOrderModel {
         let done = await run(.rate, ok: "legacyOrder.ratingSent", accept: LegacyErrors.alreadyRated) { api, id in
             try await api.rate(id, stars: stars, comment: text.isEmpty ? nil : text)
         }
-        if done { rated = true }
+        if done {
+            rated = true
+            ratedStars = stars
+        }
         return done
     }
 
     /// `reason` is the stored text (Uzbek, like the web client), not the person's language.
     func cancel(reason: String) async -> Bool {
         await run(.cancel, ok: "confirmDialog.cancelOrder.done") { api, id in try await api.cancel(id, reason: reason) }
-    }
-
-    func dispute(_ reason: LegacyDisputeReason, comment: String) async -> Bool {
-        let text = comment.trimmingCharacters(in: .whitespacesAndNewlines)
-        return await run(.dispute, ok: "legacyOrder.dispute.opened") { api, id in
-            try await api.openDispute(id, reason: reason, comment: text.isEmpty ? nil : text)
-        }
     }
 
     /// One command: the loading line while it runs, the ok banner and a fresh detail after it, the refusal said for
