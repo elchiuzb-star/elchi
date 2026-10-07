@@ -133,7 +133,7 @@ DTO:
 | L1 | `POST /listings` | `listing.create_request` \| `listing.create_trip_offer` | `ListingCreate` | `ListingDTO` (`draft`) | Y | — | `CAPABILITY_REQUIRED`, `DRIVER_NOT_ELIGIBLE`, `PRICE_BASIS_NOT_ALLOWED`, `CORRIDOR_NOT_ACTIVE` | AC01 |
 | L2 | `GET /listings/{listing_id}` | Egasi → `ListingDTO`; boshqalar (published) → `ListingPublicDTO` | — | union | — | — | — | §10.6 |
 | L3 | `PATCH /listings/{listing_id}` | Egasi | `ListingPatch` | `ListingDTO` | — | Y | `VERSION_CONFLICT`, `INVALID_STATE_TRANSITION` | §5.4, AC04 |
-| L4 | `POST /listings/{listing_id}/publish` | Egasi | `ListingCommand` | `ListingDTO` | Y | Y | `LISTING_INCOMPLETE`, `FEATURE_DISABLED`, `LISTING_EXPIRED`, `DUPLICATE_LISTING`, `CORRIDOR_NOT_ACTIVE`, `DRIVER_NOT_ELIGIBLE` | AC01, AC38 |
+| L4 | `POST /listings/{listing_id}/publish` | Egasi | `ListingCommand` | `ListingDTO` | Y | Y | `LISTING_INCOMPLETE`, `FEATURE_DISABLED`, `LISTING_EXPIRED`, `CORRIDOR_NOT_ACTIVE`, `DRIVER_NOT_ELIGIBLE` | AC01, AC38 |
 | L5 | `POST /listings/{listing_id}/pause` | Egasi | `ListingCommand` | `ListingDTO` | Y | Y | `INVALID_STATE_TRANSITION` | — |
 | L6 | `POST /listings/{listing_id}/resume` | Egasi | `ListingCommand` | `ListingDTO` | Y | Y | L4 xatolari | — |
 | L7 | `POST /listings/{listing_id}/cancel` | Egasi; boshqa foydalanuvchi listing’ini bekor qilish — `ops.booking_command` (operator+) + **audit qatori**, sabab majburiy; operator `draft`ni bekor qila olmaydi (Q23) | `ListingCancel` | `ListingDTO` | Y | Y | `INVALID_STATE_TRANSITION` | §5.4 |

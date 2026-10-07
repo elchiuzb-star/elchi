@@ -12,11 +12,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from app.contracts.enums import FeatureFlagKey
 from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.timeutil import utc_now
 from app.modules.identity import service as identity_service
 from app.modules.marketplace import service as marketplace_service
-from app.modules.marketplace.schemas import ListingCreate, ListingPatch, ProposalCounter, ProposalCreate
+from app.modules.marketplace.schemas import ListingCreate, ListingPatch, PassengerDetails, ProposalCounter, ProposalCreate
 from app.modules.platform.service import sqlstate_of
 from app.modules.trips import service as trips_service
 from tests.pg.identity.a1_world import (
@@ -307,21 +308,24 @@ def test_d9_on_counter_for_requests(world: World) -> None:
 
 
 def test_material_edit_reruns_publish_guards(world: World) -> None:
-    second = published_request_at(world, hours_after_base=3)  # client2
-    first_by_client2 = published_request_at(world, hours_after_base=8)
-    with world.db.session() as s, pytest.raises(DomainError) as info:
-        marketplace_service.patch_listing(
-            s,
-            listing_public_id=first_by_client2,
-            actor_user_id=world.client2_id,
-            data=ListingPatch(
-                expected_version=2,
-                departure_window_start=world.base_time + timedelta(hours=3),
-                departure_window_end=world.base_time + timedelta(hours=4),
-            ),
-        )
-    assert info.value.code is ErrorCode.DUPLICATE_LISTING
-    assert second in str(info.value.details)
+    """A material edit goes through the publish guards again: a window moved into the past is refused.
+
+    Q161 removed the duplicate guard, so the window is what this proves now - the point is that the guards run
+    on an edit at all, not which one fires.
+    """
+    listing = published_request_at(world, hours_after_base=8)  # client2
+    world.flags.disabled.add(FeatureFlagKey.PASSENGER_ENABLED)
+    try:
+        with world.db.session() as s, pytest.raises(DomainError) as info:
+            marketplace_service.patch_listing(
+                s,
+                listing_public_id=listing,
+                actor_user_id=world.client2_id,
+                data=ListingPatch(expected_version=2, passenger=PassengerDetails(seat_count=2, adults=2)),
+            )
+        assert info.value.code is ErrorCode.FEATURE_DISABLED
+    finally:
+        world.flags.disabled.discard(FeatureFlagKey.PASSENGER_ENABLED)
 
 
 def test_operator_cancel_is_audited_and_cannot_touch_drafts(world: World) -> None:

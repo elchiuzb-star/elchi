@@ -182,7 +182,6 @@ SERVICE_FLAG: dict[ServiceType, FeatureFlagKey] = {
     ServiceType.PASSENGER: FeatureFlagKey.PASSENGER_ENABLED,
     ServiceType.PARCEL: FeatureFlagKey.PARCEL_ENABLED,
 }
-DUPLICATE_CHECK_STATUSES = (ListingStatus.PUBLISHED.value, ListingStatus.PAUSED.value)
 EDITABLE_STATUSES = (ListingStatus.DRAFT.value, ListingStatus.PUBLISHED.value, ListingStatus.PAUSED.value)
 LIVE_STATUSES = (ListingStatus.PUBLISHED.value, ListingStatus.PAUSED.value)
 EXPIRABLE_STATUSES = (ListingStatus.PUBLISHED.value, ListingStatus.PAUSED.value, ListingStatus.FULFILLED.value)
@@ -997,35 +996,10 @@ def _assert_publishable(session: Session, listing: Listing, now: datetime) -> No
         raise DomainError(ErrorCode.LISTING_INCOMPLETE, details={"missing": missing})
     if ensure_aware_utc(listing.departure_window_end) <= now or ensure_aware_utc(listing.expires_at) <= now:
         raise DomainError(ErrorCode.LISTING_EXPIRED)
-    # The same end means the same marked place (Q88).
-    this = aliased(Listing)
-
-    def same_end(prefix: str):
-        point = f"{prefix}_point"
-        return and_(getattr(this, point).is_not(None), getattr(Listing, point).is_not(None),
-                    func.ST_Equals(getattr(Listing, point), getattr(this, point)))
-
-    duplicate = session.execute(
-        select(Listing.public_id)
-        .join(this, this.id == listing.id)
-        .where(
-            Listing.id != listing.id,
-            Listing.owner_user_id == listing.owner_user_id,
-            Listing.kind == listing.kind,
-            Listing.service_type == listing.service_type,
-            same_end("origin"),
-            same_end("destination"),
-            Listing.status.in_(DUPLICATE_CHECK_STATUSES),
-            Listing.departure_window_start < listing.departure_window_end,
-            Listing.departure_window_end > listing.departure_window_start,
-        )
-        .limit(1)
-    ).scalar_one_or_none()
-    if duplicate is not None:
-        raise DomainError(
-            ErrorCode.DUPLICATE_LISTING,
-            details={"existing_listing_id": format_public_id(PublicIdPrefix.LISTING, duplicate)},
-        )
+    # Q161 (user decision, 07.10.2026): a client may publish the same route as often as they like - no
+    # duplicate check. Spec §5.4 said a very similar active listing is refused; in the pilot that refusal
+    # mostly hit people re-sending the same pins after an app restart, and it has no safety role: each
+    # listing is a separate agreement, drivers answer the one they want, and capacity is held per booking.
 
 
 def record_listing_view(session: Session, listing: Listing, *, viewer_user_id: int | None) -> bool:

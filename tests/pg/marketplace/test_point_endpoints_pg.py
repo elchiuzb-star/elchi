@@ -278,17 +278,16 @@ def _publish_point(bw: BW, **overrides) -> str:  # noqa: ANN003
     return publish_listing(bw, bw.w.client_id, ListingCreate.model_validate(point_body(bw, **overrides)))
 
 
-def test_the_same_marked_places_at_an_overlapping_time_are_a_duplicate(bw: BW) -> None:
+def test_the_same_marked_places_at_an_overlapping_time_are_published_side_by_side(bw: BW) -> None:
+    """Q161 (user decision, 07.10.2026): one person may publish the same route at the same time as often as they
+    like. Spec §5.4 refused a "very similar active listing"; in the pilot that mostly refused someone re-sending
+    the same pins, and nothing downstream needs the listings to differ - each is its own agreement."""
     first = _publish_point(bw)
-    with pytest.raises(DomainError) as info:
-        _publish_point(bw)
-    assert info.value.code is ErrorCode.DUPLICATE_LISTING
-    assert info.value.details["existing_listing_id"] == first
+    second = _publish_point(bw)
+    assert first != second
 
 
-def test_a_different_marked_place_is_not_a_duplicate_of_an_overlapping_listing(bw: BW) -> None:
-    """Regression: comparing anything but the places made any two overlapping listings of one person "the same" - a
-    request to another place was refused as DUPLICATE_LISTING."""
+def test_listings_to_different_places_stay_separate(bw: BW) -> None:
     first = _publish_point(bw)
     second = _publish_point(bw, origin=(40.11, 67.90))  # ~0.5 km from the first pickup, same road
     third = publish_listing(bw, bw.w.client_id, passenger_request_body(bw, seats=1))  # A -> D, same time

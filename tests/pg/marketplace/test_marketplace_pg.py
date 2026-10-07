@@ -89,11 +89,10 @@ def test_ac01_server_total_and_db_check(world: World) -> None:
 def test_publish_guards(world: World) -> None:
     listing_id = published_request(world)
     with world.db.session() as s:
-        duplicate = marketplace_service.create_listing(s, owner_user_id=world.client_id, data=passenger_request(world, start=world.base_time))
-        with pytest.raises(DomainError) as info:
-            publish(world, s, marketplace_service.listing_public_id(duplicate), world.client_id)
-        assert info.value.code is ErrorCode.DUPLICATE_LISTING
-        assert info.value.details == {"existing_listing_id": listing_id}
+        # Q161: the same route at the same time is published again - each listing is its own agreement.
+        again = marketplace_service.create_listing(s, owner_user_id=world.client_id, data=passenger_request(world, start=world.base_time))
+        again_id = publish(world, s, marketplace_service.listing_public_id(again), world.client_id)
+        assert again_id != listing_id
 
     world.flags.disabled.add(FeatureFlagKey.PASSENGER_ENABLED)
     with world.db.session() as s:

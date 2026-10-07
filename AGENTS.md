@@ -602,6 +602,16 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   **o'chirilmaydi, muzlatiladi**: faqat tarix, hech bir kod ularga yozmaydi va ulardan qaror qilmaydi, DB yangi qatorni
   rad etadi. Markazi noma'lum tuman yo'lga joylashtirilmaydi (zaxira bekat yo'q) — operator markazni kiritadi.
 
+**Takroriy e'lon bloki olib tashlandi (07.10.2026):**
+- **Q161 (foydalanuvchi qarori; spec §5.4 dagi "juda o'xshash faol e'lon rad etiladi" qoidasidan chekinish)** Mijoz
+  bir xil yo'nalishni istagancha ko'p marta e'lon qila oladi: publish va material tahrirdagi `DUPLICATE_LISTING`
+  tekshiruvi (bir xil ega + tur + xizmat + aynan bir xil ikkala nuqta + kesishuvchi oyna) **butunlay olib tashlandi**.
+  Sabab: pilotda bu rad etish asosan ilovani qayta ochib bir xil nuqtalarni qayta yuborgan odamni to'sardi; xavfsizlik
+  roli yo'q — har e'lon alohida kelishuv, haydovchi o'zi tanlaganiga javob beradi, sig'im esa bron bo'yicha band
+  qilinadi (Q159/Q160 da'volari). `DUPLICATE_LISTING` kodi kontraktda qoladi (retired trip_offer yo'li uchun), lekin
+  L4 publish endi uni qaytarmaydi. Ma'lum oqibat: lentada bir mijozning bir xil ikki e'loni ko'rinishi mumkin va
+  takliflar ular orasida bo'linadi — bu qabul qilingan.
+
 **Wave 3.1 dan keyin ochiq qolgan uch band yopilgan (24.09.2026 audit):** U6 `rating_bucket` — A-variant; ADR-0021 staff MFA — **Accepted** (faqat xodim faktorlarini ulash va `enforce_privileged` rejimi — go-live bandi); dalil fayllari — imzolangan havola bilan.
 
 ## 4. Kod tuzilishi

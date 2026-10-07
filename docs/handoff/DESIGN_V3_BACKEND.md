@@ -28,6 +28,7 @@ Q160 bo'yicha «Yaqin» moslik turi) bu yerga kiritilmagan — ilova u yerlarda 
 11. **Ochiq bron kodi** — `BookingDTO.public_code` (08: 2.2), mijoz va haydovchi bir xil kodni aytishi uchun.
 12. **Chat tizim qatorlari** — `ChatMessageDTO.kind=system` + event kodi (08: 9.5). Typing indikatori — keyinroq (9.4).
 13. **Manzilgacha masofa** — `BookingTrackingDTO.remaining_distance_m` (08: 11.5).
+13a. **Narx o'zgarishi sababi** — `AmendmentDTO.reason`; hozir sabab faqat yuborgan telefonda ko'rinadi (08: 7.x).
 
 ## Haydovchi: hamyon (BOSQICH 09)
 14. **Bank rekvizitlari** — konfiguratsiya yoki endpoint (09).
