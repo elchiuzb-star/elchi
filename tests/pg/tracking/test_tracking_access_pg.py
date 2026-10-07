@@ -122,7 +122,7 @@ def _view(bw: BW, booking, now):  # noqa: ANN001, ANN202
 def test_ac31_finished_booking_closes_rest_and_websocket(client: TestClient, tw: BW, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ws_module, "PUSH_INTERVAL_SECONDS", 0.05)
     trip_id, trip_public, booking = passenger_booking(tw, "01K104AA")
-    act(tw, booking.id, tw.w.driver_id, "board", code=codes_for(tw, booking.id, tw.w.client_id)["boarding_code"], now=tw.base)
+    act(tw, booking.id, tw.w.driver_id, "board", now=tw.base)
     sid = start_session(tw, trip_public)
     real_now = utc_now()
     send(tw, sid, [point(0, real_now - timedelta(seconds=3))], now=real_now)  # onboard: open regardless of the clock
@@ -170,7 +170,7 @@ def test_websocket_auth_and_unknown_codes(client: TestClient, tw: BW) -> None:
 def test_recipient_link_stores_only_hash_and_follows_revoke(client: TestClient, tw: BW, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ws_module, "PUSH_INTERVAL_SECONDS", 0.05)
     trip_id, trip_public, booking = passenger_booking(tw, "01K106AA")
-    act(tw, booking.id, tw.w.driver_id, "board", code=codes_for(tw, booking.id, tw.w.client_id)["boarding_code"], now=tw.base)
+    act(tw, booking.id, tw.w.driver_id, "board", now=tw.base)
     real_now = utc_now()
     send(tw, start_session(tw, trip_public), [point(0, real_now - timedelta(seconds=2))], now=real_now)
     url = f"/api/v2/bookings/{_public(booking)}/tracking-grants"

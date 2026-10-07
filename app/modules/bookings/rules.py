@@ -104,14 +104,13 @@ ACTION_SERVICES: dict[BookingAction, frozenset[ServiceType]] = {
     BookingAction.RETURN_TO_SENDER: frozenset(),
 }
 # Actions that need a code from the other party (spec §11: codes are separate per action).
-# Q139 (ADR-0026): parcel codes are retired; the passenger boarding code stays.
-ACTION_PROOF_KIND: dict[BookingAction, ProofKind] = {
-    BookingAction.BOARD: ProofKind.BOARDING_CODE,
-}
-# Codes shown to the code owner (B5). The driver never sees any of them.
+# Q139 (ADR-0026) retired the parcel codes; Q163 (07.10.2026) retired the passenger boarding code too, so no
+# action asks for one any more. The dict stays as the single place that would grant a code back.
+ACTION_PROOF_KIND: dict[BookingAction, ProofKind] = {}
+# Codes shown to the code owner (B5). The driver never sees any of them. Empty since Q163: legacy rows keep
+# their codes in the table, but nothing shows or asks for them.
 CLIENT_CODE_KINDS: dict[ServiceType, tuple[ProofKind, ...]] = {
-    ServiceType.PASSENGER: (ProofKind.BOARDING_CODE,),
-    # Q139 (ADR-0026): a parcel carries no codes (legacy rows keep theirs in the table, never shown or asked for).
+    ServiceType.PASSENGER: (),
     ServiceType.PARCEL: (),
 }
 

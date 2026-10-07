@@ -75,8 +75,7 @@ def complete_passengers(bw: BW, trip_id: int, driver_id: int, bookings: list[tup
     """``bookings``: (booking_id, client_id). Board, pay cash, drop off, complete, capture - all on one trip."""
     run_trip_action(bw, trip_id, driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
     for booking_id, client_id in bookings:
-        code = codes_for(bw, booking_id, client_id)["boarding_code"]
-        act(bw, booking_id, driver_id, "board", code=code, now=bw.base + timedelta(minutes=5))
+        act(bw, booking_id, driver_id, "board", now=bw.base + timedelta(minutes=5))
     run_trip_action(bw, trip_id, driver_id, "depart", now=bw.base + timedelta(minutes=12))
     for booking_id, client_id in bookings:
         report_and_acknowledge_cash(bw, booking_id, driver_id, client_id, at=bw.base + cash_after)

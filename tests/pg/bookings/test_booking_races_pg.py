@@ -128,7 +128,7 @@ def test_ac20_parallel_completion_captures_once(bw: BW) -> None:
     listing = publish_listing(bw, bw.w.client_id, passenger_request_body(bw, seats=1))
     booking = accept(bw, propose(bw, listing, bw.w.driver_id, trip_public_id=trip_public, quantity=1), bw.w.client_id)
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, bw.w.client_id)["boarding_code"], now=bw.base)
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
     arrived = act(bw, booking.id, bw.w.driver_id, "drop_off", now=bw.base + timedelta(hours=3))
 
     def work(index: int, session: Session) -> str:

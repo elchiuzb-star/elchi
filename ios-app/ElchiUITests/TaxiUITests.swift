@@ -229,34 +229,14 @@ final class TaxiUITests: ClientUITestCase {
         snap("t3-04-booking-confirmed")
     }
 
-    // MARK: Client: the boarding code and its reissue (T4)
-
-    func testT4_ClientCode() {
-        launch(theme: "light", reset: false, extra: ["-uiTestOpenBooking", env("BOOKING")])
-        waitFor("Olib ketish kutilmoqda", timeout: 25)
-        let code = byId("elchi.booking.code", timeout: 20)
-        scrollTo(code)
-        snap("t4-01-code")
-        tapId("elchi.booking.reissue")
-        waitFor("Yangi kod tayyor", timeout: 20)
-        snap("t4-02-reissued")
-        tapId("elchi.booking.reissue")
-        waitFor("soniyadan keyin olish mumkin", timeout: 20)
-        snap("t4-03-reissue-wait")
-    }
-
-    // MARK: Driver: Keldim, wrong and right code, drop-off, cash (T5)
+    // MARK: Driver: Keldim, boarding, drop-off, cash (T5)
 
     func testT5_DriverBoard() {
         launch(theme: "light", reset: true, extra: ["-uiTestSession", env("SESSION"), "-uiTestDriverBooking", env("BOOKING")])
         waitFor("Olib ketish kutilmoqda", timeout: 25)
         snap("t5-01-driver-awaiting")
         arriveIfOffered()
-        typeInto("Yo'lovchining chiqish kodi", "000000")
-        tapId("elchi.driver.taxi.board")
-        waitFor("Kod noto'g'ri. Yana", timeout: 20)
-        snap("t5-02-wrong-code")
-        typeInto("Yo'lovchining chiqish kodi", env("CODE"))
+        // Q163: no boarding code - "Yo'lovchini chiqardim" is one tap.
         tapId("elchi.driver.taxi.board")
         waitFor("Mashinada", timeout: 25)
         scrollTop()
@@ -351,7 +331,7 @@ final class TaxiUITests: ClientUITestCase {
 
     // MARK: Tours: dark and Russian (the session of the account the shell left signed in)
 
-    /// Client screens in `THEME` / `LOCALE`: the seat picker, then the booking with the boarding code.
+    /// Client screens in `THEME` / `LOCALE`: the seat picker, then the passenger booking.
     func testTourClient() {
         let theme = envOr("THEME", "light"), locale = envOr("LOCALE", "uz")
         let prefix = "tour-\(locale)-\(theme)"
@@ -365,9 +345,9 @@ final class TaxiUITests: ClientUITestCase {
         taxiRouteStep(prefix: prefix, locale: locale)
         app.terminate()
         launch(locale: locale, theme: theme, reset: false, extra: ["-uiTestOpenBooking", env("BOOKING")])
-        let code = byId("elchi.booking.code", timeout: 25)
-        scrollTo(code)
-        snap("\(prefix)-04-booking-code")
+        let driverCard = byId("elchi.booking.driverCard", timeout: 25)
+        scrollTo(driverCard)
+        snap("\(prefix)-04-booking-driver")
         scrollTop()
         snap("\(prefix)-05-booking-top")
     }
@@ -409,9 +389,9 @@ final class TaxiUITests: ClientUITestCase {
         let theme = envOr("THEME", "light"), locale = envOr("LOCALE", "uz")
         let prefix = "tour-\(locale)-\(theme)-driver"
         launch(locale: locale, theme: theme, reset: true, extra: ["-uiTestSession", env("SESSION"), "-uiTestDriverBooking", env("BOOKING")])
-        let field = byId("elchi.driver.taxi.code", timeout: 25)
+        let board = byId("elchi.driver.taxi.board", timeout: 25)
         snap("\(prefix)-01-booking")
-        scrollTo(field)
-        snap("\(prefix)-02-code-field")
+        scrollTo(board)
+        snap("\(prefix)-02-board-action")
     }
 }

@@ -93,7 +93,7 @@ def test_passenger_completion_by_the_client_still_captures_on_its_own(bw: BW, pr
     from tests.pg.bookings.conftest import act, codes_for
 
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, bw.w.client_id)["boarding_code"], now=bw.base)
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
     act(bw, booking.id, bw.w.driver_id, "drop_off", now=bw.base + timedelta(hours=3))
     done = act(bw, booking.id, bw.w.client_id, "complete", now=bw.base + timedelta(hours=3, minutes=5))
     assert (done.commission_status, done.finance_review_reason) == ("captured", None)  # unchanged passenger rule

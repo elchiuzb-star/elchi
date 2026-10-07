@@ -22,7 +22,7 @@ class DriverTaxiRulesTest {
     // -- board ----------------------------------------------------------------------------------------------------
 
     @Test
-    fun `the code field is for the awaited passenger, drop-off for the one in the car`() {
+    fun `boarding is for the awaited passenger, drop-off for the one in the car`() {
         assertTrue(DriverTaxiRules.showBoard(p, "awaiting_pickup"))
         assertFalse(DriverTaxiRules.showBoard(p, "confirmed"))
         assertFalse(DriverTaxiRules.showBoard(ServiceType.PARCEL, "awaiting_pickup"))
@@ -31,23 +31,19 @@ class DriverTaxiRulesTest {
     }
 
     @Test
-    fun `the code keeps six digits and goes with the booking's version`() {
-        assertEquals("482916", DriverTaxiRules.normaliseCode("48 29-16 7"))
-        assertTrue(DriverTaxiRules.codeComplete("482916"))
-        assertFalse(DriverTaxiRules.codeComplete("48291"))
-        val body = DriverTaxiRules.boardBody(7, "482916")
-        assertEquals("482916", body.code)
+    fun `boarding carries the booking's version and no code (Q163)`() {
+        val body = DriverTaxiRules.boardBody(7)
+        assertNull(body.code)
         assertEquals(7L, body.expectedVersion)
     }
 
     @Test
-    fun `board refusals map to attempts left, exhausted, trip not started`() {
-        val wrong = ApiException(422, "PROOF_INVALID", "wrong", buildJsonObject { put("proof_kind", "boarding_code"); put("attempts_left", 4) })
-        assertEquals(BoardError.Wrong(4), DriverTaxiRules.boardError(wrong))
-        assertEquals(BoardError.Wrong(null), DriverTaxiRules.boardError(ApiException(422, "PROOF_INVALID", "wrong")))
-        assertEquals(BoardError.Exceeded, DriverTaxiRules.boardError(ApiException(409, "PROOF_ATTEMPTS_EXCEEDED", "no")))
+    fun `the only boarding refusal of its own is the trip that has not started`() {
         assertEquals(BoardError.TripNotStarted, DriverTaxiRules.boardError(ApiException(409, "TRIP_NOT_STARTED", "no")))
         assertTrue(DriverTaxiRules.boardError(ApiException(409, "VERSION_CONFLICT", "no")) is BoardError.Other)
+        // The code is gone: its refusals are no longer special-cased (the server never sends them for boarding).
+        assertTrue(DriverTaxiRules.boardError(ApiException(422, "PROOF_INVALID", "wrong")) is BoardError.Other)
+        assertTrue(DriverTaxiRules.boardError(ApiException(409, "PROOF_ATTEMPTS_EXCEEDED", "no")) is BoardError.Other)
     }
 
     // -- no-show (Q7) ---------------------------------------------------------------------------------------------

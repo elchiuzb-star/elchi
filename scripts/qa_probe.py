@@ -392,11 +392,11 @@ def main() -> int:  # noqa: PLR0915
     state = data_of(awaiting) or {}
     record("INFO", "F2 service status after awaiting_pickup", str(state.get("service_status")))
 
-    # The boarding code is the client's; the driver cannot invent it (S11).
-    wrong_code = api("POST", f"{V2}/bookings/{booking_id}/actions/board", token=driver_token, key=str(uuid.uuid4()),
-                     json={"expected_version": state.get("version", version + 1), "code": "000000"})
-    check("F3 S11: a wrong boarding code is refused", wrong_code.status_code in (400, 403, 409, 422),
-          f"{wrong_code.status_code} {error_code(wrong_code)}")
+    # Q163: boarding asks for no code any more - the driver boards the passenger in one step.
+    boarded = api("POST", f"{V2}/bookings/{booking_id}/actions/board", token=driver_token, key=str(uuid.uuid4()),
+                  json={"expected_version": state.get("version", version + 1)})
+    check("F3 Q163: boarding needs no code", boarded.status_code == 200,
+          f"{boarded.status_code} {error_code(boarded)}")
 
     print()
     print(json.dumps({"checks": len(RESULTS), "failed": sum(1 for r in RESULTS if r[0] == "FAIL")}))

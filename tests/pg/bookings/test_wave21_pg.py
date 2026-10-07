@@ -71,7 +71,7 @@ def _boarding_passenger(bw: BW, plate: str, *, client_id: int | None = None, dri
 def _arrived_passenger(bw: BW, plate: str, *, client_id: int | None = None, driver_id: int | None = None):  # noqa: ANN202
     client_id, driver_id = client_id or bw.w.client_id, driver_id or bw.w.driver_id
     _, trip_id, _, booking = _boarding_passenger(bw, plate, client_id=client_id, driver_id=driver_id)
-    act(bw, booking.id, driver_id, "board", code=codes_for(bw, booking.id, client_id)["boarding_code"], now=bw.base + timedelta(minutes=5))
+    act(bw, booking.id, driver_id, "board", now=bw.base + timedelta(minutes=5))
     act(bw, booking.id, driver_id, "drop_off", now=bw.base + timedelta(hours=3))
     return trip_id, booking
 
@@ -120,8 +120,7 @@ def test_q61_unapproved_vehicle_blocks_new_bookings_only(bw: BW) -> None:
         assert error.code is ErrorCode.VEHICLE_NOT_ELIGIBLE and error.http_status == 409
     assert scalar(bw.db, "SELECT count(*) FROM bookings") == 1 and seats_used(bw, trip_id) == [1, 1, 1]
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    code = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    assert act(bw, booking.id, bw.w.driver_id, "board", code=code, now=bw.base).service_status == "onboard"  # obligation continues
+    assert act(bw, booking.id, bw.w.driver_id, "board", now=bw.base).service_status == "onboard"  # obligation continues
 
 
 # --- Q60 (BR blocker 2): DB snapshot freeze; amendment path passes --------------------------------------------------------------
@@ -164,94 +163,6 @@ def test_q60_snapshot_columns_frozen_in_db_and_amendment_path_passes(bw: BW) -> 
 # --- BR blocker 3: proof code reissue ---------------------------------------------------------------------------------------------
 
 
-def test_br3_locked_code_reissued_old_code_dead_new_code_works(bw: BW, client) -> None:  # noqa: ANN001
-    _, _, _, booking = _boarding_passenger(bw, "01C102AA")
-    public = _public(booking)
-    old = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    wrong = "000000" if old != "000000" else "111111"
-    board_url = f"/api/v2/bookings/{public}/actions/board"
-    version = booking_version(bw, booking.id)
-    for attempt in range(5):
-        response = client.post(board_url, json={"expected_version": version, "code": wrong},
-                               headers=auth(bw.w.driver_id, "driver", f"w21-wrong-{attempt:04d}"))
-        assert response.status_code == 409, response.text
-    locked = client.post(board_url, json={"expected_version": version, "code": old}, headers=auth(bw.w.driver_id, "driver", "w21-locked-01"))
-    assert locked.status_code == 429 and locked.json()["error"]["code"] == "PROOF_ATTEMPTS_EXCEEDED"
-
-    reissue_url = f"/api/v2/bookings/{public}/codes/boarding_code/reissue"
-    driver_try = client.post(reissue_url, json={}, headers=auth(bw.w.driver_id, "driver", "w21-reissue-drv1"))
-    assert driver_try.status_code == 403 and driver_try.json()["error"]["code"] == "FORBIDDEN"
-    reissued = client.post(reissue_url, json={"reason": "locked out"}, headers=auth(bw.w.client_id, "client", "w21-reissue-0001"))
-    assert reissued.status_code == 200, reissued.text
-    new = reissued.json()["data"]["codes"]
-    assert [c["kind"] for c in new] == ["boarding_code"] and new[0]["code"] != old
-    replay = client.post(reissue_url, json={"reason": "locked out"}, headers=auth(bw.w.client_id, "client", "w21-reissue-0001"))
-    assert replay.headers.get("Idempotent-Replayed") == "true" and replay.json() == reissued.json()
-    assert rows(bw.db, "SELECT code_rotation, failed_attempts FROM booking_proofs WHERE booking_id = :b", b=booking.id) == [(1, 0)]
-
-    stale = client.post(board_url, json={"expected_version": version, "code": old}, headers=auth(bw.w.driver_id, "driver", "w21-old-0001"))
-    assert stale.status_code == 409 and stale.json()["error"]["code"] == "PROOF_INVALID"  # the old code no longer verifies
-    ok = client.post(board_url, json={"expected_version": version, "code": new[0]["code"]}, headers=auth(bw.w.driver_id, "driver", "w21-new-0001"))
-    assert ok.status_code == 200 and ok.json()["data"]["service_status"] == "onboard", ok.text
-
-    with bw.db.session() as s:
-        accepted = domain_error(lambda: bookings_service.reissue_proof_code(
-            s, booking_public_id_value=public, actor_user_id=bw.w.client_id, proof_kind="boarding_code"))
-    assert accepted.code is ErrorCode.INVALID_STATE_TRANSITION and accepted.details["reason"] == "proof_already_accepted"
-    audit = rows(bw.db, "SELECT details::text AS d FROM audit_logs WHERE action = 'booking_proof_code_reissued'")
-    assert len(audit) == 1 and new[0]["code"] not in audit[0].d and old not in audit[0].d
-    events = rows(bw.db, "SELECT payload FROM outbox_events WHERE event_type = 'booking.proof_code.reissued'")
-    assert len(events) == 1 and events[0].payload == {"service_type": "passenger", "proof_kind": "boarding_code", "code_rotation": 1,
-                                                      "requested_by_side": "client"}
-
-
-def test_br3_self_service_reissue_is_rate_limited_operator_is_not(bw: BW) -> None:
-    _, _, _, ref = request_with_driver_proposal(bw, plate="01C103AA", client_id=bw.w.client2_id, driver_id=bw.w.driver2_id)
-    booking = accept(bw, ref, bw.w.client2_id)
-    public = _public(booking)
-    t0 = utc_now()
-
-    def reissue(at: datetime):  # noqa: ANN202
-        with bw.db.session() as s:
-            result = bookings_service.reissue_proof_code(s, booking_public_id_value=public, actor_user_id=bw.w.client2_id,
-                                                         proof_kind="boarding_code", now=at)
-            s.commit()
-            return result
-
-    reissue(t0)
-    too_soon = domain_error(lambda: reissue(t0 + timedelta(seconds=30)))
-    assert too_soon.code is ErrorCode.PROOF_REISSUE_LIMITED and too_soon.http_status == 429
-    assert too_soon.details == {"retry_after_s": 90, "reissues_left": 2}
-    reissue(t0 + timedelta(minutes=3))
-    reissue(t0 + timedelta(minutes=6))
-    full = domain_error(lambda: reissue(t0 + timedelta(minutes=9)))
-    assert full.code is ErrorCode.PROOF_REISSUE_LIMITED and full.details["reissues_left"] == 0
-    with bw.db.session() as s:
-        assert domain_error(lambda: bookings_service.reissue_proof_code(
-            s, booking_public_id_value=public, actor_user_id=bw.w.driver2_id, proof_kind="boarding_code")).code is ErrorCode.FORBIDDEN
-        assert domain_error(lambda: bookings_service.reissue_proof_code(
-            s, booking_public_id_value=public, actor_user_id=bw.w.client_id, proof_kind="boarding_code")).code is ErrorCode.NOT_FOUND
-        assert domain_error(lambda: bookings_service.reissue_proof_code(
-            s, booking_public_id_value=public, actor_user_id=bw.w.client2_id, proof_kind="pickup_code")).code is ErrorCode.VALIDATION_ERROR
-
-    with bw.db.session() as s:  # operator B13: not rate-limited, reason required, audited
-        b = s.get(Booking, booking.id)
-        no_kind = domain_error(lambda: bookings_service.operator_command(
-            s, booking_public_id_value=public, actor_user_id=bw.operator_id, command="reissue_proof_code",
-            expected_version=b.version, reason="client called support"))
-        assert no_kind.code is ErrorCode.VALIDATION_ERROR
-    with bw.db.session() as s:
-        b = s.get(Booking, booking.id)
-        bookings_service.operator_command(s, booking_public_id_value=public, actor_user_id=bw.operator_id, command="reissue_proof_code",
-                                          expected_version=b.version, reason="client called support", proof_kind=ProofKind.BOARDING_CODE,
-                                          now=t0 + timedelta(minutes=9, seconds=10))
-        s.commit()
-    assert scalar(bw.db, "SELECT code_rotation FROM booking_proofs WHERE booking_id = :b", b=booking.id) == 4
-    assert rows(bw.db, "SELECT actor_side, self_service FROM booking_proof_reissues WHERE booking_id = :b ORDER BY id", b=booking.id) == [
-        ("client", True), ("client", True), ("client", True), ("operator", False)]
-    assert scalar(bw.db, "SELECT count(*) FROM audit_logs WHERE action = 'booking_proof_code_reissued'") == 4
-    with pytest.raises(DBAPIError, match="append-only"), bw.db.engine.begin() as conn:
-        conn.execute(text("DELETE FROM booking_proof_reissues WHERE booking_id = :b"), {"b": booking.id})
 
 
 # --- BR blocker 4: service start needs a started trip; trip cancel guard ----------------------------------------------------------
@@ -262,9 +173,9 @@ def test_br4_board_and_pick_up_on_planned_trip_are_trip_not_started_without_atte
     booking = accept(bw, ref, bw.w.client_id)
     act(bw, booking.id, bw.w.driver_id, "mark_awaiting_pickup", now=bw.base - timedelta(hours=2))
     failures: list = []
-    code = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    error = domain_error(lambda: act(bw, booking.id, bw.w.driver_id, "board", code=code, failures=failures, now=bw.base - timedelta(hours=2)))
+    error = domain_error(lambda: act(bw, booking.id, bw.w.driver_id, "board", failures=failures, now=bw.base - timedelta(hours=2)))
     assert error.code is ErrorCode.TRIP_NOT_STARTED and error.http_status == 409 and error.details["trip_status"] == "planned"
+    # Q163: boarding asks for no code, so a refused board leaves no proof row and no attempt behind.
     assert failures == [] and scalar(bw.db, "SELECT count(*) FROM booking_proof_attempts") == 0
     assert scalar(bw.db, "SELECT count(*) FROM booking_proofs WHERE booking_id = :b", b=booking.id) == 0
 
@@ -275,7 +186,7 @@ def test_br4_board_and_pick_up_on_planned_trip_are_trip_not_started_without_atte
     assert scalar(bw.db, "SELECT count(*) FROM booking_proof_attempts") == 0
 
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    assert act(bw, booking.id, bw.w.driver_id, "board", code=code, now=bw.base).service_status == "onboard"
+    assert act(bw, booking.id, bw.w.driver_id, "board", now=bw.base).service_status == "onboard"
     run_trip_action(bw, parcel_trip, bw.w.driver2_id, "start_boarding", now=bw.base - timedelta(minutes=30))
     assert scalar(bw.db, "SELECT service_status FROM bookings WHERE id = :b", b=parcel.id) != "in_transit"  # boarding is not departure
     run_trip_action(bw, parcel_trip, bw.w.driver2_id, "depart", now=bw.base)
@@ -284,7 +195,7 @@ def test_br4_board_and_pick_up_on_planned_trip_are_trip_not_started_without_atte
 
 def test_br4_trip_cancel_refused_with_people_or_parcels_inside_interrupt_resume(bw: BW) -> None:
     _, trip_id, _, booking = _boarding_passenger(bw, "01C106AA")
-    act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, bw.w.client_id)["boarding_code"], now=bw.base)
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
     boarding = domain_error(lambda: run_trip_action(bw, trip_id, bw.w.driver_id, "cancel", reason="engine", now=bw.base))
     assert boarding.code is ErrorCode.TRIP_HAS_UNRESOLVED_BOOKINGS and boarding.details["bookings"] == [_public(booking)]
     assert run_trip_action(bw, trip_id, bw.w.driver_id, "interrupt", reason="flat tyre", now=bw.base + timedelta(minutes=20)) == "interrupted"
@@ -534,7 +445,7 @@ def test_t10_manifest_phones_follow_q44_and_access(bw: BW, client) -> None:  # n
             is ErrorCode.NOT_FOUND
         _, staff_entries = bookings_service.trip_manifest(s, trip_public_id_value=trip_public, viewer_user_id=bw.operator_id, now=bw.base)
         assert len(staff_entries) == 1
-    act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, bw.w.client_id)["boarding_code"], now=bw.base)
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
     with bw.db.session() as s:
         _, started = bookings_service.trip_manifest(s, trip_public_id_value=trip_public, viewer_user_id=bw.w.driver_id,
                                                     now=bw.base + timedelta(minutes=10))
@@ -547,7 +458,7 @@ def test_t10_manifest_phones_follow_q44_and_access(bw: BW, client) -> None:  # n
 
 def test_ac26_http_cash_report_and_acknowledge(bw: BW, client) -> None:  # noqa: ANN001
     _, _, _, booking = _boarding_passenger(bw, "01C120AA")
-    act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, bw.w.client_id)["boarding_code"], now=bw.base)
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
     public = _public(booking)
     reported = client.post(
         f"/api/v2/bookings/{public}/cash-receipts",
@@ -644,30 +555,6 @@ def test_l3_amendment_growth_rechecks_driver_and_vehicle_eligibility_decrease_do
         assert (updated.unit_price_minor, updated.quantity) == (18_000_000, 1)
 
 
-def test_l5_http_operator_reissue_command_requires_reason_and_never_returns_a_code(bw: BW, client) -> None:  # noqa: ANN001
-    _, _, _, booking = _boarding_passenger(bw, "01C133AA")
-    public = _public(booking)
-    old = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    url = f"/api/v2/admin/bookings/{public}/commands/reissue_proof_code"
-    version = booking_version(bw, booking.id)
-    no_reason = client.post(url, json={"expected_version": version, "reason": "", "proof_kind": "boarding_code"},
-                            headers=auth(bw.operator_id, "operator", "w21-op-reissue-01"))
-    assert no_reason.status_code in (400, 422), no_reason.text
-    driver = client.post(url, json={"expected_version": version, "reason": "x", "proof_kind": "boarding_code"},
-                         headers=auth(bw.w.driver_id, "driver", "w21-op-reissue-02"))
-    assert driver.status_code in (403, 404)
-    ok = client.post(url, json={"expected_version": version, "reason": "client called support", "proof_kind": "boarding_code"},
-                     headers=auth(bw.operator_id, "operator", "w21-op-reissue-03"))
-    assert ok.status_code == 200, ok.text
-    assert ok.json()["data"]["id"] == public and ok.json()["data"]["version"] == version  # BookingDTO, booking unchanged
-    new = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    assert new != old and new not in ok.text and old not in ok.text and "code" not in ok.json()["data"]
-    audit = rows(bw.db, "SELECT actor_id, details::text AS d FROM audit_logs WHERE action = 'booking_proof_code_reissued'")
-    assert [a.actor_id for a in audit] == [bw.operator_id] and new not in audit[0].d and "client called support" in audit[0].d
-    events = rows(bw.db, "SELECT payload FROM outbox_events WHERE event_type = 'booking.proof_code.reissued'")
-    assert [e.payload for e in events] == [{"service_type": "passenger", "proof_kind": "boarding_code", "code_rotation": 1,
-                                            "requested_by_side": "operator"}]
-
 
 # --- Wave 3 (A4 small card): driver_arrived event, tracking close hook, finance review after a dispute (U8) -----------------------
 
@@ -696,7 +583,7 @@ def test_w3_trip_terminal_transitions_close_tracking_sessions(bw: BW, monkeypatc
     monkeypatch.setitem(sys.modules, "app.modules.tracking.service", fake)
 
     _, trip_id, _, booking = _boarding_passenger(bw, "01C151AA")
-    act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, bw.w.client_id)["boarding_code"], now=bw.base)
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
     run_trip_action(bw, trip_id, bw.w.driver_id, "depart", now=bw.base + timedelta(minutes=5))
     run_trip_action(bw, trip_id, bw.w.driver_id, "interrupt", reason="tyre", now=bw.base + timedelta(minutes=30))
     run_trip_action(bw, trip_id, bw.w.driver_id, "resume", reason="fixed", now=bw.base + timedelta(minutes=40))
@@ -755,7 +642,7 @@ def test_w3_mark_finance_review_after_dispute(bw: BW, monkeypatch: pytest.Monkey
                                                                         ("unpaid", "unpaid", "resolved_unpaid")])
 def test_w3_resolve_contested_cash_receipt_after_payment_dispute(bw: BW, outcome: str, cash_status: str, receipt_status: str) -> None:
     _, _, _, booking = _boarding_passenger(bw, "01C160AA")
-    act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, bw.w.client_id)["boarding_code"], now=bw.base)
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
     with bw.db.session() as s:
         b = s.get(Booking, booking.id)
         _, receipt = bookings_service.report_cash_receipt(s, booking_public_id_value=_public(b), actor_user_id=bw.w.driver_id,
@@ -823,7 +710,7 @@ def test_signal_functions_never_starve_new_rows_behind_signalled_ones(bw: BW) ->
     bookings = [booked(bw, trip_public, c) for c in clients]
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
     for client_id, booking in zip(clients, bookings, strict=True):
-        act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, client_id)["boarding_code"], now=bw.base)
+        act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
         act(bw, booking.id, bw.w.driver_id, "drop_off", now=bw.base + timedelta(hours=3))
     overdue, escalated = bw.base + timedelta(hours=28), utc_now() + timedelta(hours=49)
 

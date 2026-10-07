@@ -93,7 +93,6 @@ final class ClientDesign04UITests: ClientUITestCase {
         case "rateLater": rate(send: false)
         case "cash": cash()
         case "complete": complete()
-        case "code": code()
         default: XCTFail("unknown step \(step)")
         }
     }
@@ -308,15 +307,5 @@ final class ClientDesign04UITests: ClientUITestCase {
         Thread.sleep(forTimeInterval: 2.5)
         scrollTop()
         shot("completed")
-    }
-
-    private func code() {
-        let code = byId("elchi.booking.code", timeout: 20)
-        scrollTo(code)
-        // Clear of the fixed driver bar: lift the card into the middle of the screen.
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
-        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
-        Thread.sleep(forTimeInterval: 0.8)
-        shot("code")
     }
 }

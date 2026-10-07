@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -19,8 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import uz.elchi.app.R
 import uz.elchi.app.api.DriverBookingDTO
@@ -37,7 +34,6 @@ import uz.elchi.app.ui.components.ButtonSize
 import uz.elchi.app.ui.components.ButtonVariant
 import uz.elchi.app.ui.components.CheckRow
 import uz.elchi.app.ui.components.ElchiButton
-import uz.elchi.app.ui.components.ElchiField
 import uz.elchi.app.ui.components.Note
 import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.theme.Elchi
@@ -45,9 +41,9 @@ import uz.elchi.app.ui.theme.Tone
 import java.time.Instant
 
 /**
- * The passenger part of `driver-order-detail` (design "Bron tafsiloti · yo'lovchi"): the passenger's boarding code
- * and "Yo'lovchini chiqardim", "Mijoz kelmadi" (Q7), "Yo'lovchini tushirdim", and the cash record (Q78). "Keldim"
- * sits above it, shared with the parcel.
+ * The passenger part of `driver-order-detail` (design "Bron tafsiloti · yo'lovchi"): "Yo'lovchini chiqardim",
+ * "Mijoz kelmadi" (Q7), "Yo'lovchini tushirdim", and the cash record (Q78). "Keldim" sits above it, shared with
+ * the parcel.
  */
 @Composable
 internal fun PassengerActions(vm: BookingViewModel, s: BookingViewModel.State, view: DriverBookingDTO, now: Instant, nav: DriverBookingNav) {
@@ -83,31 +79,16 @@ internal fun PassengerActions(vm: BookingViewModel, s: BookingViewModel.State, v
     }
 }
 
-/** "Yo'lovchining chiqish kodi": six digits the passenger reads from its phone; a wrong one costs an attempt. */
+/** "Yo'lovchini chiqardim": one tap - the driver boards the passenger (Q163 retired the boarding code). */
 @Composable
 private fun BoardBlock(vm: BookingViewModel, s: BookingViewModel.State, view: DriverBookingDTO, nav: DriverBookingNav) {
     val error = s.boardError?.let(DriverTaxiRules::boardError)
-    val errorText = when (error) {
-        null -> null
-        is BoardError.Wrong -> error.attemptsLeft?.let { t(R.string.driver_board_attemptsLeft, "count" to it) } ?: t(R.string.error_PROOF_INVALID)
-        BoardError.Exceeded -> t(R.string.error_PROOF_ATTEMPTS_EXCEEDED)
-        BoardError.TripNotStarted -> t(R.string.error_TRIP_NOT_STARTED)
-        is BoardError.Other -> errorText(error.error)
+    when (error) {
+        null -> Unit
+        BoardError.TripNotStarted -> Note(t(R.string.error_TRIP_NOT_STARTED), tone = Tone.ERR)
+        is BoardError.Other -> Note(errorText(error.error), tone = Tone.ERR)
     }
-    ElchiField(
-        s.boardCode,
-        vm::setBoardCode,
-        label = t(R.string.driverBooking_boardingCode),
-        placeholder = t(R.string.driverBooking_codePlaceholder),
-        hint = t(R.string.driverBooking_codeFromPassenger),
-        error = errorText,
-        monospace = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
-    )
-    ElchiButton(
-        t(R.string.driverBooking_action_board), vm::board, Modifier.fillMaxWidth(),
-        enabled = DriverTaxiRules.codeComplete(s.boardCode) && error != BoardError.Exceeded, loading = s.boarding,
-    )
+    ElchiButton(t(R.string.driverBooking_action_board), vm::board, Modifier.fillMaxWidth(), loading = s.boarding)
     // TRIP_NOT_STARTED: boarding starts on the trip (its GPS with it) - one tap away.
     val tripId = view.tripId
     if (error == BoardError.TripNotStarted && tripId != null) {

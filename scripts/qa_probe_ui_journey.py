@@ -373,9 +373,10 @@ def journey() -> None:  # noqa: PLR0915 - it is one linear journey on purpose
         check("tracking answers with a reason, not a crash", track.status_code in (403, 404),
               (track.json().get("error") or {}).get("code"))
 
-    # --- proof codes belong to the client --------------------------------------------------------------
+    # --- Q139/Q163: no service carries a code any more; the endpoint answers empty for the owner ---------
     codes = data(client.get(f"{V2}/bookings/{booking['id']}/codes", headers=ch), "B5 codes")
     by_kind = {row["kind"]: row["code"] for row in codes["codes"]}
+    check("no codes are issued", not by_kind, str(sorted(by_kind)))
     denied = client.get(f"{V2}/bookings/{booking['id']}/codes", headers=dh)
     check("the driver cannot read the codes", denied.status_code == 403, str(denied.status_code))
 

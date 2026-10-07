@@ -148,9 +148,10 @@ def test_actions_of_the_other_service_are_invalid() -> None:
 
 def test_only_the_boarding_code_remains_and_the_driver_sees_none() -> None:
     # Q139 (ADR-0026): parcel pickup/delivery/return codes are retired; the passenger boarding code stays.
-    assert rules.ACTION_PROOF_KIND == {BookingAction.BOARD: ProofKind.BOARDING_CODE}
+    # Q163: no action asks for a code and no side is shown one (Q139 had already retired the parcel codes).
+    assert rules.ACTION_PROOF_KIND == {}
     assert rules.CLIENT_CODE_KINDS[ServiceType.PARCEL] == ()
-    assert rules.CLIENT_CODE_KINDS[ServiceType.PASSENGER] == (ProofKind.BOARDING_CODE,)
+    assert rules.CLIENT_CODE_KINDS[ServiceType.PASSENGER] == ()
     assert all(ActorSide.DRIVER in rules.ACTION_SIDES[action] for action in rules.ACTION_PROOF_KIND)
 
 

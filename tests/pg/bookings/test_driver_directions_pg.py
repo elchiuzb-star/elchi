@@ -282,8 +282,7 @@ def _running_trip(dw: DW) -> tuple[str, Offer]:
         booking_id = s.execute(text("SELECT id FROM bookings WHERE trip_id = :t"), {"t": first.trip_id}).scalar_one()
     from tests.pg.bookings.conftest import act, codes_for
 
-    act(dw.bw, booking_id, w.driver_id, "board", now=w.base_time - timedelta(minutes=20),
-        code=codes_for(dw.bw, booking_id, w.client_id)["boarding_code"])
+    act(dw.bw, booking_id, w.driver_id, "board", now=w.base_time - timedelta(minutes=20))
     run_trip_action(dw.bw, first.trip_id, w.driver_id, "depart", now=w.base_time + timedelta(minutes=5))
     return direction_id, first
 

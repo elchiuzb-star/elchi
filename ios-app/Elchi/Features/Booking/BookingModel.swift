@@ -63,8 +63,7 @@ final class BookingModel {
     let support: SupportChatModel
     let tracking: BookingTrackingModel
     let amendments: AmendmentsModel
-    /// Taksi: the boarding code and its reissue, and the cash record (client side).
-    let code: BoardingCodeModel
+    /// Taksi: the cash record (client side).
     let cash: CashRecordModel
 
     init(id: String, initial: ClientBookingDTO?, api: ElchiAPI, keys: ActionKeys, orders: ClientOrdersModel,
@@ -80,7 +79,6 @@ final class BookingModel {
         support = SupportChatModel(bookingId: id, api: api, keys: keys)
         tracking = BookingTrackingModel(bookingId: id, api: api, connection: connection)
         amendments = AmendmentsModel(bookingId: id, api: api, keys: keys)
-        code = BoardingCodeModel(bookingId: id, api: api, keys: keys)
         cash = CashRecordModel(bookingId: id, side: "client", api: api, keys: keys)
         amendments.onBookingChanged = { [weak self] in await self?.load() }
         cash.onChanged = { [weak self] in await self?.load() }
@@ -104,10 +102,9 @@ final class BookingModel {
         guard let dto = booking.value else { return }
         async let reputation: Void = loadReputation(dto)
         async let receiver: Void = loadReceiver(dto)
-        async let codes: Void = loadCode(dto)
         async let chatState: Void = chat.refreshState()
         async let blocks: Void = loadBlocks(dto)
-        _ = await (reputation, receiver, codes, chatState, blocks)
+        _ = await (reputation, receiver, chatState, blocks)
     }
 
     /// The chat button's red count (no server unread count: messages counted minus those seen on this phone).
@@ -121,12 +118,6 @@ final class BookingModel {
         guard let blocks = try? await api.listBlocks().data else { return }
         blocksChecked = true
         if blocks.contains(where: { $0.userId == driver.id }) { blocked = true }
-    }
-
-    /// Taksi: the boarding code while the passenger is still to board (the endpoint is empty afterwards).
-    private func loadCode(_ dto: ClientBookingDTO) async {
-        guard ClientTaxiActions.of(dto).showCode else { return }
-        await code.load()
     }
 
     private func apply(_ dto: ClientBookingDTO) {

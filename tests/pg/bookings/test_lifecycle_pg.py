@@ -60,8 +60,7 @@ def test_passenger_lifecycle_phone_timeline_and_single_capture(bw: BW) -> None:
     assert view(bw, booking.id, "client", now=bw.base)["driver"]["vehicle"]["plate_number"] == "01B100AA"  # plate from awaiting_pickup
 
     assert domain_error(lambda: codes_for(bw, booking.id, bw.w.driver_id)).code is ErrorCode.FORBIDDEN  # the driver never sees codes
-    code = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    act(bw, booking.id, bw.w.driver_id, "board", code=code, now=bw.base + timedelta(minutes=5))
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base + timedelta(minutes=5))
     started = view(bw, booking.id, "driver", now=bw.base + timedelta(minutes=6))
     assert started["client"]["contact_phone"] == CLIENT_PHONE and started["contact"]["phones_visible"] is True
     assert view(bw, booking.id, "client", now=bw.base + timedelta(minutes=6))["driver"]["contact_phone"] == DRIVER_PHONE
@@ -91,39 +90,6 @@ def test_passenger_lifecycle_phone_timeline_and_single_capture(bw: BW) -> None:
 # --- proofs: attempt limit through HTTP (failures persist after the 4xx rollback), N5 rotation ------------------------------
 
 
-def test_proof_attempt_limit_persists_through_the_idempotent_runner(bw: BW, client) -> None:  # noqa: ANN001
-    _, _, booking = boarded_passenger(bw, plate="01B101AA")
-    public = bookings_service.booking_public_id(booking)
-    right = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    wrong = "000000" if right != "000000" else "111111"
-    url = f"/api/v2/bookings/{public}/actions/board"
-    version = booking_version(bw, booking.id)
-    for attempt in range(5):
-        response = client.post(url, json={"expected_version": version, "code": wrong}, headers=auth(bw.w.driver_id, "driver", f"board-wrong-{attempt:04d}"))
-        assert response.status_code == 409 and response.json()["error"]["code"] == "PROOF_INVALID", response.text
-    replay = client.post(url, json={"expected_version": version, "code": wrong}, headers=auth(bw.w.driver_id, "driver", "board-wrong-0000"))
-    assert replay.headers.get("Idempotent-Replayed") == "true"  # a replay does not count again
-    assert scalar(bw.db, "SELECT failed_attempts FROM booking_proofs WHERE booking_id = :b", b=booking.id) == 5
-    blocked = client.post(url, json={"expected_version": version, "code": right}, headers=auth(bw.w.driver_id, "driver", "board-right-0001"))
-    assert blocked.status_code == 429 and blocked.json()["error"]["code"] == "PROOF_ATTEMPTS_EXCEEDED"
-    assert scalar(bw.db, "SELECT service_status FROM bookings WHERE id = :b", b=booking.id) == "awaiting_pickup"
-    assert scalar(bw.db, "SELECT count(*) FROM booking_proof_attempts WHERE booking_id = :b AND NOT succeeded", b=booking.id) == 5
-
-
-def test_n5_code_issued_before_key_rotation_is_accepted_in_the_window(bw: BW, monkeypatch: pytest.MonkeyPatch) -> None:
-    _, _, booking = boarded_passenger(bw, plate="01B102AA")
-    monkeypatch.setattr(settings, "proof_code_key", None)
-    old_master = settings.secret_key
-    code = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    monkeypatch.setattr(settings, "secret_key", "rotated-" + "x" * 48)
-    monkeypatch.setattr(settings, "previous_secret_keys", [])
-    failures: list = []
-    assert domain_error(lambda: act(bw, booking.id, bw.w.driver_id, "board", code=code, failures=failures)).code is ErrorCode.PROOF_INVALID
-    monkeypatch.setattr(settings, "previous_secret_keys", [old_master])  # rotation window (KEY_ROTATION_VERIFICATION_WINDOW)
-    assert act(bw, booking.id, bw.w.driver_id, "board", code=code).service_status == "onboard"
-    with bw.db.session() as s:
-        proof = s.execute(select(BookingProof).where(BookingProof.booking_id == booking.id)).scalar_one()
-        assert proof.accepted_at is not None and len(proof.code_hash) == 64 and proof.actor_user_id == bw.w.driver_id
 
 
 # --- AC21 cancellation, Q19 reopen, release contract --------------------------------------------------------------------------
@@ -302,7 +268,7 @@ def test_parcel_outcome_is_recorded_by_staff_and_money_moves_only_at_their_compl
 
 def test_ac26_contested_cash_keeps_service_status(bw: BW) -> None:
     _, _, booking = boarded_passenger(bw, plate="01B140AA")
-    act(bw, booking.id, bw.w.driver_id, "board", code=codes_for(bw, booking.id, bw.w.client_id)["boarding_code"], now=bw.base)
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base)
     with bw.db.session() as s:
         b = s.get(Booking, booking.id)
         _, receipt = bookings_service.report_cash_receipt(
@@ -425,5 +391,4 @@ def test_blocked_driver_keeps_obligations_on_an_existing_booking(bw: BW) -> None
             s, driver_user_id=bw.w.driver_id, actor_user_id=bw.w.admin_id,
             expected_version=identity_service.eligibility_version(s, bw.w.driver_id), reason="documents")
         s.commit()
-    code = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    assert act(bw, booking.id, bw.w.driver_id, "board", code=code, now=bw.base).service_status == "onboard"
+    assert act(bw, booking.id, bw.w.driver_id, "board", now=bw.base).service_status == "onboard"

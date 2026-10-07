@@ -1,23 +1,15 @@
 package uz.elchi.app.feature.client
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -36,7 +28,6 @@ import uz.elchi.app.ui.components.ElchiCard
 import uz.elchi.app.ui.components.ElchiField
 import uz.elchi.app.ui.components.Note
 import uz.elchi.app.ui.components.SectionTitle
-import uz.elchi.app.ui.icons.ElchiIcon
 import uz.elchi.app.ui.theme.Elchi
 import uz.elchi.app.ui.theme.Tone
 
@@ -50,53 +41,6 @@ internal fun seatsLine(count: Long, unitMinor: Long): String =
 /** `2 × 150 000 so'm` */
 @Composable
 internal fun seatsPrice(count: Long, unitMinor: Long): String = t(R.string.client_taxi_seatsTotal, "count" to count, "price" to soum(unitMinor))
-
-// -- boarding code (client) ---------------------------------------------------------------------------------------
-
-/**
- * "Chiqish kodi": the 6 digits the passenger says to the driver at the car (design `B.code`), and "Yangi kod olish"
- * (the old code stops at once; 3 a day, 2 minutes apart - Q75). Hidden once onboard or closed (the server sends none).
- */
-@Composable
-internal fun BoardingCodeBlock(s: BookingViewModel.State, onReissue: () -> Unit) {
-    val c = Elchi.colors
-    val code = s.boardingCode ?: return
-    // Design 04: the dark code card (navy, pale caption, 30sp mono spaced digits).
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF1B3563) else c.navy).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(t(R.string.proofCode_boarding_code), style = Elchi.type.caption, color = androidx.compose.ui.graphics.Color(0xFF9FB6D6))
-        Text(
-            code.chunked(3).joinToString(" "),
-            Modifier.semantics { contentDescription = code.toList().joinToString(" ") },
-            style = Elchi.type.title.copy(fontFamily = FontFamily.Monospace, fontSize = 30.sp, lineHeight = 38.sp, letterSpacing = 9.sp, fontWeight = FontWeight.SemiBold),
-            color = androidx.compose.ui.graphics.Color.White,
-        )
-        Text(t(R.string.proofHint_boarding), style = Elchi.type.caption, color = androidx.compose.ui.graphics.Color(0xFFC9D6E8))
-    }
-    ElchiButton(t(R.string.reissue_button), onReissue, Modifier.fillMaxWidth().height(48.dp), ButtonVariant.NEUTRAL, ButtonSize.MEDIUM, icon = ElchiIcon.REFRESH, loading = s.reissuing)
-    Text(t(R.string.reissue_hint), style = Elchi.type.caption, color = c.muted)
-    if (s.reissued) Note(t(R.string.reissue_done), tone = Tone.OK)
-    s.reissueError?.let { e ->
-        val limit = TaxiRules.reissueLimit(e)
-        val text = if (limit != null) {
-            listOfNotNull(
-                limit.first?.let { reissueWaitText(TaxiRules.reissueWait(it)) } ?: errorText(e),
-                limit.second?.let { t(R.string.reissue_left, "count" to it) },
-            ).joinToString(" ")
-        } else {
-            errorText(e)
-        }
-        Note(text, tone = if (limit != null) Tone.WARN else Tone.ERR)
-    }
-}
-
-@Composable
-private fun reissueWaitText(wait: ReissueWait): String = when (wait) {
-    is ReissueWait.Minutes -> t(R.string.reissue_waitMinutes, "minutes" to wait.minutes, "seconds" to wait.seconds)
-    is ReissueWait.Hours -> t(R.string.reissue_waitHours, "hours" to wait.hours, "minutes" to wait.minutes)
-}
 
 // -- cash record (both sides) ---------------------------------------------------------------------------------------
 

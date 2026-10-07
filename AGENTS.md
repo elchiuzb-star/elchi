@@ -622,6 +622,17 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
   {reason: boarding_window_not_open}` endi hech qachon qaytmaydi; Android/iOS dagi uni ko'rsatadigan kod zararsiz
   o'lik yo'l sifatida qoladi.
 
+**Chiqish kodi olib tashlandi (07.10.2026):**
+- **Q163 (foydalanuvchi qarori; Q139 ning "yo'lovchi boarding kodi qoladi" qismini va spec §11 ning yo'lovchi
+  qismini bekor qiladi)** Yo'lovchi **chiqish kodi** umuman yo'q: mijozga kod ko'rsatilmaydi, haydovchi kod
+  so'ramaydi — `board` bir bosishda bajariladi. `rules.ACTION_PROOF_KIND` bo'sh, `rules.CLIENT_CODE_KINDS` ikkala
+  xizmat uchun bo'sh, `GET /bookings/{id}/codes` hammaga bo'sh ro'yxat qaytaradi; reissue va `PROOF_*` rad etishlari
+  boarding uchun yetib bo'lmaydigan yo'lga aylandi. Eski `booking_proofs` qatorlari o'chirilmaydi (tarix).
+  **Ma'lum oqibat, qabul qilingan:** yo'lovchi mashinaga chiqqanining yagona dalili endi haydovchining o'z amali —
+  nizoda faqat GPS va chat qoladi. Native ilovalarda kod kartasi, kod maydoni va urinishlar matni olib tashlandi;
+  `proofCode.*`, `proofHint.boarding`, `reissue.*`, `driver.board.attemptsLeft`, `driverBooking.*Code` kalitlari
+  ishlatilmay qoldi (lug'atda saqlanadi).
+
 **Wave 3.1 dan keyin ochiq qolgan uch band yopilgan (24.09.2026 audit):** U6 `rating_bucket` — A-variant; ADR-0021 staff MFA — **Accepted** (faqat xodim faktorlarini ulash va `enforce_privileged` rejimi — go-live bandi); dalil fayllari — imzolangan havola bilan.
 
 ## 4. Kod tuzilishi

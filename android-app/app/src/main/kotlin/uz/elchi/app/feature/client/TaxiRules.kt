@@ -1,11 +1,5 @@
 package uz.elchi.app.feature.client
 
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.longOrNull
-import uz.elchi.app.api.ApiException
 import uz.elchi.app.api.generated.CashReceiptDTO
 import uz.elchi.app.api.generated.CashReceiptDecision
 import uz.elchi.app.api.generated.CashReceiptReport
@@ -52,12 +46,6 @@ enum class CashView {
 
     /** Contested: the operator reviews it (Q78). */
     CONTESTED,
-}
-
-/** `PROOF_REISSUE_LIMITED.details.retry_after_s` as the sentence needs it: minutes + seconds, or hours + minutes. */
-sealed interface ReissueWait {
-    data class Minutes(val minutes: Long, val seconds: Long) : ReissueWait
-    data class Hours(val hours: Long, val minutes: Long) : ReissueWait
 }
 
 /**
@@ -185,37 +173,13 @@ object TaxiRules {
 
     // -- the passenger booking (client) ---------------------------------------------------------------------------
 
-    /** Before the passenger is in the car: the boarding code is the client's to show (Q44). */
-    private val CODE_STATUSES = setOf("confirmed", "awaiting_pickup")
-
     /** The service started (server `has_started`): from here the cash handover can be recorded. */
     private val CASH_STATUSES = setOf("onboard", "arrived", "completed")
-
-    fun showBoardingCode(serviceType: ServiceType, status: String): Boolean = isPassenger(serviceType) && status in CODE_STATUSES
 
     fun showCash(serviceType: ServiceType, status: String): Boolean = isPassenger(serviceType) && status in CASH_STATUSES
 
     /** "Manzilga yetib keldim" (`complete`): the passenger confirms the arrival the driver recorded (`drop_off`). */
     fun canComplete(serviceType: ServiceType, status: String): Boolean = isPassenger(serviceType) && status == "arrived"
-
-    /** `PROOF_REISSUE_LIMITED.details.retry_after_s` → what to wait: under an hour in minutes + seconds. */
-    fun reissueWait(retryAfterSeconds: Long): ReissueWait {
-        val s = retryAfterSeconds.coerceAtLeast(1)
-        if (s < 3600) return ReissueWait.Minutes(s / 60, s % 60)
-        // Whole minutes, rounded up so the sentence never promises a moment too early.
-        val minutes = (s + 59) / 60
-        return ReissueWait.Hours(minutes / 60, minutes % 60)
-    }
-
-    /** `details.retry_after_s` / `details.reissues_left` of a refused reissue; null when it was another refusal. */
-    fun reissueLimit(error: Throwable): Pair<Long?, Long?>? {
-        val api = error as? ApiException ?: return null
-        if (api.code != "PROOF_REISSUE_LIMITED") return null
-        return detailLong(api.details, "retry_after_s") to detailLong(api.details, "reissues_left")
-    }
-
-    fun detailLong(details: JsonElement?, key: String): Long? =
-        ((details as? JsonObject)?.get(key) as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toDoubleOrNull()?.toLong() }
 
     // -- the cash record (both sides) -----------------------------------------------------------------------------
 

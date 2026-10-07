@@ -205,8 +205,6 @@ private fun BookingBody(
     BookingHero(booking, onTracking)
     BookingSheet(booking, s, ru, languageTag)
     BookingStatusNotices(booking, s)
-    // Taksi: the code the passenger says at the car, until it boards (Q44).
-    if (TaxiRules.showBoardingCode(booking.serviceType, status)) BoardingCodeBlock(s, vm::reissueCode)
     booking.promo?.let { BookingPromoBlock(it) }
     DriverInfoCard(booking)
     ActiveShareCard(vm, s)

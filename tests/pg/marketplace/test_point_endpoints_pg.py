@@ -124,15 +124,27 @@ def test_the_radius_is_the_corridors_own_configuration(bw: BW) -> None:
     assert refused.code is ErrorCode.ROUTE_MISMATCH
 
     with bw.db.engine.begin() as conn:
+        before = conn.execute(
+            text("SELECT max_point_offset_m FROM service_corridors WHERE id = :c"), {"c": bw.w.corridor_id}
+        ).scalar_one()
         conn.execute(
             text("UPDATE service_corridors SET max_point_offset_m = 20000 WHERE id = :c"), {"c": bw.w.corridor_id}
         )
-    with bw.db.session() as s:
-        listing = marketplace_service.create_listing(
-            s, owner_user_id=bw.w.client_id, data=ListingCreate.model_validate(point_body(bw, origin=off_road))
-        )
-        s.commit()
-    assert listing.origin_route_offset_m > 3_000, "the same place, accepted because the corridor says so"
+    try:
+        with bw.db.session() as s:
+            listing = marketplace_service.create_listing(
+                s, owner_user_id=bw.w.client_id, data=ListingCreate.model_validate(point_body(bw, origin=off_road))
+            )
+            s.commit()
+        assert listing.origin_route_offset_m > 3_000, "the same place, accepted because the corridor says so"
+    finally:
+        # The corridor is shared with every other test in the run: a widened radius would quietly put districts
+        # kilometres off the road "on the corridor" (seen as geo-district failures), so put it back.
+        with bw.db.engine.begin() as conn:
+            conn.execute(
+                text("UPDATE service_corridors SET max_point_offset_m = :m WHERE id = :c"),
+                {"m": before, "c": bw.w.corridor_id},
+            )
 
 
 def test_the_pickup_must_come_before_the_dropoff_along_the_road(bw: BW) -> None:

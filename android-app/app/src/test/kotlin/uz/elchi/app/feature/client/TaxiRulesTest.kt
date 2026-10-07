@@ -1,16 +1,13 @@
 package uz.elchi.app.feature.client
 
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import uz.elchi.app.api.ApiException
 import uz.elchi.app.api.BookingClientDTO
 import uz.elchi.app.api.ElchiJson
 import uz.elchi.app.api.generated.CashReceiptDTO
@@ -199,12 +196,8 @@ class TaxiRulesTest {
     // -- the booking (client) -----------------------------------------------------------------------------------
 
     @Test
-    fun `the code shows until boarding, the cash record from boarding, complete only after the drop-off`() {
+    fun `the cash record shows from boarding, complete only after the drop-off`() {
         val p = ServiceType.PASSENGER
-        assertTrue(TaxiRules.showBoardingCode(p, "confirmed"))
-        assertTrue(TaxiRules.showBoardingCode(p, "awaiting_pickup"))
-        assertFalse(TaxiRules.showBoardingCode(p, "onboard"))
-        assertFalse(TaxiRules.showBoardingCode(ServiceType.PARCEL, "awaiting_pickup"))
         assertFalse(TaxiRules.showCash(p, "awaiting_pickup"))
         assertTrue(TaxiRules.showCash(p, "onboard"))
         assertTrue(TaxiRules.showCash(p, "arrived"))
@@ -242,17 +235,6 @@ class TaxiRulesTest {
         assertEquals("per_seat", booking.priceBasis)
         assertFalse(booking.quantityAmendable)
         assertTrue(BookingRules.reviewPending(booking.noShowReview))
-    }
-
-    @Test
-    fun `the reissue wait reads minutes and seconds under an hour, hours and minutes above`() {
-        assertEquals(ReissueWait.Minutes(1, 30), TaxiRules.reissueWait(90))
-        assertEquals(ReissueWait.Minutes(0, 1), TaxiRules.reissueWait(0))
-        assertEquals(ReissueWait.Hours(5, 2), TaxiRules.reissueWait(5 * 3600 + 61))
-        assertEquals(ReissueWait.Hours(2, 0), TaxiRules.reissueWait(7200))
-        val limited = ApiException(429, "PROOF_REISSUE_LIMITED", "limited", buildJsonObject { put("retry_after_s", 95); put("reissues_left", 2) })
-        assertEquals(95L to 2L, TaxiRules.reissueLimit(limited))
-        assertNull(TaxiRules.reissueLimit(ApiException(409, "INVALID_STATE_TRANSITION", "no")))
     }
 
     // -- the cash record ----------------------------------------------------------------------------------------

@@ -33,17 +33,9 @@ extension LocaleStore {
         return peopleLine(max(listing.quantity, 1), unitMinor: listing.unitPriceMinor)
     }
 
-    /// `Yangi kodni 1 daqiqa 40 soniyadan keyin olish mumkin.` while a reissue has to wait, nil once it may go.
-    func reissueWaitText(_ wait: CodeReissue.Wait, now: Date = Date()) -> String? {
-        guard let text = CodeReissue.waitText(wait, now: now) else { return nil }
-        return t(text.key, values: text.values.map { ($0.0, $0.1 as Any) })
-    }
-
-    /// "Yo'lovchini chiqardim" refused: attempts left, attempts over, the trip not started, or the code's sentence.
+    /// "Yo'lovchini chiqardim" refused: the trip not started, else the refusal's own sentence.
     func boardErrorText(_ error: Error) -> String {
         switch BoardRefusal.of(error) {
-        case .attemptsLeft(let count): t("driver.board.attemptsLeft", ("count", count))
-        case .attemptsExceeded: t("error.PROOF_ATTEMPTS_EXCEEDED")
         case .tripNotStarted: t("error.TRIP_NOT_STARTED")
         case .other: errorText(error)
         }

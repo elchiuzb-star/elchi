@@ -1,8 +1,8 @@
 import Foundation
 
 // Taksi (passenger) pure logic: the rollout gate (K7/Q5/Q89/Q91), the seat picker, the request body, the seat-count
-// edit (Q145), the booking's passenger states on both sides - boarding code and its reissue (Q75), "Keldim", board,
-// drop-off, the no-show report (Q7), the cash record (Q78) and the client's own completion. No views, no network.
+// edit (Q145), the booking's passenger states on both sides - "Keldim", board, drop-off, the no-show report (Q7),
+// the cash record (Q78) and the client's own completion. No views, no network.
 
 // MARK: - The rollout gate
 
@@ -178,8 +178,6 @@ public enum PassengerStatus {
 
 /// What the client's passenger booking shows and allows beyond the shared (parcel) actions.
 public struct ClientTaxiActions: Equatable, Sendable {
-    /// The boarding code is shown (and may be reissued) until the passenger is aboard.
-    public let showCode: Bool
     /// "Naqd to'lov qaydi" (onboard, arrived, completed).
     public let cash: Bool
     /// "Manzilga yetib keldim": only once the driver dropped the passenger off.
@@ -189,62 +187,20 @@ public struct ClientTaxiActions: Equatable, Sendable {
 
     public static func of(_ booking: ClientBookingDTO) -> ClientTaxiActions {
         guard booking.serviceType == .passenger else {
-            return ClientTaxiActions(showCode: false, cash: false, canComplete: false, noShowPending: false)
+            return ClientTaxiActions(cash: false, canComplete: false, noShowPending: false)
         }
         let status = booking.serviceStatus
-        return ClientTaxiActions(showCode: status == "confirmed" || status == "awaiting_pickup",
-                                 cash: PassengerStatus.cashRecordable.contains(status),
+        return ClientTaxiActions(cash: PassengerStatus.cashRecordable.contains(status),
                                  canComplete: status == "arrived",
                                  noShowPending: booking.noShowReview?.status == "pending")
-    }
-}
-
-// MARK: - Boarding code reissue (Q75: 2 minutes apart, 3 per 24 hours)
-
-public enum CodeReissue {
-    /// The boarding code among the booking's codes (the endpoint is empty once the passenger is aboard or it ended).
-    public static func boarding(_ codes: BookingCodesDTO?) -> BookingCodeDTO? {
-        codes?.codes.first { $0.kind == .boardingCode }
-    }
-
-    /// `482916` -> `482 916` (read aloud in two halves).
-    public static func spaced(_ code: String) -> String {
-        guard code.count == 6 else { return code }
-        return "\(code.prefix(3)) \(code.suffix(3))"
-    }
-
-    /// When the next reissue is allowed, from `PROOF_REISSUE_LIMITED {retry_after_s, reissues_left}`.
-    public struct Wait: Equatable, Sendable {
-        public let until: Date
-        /// No reissues left today: the long wait ("Bugungi chegara tugadi").
-        public let dailyLimit: Bool
-    }
-
-    public static func wait(_ error: Error, now: Date = Date()) -> Wait? {
-        guard let error = error as? APIError, error.code == "PROOF_REISSUE_LIMITED" else { return nil }
-        let seconds: Double = if case .number(let value)? = error.details?["retry_after_s"] { value } else { 120 }
-        let left: Int? = if case .number(let value)? = error.details?["reissues_left"] { Int(value) } else { nil }
-        return Wait(until: now.addingTimeInterval(max(1, seconds)), dailyLimit: left == 0)
-    }
-
-    /// The wait sentence for the time still left: `reissue.waitHours` on the daily limit, else `reissue.waitMinutes`;
-    /// nil once the time has passed (the button works again).
-    public static func waitText(_ wait: Wait, now: Date = Date()) -> (key: String, values: [(String, Int)])? {
-        let left = Int(wait.until.timeIntervalSince(now).rounded(.up))
-        guard left > 0 else { return nil }
-        if wait.dailyLimit {
-            let minutes = (left + 59) / 60
-            return ("reissue.waitHours", [("hours", minutes / 60), ("minutes", minutes % 60)])
-        }
-        return ("reissue.waitMinutes", [("minutes", left / 60), ("seconds", left % 60)])
     }
 }
 
 // MARK: - The driver's passenger booking
 
 /// What the driver may do with a passenger booking: "Keldim" until it was sent (allowed in confirmed and
-/// awaiting_pickup - the web hides it in awaiting_pickup), the boarding code + "Yo'lovchini chiqardim" while the
-/// passenger is awaited, "Mijoz kelmadi" (see `NoShowGate`), "Yo'lovchini tushirdim" once aboard, and the cash record.
+/// awaiting_pickup - the web hides it in awaiting_pickup), "Yo'lovchini chiqardim" while the passenger is awaited,
+/// "Mijoz kelmadi" (see `NoShowGate`), "Yo'lovchini tushirdim" once aboard, and the cash record.
 public struct DriverTaxiActions: Equatable, Sendable {
     public let canArrive: Bool
     public let canBoard: Bool
@@ -265,33 +221,17 @@ public struct DriverTaxiActions: Equatable, Sendable {
     }
 }
 
-/// "Yo'lovchini chiqardim" refusals, in the terms the screen acts on.
+/// "Yo'lovchini chiqardim" refusals, in the terms the screen acts on. Q163 retired the boarding code, so the only
+/// refusal with words of its own left is the trip that has not started.
 public enum BoardRefusal: Equatable, Sendable {
-    /// `PROOF_INVALID {attempts_left}`: "Kod noto'g'ri. Yana N ta urinish qoldi."
-    case attemptsLeft(Int)
-    /// `PROOF_ATTEMPTS_EXCEEDED`: an operator reissues the code.
-    case attemptsExceeded
     /// `TRIP_NOT_STARTED`: start boarding on the trip first (a link to it).
     case tripNotStarted
     case other
 
     public static func of(_ error: Error) -> BoardRefusal {
-        guard let error = error as? APIError else { return .other }
-        switch error.code {
-        case "PROOF_INVALID":
-            if case .number(let left)? = error.details?["attempts_left"] { return .attemptsLeft(Int(left)) }
-            return .attemptsLeft(0)
-        case "PROOF_ATTEMPTS_EXCEEDED": return .attemptsExceeded
-        case "TRIP_NOT_STARTED": return .tripNotStarted
-        default: return .other
-        }
+        guard let error = error as? APIError, error.code == "TRIP_NOT_STARTED" else { return .other }
+        return .tripNotStarted
     }
-
-    /// A code the driver can send: six digits.
-    public static func validCode(_ text: String) -> Bool { text.count == 6 && text.allSatisfy { $0.isASCII && $0.isNumber } }
-
-    /// What is typed, kept to six digits.
-    public static func digits(_ typed: String) -> String { String(typed.filter { $0.isASCII && $0.isNumber }.prefix(6)) }
 }
 
 // MARK: - No-show (Q7)

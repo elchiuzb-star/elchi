@@ -34,8 +34,6 @@ import uz.elchi.app.api.generated.ContactDetails
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.api.generated.ListingDTO
 import uz.elchi.app.api.generated.PromoConsentInput
-import uz.elchi.app.api.generated.ProofKind
-import uz.elchi.app.api.generated.ProofReissueRequest
 import uz.elchi.app.api.generated.RatingCreate
 import uz.elchi.app.api.generated.ReportCreate
 import uz.elchi.app.api.generated.ReportReasonCode
@@ -147,13 +145,7 @@ class BookingViewModel(
         val arrivedAt: String? = null,
         val arriving: Boolean = false,
         val arriveError: Throwable? = null,
-        // Taksi (passenger): boarding code (client), cash record (both), complete (client), board / drop-off /
-        // no-show (driver).
-        /** The client's 6-digit boarding code while the passenger is awaited; null once onboard (the server sends none). */
-        val boardingCode: String? = null,
-        val reissuing: Boolean = false,
-        val reissued: Boolean = false,
-        val reissueError: Throwable? = null,
+        // Taksi (passenger): cash record (both), complete (client), board / drop-off / no-show (driver).
         val cashDigits: String = "",
         val cashNote: String = "",
         val contestComment: String = "",
@@ -161,7 +153,6 @@ class BookingViewModel(
         val cashError: Throwable? = null,
         val completing: Boolean = false,
         val completeError: Throwable? = null,
-        val boardCode: String = "",
         val boarding: Boolean = false,
         val boardError: Throwable? = null,
         val droppingOff: Boolean = false,
@@ -248,7 +239,6 @@ class BookingViewModel(
         }
         if (side == BookingSide.DRIVER) loadArrival(booking)
         if (side == BookingSide.CLIENT) {
-            loadCodes(booking)
             loadChatCount()
             booking.driver?.id?.let(::loadBlocked)
         }
@@ -656,40 +646,6 @@ class BookingViewModel(
         }
     }
 
-    // -- Taksi: boarding code (client) ---------------------------------------------------------------------------
-
-    /** `GET /bookings/{id}/codes` while the passenger is awaited; the code goes once the passenger is onboard. */
-    private fun loadCodes(booking: BookingClientDTO) {
-        if (!TaxiRules.showBoardingCode(booking.serviceType, booking.serviceStatus)) {
-            if (_state.value.boardingCode != null) _state.update { it.copy(boardingCode = null) }
-            return
-        }
-        viewModelScope.launch {
-            runCatching { api.getBookingCodes(bookingId).data.codes.firstOrNull { it.kind == ProofKind.BOARDING_CODE }?.code }
-                .onSuccess { code -> _state.update { it.copy(boardingCode = code) } }
-                .onFailure { if (it is CancellationException) throw it }
-        }
-    }
-
-    /** "Yangi kod olish": the old code stops at once; Q75 limits it (2 min apart, 3 a day) - the refusal says how long. */
-    fun reissueCode() {
-        if (_state.value.reissuing) return
-        _state.update { it.copy(reissuing = true, reissued = false, reissueError = null) }
-        viewModelScope.launch {
-            try {
-                val codes = keyed("reissue:$bookingId:${_state.value.boardingCode}") { key ->
-                    api.reissueBookingCode(bookingId, ProofKind.BOARDING_CODE, ProofReissueRequest(), key).data
-                }
-                val code = codes.codes.firstOrNull { it.kind == ProofKind.BOARDING_CODE }?.code
-                _state.update { it.copy(reissuing = false, reissued = true, boardingCode = code ?: it.boardingCode) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(reissuing = false, reissueError = e) }
-            }
-        }
-    }
-
     // -- Taksi: cash record (both sides) ---------------------------------------------------------------------------
 
     /** The cash this side hands over / collects: the promo's cash on a discounted booking, else the agreed total. */
@@ -785,22 +741,19 @@ class BookingViewModel(
 
     // -- Taksi: board / drop-off / no-show (driver) ----------------------------------------------------------------
 
-    fun setBoardCode(text: String) = _state.update { it.copy(boardCode = uz.elchi.app.feature.driver.DriverTaxiRules.normaliseCode(text), boardError = null) }
-
-    /** "Yo'lovchini chiqardim": `board {code}` - a wrong code costs an attempt (the server counts them). */
+    /** "Yo'lovchini chiqardim": `board {expected_version}` - no code to check any more (Q163). */
     fun board() {
         val s = _state.value
         val booking = s.value ?: return
-        if (s.boarding || side != BookingSide.DRIVER || !uz.elchi.app.feature.driver.DriverTaxiRules.codeComplete(s.boardCode)) return
+        if (s.boarding || side != BookingSide.DRIVER) return
         _state.update { it.copy(boarding = true, boardError = null) }
         viewModelScope.launch {
             try {
-                // A new key per attempt: a wrong code is a definite answer, the next code is a new action.
-                val result = keyed("board:${booking.id}:${booking.version}:${s.boardCode}") { key ->
-                    api.bookingAction(booking.id, BookingAction.BOARD, uz.elchi.app.feature.driver.DriverTaxiRules.boardBody(booking.version, s.boardCode), key)
+                val result = keyed("board:${booking.id}:${booking.version}") { key ->
+                    api.bookingAction(booking.id, BookingAction.BOARD, uz.elchi.app.feature.driver.DriverTaxiRules.boardBody(booking.version), key)
                 }
                 setBooking(result.data)
-                _state.update { it.copy(boarding = false, boardCode = "", notice = BookingNotice.STATUS_UPDATED) }
+                _state.update { it.copy(boarding = false, notice = BookingNotice.STATUS_UPDATED) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -210,7 +210,7 @@ class PW:
         bw = self.bw
         run_trip_action(bw, trip_id, driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
         for booking_id, client_id in bookings:
-            act(bw, booking_id, driver_id, "board", code=codes_for(bw, booking_id, client_id)["boarding_code"],
+            act(bw, booking_id, driver_id, "board",
                 now=bw.base + timedelta(minutes=5))
         run_trip_action(bw, trip_id, driver_id, "depart", now=bw.base + timedelta(minutes=12))
 

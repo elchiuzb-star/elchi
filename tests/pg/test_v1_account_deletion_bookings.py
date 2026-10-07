@@ -94,8 +94,7 @@ def _complete_passenger_booking(bw: BW, plate: str):  # noqa: ANN202
     _listing, trip_id, _trip, ref = request_with_driver_proposal(bw, plate=plate)
     booking = accept(bw, ref, bw.w.client_id)
     assert run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30)) == "boarding"
-    code = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    act(bw, booking.id, bw.w.driver_id, "board", code=code, now=bw.base + timedelta(minutes=5))
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base + timedelta(minutes=5))
     act(bw, booking.id, bw.w.driver_id, "drop_off", now=bw.base + timedelta(hours=3))
     return act(bw, booking.id, bw.w.client_id, "complete", now=bw.base + timedelta(hours=3, minutes=10))
 

@@ -149,8 +149,7 @@ def test_admin_block_with_active_v2_booking_blocks_only_new_business(bw: BW) -> 
 
     # The existing booking still progresses: trip operation and proofs continue (D16).
     assert run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30)) == "boarding"
-    code = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    assert act(bw, booking.id, bw.w.driver_id, "board", code=code, now=bw.base + timedelta(minutes=5)).service_status == "onboard"
+    assert act(bw, booking.id, bw.w.driver_id, "board", now=bw.base + timedelta(minutes=5)).service_status == "onboard"
     act(bw, booking.id, bw.w.driver_id, "drop_off", now=bw.base + timedelta(hours=3))
     final = act(bw, booking.id, bw.w.client_id, "complete", now=bw.base + timedelta(hours=3, minutes=10))
     assert final.service_status == "completed"

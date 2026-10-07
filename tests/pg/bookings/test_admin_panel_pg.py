@@ -45,8 +45,7 @@ def completed_held_booking(bw: BW, *, plate: str = "01B500AA") -> Booking:
     _, trip_id, _, ref = request_with_driver_proposal(bw, plate=plate)
     booking = accept(bw, ref, bw.w.client_id)
     run_trip_action(bw, trip_id, bw.w.driver_id, "start_boarding", now=bw.base - timedelta(minutes=30))
-    code = codes_for(bw, booking.id, bw.w.client_id)["boarding_code"]
-    act(bw, booking.id, bw.w.driver_id, "board", code=code, now=bw.base + timedelta(minutes=5))
+    act(bw, booking.id, bw.w.driver_id, "board", now=bw.base + timedelta(minutes=5))
     act(bw, booking.id, bw.w.driver_id, "drop_off", now=bw.base + timedelta(hours=3))
     done = act(bw, booking.id, bw.w.client_id, "complete", now=bw.base + timedelta(hours=3, minutes=10))
     assert (done.commission_status, done.finance_review_reason) == ("held", "dispute_module_unavailable")

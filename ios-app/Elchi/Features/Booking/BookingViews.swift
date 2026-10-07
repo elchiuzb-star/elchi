@@ -108,7 +108,6 @@ struct BookingDetailView: View {
         ForEach(Array(BookingDetailRules.notices(booking, blocked: model.blocked).enumerated()), id: \.offset) { _, notice in
             BookingNoticeBox(text: noticeText(notice), tone: notice.tone)
         }
-        if taxi.showCode { BoardingCodeSection(model: model.code) }
         driverCard(booking)
         if let promo = booking.promo { promoBlock(promo) }
         if taxi.cash { CashRecordSection(model: model.cash, booking: booking, dueMinor: booking.cashDueMinor) }

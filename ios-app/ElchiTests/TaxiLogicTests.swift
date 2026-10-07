@@ -3,8 +3,8 @@ import Testing
 @testable import Elchi
 
 /// Taksi (passenger): the rollout gate, the seat picker, the request body and its total, the seat-count edit (Q145),
-/// the passenger booking's states on both sides, the boarding code reissue wait (Q75), board refusals, the no-show
-/// gate, body and reasons (Q7), the cash record rules (Q78) and the client's completion.
+/// the passenger booking's states on both sides, board refusals, the no-show gate, body and reasons (Q7), the cash
+/// record rules (Q78) and the client's completion.
 enum TaxiFixture {
     static func flags(passenger: Bool, parcel: Bool = true) -> EffectiveFlagValuesDTO {
         EffectiveFlagValuesDTO(driverListingEnabled: false, parcelEnabled: parcel, passengerEnabled: passenger, trackingEnabled: true)
@@ -241,22 +241,22 @@ struct PassengerBookingTests {
 
     @Test func clientActionsByStatus() {
         let confirmed = ClientTaxiActions.of(TaxiFixture.client(status: "confirmed"))
-        #expect(confirmed.showCode && !confirmed.cash && !confirmed.canComplete)
+        #expect(!confirmed.cash && !confirmed.canComplete)
         let waiting = ClientTaxiActions.of(TaxiFixture.client(status: "awaiting_pickup", noShow: "pending"))
-        #expect(waiting.showCode && waiting.noShowPending)
+        #expect(waiting.noShowPending && !waiting.cash)
         let aboard = ClientTaxiActions.of(TaxiFixture.client(status: "onboard"))
-        #expect(!aboard.showCode && aboard.cash && !aboard.canComplete)
+        #expect(aboard.cash && !aboard.canComplete)
         // "Manzilga yetib keldim" only once the driver dropped the passenger off.
         let arrived = ClientTaxiActions.of(TaxiFixture.client(status: "arrived"))
         #expect(arrived.canComplete && arrived.cash)
         let done = ClientTaxiActions.of(TaxiFixture.client(status: "completed"))
-        #expect(!done.canComplete && done.cash && !done.showCode)
+        #expect(!done.canComplete && done.cash)
         #expect(BookingActions.of("completed").canRate)
         // A rejected review is no longer pending.
         #expect(!ClientTaxiActions.of(TaxiFixture.client(status: "awaiting_pickup", noShow: "rejected")).noShowPending)
         // A parcel booking has none of it.
         let parcel = ClientTaxiActions.of(BookingFixture.booking(status: "confirmed"))
-        #expect(!parcel.showCode && !parcel.cash && !parcel.canComplete)
+        #expect(!parcel.cash && !parcel.canComplete)
     }
 
     @Test func driverActionsByStatus() {
@@ -276,64 +276,22 @@ struct PassengerBookingTests {
     }
 }
 
-struct BoardingCodeTests {
-    let now = Fixture.date("2026-09-30T05:00:00Z")
-
-    @Test func findsTheBoardingCode() {
-        let codes = Fixture.decode(BookingCodesDTO.self, """
-            {"booking_id":"bkg_p","codes":[{"kind":"boarding_code","code":"482916","valid_until":null}]}
-            """)
-        #expect(CodeReissue.boarding(codes)?.code == "482916")
-        #expect(CodeReissue.boarding(Fixture.decode(BookingCodesDTO.self, #"{"booking_id":"bkg_p","codes":[]}"#)) == nil)
-        #expect(CodeReissue.spaced("482916") == "482 916")
-    }
-
-    @Test func shortWaitInMinutesAndSeconds() throws {
-        let wait = try #require(CodeReissue.wait(TaxiFixture.apiError("PROOF_REISSUE_LIMITED", #"{"retry_after_s":100,"reissues_left":2}"#), now: now))
-        #expect(!wait.dailyLimit)
-        let text = try #require(CodeReissue.waitText(wait, now: now))
-        #expect(text.key == "reissue.waitMinutes")
-        #expect(text.values.map(\.1) == [1, 40])
-        // Once the time passed, the button works again.
-        #expect(CodeReissue.waitText(wait, now: now.addingTimeInterval(101)) == nil)
-    }
-
-    @Test func dailyLimitInHoursAndMinutes() throws {
-        let wait = try #require(CodeReissue.wait(TaxiFixture.apiError("PROOF_REISSUE_LIMITED", #"{"retry_after_s":7500,"reissues_left":0}"#), now: now))
-        #expect(wait.dailyLimit)
-        let text = try #require(CodeReissue.waitText(wait, now: now))
-        #expect(text.key == "reissue.waitHours")
-        #expect(text.values.map(\.1) == [2, 5])
-        #expect(CodeReissue.wait(TaxiFixture.apiError("VERSION_CONFLICT"), now: now) == nil)
-    }
-
-    @MainActor @Test func waitSentenceIsFilled() throws {
-        let strings = LocaleStore()
-        strings.set(.uz)
-        let wait = try #require(CodeReissue.wait(TaxiFixture.apiError("PROOF_REISSUE_LIMITED", #"{"retry_after_s":100,"reissues_left":2}"#), now: now))
-        #expect(strings.reissueWaitText(wait, now: now) == "Yangi kodni 1 daqiqa 40 soniyadan keyin olish mumkin.")
-    }
-}
-
 struct BoardRefusalTests {
+    /// Q163 retired the boarding code: `TRIP_NOT_STARTED` is the only refusal with words of its own, and the code's
+    /// old refusals (which the server no longer sends for boarding) fall through to the generic sentence.
     @Test func mapsTheBoardRefusals() {
-        #expect(BoardRefusal.of(TaxiFixture.apiError("PROOF_INVALID", #"{"proof_kind":"boarding_code","attempts_left":3}"#)) == .attemptsLeft(3))
-        #expect(BoardRefusal.of(TaxiFixture.apiError("PROOF_ATTEMPTS_EXCEEDED", #"{"limit":5}"#)) == .attemptsExceeded)
         #expect(BoardRefusal.of(TaxiFixture.apiError("TRIP_NOT_STARTED", #"{"trip_status":"planned"}"#)) == .tripNotStarted)
         #expect(BoardRefusal.of(TaxiFixture.apiError("VERSION_CONFLICT")) == .other)
+        #expect(BoardRefusal.of(TaxiFixture.apiError("PROOF_INVALID", #"{"attempts_left":3}"#)) == .other)
+        #expect(BoardRefusal.of(TaxiFixture.apiError("PROOF_ATTEMPTS_EXCEEDED", #"{"limit":5}"#)) == .other)
     }
 
-    @Test func codeIsSixDigits() {
-        #expect(BoardRefusal.validCode("482916"))
-        #expect(!BoardRefusal.validCode("48291") && !BoardRefusal.validCode("48291a"))
-        #expect(BoardRefusal.digits("48 29-16 7") == "482916")
-    }
-
-    @MainActor @Test func attemptsLeftSentence() {
+    @MainActor @Test func boardRefusalSentences() {
         let strings = LocaleStore()
         strings.set(.uz)
-        #expect(strings.boardErrorText(TaxiFixture.apiError("PROOF_INVALID", #"{"attempts_left":2}"#)) == "Kod noto'g'ri. Yana 2 ta urinish qoldi.")
         #expect(strings.boardErrorText(TaxiFixture.apiError("TRIP_NOT_STARTED")) == strings.t("error.TRIP_NOT_STARTED"))
+        #expect(strings.boardErrorText(TaxiFixture.apiError("VERSION_CONFLICT"))
+                == strings.errorText(TaxiFixture.apiError("VERSION_CONFLICT")))
     }
 }
 
@@ -456,13 +414,12 @@ struct TaxiStringsTests {
         let keys = ["status.onboard", "status.arrived", "status.no_show", "client.taxi.complete", "client.taxi.completeHint",
                     "client.taxi.completeConfirmTitle", "client.taxi.completed", "client.taxi.seatsTotal", "driver.noShow.button",
                     "driver.noShow.hint", "driver.noShow.contactTitle", "driver.noShow.confirm", "driver.noShow.sent", "driver.noShow.pending",
-                    "driver.board.attemptsLeft", "home.modeTaxi", "home.passengerClosed", "driverFeed.modeTaxi", "seatPicker.howMany",
+                    "home.modeTaxi", "home.passengerClosed", "driverFeed.modeTaxi", "seatPicker.howMany",
                     "seatPicker.peopleCount", "seatPicker.driver", "seatPicker.bookedIs", "seatPicker.seatCount", "seatPicker.seatNotReserved",
                     "routeSummary.pricePerPerson", "orderForm.review.passengers", "orderForm.review.peopleCount", "orderForm.review.perPersonDetail",
                     "orderForm.review.seatNegotiated", "orderForm.review.incompletePassenger", "listingEdit.seats", "listingEdit.seatsHint",
-                    "listingOwner.invalid.seats", "amendment.seatsFixed", "amendment.seatPriceLabel", "proofCode.boarding_code", "proofHint.boarding",
-                    "reissue.button", "reissue.hint", "reissue.done", "reissue.waitMinutes", "reissue.waitHours", "driverBooking.boardingCode",
-                    "driverBooking.codePlaceholder", "driverBooking.codeFromPassenger", "driverBooking.action.board", "driverBooking.action.dropOff",
+                    "listingOwner.invalid.seats", "amendment.seatsFixed", "amendment.seatPriceLabel",
+                    "driverBooking.action.board", "driverBooking.action.dropOff",
                     "driverBooking.phoneHidden", "app.cash.title", "app.cash.explainer", "app.cash.markGiven", "app.cash.markReceived",
                     "app.cash.acknowledge", "app.cash.contest", "app.cash.bothConfirmed", "app.cash.contested", "app.cash.reportedByMe",
                     "app.cash.reportedByOther", "app.cash.awaitingOther", "bookingCancel.reviewPending", "bookingCancel.refused.noShowPending",

@@ -57,7 +57,7 @@ def boarding_passenger(bw: BW, plate: str, *, client_id: int | None = None, driv
 def arrived_passenger(bw: BW, plate: str, *, client_id: int | None = None, driver_id: int | None = None) -> Booking:
     client_id, driver_id = client_id or bw.w.client_id, driver_id or bw.w.driver_id
     _, booking = boarding_passenger(bw, plate, client_id=client_id, driver_id=driver_id)
-    act(bw, booking.id, driver_id, "board", code=codes_for(bw, booking.id, client_id)["boarding_code"], now=bw.base + timedelta(minutes=5))
+    act(bw, booking.id, driver_id, "board", now=bw.base + timedelta(minutes=5))
     act(bw, booking.id, driver_id, "drop_off", now=bw.base + timedelta(hours=3))
     return booking
 

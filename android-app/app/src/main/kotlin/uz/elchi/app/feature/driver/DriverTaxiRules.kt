@@ -34,14 +34,8 @@ sealed interface NoShowState {
     data object Ready : NoShowState
 }
 
-/** A refused boarding code, in the words the driver needs. */
+/** A refused boarding, in the words the driver needs. */
 sealed interface BoardError {
-    /** `PROOF_INVALID {attempts_left}`. */
-    data class Wrong(val attemptsLeft: Long?) : BoardError
-
-    /** `PROOF_ATTEMPTS_EXCEEDED`: only the operator can issue a new code now. */
-    data object Exceeded : BoardError
-
     /** `TRIP_NOT_STARTED`: the trip's boarding must be started first (the trip screen). */
     data object TripNotStarted : BoardError
 
@@ -56,31 +50,20 @@ object DriverTaxiRules {
     /** The announced wait before a no-show may be reported (the trip's `pickup_wait_minutes`, 10 by default). */
     val WAIT: Duration = Duration.ofMinutes(10)
 
-    const val CODE_LENGTH = 6
-
     private fun passenger(serviceType: ServiceType) = TaxiRules.isPassenger(serviceType)
 
-    /** The code field and "Yo'lovchini chiqardim": the passenger is waiting at the car. */
+    /** "Yo'lovchini chiqardim": the passenger is waiting at the car. */
     fun showBoard(serviceType: ServiceType, status: String): Boolean = passenger(serviceType) && status == "awaiting_pickup"
 
     /** "Yo'lovchini tushirdim" (`drop_off`): the passenger is in the car. */
     fun showDropOff(serviceType: ServiceType, status: String): Boolean = passenger(serviceType) && status == "onboard"
 
-    /** Digits only, at most six - what the field keeps of what was typed. */
-    fun normaliseCode(text: String): String = text.filter(Char::isDigit).take(CODE_LENGTH)
-
-    fun codeComplete(code: String): Boolean = code.length == CODE_LENGTH && code.all(Char::isDigit)
-
-    fun boardBody(version: Long, code: String): BookingActionRequest = BookingActionRequest(code = code, expectedVersion = version)
+    /** `board {expected_version}`: the passenger boards on the driver's word alone (Q163 retired the code). */
+    fun boardBody(version: Long): BookingActionRequest = BookingActionRequest(expectedVersion = version)
 
     fun boardError(error: Throwable): BoardError {
         val api = error as? ApiException ?: return BoardError.Other(error)
-        return when (api.code) {
-            "PROOF_INVALID" -> BoardError.Wrong(TaxiRules.detailLong(api.details, "attempts_left"))
-            "PROOF_ATTEMPTS_EXCEEDED" -> BoardError.Exceeded
-            "TRIP_NOT_STARTED" -> BoardError.TripNotStarted
-            else -> BoardError.Other(error)
-        }
+        return if (api.code == "TRIP_NOT_STARTED") BoardError.TripNotStarted else BoardError.Other(error)
     }
 
     /** Server `check_no_show_report`: the wait counts from the arrival or the window start, whichever is later. */

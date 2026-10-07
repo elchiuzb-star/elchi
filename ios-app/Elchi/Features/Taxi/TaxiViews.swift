@@ -1,58 +1,5 @@
 import SwiftUI
 
-// MARK: - Chiqish kodi (client)
-
-/// The boarding code, big and monospaced, with "tell it to the driver as you get in", "Yangi kod olish" and its limits
-/// (Q75). A refused reissue says how long to wait, counting down.
-struct BoardingCodeSection: View {
-    let model: BoardingCodeModel
-    @Environment(LocaleStore.self) private var strings
-    @Environment(\.elchi) private var c
-    @State private var now = Date()
-
-    var body: some View {
-        if let code = model.code {
-            VStack(alignment: .leading, spacing: 10) {
-                // The design's dark code card: "Chiqish kodi", the six digits spaced wide, the hint under them.
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(strings.t("proofCode.boarding_code")).font(ElchiFont.caption).foregroundStyle(Color(hex: 0x9FB6D6))
-                    Text(CodeReissue.spaced(code.code)).font(.system(size: 30, weight: .semibold, design: .monospaced)).foregroundStyle(.white)
-                        .kerning(9).padding(.vertical, 2)
-                        .accessibilityLabel(code.code.map(String.init).joined(separator: " "))
-                        .accessibilityIdentifier("elchi.booking.code")
-                    Text(strings.t("proofHint.boarding")).font(ElchiFont.caption).foregroundStyle(Color(hex: 0xC9D6E8))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(c.isDark ? Color(hex: 0x1B3563) : Color(hex: 0x0E2350), in: RoundedRectangle(cornerRadius: 22))
-                let waitText = model.wait.flatMap { strings.reissueWaitText($0, now: now) }
-                ElchiButton(strings.t("reissue.button"), variant: .neutral, icon: .refresh, loading: model.reissuing) {
-                    Task { await model.reissue() }
-                }
-                .disabled(waitText != nil)
-                .accessibilityIdentifier("elchi.booking.reissue")
-                if let waitText {
-                    Note(waitText, tone: .warn)
-                } else if model.reissued {
-                    Note(strings.t("reissue.done"), tone: .ok)
-                }
-                if let error = model.reissueError { Note(strings.errorText(error), tone: .err) }
-                Text(strings.t("reissue.hint")).font(ElchiFont.caption).foregroundStyle(c.muted).fixedSize(horizontal: false, vertical: true)
-            }
-            .task(id: model.wait?.until) {
-                // The wait sentence counts down; the button comes back by itself.
-                while model.wait != nil, !Task.isCancelled {
-                    now = Date()
-                    try? await Task.sleep(for: .seconds(1))
-                }
-            }
-        } else if let error = model.loadError {
-            Note(strings.errorText(error), tone: .err)
-        }
-    }
-}
-
 // MARK: - Naqd to'lov qaydi (both sides)
 
 /// "Naqd to'lov qaydi" (design 'cash-ack'): the agreed amount, then by state - record it (the amount prefilled with
@@ -246,9 +193,9 @@ struct TaxiCompleteDialog: View {
 
 // MARK: - The driver's passenger block
 
-/// What the driver does with a passenger before and during the ride: the boarding code from the passenger and
-/// "Yo'lovchini chiqardim" (awaiting pickup), "Mijoz kelmadi" with when it opens (Q7), "Yo'lovchini tushirdim"
-/// (aboard). Refusals are said in their own words; `TRIP_NOT_STARTED` links to the trip.
+/// What the driver does with a passenger before and during the ride: "Yo'lovchini chiqardim" (awaiting pickup),
+/// "Mijoz kelmadi" with when it opens (Q7), "Yo'lovchini tushirdim" (aboard). Refusals are said in their own words;
+/// `TRIP_NOT_STARTED` links to the trip.
 struct DriverTaxiSection: View {
     let model: DriverTaxiModel
     let booking: DriverBookingDTO
@@ -260,20 +207,12 @@ struct DriverTaxiSection: View {
     @State private var noShowSheet = false
 
     var body: some View {
-        @Bindable var model = model
         let version = booking.base.version
         if actions.canBoard {
-            ElchiField(text: $model.code, label: strings.t("driverBooking.boardingCode"), placeholder: strings.t("driverBooking.codePlaceholder"),
-                       hint: strings.t("driverBooking.codeFromPassenger"), keyboard: .numberPad, contentType: .oneTimeCode, monospaced: true)
-                .onChange(of: model.code) { _, typed in
-                    let digits = BoardRefusal.digits(typed)
-                    if digits != typed { model.code = digits }
-                }
-                .accessibilityIdentifier("elchi.driver.taxi.code")
             ElchiButton(strings.t("driverBooking.action.board"), loading: model.running == .board) {
                 Task { _ = await model.board(version: version) }
             }
-            .disabled(!BoardRefusal.validCode(model.code) || model.running != nil)
+            .disabled(model.running != nil)
             .accessibilityIdentifier("elchi.driver.taxi.board")
             if let error = model.error, model.failed == .board {
                 Note(strings.boardErrorText(error), tone: .err)
