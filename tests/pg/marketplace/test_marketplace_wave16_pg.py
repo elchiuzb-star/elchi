@@ -7,7 +7,6 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import text
 
-import app.modules.geo.service as geo_service
 from app.contracts.errors import DomainError, ErrorCode
 from app.modules.identity import service as identity_service
 from app.modules.marketplace import service as marketplace_service
@@ -86,20 +85,12 @@ def test_n1_amenities_edit_is_not_material(world: World) -> None:
 # --- N5 ---------------------------------------------------------------------------------------------
 
 
-def test_n5_detour_seconds_and_route_public_id_reach_route_matching(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_n5_detour_seconds_are_shown_and_the_budget_is_checked(world: World) -> None:
     listing_id = published_request(world)
     trip_id, trip_public_id = driver_trip(world)
     with world.db.session() as s:
         s.execute(text("UPDATE trips SET detour_used_s = 125 WHERE id = :t"), {"t": trip_id})
         s.commit()
-    seen = []
-    original = geo_service.evaluate_route_match
-
-    def spy(context, request, **kwargs):  # noqa: ANN001, ANN202
-        seen.append(context)
-        return original(context, request, **kwargs)
-
-    monkeypatch.setattr(geo_service, "evaluate_route_match", spy)
     with world.db.session() as s:
         marketplace_service.submit_proposal(s, listing_public_id=listing_id, actor_user_id=world.driver_id, data=proposal(world, trip_public_id))
         dto = trip_dto(s, trips_service.get_trip(s, trip_id))
@@ -109,7 +100,6 @@ def test_n5_detour_seconds_and_route_public_id_reach_route_matching(world: World
                 s, trip_public_id_value=trip_public_id, actor_user_id=world.driver_id, data=TripPatch(expected_version=1, max_detour_minutes=2)
             )
         assert info.value.code is ErrorCode.VALIDATION_ERROR
-    assert seen and seen[0].detour_used_s == 125 and seen[0].route_version_public_id == world.route_public_id
 
 
 def test_n5_migration_constraint_on_detour_seconds(world: World) -> None:
@@ -124,12 +114,19 @@ def test_n5_migration_constraint_on_detour_seconds(world: World) -> None:
 # --- R1 ---------------------------------------------------------------------------------------------
 
 
+def _pickup_offset(world: World, listing_id: str) -> timedelta:
+    with world.db.session() as s:
+        listing = marketplace_service.get_listing_by_public_id(s, listing_id)
+        return listing.departure_window_start - world.base_time
+
+
 def _second_driver_offer(world: World, listing_id: str) -> str:
     vehicle = make_vehicle(world, world.driver2_id, "01M200MM", seats=7)
     _, trip_public_id = make_trip(world, world.driver2_id, vehicle, start=world.base_time, seats=6)
     with world.db.session() as s:
         thread = marketplace_service.submit_proposal(
-            s, listing_public_id=listing_id, actor_user_id=world.driver2_id, data=proposal(world, trip_public_id, unit_price_minor=18_000_000)
+            s, listing_public_id=listing_id, actor_user_id=world.driver2_id,
+            data=proposal(world, trip_public_id, unit_price_minor=18_000_000, start_offset=_pickup_offset(world, listing_id))
         )
         s.commit()
         return marketplace_service.thread_public_id(thread)
@@ -160,7 +157,7 @@ def test_r1_drivers_see_anonymized_offers_with_stable_labels(world: World) -> No
 
 def test_r1_labels_differ_between_listings(world: World) -> None:
     first_listing, _, _ = open_thread(world)  # driver 1 is "#1" here
-    second_listing = published_request(world, origin="B", destination="D")
+    second_listing = published_request(world, origin="B", destination="D", start=world.base_time + timedelta(hours=1))
     _second_driver_offer(world, second_listing)  # driver 2 is "#1" on the second listing
     labels_first = {o["is_mine"]: o["label"] for o in _offers(world, first_listing, world.driver_id)}
     labels_second = {o["is_mine"]: o["label"] for o in _offers(world, second_listing, world.driver_id)}

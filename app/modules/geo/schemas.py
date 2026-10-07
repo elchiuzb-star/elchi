@@ -68,12 +68,6 @@ class DistrictDTO(ContractModel):
     #: placed yet, and the client then opens on the region instead of pretending to know.
     center_lat: float | None = None
     center_lng: float | None = None
-    stops_count: int = Field(
-        description=(
-            "Active stops of publicly visible corridors in this district. 0 means the place can be named but "
-            "no verified stop serves it yet - the client says so instead of promising a ride."
-        )
-    )
 
 
 class CorridorDistrictDTO(ContractModel):
@@ -81,31 +75,13 @@ class CorridorDistrictDTO(ContractModel):
 
     district: DistrictDTO
     sequence: int
-    stops_count: int = Field(description="Active stops of this corridor inside the district.")
     on_confirmed_route: bool = Field(
+        default=True,
         description=(
-            "A confirmed route version of this corridor really stops in the district. False = the corridor "
-            "owns a stop there, but no confirmed road reaches it yet (spec 6.1: proximity is not a route)."
-        )
+            "Always true (ADR-0028): a district is listed only when its centre lies within the corridor's radius of "
+            "a confirmed road. A district the road does not reach is not listed (spec 6.1: proximity is not a route)."
+        ),
     )
-
-
-class StopDTO(ContractModel):
-    id: str
-    name_uz: str
-    name_ru: str | None = None
-    district: DistrictRefDTO
-    point: PointDTO
-    meeting_note: str | None = None
-    is_active: bool
-
-
-class AdminStopDTO(StopDTO):
-    corridor_id: str
-    meeting_photo_file_id: str | None = None
-    meeting_photo_url: str | None = None  # short-lived signed URL (H0 file access)
-    sequence_hint: int
-    version: int
 
 
 class CorridorDTO(ContractModel):
@@ -114,7 +90,6 @@ class CorridorDTO(ContractModel):
     origin_region: RegionRefDTO
     destination_region: RegionRefDTO
     enabled_services: list[ServiceType]
-    stops_count: int
 
 
 class CorridorConfigDTO(ContractModel):
@@ -158,52 +133,18 @@ class CorridorPatch(ContractModel):
         return self
 
 
-class StopCreate(ContractModel):
-    name_uz: str = Field(min_length=1, max_length=120)
-    name_ru: str | None = Field(default=None, max_length=120)
-    district_id: str = Field(min_length=1, max_length=64)
-    point: PointDTO
-    meeting_note: str | None = Field(default=None, max_length=500)
-    meeting_photo_file_id: str | None = Field(default=None, min_length=1, max_length=128)
-    sequence_hint: StrictInt = Field(default=0, ge=0, le=100_000)
-    is_active: StrictBool = False
-
-
-class StopPatch(ContractModel):
-    expected_version: StrictInt = Field(ge=1)
-    name_uz: str | None = Field(default=None, min_length=1, max_length=120)
-    name_ru: str | None = Field(default=None, max_length=120)
-    district_id: str | None = Field(default=None, min_length=1, max_length=64)
-    point: PointDTO | None = None
-    meeting_note: str | None = Field(default=None, max_length=500)
-    meeting_photo_file_id: str | None = Field(default=None, min_length=1, max_length=128)
-    sequence_hint: StrictInt | None = Field(default=None, ge=0, le=100_000)
-    is_active: StrictBool | None = None
-
-    @model_validator(mode="after")
-    def _no_explicit_nulls(self) -> StopPatch:
-        for name in ("name_uz", "district_id", "point", "sequence_hint", "is_active"):
-            if name in self.model_fields_set and getattr(self, name) is None:
-                raise ValueError(f"{name} cannot be null")
-        return self
-
-
 class RoutePreviewRequest(ContractModel):
-    stop_ids: list[str] = Field(min_length=2, max_length=25)
+    """A road to propose for confirmation (ADR-0028): from A to B on a corridor - no intermediate point."""
+
+    corridor_id: str = Field(min_length=1, max_length=64)
+    origin: PointDTO
+    destination: PointDTO
     departure_at: UtcDateTime
-
-
-class RouteVersionStopDTO(ContractModel):
-    stop_id: str
-    seq: int
-    cumulative_distance_m: int
-    cumulative_duration_s: int
 
 
 class RouteVersionDTO(ContractModel):
     id: str
     status: Literal["draft", "confirmed"]
-    stops: list[RouteVersionStopDTO]
     distance_m: int
     duration_s: int
     geometry_polyline: str
@@ -260,11 +201,9 @@ MAX_MINOR = 9_000_000_000_000_000
 
 
 class PriceBandUpsert(ContractModel):
-    """Q42. Omit both stop ids for the corridor-wide band; send both for a segment band."""
+    """Q42: the corridor-wide band of one service (ADR-0028: there is no stop pair to price)."""
 
     expected_version: StrictInt | None = Field(default=None, ge=1)
-    origin_stop_id: str | None = Field(default=None, min_length=1, max_length=64)
-    destination_stop_id: str | None = Field(default=None, min_length=1, max_length=64)
     floor_minor: StrictInt = Field(gt=0, le=MAX_MINOR)
     ceiling_minor: StrictInt = Field(gt=0, le=MAX_MINOR)
     is_active: StrictBool = True
@@ -278,8 +217,6 @@ class PriceBandDTO(ContractModel):
     corridor_id: str
     service_type: ServiceType
     price_basis: PriceBasis
-    origin_stop_id: str | None = None
-    destination_stop_id: str | None = None
     floor_minor: int
     ceiling_minor: int
     currency: Currency
@@ -294,8 +231,6 @@ class PriceBandDTO(ContractModel):
 
 class PriceBandChangeDTO(ContractModel):
     service_type: ServiceType
-    origin_stop_id: str | None = None
-    destination_stop_id: str | None = None
     version: int
     old_floor_minor: int | None = None
     old_ceiling_minor: int | None = None
@@ -309,11 +244,9 @@ class PriceBandChangeDTO(ContractModel):
 
 
 class Q47ViolationDTO(ContractModel):
-    """F1: a pilot/active corridor that already violates Q47 (repair runbook: app.modules.geo.checks)."""
+    """F1: a pilot/active corridor without a confirmed road (ADR-0028; repair runbook: app.modules.geo.checks)."""
 
     corridor_id: str
     name: str
     rollout_state: CorridorRolloutState
-    active_stops: int
-    stops_missing_evidence: list[str]
     reasons: list[str]

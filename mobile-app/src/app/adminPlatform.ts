@@ -186,11 +186,8 @@ export const ROLLOUT_TRANSITIONS: Record<CorridorRolloutState, CorridorRolloutSt
 };
 
 const CORRIDOR_REASONS = [
-  "needs_two_active_stops",
-  "stops_missing_meeting_evidence",
-  "needs_active_stop",
+  "needs_confirmed_road",
   "active_bookings",
-  "stop_used_by_confirmed_route",
 ] as const;
 
 export function corridorReasonLabel(reason: string): string {
@@ -199,22 +196,15 @@ export function corridorReasonLabel(reason: string): string {
     : reason;
 }
 
-/** Rollout/stop guard refusal (INVALID_STATE_TRANSITION with a reason) in words; null for anything else. */
+/** Rollout guard refusal (INVALID_STATE_TRANSITION with a reason) in words; null for anything else. */
 export function corridorRefusalMessage(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
   const d = details(error);
   if (error.code === "INVALID_STATE_TRANSITION" && typeof d.reason === "string") {
-    const stops =
-      Array.isArray(d.stop_ids) && d.stop_ids.length ? translate("admin.platform.err.stopsList", { stops: (d.stop_ids as string[]).join(", ") }) : "";
-    return translate("admin.platform.err.refused", { reason: corridorReasonLabel(d.reason), stops });
+    return translate("admin.platform.err.refused", { reason: corridorReasonLabel(d.reason) });
   }
   if (error.code === "VERSION_CONFLICT") return translate("admin.platform.err.recordVersion");
   return null;
-}
-
-/** Q27: a stop carries evidence when it has a non-blank meeting note or a photo. */
-export function stopHasEvidence(stop: { meeting_note?: string | null; meeting_photo_file_id?: string | null }): boolean {
-  return Boolean((stop.meeting_note ?? "").trim() || stop.meeting_photo_file_id);
 }
 
 // --- parcel policy ----------------------------------------------------------------------------------------------------

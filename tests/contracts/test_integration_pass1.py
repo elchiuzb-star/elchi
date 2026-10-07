@@ -25,8 +25,8 @@ def test_public_id_prefixes_are_unique() -> None:
 
 def test_match_reason_values() -> None:
     assert {r.value for r in MatchReason} == {
-        "full_route", "intermediate_segment", "pickup_at_stop", "dropoff_at_stop", "pickup_detour",
-        "dropoff_detour", "nearby_stop", "time_differs", "same_stop", "pickup_not_on_route",
+        "full_route", "intermediate_segment", "pickup_detour",
+        "dropoff_detour", "time_differs", "pickup_not_on_route",
         "dropoff_not_on_route", "reverse_direction", "detour_order_unknown", "time_window_mismatch",
         "detour_limit_exceeded", "routing_unavailable",
     }
@@ -34,9 +34,6 @@ def test_match_reason_values() -> None:
 
 def test_geo_re_exports_are_the_contract_enums() -> None:
     from app.modules.geo.schemas import CorridorRolloutState as GeoRollout
-    from app.modules.geo.types import MatchReason as GeoMatchReason
-
-    assert GeoMatchReason is MatchReason
     assert GeoRollout is CorridorRolloutState
 
 

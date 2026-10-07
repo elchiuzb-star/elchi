@@ -12,6 +12,8 @@ replica`` only for that setup statement), because no code path can create one an
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -37,7 +39,16 @@ from tests.pg.bookings.conftest import (  # noqa: F401  (bw, client fixtures)
     seats_used,
     wallet,
 )
-from tests.pg.identity.a1_world import passenger_offer
+from app.modules.marketplace.schemas import ListingCreate
+
+
+def passenger_offer(w, trip_public_id: str, *, start, unit_price_minor: int = 20_000_000) -> ListingCreate:  # noqa: ANN001
+    """The retired driver listing (Q138), as a client would still try to send it."""
+    return ListingCreate.model_validate({
+        "kind": "trip_offer", "service_type": "passenger", "origin_point": w.point("A"), "destination_point": w.point("D"),
+        "departure_window_start": start.isoformat(), "departure_window_end": (start + timedelta(hours=1)).isoformat(),
+        "price_basis": "per_seat", "unit_price_minor": unit_price_minor, "trip_id": trip_public_id,
+    })
 
 pytestmark = pytest.mark.pg
 
@@ -49,8 +60,8 @@ def _legacy_offer_with_open_thread(bw: BW, plate: str) -> tuple[str, int, object
     ref = propose(bw, listing, bw.w.driver_id, trip_public_id=trip_public, quantity=1, unit=20_000_000)
     with bw.db.engine.begin() as conn:
         conn.execute(text("SET LOCAL session_replication_role = replica"))
-        conn.execute(text("UPDATE listings SET kind = 'trip_offer', owner_user_id = :d, trip_id = :t WHERE public_id = "
-                          "(SELECT public_id FROM listings WHERE id = :l)"),
+        conn.execute(text("UPDATE listings SET kind = 'trip_offer', owner_user_id = :d, trip_id = :t "
+                          "WHERE public_id = (SELECT public_id FROM listings WHERE id = :l)"),
                      {"d": bw.w.driver_id, "t": trip_id, "l": marketplace_service_id(bw, listing)})
     return listing, trip_id, ref
 

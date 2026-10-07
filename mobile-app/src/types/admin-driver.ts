@@ -43,6 +43,8 @@ export type AdminDriver = {
   id: number;
   user?: AdminDriverUser;
   user_id?: number;
+  /** `usr_` id of the driver's account: matches the driver to its v2 vehicles (additive v1 field). */
+  user_public_id?: string | null;
   full_name?: string | null;
   phone?: string | null;
   verification_status: AdminDriverStatus;

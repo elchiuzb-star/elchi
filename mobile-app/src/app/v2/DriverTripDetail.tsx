@@ -1,10 +1,14 @@
 /**
- * T3/T10: the driver's own trip - stops, remaining capacity per segment and the manifest.
+ * T3/T10: the driver's own trip - remaining capacity along its stretch of road and the manifest.
  *
  * Remaining capacity is what the server computed (AC07/AC10), not a reservation, and the screen never adds its
  * own arithmetic. The manifest shows only what the API returns: a phone number appears only when the server sends
  * it (Q44 - after the service starts; a parcel receiver's phone only after pick-up), otherwise the screen says when
  * it will appear. The three calls load independently so one failure does not hide the rest.
+ *
+ * ADR-0028 (Q160): a trip is a stretch of road (`route_start_m`..`route_end_m`), not a list of stops. It is named by
+ * the direction it was planned for (passed in by the caller) or by its times; capacity is read per stretch in
+ * kilometres along the trip, and the manifest lists the clients' own marked places.
  */
 import {
   getTrip,
@@ -56,6 +60,11 @@ function litres(ml: number): string {
   return translate("tripDetail.litres", { value: (ml / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 1 }) });
 }
 
+/** A road position as kilometres from the start of this trip's stretch. */
+function kmAlong(positionM: number, startM: number): string {
+  return Math.max(0, Math.round((positionM - startM) / 1000)).toLocaleString("ru-RU");
+}
+
 function ManifestItem({ item }: { item: ManifestItemDTO }) {
   const parcel = item.service_type === "parcel";
   return (
@@ -82,7 +91,7 @@ function ManifestItem({ item }: { item: ManifestItemDTO }) {
   );
 }
 
-export function DriverTripDetail(props: { tripId: string; onBack?: () => void }) {
+export function DriverTripDetail(props: { tripId: string; routeName?: string; onBack?: () => void }) {
   const trip = useAsync<TripDTO>(() => getTrip(props.tripId), [props.tripId]);
   const availability = useAsync<TripAvailabilityDTO>(() => tripAvailability(props.tripId), [props.tripId]);
   const manifest = useAsync<TripManifestDTO>(() => tripManifest(props.tripId), [props.tripId]);
@@ -93,12 +102,7 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
     manifest.reload();
   };
 
-  // Q158: route nodes are internal; the driver reads the road by its districts and the clients' own places.
-  const placeOf = (stop: { stop: { district_name_uz?: string | null } } | undefined) => stop?.stop.district_name_uz || "-";
-  const nodeDistrict = new Map((trip.data?.stops ?? []).map((stop) => [stop.stop.id, placeOf(stop)]));
-  const alongTheRoad = (trip.data?.stops ?? []).filter(
-    (stop, index, all) => index === 0 || placeOf(stop) !== placeOf(all[index - 1]),
-  );
+  const startM = trip.data?.route_start_m ?? 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -110,7 +114,7 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
         <Card>
           <div className="flex items-center justify-between gap-2">
             <strong className="text-[15px]" data-testid="trip-route">
-              {placeOf(trip.data.stops[0])} → {placeOf(trip.data.stops[trip.data.stops.length - 1])}
+              {props.routeName ?? `${formatTime(trip.data.planned_start_at)} → ${formatTime(trip.data.planned_end_at)}`}
             </strong>
             <Badge {...badge(trip.data.status)} />
           </div>
@@ -125,15 +129,6 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
             label={translate("tripDetail.cutoffLabel")}
             value={translate("tripDetail.cutoffValue", { time: formatDateTime(trip.data.booking_cutoff_at) })}
           />
-          <p className="mt-1 text-[12px] font-semibold text-muted-foreground">{translate("tripDetail.alongTheRoad")}</p>
-          <ol className="flex flex-col gap-1">
-            {alongTheRoad.map((stop) => (
-              <li key={stop.seq} className="flex justify-between gap-2 text-[13px]">
-                <span className="text-foreground">{placeOf(stop)}</span>
-                <span className="text-muted-foreground">{formatTime(stop.eta_arrival_at ?? stop.planned_arrival_at)}</span>
-              </li>
-            ))}
-          </ol>
         </Card>
       )}
 
@@ -143,16 +138,15 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
           <SkeletonCard lines={2} />
         ) : !availability.data ? (
           <ErrorNote message={v2ErrorMessage(availability.error)} onRetry={availability.reload} />
-        ) : availability.data.segments.length === 0 ? (
+        ) : availability.data.stretches.length === 0 ? (
           <p className="text-[13px] text-muted-foreground" data-testid="availability-empty">{translate("tripDetail.availabilityEmpty")}</p>
         ) : (
           <>
             <ul className="flex flex-col gap-1.5" data-testid="availability-list">
-              {availability.data.segments.map((segment) => (
-                <li key={`${segment.from_seq}-${segment.to_seq}`} className="rounded-[10px] bg-background px-3 py-2">
+              {availability.data.stretches.map((segment) => (
+                <li key={`${segment.from_m}-${segment.to_m}`} className="rounded-[10px] bg-background px-3 py-2">
                   <p className="text-[13px] font-medium text-foreground">
-                    {nodeDistrict.get(segment.from_stop_id) ?? translate("tripDetail.stopSeq", { seq: segment.from_seq })} →{" "}
-                    {nodeDistrict.get(segment.to_stop_id) ?? translate("tripDetail.stopSeq", { seq: segment.to_seq })}
+                    {translate("tripDetail.stretchKm", { from: kmAlong(segment.from_m, startM), to: kmAlong(segment.to_m, startM) })}
                   </p>
                   <p className="text-[12px] text-muted-foreground">
                     {translate("tripDetail.segmentLine", {
@@ -178,32 +172,32 @@ export function DriverTripDetail(props: { tripId: string; onBack?: () => void })
           <SkeletonCard lines={2} />
         ) : !manifest.data ? (
           <ErrorNote message={v2ErrorMessage(manifest.error)} onRetry={manifest.reload} />
-        ) : manifest.data.stops.every((stop) => stop.pickups.length === 0 && stop.dropoffs.length === 0) ? (
+        ) : manifest.data.places.every((place) => place.pickups.length === 0 && place.dropoffs.length === 0) ? (
           <p className="text-[13px] text-muted-foreground" data-testid="manifest-empty">{translate("tripDetail.manifestEmpty")}</p>
         ) : (
-          manifest.data.stops
-            .filter((stop) => stop.pickups.length || stop.dropoffs.length)
-            .map((stop) => (
-              <section key={stop.seq} className="flex flex-col gap-1.5">
+          manifest.data.places
+            .filter((place) => place.pickups.length || place.dropoffs.length)
+            .map((place) => (
+              <section key={place.seq} className="flex flex-col gap-1.5">
                 <p className="text-[13px] font-semibold text-secondary-foreground">
-                  {stop.point?.address ?? stop.point?.district?.name_uz ?? stop.stop?.district_name_uz ?? translate("tripDetail.agreedPoint")} ·{" "}
-                  {formatTime(stop.planned_arrival_at)}
+                  {place.point?.address ?? place.point?.district?.name_uz ?? translate("tripDetail.agreedPoint")} ·{" "}
+                  {formatTime(place.planned_arrival_at)}
                 </p>
-                {stop.pickups.length ? (
+                {place.pickups.length ? (
                   <>
                     <p className="text-[11px] font-semibold text-muted-foreground">{translate("tripDetail.pickups")}</p>
                     <ul className="flex flex-col gap-1.5">
-                      {stop.pickups.map((item) => (
+                      {place.pickups.map((item) => (
                         <ManifestItem key={`p-${item.booking_id}`} item={item} />
                       ))}
                     </ul>
                   </>
                 ) : null}
-                {stop.dropoffs.length ? (
+                {place.dropoffs.length ? (
                   <>
                     <p className="text-[11px] font-semibold text-muted-foreground">{translate("tripDetail.dropoffs")}</p>
                     <ul className="flex flex-col gap-1.5">
-                      {stop.dropoffs.map((item) => (
+                      {place.dropoffs.map((item) => (
                         <ManifestItem key={`d-${item.booking_id}`} item={item} />
                       ))}
                     </ul>

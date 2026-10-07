@@ -34,12 +34,3 @@ export function canShareTracking(serviceStatus: string): boolean {
 export function canShareListing(status: string): boolean {
   return status === "published" || status === "paused";
 }
-
-/** Driver trip planning: the routes of the chosen corridor that pass through the stop the driver searched for. */
-export function routesThroughStop<R extends { stops: ReadonlyArray<{ stop_id: string }> }>(
-  routes: readonly R[],
-  stopId: string | null | undefined,
-): R[] {
-  if (!stopId) return [...routes];
-  return routes.filter((route) => route.stops.some((stop) => stop.stop_id === stopId));
-}

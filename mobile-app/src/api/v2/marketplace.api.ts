@@ -1,11 +1,10 @@
-/** Client-side v2 marketplace calls (A8): stops, listings, offers, proposals. Types come from the contract. */
+/** Client-side v2 marketplace calls (A8): listings, offers, proposals. Types come from the contract. */
 import { newIdempotencyKey, v2Request, v2RequestFull, type Schemas, type V2Result } from "./http";
 
 export type ListingCreate = Schemas["ListingCreate"];
 export type ListingDTO = Schemas["ListingDTO"];
 export type ListingOfferDTO = Schemas["ListingOfferDTO"];
 export type ProposalThreadDTO = Schemas["ProposalThreadDTO"];
-export type StopRefDTO = Schemas["StopRefDTO"];
 /** A private upload this viewer is allowed to render: short-lived signed URL, never a public bucket path. */
 export type MediaRefDTO = Schemas["MediaRefDTO"];
 /** Q88: a direction end marked on the map - `route_offset_m` says how far it sits from the confirmed road. */
@@ -56,17 +55,6 @@ export function listCorridors() {
   return v2Request<CorridorDTO[]>("/corridors");
 }
 
-export type StopDTO = Schemas["StopDTO"];
-
-/** Stops of one corridor (the picker source); `/stops/search` is a free-text search across regions. */
-export function listCorridorStops(corridorId: string) {
-  return v2Request<StopDTO[]>(`/corridors/${corridorId}/stops`);
-}
-
-export function searchStops(params: { q?: string; region_id?: string; limit?: number } = {}) {
-  return v2Request<StopDTO[]>("/stops/search", { query: params });
-}
-
 export type RegionDTO = Schemas["RegionDTO"];
 export type DistrictDTO = Schemas["DistrictDTO"];
 export type CorridorDistrictDTO = Schemas["CorridorDistrictDTO"];
@@ -84,9 +72,9 @@ export function listDistricts(params: { region_id?: string; q?: string; limit?: 
 /**
  * G17: the districts this direction really passes, in travel order.
  *
- * `on_confirmed_route` is the honest part: true = a confirmed route of the corridor stops there, so a listing
- * in that district can be served without leaving the agreed road; false = the corridor owns a stop there but
- * no confirmed route reaches it yet, and the screen must not call it "on your way".
+ * `on_confirmed_route` is the honest part: true = a confirmed road of the corridor passes there, so a listing
+ * in that district can be served without leaving the agreed road; false = the district belongs to the corridor
+ * but no confirmed road reaches it yet, and the screen must not call it "on your way".
  */
 export function listCorridorDistricts(corridorId: string) {
   return v2Request<CorridorDistrictDTO[]>(`/corridors/${corridorId}/districts`);

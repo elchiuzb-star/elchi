@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from app.contracts.feed import MATCH_SCOPE_CONFIRMED_STOPS
+from app.contracts.feed import MATCH_SCOPE_CONFIRMED_ROADS
 
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "mobile-app" / "src"
@@ -94,7 +94,7 @@ def test_a_suggestion_says_which_kind_it_is() -> None:
 
 
 @pytest.mark.parametrize(
-    "key", ["match.alternativesTitle", "match.alternativesNote", "match.reason.time_differs", "match.reason.nearby_stop"]
+    "key", ["match.alternativesTitle", "match.alternativesNote", "match.reason.time_differs"]
 )
 def test_the_suggestion_copy_is_translated(key: str) -> None:
     messages = MESSAGES_TS.read_text(encoding="utf-8")
@@ -107,4 +107,4 @@ def test_the_suggestion_copy_is_translated(key: str) -> None:
 def test_the_confirmed_stops_caveat_still_travels_with_the_results() -> None:
     """Q46: the app must not imply a measured detour. Widening the search does not widen what was measured."""
     source = CONNECTED_APP.read_text(encoding="utf-8")
-    assert f'matchScope === "{MATCH_SCOPE_CONFIRMED_STOPS}"' in source
+    assert f'matchScope === "{MATCH_SCOPE_CONFIRMED_ROADS}"' in source

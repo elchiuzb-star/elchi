@@ -36,12 +36,12 @@ from app.modules.bookings.schemas import (
     BookingPromoClientDTO,
     BookingPromoDriverDTO,
     BookingPolicyVersionsDTO,
-    BookingStopDTO,
+    BookingEndDTO,
     BookingVehicleDTO,
     CashReceiptDTO,
     CustodyCaseDTO,
     ManifestItemDTO,
-    ManifestStopDTO,
+    ManifestPlaceDTO,
     NoShowReviewDTO,
     ParcelContactsDTO,
     TripManifestDTO,
@@ -54,9 +54,7 @@ from app.modules.marketplace.models import Listing, ProposalVersion
 from app.modules.promotions import booking as promo_booking
 from app.modules.trips import service as trips_service
 from app.modules.trips.models import Trip
-from app.modules.trips.ports import get_geo_port
 from app.modules.trips.rules import vehicle_class
-from app.modules.trips.views import stop_ref_dto
 
 ViewerRole = bookings_service.ViewerRole
 # Q64: bookings that ended before the service started never disclose the full plate.
@@ -109,15 +107,18 @@ def _fee_block(session: Session, booking: Booking) -> BookingFeeDTO:
     )
 
 
+def _arrival(trip, position_m: int | None):  # noqa: ANN001, ANN202
+    """ADR-0028: when the trip reaches a booking end - its road position on the trip's plan (what accept checked)."""
+    return None if position_m is None else trips_service.trip_eta_at(trip, position_m)
+
+
 def booking_view(
     session: Session, booking: Booking, *, viewer_role: str, now: datetime | None = None
 ) -> BookingDTO | BookingClientDTO:
     now = ensure_aware_utc(now) if now is not None else utc_now()
     service = ServiceType(booking.service_type)
     trip = trips_service.get_trip(session, booking.trip_id)
-    occurrences = {o.seq: o for o in trips_service.list_occurrences(session, trip.id)}
-    stops = get_geo_port().stops_by_ids(session, [booking.pickup_stop_id, booking.dropoff_stop_id])
-    pickup_occ, dropoff_occ = occurrences.get(booking.pickup_occurrence_seq), occurrences.get(booking.dropoff_occurrence_seq)
+    pickup_eta, dropoff_eta = _arrival(trip, booking.pickup_position_m), _arrival(trip, booking.dropoff_position_m)
     visibility = rules.contact_visibility(
         service_started_at=booking.service_started_at, service_terminal_at=booking.service_terminal_at, now=now
     )
@@ -182,19 +183,15 @@ def booking_view(
         total_minor=booking.total_minor,
         currency=Currency(booking.currency),
         payment_method=PaymentMethod(booking.payment_method),
-        pickup=BookingStopDTO(
-            stop=stop_ref_dto(stops.get(booking.pickup_stop_id)) if booking.pickup_stop_id else None,
+        pickup=BookingEndDTO(
             point=marketplace_views.point_end_dto(session, booking, "pickup"),
-            occurrence_seq=booking.pickup_occurrence_seq,
-            planned_arrival_at=_aware(pickup_occ.planned_arrival_at) if pickup_occ else None,
+            planned_arrival_at=pickup_eta,
             window_start=_aware(booking.pickup_window_start),
             window_end=_aware(booking.pickup_window_end),
         ),
-        dropoff=BookingStopDTO(
-            stop=stop_ref_dto(stops.get(booking.dropoff_stop_id)) if booking.dropoff_stop_id else None,
+        dropoff=BookingEndDTO(
             point=marketplace_views.point_end_dto(session, booking, "dropoff"),
-            occurrence_seq=booking.dropoff_occurrence_seq,
-            planned_arrival_at=_aware(dropoff_occ.planned_arrival_at) if dropoff_occ else None,
+            planned_arrival_at=dropoff_eta,
             window_start=_aware(booking.dropoff_window_start),
             window_end=_aware(booking.dropoff_window_end),
         ),
@@ -307,13 +304,12 @@ def amendment_dto(amendment: BookingAmendment, booking: Booking, *, viewer_role:
 
 
 def manifest_dto(session: Session, trip: Trip, entries: list) -> TripManifestDTO:
-    occurrences = trips_service.list_occurrences(session, trip.id)
-    stops = get_geo_port().stops_by_ids(session, sorted({o.stop_id for o in occurrences}))
-    pickups: dict[int, list[ManifestItemDTO]] = {}
-    dropoffs: dict[int, list[ManifestItemDTO]] = {}
-    for entry in entries:
+    """T10 (ADR-0028): the bookings' own places in road order, each with its ETA. One row per distinct place (the same
+    road position for two bookings is one place for the driver); ``seq`` is the row's order."""
+
+    def item_of(entry) -> ManifestItemDTO:  # noqa: ANN001
         booking = entry.booking
-        item = ManifestItemDTO(
+        return ManifestItemDTO(
             booking_id=bookings_service.booking_public_id(booking),
             service_type=ServiceType(booking.service_type),
             service_status=booking.service_status,
@@ -324,22 +320,31 @@ def manifest_dto(session: Session, trip: Trip, entries: list) -> TripManifestDTO
             client_first_name=entry.client_first_name,
             contact_phone=entry.contact_phone,
         )
-        pickups.setdefault(booking.pickup_occurrence_seq, []).append(item)
-        dropoffs.setdefault(booking.dropoff_occurrence_seq, []).append(item)
-    return TripManifestDTO(
-        trip_id=trips_service.trip_public_id(trip),
-        trip_version=trip.version,
-        stops=[
-            ManifestStopDTO(
-                seq=o.seq,
-                stop=stop_ref_dto(stops.get(o.stop_id)),
-                planned_arrival_at=ensure_aware_utc(o.planned_arrival_at),
-                pickups=pickups.get(o.seq, []),
-                dropoffs=dropoffs.get(o.seq, []),
+
+    places: dict[int, dict] = {}
+    for entry in entries:
+        booking = entry.booking
+        item = item_of(entry)
+        for end, bucket in (("pickup", "pickups"), ("dropoff", "dropoffs")):
+            position = getattr(booking, f"{end}_position_m")
+            if position is None:
+                continue
+            row = places.setdefault(position, {"booking": booking, "end": end, "pickups": [], "dropoffs": []})
+            row[bucket].append(item)
+    rows = []
+    for index, position in enumerate(sorted(places), start=1):
+        row = places[position]
+        eta = trips_service.trip_eta_at(trip, position)
+        rows.append(
+            ManifestPlaceDTO(
+                seq=index,
+                point=marketplace_views.point_end_dto(session, row["booking"], row["end"]),
+                planned_arrival_at=eta if eta is not None else ensure_aware_utc(trip.planned_start_at),
+                pickups=row["pickups"],
+                dropoffs=row["dropoffs"],
             )
-            for o in occurrences
-        ],
-    )
+        )
+    return TripManifestDTO(trip_id=trips_service.trip_public_id(trip), trip_version=trip.version, places=rows)
 
 
 def _parcel_category(session: Session, booking: Booking) -> dict | None:

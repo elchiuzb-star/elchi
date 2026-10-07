@@ -76,3 +76,18 @@ def test_owner_block_reflects_an_eligibility_block_and_its_version(world: World)
         assert after.eligible is False and after.blocked_reason == "Hujjat tekshirilmoqda"
         assert "eligibility_blocked" in after.reasons
         assert after.eligibility_version == (before.eligibility_version or 0) + 1
+
+
+def test_owner_filter_lists_only_that_drivers_vehicles(world: World) -> None:
+    """The admin driver card: one driver's cars in every status; an unknown owner id is NOT_FOUND."""
+    mine = make_vehicle(world, world.driver_id, "01Q600QQ", approve=False)
+    make_vehicle(world, world.driver2_id, "01Q700QQ", approve=False)
+    with world.db.session() as s:
+        owner = identity_service.user_public_id(s, world.driver_id)
+        rows = trips_service.list_vehicles_for_review(s, actor_user_id=world.admin_id, owner_user_public_id=owner)
+        assert _ids(rows) == [mine]
+        with pytest.raises(DomainError) as info:
+            trips_service.list_vehicles_for_review(
+                s, actor_user_id=world.admin_id, owner_user_public_id="usr_" + "a" * 26
+            )
+        assert info.value.code is ErrorCode.NOT_FOUND

@@ -1,16 +1,17 @@
-"""Trips domain API (A1): vehicles, trips, stop occurrences and segment capacity.
+"""Trips domain API (A1): vehicles, trips and their capacity on the road.
 
 Public functions take the caller's ``Session`` and never commit (ADR-0001).
 
-Capacity API for the bookings orchestrator (A4) - all quantities are integers
-(seats, ml, g); a booking from occurrence ``p`` to ``d`` uses segments ``[p, d)``:
+A trip is a stretch ``[route_start_m, route_end_m]`` of one confirmed road (ADR-0028, Q160: no stop anywhere). Capacity
+API for the bookings orchestrator (A4) - quantities are integers (seats, ml, g), positions are metres along the road,
+a booking occupies ``[from_m, to_m)``:
 
 * ``lock_trip(session, trip_id, *, share=False) -> Trip``  (``FOR NO KEY UPDATE``; call right after users locks)
-* ``check_capacity(session, trip_id, from_seq, to_seq, demand) -> list[Shortfall]``  (read only)
-* ``require_capacity(...) -> None``  (CAPACITY_UNAVAILABLE / CARGO_LIMIT_EXCEEDED)
-* ``reserve(session, trip_id, from_seq, to_seq, demand) -> list[int]``  (re-locks the trip; atomic)
-* ``release(session, trip_id, from_seq, to_seq, demand) -> list[int]``
-* ``occurrence_seqs_for_stops(session, trip_id, pickup_stop_id, dropoff_stop_id) -> tuple[int, int] | None``
+
+* ``check_claim_capacity(session, trip_id, from_m, to_m, demand) -> list[ClaimShortfall]``  (read only)
+* ``require_claim_capacity(session, trip_id, from_m, to_m, demand) -> None``  (the decision, under ``lock_trip``)
+* ``claim(session, *, trip_id, booking_id, from_m, to_m, demand) -> TripCapacityClaim``  (re-locks the trip)
+* ``release_claim(session, *, booking_id, now) -> bool``  (true -> false once; the release contract's twin)
 
 A proposal only *checks* capacity; nothing is reserved before accept (spec §5.3).
 """
@@ -20,63 +21,71 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from datetime import datetime
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.contracts.enums import Capability, Role, TripStatus
 from app.contracts.errors import DomainError, ErrorCode
-from app.contracts.ids import PublicIdPrefix, format_public_id, new_public_uuid, parse_public_id, public_id_fragment_range
+from app.contracts.ids import (
+    PublicIdPrefix,
+    format_public_id,
+    new_public_uuid,
+    parse_public_id,
+    public_id_fragment_range,
+)
+from app.contracts.route_position import (
+    Claim,
+    ClaimShortfall,
+    Resources,
+    claim_span,
+    eta_at,
+    interval_shortfalls,
+)
 from app.contracts.state_machines import TRIP
 from app.contracts.timeutil import ensure_aware_utc, utc_now
 from app.models import AuditLog
 from app.modules.identity import service as identity_service
 from app.modules.platform.service import constraint_name_of
-from app.modules.trips.models import Trip, TripSegmentResource, TripStopOccurrence, Vehicle
-from app.modules.trips.ports import RouteVersionRef, StopRef, get_geo_port
+from app.modules.trips.models import Trip, TripCapacityClaim, Vehicle
+from app.modules.trips.ports import RouteVersionRef, get_geo_port
 from app.modules.trips.rules import (
     ACTIVE_TRIP_STATUSES,
     TERMINAL_TRIP_STATUSES,
     TRIP_TIMEZONE,
     VEHICLE_DECISIONS,
     ResourceDemand,
-    SegmentLoad,
-    Shortfall,
     VehicleVerificationStatus,
     blocked_period,
-    covered_from_seqs,
-    find_shortfalls,
-    map_stops_onto_route,
+    claim_shortfall_error,
     normalize_plate,
-    shortfall_error,
     validate_schedule,
     validation_error,
 )
-from app.modules.trips.schemas import TripCreate, TripPatch, TripStopInput, VehicleCreate
+from app.modules.trips.schemas import TripCreate, TripPatch, VehicleCreate
 
 __all__ = [
-    "CapacityAccountingError",
     "active_trip_public_ids",
     "assert_vehicle_eligible_for_new_booking",
-    "check_capacity",
+    "active_claims",
+    "check_claim_capacity",
+    "claim",
+    "require_claim_capacity",
     "count_active_trips",
     "create_trip",
     "create_vehicle",
-    "get_segment_loads",
     "get_trip",
     "get_trip_by_public_id",
     "get_vehicle",
     "list_driver_trips",
     "list_driver_vehicles",
     "list_vehicles_for_review",
-    "list_occurrences",
     "lock_trip",
-    "occurrence_seqs_for_stops",
     "patch_trip",
-    "release",
-    "require_capacity",
-    "reserve",
+    "release_claim",
+    "trip_eta_at",
+    "trip_has_claims",
     "resolve_trip_id",
     "transition_trip",
     "trip_public_id",
@@ -87,10 +96,6 @@ __all__ = [
 PLATE_UNIQUE = "uq_vehicles_plate_normalized"
 DRIVER_OVERLAP = "ex_trips_driver_overlap"
 VEHICLE_OVERLAP = "ex_trips_vehicle_overlap"
-
-
-class CapacityAccountingError(RuntimeError):
-    """A release would drive a used counter below zero: caller bookkeeping bug (500)."""
 
 
 def _now(now: datetime | None) -> datetime:
@@ -204,6 +209,7 @@ def list_vehicles_for_review(
     *,
     actor_user_id: int,
     statuses: Sequence[str] | None = None,
+    owner_user_public_id: str | None = None,
     after: tuple[datetime, int] | None = None,
     limit: int = 20,
     now: datetime | None = None,
@@ -211,13 +217,17 @@ def list_vehicles_for_review(
     """T3a: the staff verification queue, oldest first (``created_at``, ``id`` keyset).
 
     Gated with the same capability as ``verify_vehicle``: whoever may decide may see what waits for a decision.
-    Read only - no lock, no audit row (reading the queue is not an action on a vehicle).
+    Read only - no lock, no audit row (reading the queue is not an action on a vehicle). ``owner_user_public_id``
+    narrows it to one driver's cars (the admin driver card); the owner is resolved only after the capability check,
+    so an unauthorised caller cannot probe which user ids exist.
     """
     identity_service.require_capability(
         identity_service.get_capabilities(session, actor_user_id, now=_now(now)),
         Capability.OPS_DRIVER_ELIGIBILITY_MANAGE,
     )
     stmt = select(Vehicle)
+    if owner_user_public_id is not None:
+        stmt = stmt.where(Vehicle.driver_user_id == identity_service.resolve_user_id(session, owner_user_public_id))
     if statuses:
         stmt = stmt.where(Vehicle.verification_status.in_(list(statuses)))
     if after is not None:
@@ -315,28 +325,6 @@ def lock_trip(session: Session, trip_id: int, *, share: bool = False) -> Trip:
     return trip
 
 
-def list_occurrences(session: Session, trip_id: int) -> list[TripStopOccurrence]:
-    return list(
-        session.execute(
-            select(TripStopOccurrence).where(TripStopOccurrence.trip_id == trip_id).order_by(TripStopOccurrence.seq)
-        ).scalars()
-    )
-
-
-def occurrence_seqs_for_stops(
-    session: Session, trip_id: int, pickup_stop_id: int, dropoff_stop_id: int
-) -> tuple[int, int] | None:
-    """First pickup occurrence and the first dropoff occurrence after it; ``None`` if absent or reversed."""
-    occurrences = list_occurrences(session, trip_id)
-    for pickup in occurrences:
-        if pickup.stop_id != pickup_stop_id:
-            continue
-        for dropoff in occurrences:
-            if dropoff.seq > pickup.seq and dropoff.stop_id == dropoff_stop_id:
-                return pickup.seq, dropoff.seq
-    return None
-
-
 def count_active_trips(session: Session, driver_user_id: int) -> int:
     return int(
         session.execute(
@@ -378,28 +366,6 @@ def list_driver_trips(
 # --- trips: commands ----------------------------------------------------------------------------
 
 
-def _resolve_trip_stops(
-    session: Session, route: RouteVersionRef, stops: Sequence[TripStopInput]
-) -> tuple[list[StopRef], list[int]]:
-    geo = get_geo_port()
-    public_ids = [stop.stop_id for stop in stops]
-    for public_id in public_ids:
-        parse_public_id(public_id, PublicIdPrefix.STOP)
-    refs = geo.stops_by_public_ids(session, public_ids)
-    resolved: list[StopRef] = []
-    for index, public_id in enumerate(public_ids):
-        ref = refs.get(public_id)
-        if ref is None:
-            raise DomainError(ErrorCode.NOT_FOUND, details={"field": "stops", "index": index})
-        if not ref.is_active:
-            raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"field": "stops", "index": index})
-        resolved.append(ref)
-    route_seqs = map_stops_onto_route([ref.id for ref in resolved], [(s.seq, s.stop_id) for s in route.stops])
-    if route_seqs is None:
-        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "stops_not_on_route_version"})
-    return resolved, route_seqs
-
-
 def _confirmed_route(session: Session, route_version_public_id: str) -> RouteVersionRef:
     parse_public_id(route_version_public_id, PublicIdPrefix.ROUTE_VERSION)
     route = get_geo_port().route_version_by_public_id(session, route_version_public_id)
@@ -408,39 +374,6 @@ def _confirmed_route(session: Session, route_version_public_id: str) -> RouteVer
     if not route.is_confirmed:
         raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "route_version_not_confirmed"})
     return route
-
-
-def _write_stops_and_segments(
-    session: Session, trip: Trip, stops: Sequence[TripStopInput], refs: Sequence[StopRef], route_seqs: Sequence[int]
-) -> None:
-    for stop, ref, route_seq in zip(stops, refs, route_seqs, strict=True):
-        session.add(
-            TripStopOccurrence(
-                trip_id=trip.id,
-                seq=stop.seq,
-                stop_id=ref.id,
-                route_version_stop_seq=route_seq,
-                planned_arrival_at=ensure_aware_utc(stop.planned_arrival_at),
-                dwell_minutes=stop.dwell_minutes,
-            )
-        )
-    for from_seq in range(1, len(stops)):
-        session.add(
-            TripSegmentResource(
-                trip_id=trip.id,
-                from_seq=from_seq,
-                to_seq=from_seq + 1,
-                seat_capacity=trip.seat_capacity,
-                seats_used=0,
-                baggage_capacity_ml=trip.baggage_capacity_ml,
-                baggage_used_ml=0,
-                cargo_capacity_weight_g=trip.cargo_capacity_weight_g,
-                cargo_used_weight_g=0,
-                cargo_capacity_volume_ml=trip.cargo_capacity_volume_ml,
-                cargo_used_volume_ml=0,
-            )
-        )
-    session.flush()
 
 
 def _check_vehicle_capacity(vehicle: Vehicle, data: TripCreate) -> None:
@@ -479,12 +412,11 @@ def create_trip(
     _check_vehicle_capacity(vehicle, data)
 
     route = _confirmed_route(session, data.route_version_id)
-    refs, route_seqs = _resolve_trip_stops(session, route, data.stops)
+    span = _road_stretch(route, data.route_start_m, data.route_end_m)
     cutoff = validate_schedule(
         now=now,
         planned_start_at=data.planned_start_at,
         planned_end_at=data.planned_end_at,
-        arrivals=[stop.planned_arrival_at for stop in data.stops],
         booking_cutoff_at=data.booking_cutoff_at,
     )
     start, blocked_end = blocked_period(data.planned_start_at, data.planned_end_at)
@@ -511,17 +443,28 @@ def create_trip(
         pickup_wait_minutes=data.pickup_wait_minutes,
         version=1,
         direction_id=direction_id,
+        route_start_m=span[0],
+        route_end_m=span[1],
     )
     session.add(trip)
     _flush_or_translate(session, SCHEDULE_TRANSLATIONS)
-    _write_stops_and_segments(session, trip, data.stops, refs, route_seqs)
     return trip
+
+
+def _road_stretch(route: RouteVersionRef, start_m: int | None, end_m: int | None) -> tuple[int, int]:
+    """ADR-0028: the part of the road the trip drives - the whole road unless a stretch is given."""
+    if route.distance_m is None:
+        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "road_length_unknown"})
+    start, end = (0, route.distance_m) if start_m is None else (start_m, end_m)
+    if not 0 <= start < end <= route.distance_m:
+        raise validation_error("the trip's stretch must lie on the road", field="route_end_m", road_m=route.distance_m)
+    return start, end
 
 
 def patch_trip(
     session: Session, *, trip_public_id_value: str, actor_user_id: int, data: TripPatch, now: datetime | None = None
 ) -> Trip:
-    """T7: schedule/stops/detour edits on a ``planned`` trip; route and time are frozen once capacity is reserved."""
+    """T7: schedule/stretch/detour edits on a ``planned`` trip; the stretch and time are frozen once capacity is reserved."""
     now = _now(now)
     trip_id = resolve_trip_id(session, trip_public_id_value)
     identity_service.lock_user_eligibility(session, [actor_user_id], mode="share")
@@ -534,32 +477,24 @@ def patch_trip(
     _check_version(trip.version, data.expected_version)
     if trip.status != TripStatus.PLANNED.value:
         raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "trip", "from": trip.status, "command": "patch"})
-    if data.stops is not None:
-        # Q63: any allocation, released ones included, freezes the stops (bookings reference occurrence seqs).
-        # Read under the trip lock, which every allocation insert also holds; DB backstop: 0054 trip_stops_locked.
-        from app.modules.bookings import service as bookings_service  # bookings imports trips
+    stretch_change = data.route_start_m is not None
+    if stretch_change and trip_has_claims(session, trip.id):
+        # Q63 successor (ADR-0028): any booking ever on the trip, released ones included, freezes its stretch. Read
+        # under the trip lock, which every claim insert also holds; DB backstop: 0097 trips_route_span_locked.
+        raise DomainError(ErrorCode.TRIP_STOPS_LOCKED, details={"reason": "trip_has_bookings"})
 
-        if bookings_service.trip_has_allocations(session, trip.id):
-            raise DomainError(ErrorCode.TRIP_STOPS_LOCKED, details={"reason": "trip_has_allocations"})
-
-    schedule_change = any(value is not None for value in (data.planned_start_at, data.planned_end_at, data.stops))
-    if schedule_change and any(_has_usage(load) for load in get_segment_loads(session, trip.id)):
+    schedule_change = any(value is not None for value in (data.planned_start_at, data.planned_end_at, data.route_start_m))
+    if schedule_change and trip_has_claims(session, trip.id, active_only=True):
         raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"reason": "trip_has_reserved_capacity"})
 
     new_start = ensure_aware_utc(data.planned_start_at) if data.planned_start_at else ensure_aware_utc(trip.planned_start_at)
     new_end = ensure_aware_utc(data.planned_end_at) if data.planned_end_at else ensure_aware_utc(trip.planned_end_at)
     if schedule_change:
-        occurrences = list_occurrences(session, trip.id)
-        arrivals = (
-            [stop.planned_arrival_at for stop in data.stops]
-            if data.stops
-            else [ensure_aware_utc(o.planned_arrival_at) for o in occurrences]
-        )
         old_start = ensure_aware_utc(trip.planned_start_at)
         old_cutoff = ensure_aware_utc(trip.booking_cutoff_at)
         requested_cutoff = new_start if old_cutoff == old_start else min(old_cutoff, new_start)
         trip.booking_cutoff_at = validate_schedule(
-            now=now, planned_start_at=new_start, planned_end_at=new_end, arrivals=arrivals, booking_cutoff_at=requested_cutoff
+            now=now, planned_start_at=new_start, planned_end_at=new_end, booking_cutoff_at=requested_cutoff
         )
         _, blocked_end = blocked_period(new_start, new_end)
         trip.planned_start_at = new_start
@@ -579,25 +514,20 @@ def patch_trip(
     trip.updated_at = now
     _flush_or_translate(session, SCHEDULE_TRANSLATIONS)
 
-    if data.stops:
-        routes = get_geo_port().route_versions_by_ids(session, [trip.route_version_id])
-        route = routes.get(trip.route_version_id)
+    if stretch_change:
+        route = get_geo_port().route_versions_by_ids(session, [trip.route_version_id]).get(trip.route_version_id)
         if route is None or not route.is_confirmed:
             raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "route_version_not_confirmed"})
-        refs, route_seqs = _resolve_trip_stops(session, route, data.stops)
-        session.execute(delete(TripSegmentResource).where(TripSegmentResource.trip_id == trip.id))
-        session.execute(delete(TripStopOccurrence).where(TripStopOccurrence.trip_id == trip.id))
-        session.expire_all()
-        trip = lock_trip(session, trip.id)
-        _write_stops_and_segments(session, trip, data.stops, refs, route_seqs)
+        trip.route_start_m, trip.route_end_m = _road_stretch(route, data.route_start_m, data.route_end_m)
+        session.flush()
 
     if schedule_change:
-        # BR #5: open trip-offer listings must still fit the new stops, and open negotiations quoted
-        # against the old schedule expire (versions carry trip_version for A4 to compare).
-        # Lock order: trip (held) -> listings -> threads.
-        from app.modules.marketplace import service as marketplace_service  # marketplace imports trips
+        # BR #5: open negotiations quoted against the old schedule expire (versions carry trip_version for A4 to
+        # compare). Lock order: trip (held) -> listings -> threads.
+        from app.modules.marketplace import (
+            service as marketplace_service,  # marketplace imports trips
+        )
 
-        marketplace_service.assert_trip_offers_on_trip(session, trip.id)
         marketplace_service.expire_threads_for_trip(session, trip.id, reason="trip_changed", now=now)
     return trip
 
@@ -646,120 +576,143 @@ def assert_vehicle_eligible_for_new_booking(session: Session, vehicle_id: int) -
 # --- segment capacity (AC10, AC11, AC12; used by A4) ---------------------------------------
 
 
-def _has_usage(load: SegmentLoad) -> bool:
-    return bool(load.seats_used or load.baggage_used_ml or load.cargo_used_weight_g or load.cargo_used_volume_ml)
+# --- interval capacity (ADR-0028 phase 1, Q159) ----------------------------------------------------------------
 
 
-def _to_load(row: TripSegmentResource) -> SegmentLoad:
-    return SegmentLoad(
-        from_seq=row.from_seq,
-        to_seq=row.to_seq,
-        seat_capacity=row.seat_capacity,
-        seats_used=row.seats_used,
-        baggage_capacity_ml=row.baggage_capacity_ml,
-        baggage_used_ml=row.baggage_used_ml,
-        cargo_capacity_weight_g=row.cargo_capacity_weight_g,
-        cargo_used_weight_g=row.cargo_used_weight_g,
-        cargo_capacity_volume_ml=row.cargo_capacity_volume_ml,
-        cargo_used_volume_ml=row.cargo_used_volume_ml,
+def _resources(demand: ResourceDemand) -> Resources:
+    return Resources(
+        seats=demand.seats,
+        baggage_ml=demand.baggage_ml,
+        cargo_weight_g=demand.cargo_weight_g,
+        cargo_volume_ml=demand.cargo_volume_ml,
     )
 
 
-def _segment_rows(
-    session: Session, trip_id: int, *, span: tuple[int, int] | None = None, for_update: bool = False
-) -> list[TripSegmentResource]:
-    stmt = select(TripSegmentResource).where(TripSegmentResource.trip_id == trip_id)
-    if span is not None:
-        stmt = stmt.where(TripSegmentResource.from_seq >= span[0], TripSegmentResource.from_seq < span[1])
-    stmt = stmt.order_by(TripSegmentResource.from_seq).execution_options(populate_existing=True)
-    if for_update:
-        stmt = stmt.with_for_update(key_share=True)
-    return list(session.execute(stmt).scalars())
+def _trip_capacity(trip: Trip) -> Resources:
+    return Resources(
+        seats=trip.seat_capacity,
+        baggage_ml=trip.baggage_capacity_ml,
+        cargo_weight_g=trip.cargo_capacity_weight_g,
+        cargo_volume_ml=trip.cargo_capacity_volume_ml,
+    )
 
 
-def get_segment_loads(session: Session, trip_id: int) -> list[SegmentLoad]:
-    return [_to_load(row) for row in _segment_rows(session, trip_id)]
+def active_claims(session: Session, trip_id: int) -> list[Claim]:
+    rows = session.execute(
+        select(TripCapacityClaim)
+        .where(TripCapacityClaim.trip_id == trip_id, TripCapacityClaim.active.is_(True))
+        .order_by(TripCapacityClaim.from_m, TripCapacityClaim.id)
+    ).scalars()
+    return [
+        Claim(
+            row.from_m,
+            row.to_m,
+            Resources(
+                seats=row.seats,
+                baggage_ml=row.baggage_ml,
+                cargo_weight_g=row.cargo_weight_g,
+                cargo_volume_ml=row.cargo_volume_ml,
+            ),
+        )
+        for row in rows
+    ]
 
 
-def check_capacity(
-    session: Session, trip_id: int, from_seq: int, to_seq: int, demand: ResourceDemand
-) -> list[Shortfall]:
+def check_claim_capacity(
+    session: Session, trip_id: int, from_m: int, to_m: int, demand: ResourceDemand
+) -> list[ClaimShortfall]:
     """Pure read. Only meaningful for a decision when the caller holds ``lock_trip``."""
-    covered_from_seqs(from_seq, to_seq)
-    rows = _segment_rows(session, trip_id, span=(from_seq, to_seq))
-    return find_shortfalls([_to_load(row) for row in rows], from_seq, to_seq, demand)
+    claim_span(from_m, to_m)
+    trip = get_trip(session, trip_id)
+    return interval_shortfalls(_trip_capacity(trip), active_claims(session, trip_id), from_m, to_m, _resources(demand))
 
 
-def require_capacity(session: Session, trip_id: int, from_seq: int, to_seq: int, demand: ResourceDemand) -> None:
-    shortfalls = check_capacity(session, trip_id, from_seq, to_seq, demand)
+def require_claim_capacity(session: Session, trip_id: int, from_m: int, to_m: int, demand: ResourceDemand) -> None:
+    """ADR-0028 phase 2: the capacity decision - ``CAPACITY_UNAVAILABLE`` / ``CARGO_LIMIT_EXCEEDED`` with the road
+    position where the trip is full. A decision only under ``lock_trip``; a proposal uses it as an early check."""
+    if demand.is_empty:
+        return
+    shortfalls = check_claim_capacity(session, trip_id, from_m, to_m, demand)
     if shortfalls:
-        raise shortfall_error(shortfalls)
+        raise claim_shortfall_error(shortfalls)
 
 
-def reserve(session: Session, trip_id: int, from_seq: int, to_seq: int, demand: ResourceDemand) -> list[int]:
-    """Atomically consume capacity on segments ``[from_seq, to_seq)``; returns their ``from_seq``.
+def claim(
+    session: Session, *, trip_id: int, booking_id: int, from_m: int, to_m: int, demand: ResourceDemand
+) -> TripCapacityClaim:
+    """Occupy ``[from_m, to_m)`` of the trip's road for one booking (ADR-0028).
 
-    Takes the trip row lock (re-entrant if the caller already holds it), re-reads the
-    segments under ``FOR UPDATE`` and rejects with ``CAPACITY_UNAVAILABLE`` /
-    ``CARGO_LIMIT_EXCEEDED`` before writing. The ``used <= capacity`` CHECK is the backstop.
+    Takes the trip row lock (re-entrant), checks every road position the claim covers and rejects with
+    ``CAPACITY_UNAVAILABLE`` / ``CARGO_LIMIT_EXCEEDED`` before writing; the DB trigger is the backstop. Since phase 2
+    this is the capacity decision; new bookings get no segment allocation.
     """
     if demand.is_empty:
-        raise ValueError("reserve needs a non-empty demand")
-    span = covered_from_seqs(from_seq, to_seq)
+        raise ValueError("claim needs a non-empty demand")
+    claim_span(from_m, to_m)
     trip = lock_trip(session, trip_id)
     if trip.status in TERMINAL_TRIP_STATUSES:
-        raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "trip", "from": trip.status, "command": "reserve"})
-    rows = _segment_rows(session, trip_id, span=(from_seq, to_seq), for_update=True)
-    shortfalls = find_shortfalls([_to_load(row) for row in rows], from_seq, to_seq, demand)
+        raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "trip", "from": trip.status, "command": "claim"})
+    shortfalls = interval_shortfalls(
+        _trip_capacity(trip), active_claims(session, trip_id), from_m, to_m, _resources(demand)
+    )
     if shortfalls:
-        raise shortfall_error(shortfalls)
-    for row in rows:
-        row.seats_used += demand.seats
-        row.baggage_used_ml += demand.baggage_ml
-        row.cargo_used_weight_g += demand.cargo_weight_g
-        row.cargo_used_volume_ml += demand.cargo_volume_ml
-        row.updated_at = utc_now()
+        raise claim_shortfall_error(shortfalls)
+    row = TripCapacityClaim(
+        trip_id=trip_id,
+        booking_id=booking_id,
+        from_m=from_m,
+        to_m=to_m,
+        seats=demand.seats,
+        baggage_ml=demand.baggage_ml,
+        cargo_weight_g=demand.cargo_weight_g,
+        cargo_volume_ml=demand.cargo_volume_ml,
+        active=True,
+    )
+    session.add(row)
     session.flush()
-    return list(span)
+    return row
 
 
-def release(session: Session, trip_id: int, from_seq: int, to_seq: int, demand: ResourceDemand) -> list[int]:
-    """Return capacity taken by :func:`reserve` (cancel, no-show confirm, amendment).
+def trip_eta_at(trip: Trip, position_m: int) -> datetime | None:
+    """ADR-0028 phase 2: when the trip passes ``position_m`` of its road - linear between its planned start and end
+    over its road span (``app.contracts.route_position.eta_at``). ``None`` for a trip without a road span."""
+    if trip.route_start_m is None or trip.route_end_m is None:
+        return None
+    return eta_at(
+        position_m, start_m=trip.route_start_m, end_m=trip.route_end_m,
+        start_at=ensure_aware_utc(trip.planned_start_at), end_at=ensure_aware_utc(trip.planned_end_at),
+    )
 
-    Contract for the bookings orchestrator (A4, owner of ``booking_allocations``):
 
-    * call exactly once per allocation transition ``active -> inactive``, in the same transaction
-      that flips ``booking_allocations.active``, while holding :func:`lock_trip` (taken here too);
-    * pass the demand that was reserved for that allocation (the proposal version snapshot).
+def trip_stretch(session: Session, trip: Trip) -> tuple[int, int]:
+    """``(route_start_m, route_end_m)`` - the part of the road the trip drives; an unset stretch is the whole road."""
+    if trip.route_start_m is not None and trip.route_end_m is not None:
+        return trip.route_start_m, trip.route_end_m
+    route = get_geo_port().route_versions_by_ids(session, [trip.route_version_id]).get(trip.route_version_id)
+    return 0, route.distance_m if route is not None else 0
 
-    Segment counters cannot tell which booking a unit belongs to, so a double release is only
-    detectable when it would drive a counter below zero: that raises
-    :class:`CapacityAccountingError` and nothing is written. A double release that another booking's
-    usage hides is prevented only by A4's ``active`` flag transition, not here.
+
+def trip_has_claims(session: Session, trip_id: int, *, active_only: bool = False) -> bool:
+    """ADR-0028 (Q63 successor): has any booking ever claimed this trip's road (or holds one now)."""
+    stmt = select(TripCapacityClaim.id).where(TripCapacityClaim.trip_id == trip_id)
+    if active_only:
+        stmt = stmt.where(TripCapacityClaim.active.is_(True))
+    return session.execute(stmt.limit(1)).first() is not None
+
+
+def release_claim(session: Session, *, booking_id: int, now: datetime) -> bool:
+    """Flip the booking's active claim true -> false; ``False`` when it had none (release contract, ADR-0017 §11).
+
+    Call it in the transaction - and under the trip lock - that releases the booking's allocations.
     """
-    if demand.is_empty:
-        raise ValueError("release needs a non-empty demand")
-    span = covered_from_seqs(from_seq, to_seq)
-    lock_trip(session, trip_id)
-    rows = _segment_rows(session, trip_id, span=(from_seq, to_seq), for_update=True)
-    if [row.from_seq for row in rows] != list(span):
-        raise CapacityAccountingError(f"trip {trip_id} lacks segments {list(span)}")
-    for row in rows:
-        if (
-            row.seats_used < demand.seats
-            or row.baggage_used_ml < demand.baggage_ml
-            or row.cargo_used_weight_g < demand.cargo_weight_g
-            or row.cargo_used_volume_ml < demand.cargo_volume_ml
-        ):
-            raise CapacityAccountingError(f"release exceeds reserved capacity on trip {trip_id} segment {row.from_seq}")
-    for row in rows:
-        row.seats_used -= demand.seats
-        row.baggage_used_ml -= demand.baggage_ml
-        row.cargo_used_weight_g -= demand.cargo_weight_g
-        row.cargo_used_volume_ml -= demand.cargo_volume_ml
-        row.updated_at = utc_now()
-    session.flush()
-    return list(span)
+    released = session.execute(
+        update(TripCapacityClaim)
+        .where(TripCapacityClaim.booking_id == booking_id, TripCapacityClaim.active.is_(True))
+        .values(active=False, released_at=ensure_aware_utc(now))
+        .returning(TripCapacityClaim.id)
+        .execution_options(synchronize_session=False)
+    ).all()
+    return bool(released)
 
 
 # --- staff lookup (admin panel) -------------------------------------------------------------------------------

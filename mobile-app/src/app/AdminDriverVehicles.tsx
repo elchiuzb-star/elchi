@@ -1,16 +1,18 @@
 /**
- * Vehicle verification queue and driver eligibility (T3, T3a, I5; D16).
+ * A driver's v2 vehicles and their verification, shown on the driver card next to the v1 documents (T3, T3a, I5; D16).
+ *
+ * The car is verified where the driver is verified: the «Haydovchilar» card shows the profile documents and, right
+ * under them, the cars this driver registered. There is no separate vehicle section any more; the drivers list marks
+ * who has a car waiting (`usePendingVehicles`).
  *
  * A new v2 vehicle is born `pending` and no trip can use it until staff approve it here. The server decides who may
- * act (`ops.driver_eligibility_manage`, admin+): the decision buttons appear only for that capability, so an operator
- * reads the queue without buttons the server would refuse (DESIGN-ADMIN-DIFF 6.6). Each decision is confirmed first
- * and sent with the row's `version`, so a screen that went stale gets `VERSION_CONFLICT` instead of overwriting
- * another staff member's decision.
+ * act (`ops.driver_eligibility_manage`, admin+): an operator sees a note instead of buttons the server would refuse.
+ * Each decision is confirmed first and sent with the row's `version`, so a screen that went stale gets
+ * `VERSION_CONFLICT` instead of overwriting another staff member's decision.
  *
- * What the panel deliberately does not claim: approving the car does not verify the driver's own profile (that is the
- * v1 «Haydovchilar» section), and an eligibility block stops only new business - active trips, tracking and support
- * go on. Document files open only where the server handed out a link; a bare storage id is listed, not guessed into a
- * URL (the v1 file route needs a signed link, BLOCKED in the contract).
+ * What this block deliberately does not claim: approving the car does not verify the driver's profile (that is the
+ * card's own «Tasdiqlash»), and an eligibility block stops only new business - active trips, tracking and support go
+ * on. Document files open only where the server handed out a link; a bare storage id is listed, not guessed into a URL.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -19,7 +21,6 @@ import {
   adminVehicles,
   adminVerifyVehicle,
   type AdminVehicle,
-  type AdminVehicleStatus,
 } from "../api/v2/admin-vehicles.api";
 import { apiOriginUrl } from "../api/http";
 import { newIdempotencyKey } from "../api/v2/http";
@@ -28,25 +29,16 @@ import { translate, translateDynamic, type MessageKey } from "../i18n";
 import { useT } from "../i18n/react";
 import { v2ErrorMessage } from "../utils/v2Errors";
 import { formatDateTime } from "../utils/v2Format";
-import { Badge, Btn, Chips, Note, PanelHead, hasCap, type BadgeTone } from "./adminMarketKit";
-import { RefreshCw, X } from "./ui/icons";
-
-type Filter = AdminVehicleStatus | "all";
-
-const FILTERS: Array<[Filter, MessageKey]> = [
-  ["pending", "status.pending"],
-  ["approved", "status.approved"],
-  ["rejected", "status.rejected"],
-  ["blocked", "admin.mk.blocked"],
-  ["all", "admin.mk.allShort"],
-];
+import { Badge, Btn, Note, hasCap, type BadgeTone } from "./adminMarketKit";
+import { X } from "./ui/icons";
 
 const STATUS_TONE: Record<string, BadgeTone> = { pending: "warn", approved: "ok", rejected: "err", blocked: "err" };
 
 // Mirrors app/modules/trips/rules.py VEHICLE_DECISIONS: approve from pending/rejected, reject from pending/approved.
 const CAN_APPROVE = new Set(["pending", "rejected"]);
 const CAN_REJECT = new Set(["pending", "approved"]);
-const PAGE_SIZE = 20;
+// One driver has one or two cars (Q94); a pending queue larger than this is listed as "at least".
+const PAGE_SIZE = 50;
 
 function statusLabel(status: string): string {
   return translateDynamic(`admin.vehicles.status.${status}`) ?? status;
@@ -170,12 +162,10 @@ function DocumentsModal({ vehicle, onClose }: { vehicle: AdminVehicle; onClose: 
 function VehicleCard({
   vehicle,
   canManage,
-  highlight,
   onChanged,
 }: {
   vehicle: AdminVehicle;
   canManage: boolean;
-  highlight: boolean;
   onChanged: () => void;
 }) {
   const t = useT();
@@ -229,7 +219,7 @@ function VehicleCard({
 
   return (
     <div
-      className={`space-y-3 rounded-[14px] border bg-card p-4 text-sm ${highlight ? "border-primary/50 ring-2 ring-primary/10" : "border-border"}`}
+      className={`space-y-3 rounded-[14px] border bg-card p-4 text-sm ${vehicle.verification_status === "pending" ? "border-primary/50 ring-2 ring-primary/10" : "border-border"}`}
       data-testid="vehicle-card"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -261,7 +251,6 @@ function VehicleCard({
           <>
             <p className="text-secondary-foreground">
               {t("admin.vehicles.ownerLine", {
-                name: owner.user_id,
                 profile: profileLabel(owner.driver_verification_status),
                 eligibility,
                 count: owner.active_trip_count,
@@ -277,7 +266,7 @@ function VehicleCard({
           </>
         ) : (
           <p className="text-muted-foreground">
-            {t("admin.vehicles.ownerNoDriver", { id: owner.user_id })}
+            {t("admin.vehicles.ownerNoDriver")}
           </p>
         )}
       </div>
@@ -339,18 +328,16 @@ function VehicleCard({
   );
 }
 
-export function AdminVehiclesPanel() {
+/** The vehicles block of one driver's card. `ownerUserId` is the driver's `usr_` id (v1 `user_public_id`). */
+export function DriverVehicles({ ownerUserId }: { ownerUserId: string | null | undefined }) {
   const t = useT();
-  const [filter, setFilter] = useState<Filter>("pending");
   const [rows, setRows] = useState<AdminVehicle[] | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
   // undefined: still asking; null: the capability call failed (the list call then shows the server's own answer).
   const [caps, setCaps] = useState<CapabilitiesDTO | null | undefined>(undefined);
   const request = useRef(0);
   const canManage = hasCap(caps as { capabilities?: readonly string[] } | null, "ops.driver_eligibility_manage");
-  // The server reads and decides this queue with one capability (trips/api.py T3a); without it there is nothing to show.
+  // The server reads and decides vehicles with one capability (trips/api.py T3a); without it there is nothing to show.
   const noAccess = Boolean(caps) && !canManage;
 
   useEffect(() => {
@@ -358,91 +345,70 @@ export function AdminVehiclesPanel() {
   }, []);
 
   const load = useCallback(() => {
-    if (caps === undefined || noAccess) return;
+    if (caps === undefined || noAccess || !ownerUserId) return;
     const ticket = ++request.current;
     setRows(null);
     setError(null);
-    setNextCursor(null);
-    adminVehicles({ status: filter === "all" ? undefined : filter, limit: PAGE_SIZE })
+    adminVehicles({ owner_user_id: ownerUserId, limit: PAGE_SIZE })
       .then((page) => {
-        if (ticket !== request.current) return; // a newer filter won
-        setRows(page.items);
-        setNextCursor(page.nextCursor);
+        if (ticket === request.current) setRows(page.items);
       })
       .catch((cause) => {
         if (ticket === request.current) setError(v2ErrorMessage(cause));
       });
-  }, [filter, caps, noAccess]);
+  }, [caps, noAccess, ownerUserId]);
 
   useEffect(load, [load]);
 
-  async function loadMore() {
-    if (!nextCursor) return;
-    const ticket = request.current;
-    setLoadingMore(true);
-    try {
-      const page = await adminVehicles({ status: filter === "all" ? undefined : filter, cursor: nextCursor, limit: PAGE_SIZE });
-      if (ticket !== request.current) return;
-      setRows((current) => [...(current ?? []), ...page.items]);
-      setNextCursor(page.nextCursor);
-    } catch (cause) {
-      if (ticket === request.current) setError(v2ErrorMessage(cause));
-    } finally {
-      setLoadingMore(false);
-    }
-  }
-
-  // The count is what this screen loaded: a further page means "at least", never an invented exact number.
-  const count = rows === null ? null : `${rows.length}${nextCursor ? "+" : ""}`;
-
   return (
-    <div className="space-y-4">
-      <PanelHead
-        title={t("admin.vehicles.title")}
-        sub={t("admin.vehicles.subtitle")}
-        actions={
-          <Btn onClick={load}>
-            <RefreshCw size={14} /> {t("support.refresh")}
-          </Btn>
-        }
-      />
-      <Chips
-        label={t("admin.mk.status")}
-        value={filter}
-        onChange={setFilter}
-        items={FILTERS.map(([value, key]) => ({ value, label: t(key), count: value === filter ? count : null }))}
-      />
-      {noAccess ? <Note>{t("admin.vehicles.noAccess")}</Note> : null}
+    <section className="grid gap-3" aria-label={t("admin.vehicles.title")}>
+      <div>
+        <h3 className="text-base font-bold text-foreground">{t("admin.vehicles.title")}</h3>
+        <p className="text-xs text-muted-foreground">{t("admin.vehicles.subtitle")}</p>
+      </div>
+      {!ownerUserId ? <Note>{t("admin.vehicles.noOwner")}</Note> : null}
+      {ownerUserId && noAccess ? <Note>{t("admin.vehicles.noAccess")}</Note> : null}
       {error && (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm text-destructive">{error}</p>
           <Btn onClick={load}>{t("common.retry")}</Btn>
         </div>
       )}
-      {rows === null && !error && !noAccess && (
+      {ownerUserId && rows === null && !error && !noAccess && (
         <p className="text-sm text-muted-foreground" aria-busy="true">
           {t("common.loading")}
         </p>
       )}
-      {rows !== null && rows.length === 0 && (
-        <p className="text-sm text-muted-foreground">{filter === "pending" ? t("admin.vehicles.emptyPending") : t("admin.vehicles.empty")}</p>
-      )}
-      <div className="grid gap-3">
-        {(rows ?? []).map((vehicle, index) => (
-          <VehicleCard
-            key={vehicle.id}
-            vehicle={vehicle}
-            canManage={canManage}
-            highlight={index === 0 && vehicle.verification_status === "pending"}
-            onChanged={load}
-          />
-        ))}
-      </div>
-      {nextCursor && (
-        <Btn disabled={loadingMore} onClick={() => void loadMore()}>
-          {loadingMore ? t("common.loading") : t("admin.mk.showMore")}
-        </Btn>
-      )}
-    </div>
+      {rows !== null && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("admin.vehicles.empty")}</p>}
+      {(rows ?? []).map((vehicle) => (
+        <VehicleCard key={vehicle.id} vehicle={vehicle} canManage={canManage} onChanged={load} />
+      ))}
+    </section>
   );
+}
+
+/**
+ * Cars waiting for a decision, for the drivers list: which drivers to open first. Empty (and no request) for staff
+ * without the capability; a failed read is an empty list - the card itself still shows the server's answer.
+ */
+export function usePendingVehicles(refreshKey: unknown): { vehicles: AdminVehicle[]; more: boolean } {
+  const [state, setState] = useState<{ vehicles: AdminVehicle[]; more: boolean }>({ vehicles: [], more: false });
+  useEffect(() => {
+    let alive = true;
+    capabilities()
+      .then((caps) => {
+        if (!hasCap(caps as { capabilities?: readonly string[] } | null, "ops.driver_eligibility_manage")) return null;
+        return adminVehicles({ status: "pending", limit: PAGE_SIZE });
+      })
+      .then((page) => {
+        if (alive && page) setState({ vehicles: page.items, more: Boolean(page.nextCursor) });
+      })
+      .catch(() => {
+        if (alive) setState({ vehicles: [], more: false });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [refreshKey]);
+  return state;
 }

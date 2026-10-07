@@ -7,19 +7,7 @@ from collections.abc import Sequence
 from sqlalchemy.orm import Session
 
 from app.contracts.errors import DomainError, ErrorCode
-from app.modules.trips.ports import RouteStopRef, RouteVersionRef, StopRef
-
-
-def _stop(info) -> StopRef:  # noqa: ANN001 - geo.service.StopInfo
-    return StopRef(
-        id=info.id,
-        public_id=info.api_id,
-        corridor_id=info.corridor_id,
-        name_uz=info.name_uz,
-        name_ru=info.name_ru,
-        is_active=info.is_active,
-        district_name_uz=info.district_name_uz,
-    )
+from app.modules.trips.ports import RouteVersionRef
 
 
 def _route(info) -> RouteVersionRef:  # noqa: ANN001 - geo.service.RouteVersionInfo
@@ -27,25 +15,13 @@ def _route(info) -> RouteVersionRef:  # noqa: ANN001 - geo.service.RouteVersionI
         id=info.id,
         public_id=info.api_id,
         status=str(getattr(info.status, "value", info.status)),
-        stops=tuple(
-            RouteStopRef(stop.seq, stop.stop_id, stop.cumulative_distance_m, stop.cumulative_duration_s)
-            for stop in info.stops
-        ),
+        distance_m=info.distance_m,
+        duration_s=info.duration_s,
     )
 
 
 class GeoServiceAdapter:
     """Implements ``TripsGeoPort`` and ``MarketplaceGeoPort``."""
-
-    def stops_by_public_ids(self, session: Session, public_ids: Sequence[str]) -> dict[str, StopRef]:
-        from app.modules.geo import service as geo_service
-
-        return {key: _stop(info) for key, info in geo_service.get_stops_by_api_ids(session, public_ids).items()}
-
-    def stops_by_ids(self, session: Session, ids: Sequence[int]) -> dict[int, StopRef]:
-        from app.modules.geo import service as geo_service
-
-        return {key: _stop(info) for key, info in geo_service.get_stops(session, ids).items()}
 
     def corridors_by_ids(self, session: Session, ids: Sequence[int]):  # noqa: ANN201 - dict[int, CorridorRef]
         from app.modules.geo import service as geo_service

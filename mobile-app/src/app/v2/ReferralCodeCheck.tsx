@@ -1,5 +1,5 @@
 /**
- * The public referral code check. (Q158: the free-text stop search that lived here is gone - no stops in the UI.)
+ * The public referral code check.
  *
  * The referral check answers only "usable or not" (Q117, ADR-0023 §16): it never shows, guesses or hints who owns
  * the code, and it does not attribute anything - attribution is a separate, explicit step elsewhere.
@@ -37,16 +37,16 @@ export function ReferralCodeCheck(props: { initialCode?: string; onValid?: (code
   return (
     <div className="flex flex-col gap-2">
       <Field
-        label={translate("stopSearch.referralLabel")}
+        label={translate("referralCheck.Label")}
         value={code}
         onChange={(value) => {
           setCode(value.slice(0, 64));
           setChecked(null);
         }}
-        placeholder={translate("stopSearch.referralPlaceholder")}
+        placeholder={translate("referralCheck.Placeholder")}
       />
       <InlineButton tone="primary" disabled={!trimmed || busy} onClick={check}>
-        {translate("stopSearch.referralCheck")}
+        {translate("referralCheck.Check")}
       </InlineButton>
       <ErrorNote message={error ? v2ErrorMessage(error) : null} />
       {checked ? (
@@ -54,7 +54,7 @@ export function ReferralCodeCheck(props: { initialCode?: string; onValid?: (code
           data-testid="referral-result"
           className={cls("text-[13px]", checked.valid ? "text-success" : "text-muted-foreground")}
         >
-          {checked.valid ? translate("stopSearch.referralValid") : translate("stopSearch.referralInvalid")}
+          {checked.valid ? translate("referralCheck.Valid") : translate("referralCheck.Invalid")}
         </p>
       ) : null}
     </div>

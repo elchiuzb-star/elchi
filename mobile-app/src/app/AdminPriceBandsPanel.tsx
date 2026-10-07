@@ -10,10 +10,8 @@
  * So the screen is built around making the difference impossible to miss: an advisory reference is the default
  * and reads as advice, and turning a band into a hard limit is a separate, explained switch.
  *
- * Scope: only the corridor-wide band (a loose safety range for the whole direction) is created or edited here.
- * The server still knows bands for one pair of internal route anchor points (Q53 segment bands, the segment one
- * wins when both exist), but since 06.10.2026 staff work point A -> point B and never see those anchors as
- * places, so old pair rows are listed read-only as "eski" and no new one can be made from this screen.
+ * Scope: a band is corridor-wide (a loose safety range for the whole direction) - ELCHI works point A -> point B
+ * and has no stops, so there is no narrower band to create or show (ADR-0028, Q160).
  *
  * Q52: editing is admin+ (`ops.corridor_manage`). Without that capability the form is not rendered at all - the
  * operator reads the table and the history, and the button names the version a save would create ("Yangilash (v3)").
@@ -124,7 +122,7 @@ export function AdminPriceBandsPanel() {
 
   /** The corridor-wide band for the service type being edited, if there is one - it carries the version. */
   const current = useMemo(
-    () => bands.find((band) => band.service_type === form.service_type && !band.origin_stop_id) ?? null,
+    () => bands.find((band) => band.service_type === form.service_type) ?? null,
     [bands, form.service_type],
   );
 
@@ -322,10 +320,10 @@ export function AdminPriceBandsPanel() {
                   </tr>
                 )}
                 {bands.map((band) => (
-                  <tr key={`${band.service_type}-${band.origin_stop_id ?? "corridor"}-${band.destination_stop_id ?? ""}`}>
+                  <tr key={band.service_type}>
                     <td className="px-3 py-2 font-medium text-foreground">{serviceLabel(band.service_type)}</td>
                     <td className="px-3 py-2 text-muted-foreground">
-                      {band.origin_stop_id ? t("admin.bands.legacyPair") : t("admin.bands.wholeCorridor")}
+                      {t("admin.bands.wholeCorridor")}
                     </td>
                     <td className="px-3 py-2 text-foreground">
                       {t(band.price_basis === "per_seat" ? "admin.bands.rangePerSeat" : "admin.bands.rangeTotal", {
@@ -347,7 +345,6 @@ export function AdminPriceBandsPanel() {
               </tbody>
             </table>
           </div>
-          {bands.some((band) => band.origin_stop_id) && <Note>{t("admin.bands.legacyPairNote")}</Note>}
 
           <div className="rounded-[12px] border border-border bg-card p-4">
             <p className="text-sm font-semibold text-foreground">{t("admin.bands.history")}</p>

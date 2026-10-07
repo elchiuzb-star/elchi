@@ -53,7 +53,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Q24** Geoapify/hosted router production’da huquqiy/data-flow va provider shartlari tekshiruvigacha o‘chiq. Provider geometriyasini doimiy saqlash faqat shartlar ruxsat bersa; aks holda bekatlar, kumulyativ qiymatlar va request hash saqlanadi.
 - **Q25** Bir oyoq (leg)da ikki detour rad (pilot cheklovi).
 - **Q26** Bir scope darajasida ziddiyatli flag qatorlari → o‘chiq (xavfsiz default).
-- **Q27** Pilotda bekat yaratuvchisi verifier hisoblanadi; koridor `pilot`ga o‘tishidan oldin bekatlarda meeting note yoki foto dalil bo‘lishi shart.
+- **Q27** *(Q159/ADR-0028 2-bosqich bilan almashtirilgan: koridor gate'i — tasdiqlangan yo'l, bekat dalili emas)* Pilotda bekat yaratuvchisi verifier hisoblanadi; koridor `pilot`ga o‘tishidan oldin bekatlarda meeting note yoki foto dalil bo‘lishi shart.
 - **Q28** Faqat migratsiya seed global standard policy (`created_by IS NULL`) amal qilsa, production v2 quote/hold bloklanadi — super_admin stavkani tasdiqlaguncha/yaratguncha (go-live checklist).
 - **Q29** 0036 noto‘g‘ri legacy stavkada qattiq yiqiladi; deploy oldi tekshiruv skripti (A10a).
 - **Q30** Kichik tuzatishlarni bo‘lish moliya hisobotlarida belgilanadi; pilotda qat’iy kunlik limit yo‘q.
@@ -70,12 +70,12 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 **Wave 1.6 tasdiqlari (14.09.2026) — R1/R2 va qayta ko‘rib chiqish:**
 - **Q40 (R1, ADR-0019 Accepted)** Mijoz request listing’ida (passenger va parcel) listing’ni ko‘ra oladigan eligible driverlar raqobatchi **joriy** takliflarning anonim ro‘yxatini ko‘radi: yorliq “Haydovchi #3” (listing ichida barqaror, user id’dan olinmaydi), jami va birlik narx, pickup oynasi/segment, avtomobil klassi va o‘rin sig‘imi, reyting bucket’i + bajarilganlar soni, yangilangan vaqt; o‘z taklifi ajratiladi. Ko‘rinmaydi: ism, foto, davlat raqami, telefon, aniq avtomobil.
 - **Q41** Mijoz ↔ bitta driver counter shartlari shu juftlikka xususiy; boshqalar har driverning faqat joriy taklifini ko‘radi.
-- **Q42** Koridor segmenti bo‘yicha operator sozlaydigan narx floor/ceiling. **Q90 (18.09.2026) bilan yumshatildi:** band endi taklifni bloklamaydi — u ogohlantirish va ranking signali; hard reject faqat `enforced` band va texnik yaroqsizlikda.
+- **Q42** *(ADR-0028: band faqat koridor bo'yicha; bekat juftligi bandi faqat o'chiriladi)* Koridor segmenti bo‘yicha operator sozlaydigan narx floor/ceiling. **Q90 (18.09.2026) bilan yumshatildi:** band endi taklifni bloklamaydi — u ogohlantirish va ranking signali; hard reject faqat `enforced` band va texnik yaroqsizlikda.
 - **Q43 (R2, ADR-0020 Accepted — spec §16 dagi “tasdiqlanganda telefon ochiladi” qoidasini foydalanuvchi qarori bilan almashtiradi)** Accept’dan oldin hech bir DTO’da telefon, to‘liq ism, davlat raqami, aniq manzil yo‘q. Barcha erkin matnlar (listing izohi, taklif izohi, chat, parcel tavsifi, reyting matni, profil maydonlari) `app.contracts.contact_filter` orqali: moslik maskalanadi va ogohlantirish qaytadi (telefon har formatda, bo‘shliqli raqamlar, o‘zbek/rus son so‘zlari lotin va kirillda; e-mail, @handle; t.me/telegram/whatsapp/instagram; “qo‘ng‘iroq qiling” naqshlari).
 - **Q44** Accept’dan xizmat boshlanguncha (passenger: boarding code/onboard; parcel: `picked_up`) aloqa faqat ilova chati + tezkor javoblar, tracking oynasida haydovchining jonli joylashuvi va “keldim” signali. Ishtirokchi telefonlari start’da ochiladi, yakunlangandan 24 soat keyin yana yashiriladi. Parcel qabul qiluvchi telefoni driverga faqat pickup’dan keyin; jo‘natuvchi telefoni hech qachon. Support/SOS har doim; maskalangan qo‘ng‘iroq keyinroq.
 - **Q45** Pilotda jarima yo‘q. Filtr mosligi → ogohlantirish → strike → operator navbati; shu navbatga chat aloqasidan keyin tez bekor qilish va bir juftlikning takroriy bekor qilishlari signallari. Rasmlar — operator tanlab tekshiradi, OCR keyin. v1/muzlatilgan Android o‘zgarmaydi (ma’lum bo‘shliq).
 - **Q46** Production’da routing provayderi yo‘q → detour match bo‘lmaydi, faqat tasdiqlangan bekat match’lari; mahsulot matni shuni aytadi.
-- **Q47** Pilot/active koridorda ≥ 2 faol bekat va bekat dalili (Q27) uzluksiz majburiy (faqat o‘tishda emas).
+- **Q47** *(Q159/ADR-0028 2-bosqich bilan almashtirilgan: pilot/active koridorda kamida bitta tasdiqlangan yo'l, 0099)* Pilot/active koridorda ≥ 2 faol bekat va bekat dalili (Q27) uzluksiz majburiy (faqat o‘tishda emas).
 - **Q48** DB rollari ajratilmaguncha (Q36) va balans guard tuzatishi kirmaguncha production v2 pul oqimi yo‘q (launch gate).
 - **Q49** Adjustment reject — faqat `finance.adjustment_approve`li **boshqa** foydalanuvchi; so‘rovchi faqat withdraw.
 - **Q50** Eski image’ga rollback’da readiness 503 hozircha qabul (monitoring toqat qiladi). Launch’dan oldin migratsiyalar revision lineage (revision → parent) jadvaliga yozadi, eski image “ahead”ni taniydi — launch gate, dizayn ADR-0012/0016 da, egasi A0a/A10a.
@@ -95,7 +95,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Q60** Bron snapshot’ida faqat miqdor, narx, jami, komissiya va o‘rin ustunlari o‘zgaradi — faqat qabul qilingan amendment orqali; qolgan snapshot ustunlari DB’da muzlatiladi (trigger).
 - **Q61** Mashina tasdig‘i bekor bo‘lsa faqat yangi bronlar bloklanadi (accept’da mashina holati qayta tekshiriladi); mavjud bronlar majburiyat sifatida davom etadi.
 - **Q62** Detour va AC13 pilotda qoldiriladi (Q46): accept detour quote’ni barcha muhitlarda rad etadi.
-- **Q63** Trip’da bironta allocation bo‘lsa (qaytarilgan/inactive ham) bekatlarni o‘zgartirish taqiq.
+- **Q63** *(ADR-0028: bironta yo'l da'vosi — `trip_capacity_claims` — bo'lsa yo'l oralig'i va bekatlar qulf)* Trip’da bironta allocation bo‘lsa (qaytarilgan/inactive ham) bekatlarni o‘zgartirish taqiq.
 - **Q64** Davlat raqami: accept’dan keyin maskalangan raqam + model + rang; to‘liq raqam trip `boarding` holatida yoki pickup’ga ≤ 30 daqiqa qolganda.
 - **Q65** *(Q139 bilan almashtirilgan: pochta kodi va jo‘natuvchi tasdig‘i yo‘q)* Delivery kodi pilotda jo‘natuvchiga “faqat qabul qiluvchiga bering” ogohlantirishi bilan ko‘rsatiladi. `delivered` bronni avtomatik yakunlamaydi: jo‘natuvchi tasdiqlaydi yoki 24 soatda operator navbatiga tushadi. Chatdagi 6 xonali kodlar maskalanadi. Keyin kod qabul qiluvchiga havola/SMS orqali.
 - **Q66** Nizo moduli (A12) yo‘q bo‘lsa 503 o‘rniga xizmat yakunlanadi, komissiya hold’da qoladi va finance navbatiga tushadi.
@@ -566,6 +566,42 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Q156** API faqat additiv; `gen_native_api --check` OpenAPI o'zgargani uchun «stale» — Android/iOS dasturchisiga
   handoff (`docs/handoff/ADR0027_NATIVE.md`), agentlar native fayllarni qayta generatsiya qilmaydi.
 
+**A→B arxitekturasi (06.10.2026) — ADR-0028:**
+- **Q159 (foydalanuvchi qarori; maqsadli arxitektura — Q27, Q46 bekat qismi, Q47, Q63, Q88 4-band va Q158 dagi «ichki
+  tayanch nuqta» qismini bosqichma-bosqich almashtiradi)** ELCHI bekatlar tizimi emas: mijoz buyurtmasi ham, haydovchi
+  yo'nalishi ham **A nuqta → B nuqta**. Oraliq nuqtalar foydalanuvchi yoki operator yaratadigan biznes obyekti emas va
+  **tizim ham ularni yasamaydi** (avtomatik tugun = boshqa nomdagi bekat, rad etilgan A-variant). Yangi biznes logika
+  faqat tasdiqlangan yo'l geometriyasi (`route_versions.geometry/distance_m/duration_s`) va **marshrut bo'yidagi
+  pozitsiya** `*_position_m` (yo'l boshidan proyeksiyagacha metr, `round(ST_LineLocatePoint × distance_m)`) ustida:
+  safar `route_start_m/route_end_m`; ETA chiziqli yo'l vaqtidan; sig'im — `trip_capacity_claims` interval da'volari
+  (`[pickup_position_m, dropoff_position_m)`, har nuqtada Σ ≤ sig'im); moslik — proyeksiya, `pos(A) < pos(B)`; koridor
+  ishga tushishi — kamida bitta tasdiqlangan yo'l (bekat soni/dalili emas); narx bandi — koridor bo'yicha. Mavjud
+  `*_route_offset_m` (ko'ndalang masofa, Q88) o'zgarmaydi. Bekat tuzilmalari (`corridor_stops`, `route_version_stops`,
+  `trip_stop_occurrences`, `trip_segment_resources`, `booking_allocations`, `*_stop_id`, `*_occurrence_seq`) faqat
+  legacy/backward compatibility uchun vaqtincha qoladi va **o'chirilmaydi** (tarix). Bosqichlar: 1 expand + dual write
+  (0097) → 2 switch reads → 3 switch writes → 4 contract; har bosqichdan keyin hisobot va tasdiq. Native API (Q156)
+  additiv: bekat id kirishi 3-bosqichda nuqtaga tarjima qilinadi.
+  **2-bosqich (07.10.2026, 0098/0099):** sig'im qarori da'volardan (yangi bron allokatsiyasiz; xato tafsilotida
+  `positions` + eski `segments`); ETA — `trips.trip_eta_at` (safar rejasi bo'yicha chiziqli, dwell yo'q) taklif, accept,
+  Q154 va yo'nalish rejalashtiruvchisida; eski `/feed` va saqlangan qidiruv — maydonlar orasidagi yo'l oralig'i;
+  koridor gate'i — tasdiqlangan yo'l; narx bandi koridor bo'yicha. Ochiq (3-bosqich): yo'l A/B uchlaridan, safar
+  occurrence'siz, admin bekat CRUD, maydonni bekatsiz joylashtirish, eski stop matcher, native tarjima.
+  **3-bosqich (07.10.2026, 0100):** yo'l A/B uchlaridan (`/routes/preview` `corridor_id`+`origin`+`destination`);
+  safar — yo'l oralig'i (`TripCreate.stops` faqat native legacy, aks holda `route_start_m/route_end_m`), occurrence'siz
+  safarda bron seq'i `NULL`; yangi e'londagi bekat id nuqtaga tarjima, taklif mijoz joyini o'zgartirmaydi; admin bekat
+  yaratish `stops_retired`; maydon yo'lga markazi bilan (markazsiz tumanda eski bekat — ma'lumot bo'shlig'i). Ochiq
+  (4-bosqich): bekat jadvallariga yangi qator DB taqiqi, markazsiz tumanlar, staff A/B yo'l UI'si.
+
+- **Q160 (foydalanuvchi qarori, 07.10.2026 — Q156 va AGENTS §2 «legacy jadvalni o'chirish taqiq» bandining bekat qismiga
+  aniqlik; ADR-0028 4-bosqich)** «Bekat» tushunchasi loyihada **umuman yo'q**: mijoz e'loni faqat A va B nuqta. (1) v2 API
+  bekat id ni **rad etadi** — barcha kirish maydonlari (`*_stop_id`, `TripCreate.stops`, `RoutePreviewRequest.stop_ids`,
+  lenta/saqlangan qidiruv bekat mezoni) va bekat endpointlari olib tashlanadi; javob DTO'larida `stop` maydoni yo'q.
+  Muzlatilgan Android ilovasi yangilanmaguncha e'lon/taklif bera olmaydi — ma'lum oqibat, handoff
+  `docs/handoff/ADR0028_NATIVE.md`. (2) Bekat jadvallari va ustunlari (`corridor_stops`, `route_version_stops`,
+  `trip_stop_occurrences`, `trip_segment_resources`, `booking_allocations`, `*_stop_id`, `*_occurrence_seq`)
+  **o'chirilmaydi, muzlatiladi**: faqat tarix, hech bir kod ularga yozmaydi va ulardan qaror qilmaydi, DB yangi qatorni
+  rad etadi. Markazi noma'lum tuman yo'lga joylashtirilmaydi (zaxira bekat yo'q) — operator markazni kiritadi.
+
 **Wave 3.1 dan keyin ochiq qolgan uch band yopilgan (24.09.2026 audit):** U6 `rating_bucket` — A-variant; ADR-0021 staff MFA — **Accepted** (faqat xodim faktorlarini ulash va `enforce_privileged` rejimi — go-live bandi); dalil fayllari — imzolangan havola bilan.
 
 ## 4. Kod tuzilishi
@@ -593,7 +629,7 @@ Kontrakt o‘zgarishi faqat integrator (A0a) orqali, boshqa agentlarga yetkazilg
 - **Global lock tartibi (ADR-0017):** `users → driver_directions (ADR-0027) → trips → listings → proposal_threads → trip_intents (ADR-0025) → bookings → booking bolalari (amendments, no_show_reviews, custody_cases, cash_receipts, disputes) → wallet_accounts → wallet_holds/topup_requests/ledger_adjustment_requests`; har guruh ichida id o‘sish tartibida. Bola id bilan kelgan buyruq avval lock’siz o‘qib ota id’larini topadi, keyin tartib bo‘yicha lock oladi va qayta tekshiradi.
 - **Lock rejimi:** `users`, `trips`, `listings`, `proposal_threads` (va boshqa FK ota qatorlari) `FOR NO KEY UPDATE` (`with_for_update(key_share=True)`) yoki `FOR SHARE` bilan; **oddiy `FOR UPDATE` emas** — FK insert’larining key-share lock’lari bilan deadlock bo‘ladi. Yagona istisno: unique ustun o‘zgarsa (`users.phone`/`username`, `driver_profiles.plate_number`) qator boshidanoq `FOR UPDATE`. Qator har doim boshidanoq yakuniy rejimda olinadi (kuchaytirish yo‘q). v1: `orders → users → driver_profiles → wallet`; akkaunt o‘chirish `users`/profil `FOR UPDATE`; token refresh `users FOR SHARE` → session `FOR UPDATE` (ADR-0017 §12–13).
 - **Retry:** har v2 buyrug‘i `platform.service.run_with_db_retry` ichida (deadlock/serialization, ≤3).
-- **Release kontrakti:** A4 `booking_allocations.active`ni trip lock ostida true→false o‘tkazadi va `trips.release`ni faqat shu o‘tishda chaqiradi (ikki marta release yo‘q).
+- **Release kontrakti (ADR-0028 / Q160):** sig'imni faqat bronning `trip_capacity_claims` da'vosi ushlab turadi. A4 bron bekor bo'lganda / tugaganda trip lock ostida `trips.release_claim` bilan da'voni bir marta true→false o'tkazadi (qayta faollashmaydi); yangi bron yoki amendment — `trips.claim`. Bekat davri `booking_allocations`/`trip_segment_resources` muzlatilgan tarix (0101): kod ularga tegmaydi, DB yangi yozuvni rad etadi.
 - **Detour:** trip detour hisoblagichlari soniyada; snapshot — `app.contracts.detour.DetourQuote`.
 - **Production aniqlash:** geo va boshqa modullar `platform.service.is_production(db)` (DB markeri + env), faqat env satri emas.
 - **Muhit:** `ELCHI_ENVIRONMENT` allowlist’dan tashqari qiymat app va migratsiyani ishga tushirmaydi (`app/core/config.py`).

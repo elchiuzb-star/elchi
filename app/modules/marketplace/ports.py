@@ -2,7 +2,7 @@
 
 INTEGRATION POINTS (not yet published by their owners as ``service.py``):
 
-* geo: stop lookups, corridor rollout state            -> :class:`MarketplaceGeoPort`
+* geo: corridor rollout state                          -> :class:`MarketplaceGeoPort`
 * geo: ``is_flag_enabled`` for a corridor (Q5, AC38)    -> :class:`FlagPort`
 * wallet: ``quote_fee`` / policy public ids (AC43)       -> :class:`FeePort`
 
@@ -22,7 +22,6 @@ from typing import Protocol
 from sqlalchemy.orm import Session
 
 from app.contracts.enums import FeatureFlagKey, ServiceType
-from app.modules.trips.ports import StopRef
 
 # Corridor rollout states in which listings may be published (draft/closed may not).
 OPEN_CORRIDOR_ROLLOUT_STATES: frozenset[str] = frozenset({"internal", "pilot", "active"})
@@ -37,7 +36,6 @@ __all__ = [
     "MarketplacePorts",
     "OPEN_CORRIDOR_ROLLOUT_STATES",
     "PolicyRef",
-    "StopRef",
     "configure_ports",
     "get_ports",
 ]
@@ -76,10 +74,6 @@ class PolicyRef:
 
 
 class MarketplaceGeoPort(Protocol):
-    def stops_by_public_ids(self, session: Session, public_ids: Sequence[str]) -> dict[str, StopRef]: ...
-
-    def stops_by_ids(self, session: Session, ids: Sequence[int]) -> dict[int, StopRef]: ...
-
     def corridors_by_ids(self, session: Session, ids: Sequence[int]) -> dict[int, CorridorRef]: ...
 
 

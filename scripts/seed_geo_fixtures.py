@@ -31,7 +31,7 @@ if str(REPO_ROOT) not in sys.path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--actor-user-id", type=int, required=True, help="existing staff user id recorded as creator/verifier")
-    parser.add_argument("--no-routes", action="store_true", help="only catalogue, corridor and stops")
+    parser.add_argument("--no-routes", action="store_true", help="only catalogue and corridor (one road)")
     parser.add_argument(
         "--no-flags",
         action="store_true",
@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             fixture = load_geo_fixture(db, actor_user_id=args.actor_user_id, with_routes=not args.no_routes)
             corridor_api_id = fixture.corridor.api_id
-            print(f"seeded corridor {corridor_api_id} with {len(fixture.stops)} stops and {len(fixture.routes)} confirmed routes")
+            print(f"seeded corridor {corridor_api_id} with {len(fixture.routes)} confirmed roads")
 
         # The flags are ensured on every run, not only on the first: a corridor with no
         # `driver_listing_enabled` row falls back to the production default (false), and a driver then cannot

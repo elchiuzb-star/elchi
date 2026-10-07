@@ -1,4 +1,4 @@
-"""DTO builders for trips (no writes). Stop names come from the geo port."""
+"""DTO builders for trips (no writes). A trip is a stretch of one confirmed road (ADR-0028, Q160)."""
 
 from __future__ import annotations
 
@@ -6,35 +6,33 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.contracts.enums import ListingKind, ListingStatus, Role, ServiceType, TripStatus
+from app.contracts.enums import (
+    ListingKind,
+    ListingStatus,
+    Role,
+    ServiceType,
+    TripStatus,
+)
 from app.contracts.ids import PublicIdPrefix, format_public_id
+from app.contracts.route_position import peak_load
 from app.contracts.timeutil import ensure_aware_utc, utc_now
 from app.modules.identity import service as identity_service
 from app.modules.trips import service as trips_service
 from app.modules.trips.models import Trip, Vehicle
-from app.modules.trips.ports import StopRef, get_geo_port
-from app.modules.trips.rules import Resource, mask_plate, vehicle_class
+from app.modules.trips.ports import get_geo_port
+from app.modules.trips.rules import mask_plate, vehicle_class
 from app.modules.trips.schemas import (
     AdminVehicleDTO,
     AdminVehicleOwnerDTO,
-    SegmentAvailabilityDTO,
-    StopRefDTO,
+    StretchAvailabilityDTO,
     TripAvailabilityDTO,
     TripDTO,
     TripListingRefDTO,
     TripPublicDTO,
-    TripPublicStopDTO,
     TripPublicVehicleDTO,
-    TripStopDTO,
     TripVehicleDTO,
     VehicleDTO,
 )
-
-
-def stop_ref_dto(ref: StopRef | None) -> StopRefDTO:
-    if ref is None:  # geo row missing: never invent a name
-        return StopRefDTO(id="", name_uz="", name_ru=None)
-    return StopRefDTO(id=ref.public_id, name_uz=ref.name_uz, name_ru=ref.name_ru, district_name_uz=ref.district_name_uz)
 
 
 def vehicle_dto(vehicle: Vehicle) -> VehicleDTO:
@@ -92,17 +90,12 @@ def admin_vehicle_dtos(session: Session, vehicles: list[Vehicle]) -> list[AdminV
     return rows
 
 
-def _stops(session: Session, trip: Trip) -> tuple[list, dict[int, StopRef]]:
-    occurrences = trips_service.list_occurrences(session, trip.id)
-    refs = get_geo_port().stops_by_ids(session, sorted({o.stop_id for o in occurrences}))
-    return occurrences, refs
-
-
 def trip_dto(session: Session, trip: Trip) -> TripDTO:
-    from app.modules.marketplace import service as marketplace_service  # marketplace imports trips
+    from app.modules.marketplace import (
+        service as marketplace_service,  # marketplace imports trips
+    )
 
     vehicle = trips_service.get_vehicle(session, trip.vehicle_id)
-    occurrences, refs = _stops(session, trip)
     route = get_geo_port().route_versions_by_ids(session, [trip.route_version_id]).get(trip.route_version_id)
     listings = marketplace_service.listings_for_trip(session, trip.id)
     return TripDTO(
@@ -117,16 +110,8 @@ def trip_dto(session: Session, trip: Trip) -> TripDTO:
             seat_capacity=vehicle.seat_capacity,
         ),
         route_version_id=route.public_id if route else "",
-        stops=[
-            TripStopDTO(
-                seq=o.seq,
-                stop=stop_ref_dto(refs.get(o.stop_id)),
-                planned_arrival_at=ensure_aware_utc(o.planned_arrival_at),
-                dwell_minutes=o.dwell_minutes,
-                eta_arrival_at=ensure_aware_utc(o.eta_arrival_at) if o.eta_arrival_at else None,
-            )
-            for o in occurrences
-        ],
+        route_start_m=trip.route_start_m,
+        route_end_m=trip.route_end_m,
         planned_start_at=ensure_aware_utc(trip.planned_start_at),
         planned_end_at=ensure_aware_utc(trip.planned_end_at),
         timezone=trip.timezone,
@@ -155,19 +140,11 @@ def trip_dto(session: Session, trip: Trip) -> TripDTO:
     )
 
 
-def trip_public_dto(session: Session, trip: Trip) -> TripPublicDTO:
-    vehicle = trips_service.get_vehicle(session, trip.vehicle_id)
-    occurrences, refs = _stops(session, trip)
+def trip_public_dto(session: Session, trip: Trip) -> TripPublicDTO:  # noqa: ARG001 - the session is the builders' contract
     return TripPublicDTO(
         id=trips_service.trip_public_id(trip),
         status=TripStatus(trip.status),
         vehicle=TripPublicVehicleDTO(vehicle_class=vehicle_class(trip.seat_capacity), seat_capacity=trip.seat_capacity),
-        stops=[
-            TripPublicStopDTO(
-                seq=o.seq, stop=stop_ref_dto(refs.get(o.stop_id)), planned_arrival_at=ensure_aware_utc(o.planned_arrival_at)
-            )
-            for o in occurrences
-        ],
         planned_start_at=ensure_aware_utc(trip.planned_start_at),
         planned_end_at=ensure_aware_utc(trip.planned_end_at),
         timezone=trip.timezone,
@@ -175,26 +152,29 @@ def trip_public_dto(session: Session, trip: Trip) -> TripPublicDTO:
 
 
 def availability_dto(session: Session, trip: Trip, now: datetime | None = None) -> TripAvailabilityDTO:
-    occurrences, refs = _stops(session, trip)
-    stop_by_seq = {o.seq: refs.get(o.stop_id) for o in occurrences}
-    loads = trips_service.get_segment_loads(session, trip.id)
+    """ADR-0028: the trip's stretch cut at every booking's place; each piece with what is still free on it."""
+    claims = trips_service.active_claims(session, trip.id)
+    start = trip.route_start_m or 0
+    end = trip.route_end_m or start
+    cuts = sorted({start, end, *(c.from_m for c in claims if start < c.from_m < end), *(c.to_m for c in claims if start < c.to_m < end)})
+    pieces = []
+    for from_m, to_m in zip(cuts, cuts[1:], strict=False):
+        used = peak_load(claims, from_m, to_m)
+        pieces.append(
+            StretchAvailabilityDTO(
+                from_m=from_m,
+                to_m=to_m,
+                seats_remaining=trip.seat_capacity - used["seats"][0],
+                baggage_remaining_ml=trip.baggage_capacity_ml - used["baggage_ml"][0],
+                cargo_remaining_weight_g=trip.cargo_capacity_weight_g - used["cargo_weight_g"][0],
+                cargo_remaining_volume_ml=trip.cargo_capacity_volume_ml - used["cargo_volume_ml"][0],
+            )
+        )
     return TripAvailabilityDTO(
         trip_id=trips_service.trip_public_id(trip),
         trip_version=trip.version,
         computed_at=ensure_aware_utc(now) if now else utc_now(),
-        segments=[
-            SegmentAvailabilityDTO(
-                from_seq=load.from_seq,
-                to_seq=load.to_seq,
-                from_stop_id=stop_ref_dto(stop_by_seq.get(load.from_seq)).id,
-                to_stop_id=stop_ref_dto(stop_by_seq.get(load.to_seq)).id,
-                seats_remaining=load.remaining(Resource.SEATS),
-                baggage_remaining_ml=load.remaining(Resource.BAGGAGE_ML),
-                cargo_remaining_weight_g=load.remaining(Resource.CARGO_WEIGHT_G),
-                cargo_remaining_volume_ml=load.remaining(Resource.CARGO_VOLUME_ML),
-            )
-            for load in loads
-        ],
+        stretches=pieces,
     )
 
 
@@ -220,7 +200,11 @@ def direction_dto(session: Session, direction, *, admin: bool = False):  # noqa:
     """DriverDirectionDTO (or the admin variant): names of both ends, the road's districts between them, the car,
     the capacity and the trip the system made from the direction."""
     from app.modules.trips import directions as trip_directions
-    from app.modules.trips.schemas import AdminDriverDirectionDTO, DirectionEndDTO, DriverDirectionDTO
+    from app.modules.trips.schemas import (
+        AdminDriverDirectionDTO,
+        DirectionEndDTO,
+        DriverDirectionDTO,
+    )
 
     origin, destination = trip_directions.direction_ends(session, direction)
 

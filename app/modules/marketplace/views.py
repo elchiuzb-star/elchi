@@ -56,7 +56,6 @@ from app.modules.marketplace.schemas import (
 )
 from app.modules.trips.models import Trip
 from app.modules.trips.rules import vehicle_class
-from app.modules.trips.views import stop_ref_dto
 from app.utils.file_access import media_ref
 
 
@@ -79,7 +78,7 @@ def _passenger(row: PassengerListingDetails | None) -> PassengerDetails | None:
 
 
 def point_end_dto(session: Session, row, prefix: str) -> PointEndDTO | None:  # noqa: ANN001
-    """Read one map-point end back (Q88), or ``None`` when that end is a verified stop.
+    """Read one marked place back (Q88); ``None`` only for a row without one.
 
     The district travels with it because it is what an operator files and searches by; it is explicitly not a
     validity claim - `PointEndInput` says why.
@@ -224,7 +223,6 @@ def listing_dto(session: Session, listing: Listing, *, viewer_user_id: int | Non
     which means "not the owner", so a caller that forgets to pass it leaks nothing.
     """
     geo = get_ports().geo
-    stops = geo.stops_by_ids(session, [listing.origin_stop_id, listing.destination_stop_id])
     corridor = geo.corridors_by_ids(session, [listing.corridor_id]).get(listing.corridor_id)
     owner_public_id, owner_name = identity_service.user_refs(session, [listing.owner_user_id])[listing.owner_user_id]
     return ListingDTO(
@@ -236,8 +234,6 @@ def listing_dto(session: Session, listing: Listing, *, viewer_user_id: int | Non
         terms_version=listing.terms_version,
         owner=ListingOwnerDTO(id=owner_public_id, display_name=display_name(owner_name)),
         corridor_id=corridor.public_id if corridor else "",
-        origin_stop=stop_ref_dto(stops.get(listing.origin_stop_id)) if listing.origin_stop_id else None,
-        destination_stop=stop_ref_dto(stops.get(listing.destination_stop_id)) if listing.destination_stop_id else None,
         origin_point=point_end_dto(session, listing, "origin"),
         destination_point=point_end_dto(session, listing, "destination"),
         departure_window_start=ensure_aware_utc(listing.departure_window_start),
@@ -264,15 +260,12 @@ def listing_dto(session: Session, listing: Listing, *, viewer_user_id: int | Non
 
 
 def listing_public_dto(session: Session, listing: Listing) -> ListingPublicDTO:
-    stops = get_ports().geo.stops_by_ids(session, [listing.origin_stop_id, listing.destination_stop_id])
     parcel = marketplace_service.get_parcel_details(session, listing.id)
     return ListingPublicDTO(
         id=marketplace_service.listing_public_id(listing),
         kind=ListingKind(listing.kind),
         service_type=ServiceType(listing.service_type),
         status=ListingStatus(listing.status),
-        origin_stop=stop_ref_dto(stops.get(listing.origin_stop_id)) if listing.origin_stop_id else None,
-        destination_stop=stop_ref_dto(stops.get(listing.destination_stop_id)) if listing.destination_stop_id else None,
         origin_point=point_end_dto(session, listing, "origin"),
         destination_point=point_end_dto(session, listing, "destination"),
         departure_window_start=ensure_aware_utc(listing.departure_window_start),
@@ -297,7 +290,6 @@ def _version_dto(
     thread: ProposalThread,
     version: ProposalVersion,
     viewer_side: ActorSide | None,
-    stops: dict,
     policies: dict,
     promo: dict | None = None,
     promo_reason: str | None = None,
@@ -329,8 +321,6 @@ def _version_dto(
         author_side=ActorSide(version.author_side),
         status=ProposalStatus(version.status),
         status_reason=version.status_reason,
-        pickup_stop=stop_ref_dto(stops.get(version.pickup_stop_id)) if version.pickup_stop_id else None,
-        dropoff_stop=stop_ref_dto(stops.get(version.dropoff_stop_id)) if version.dropoff_stop_id else None,
         pickup_point=point_end_dto(session, version, "pickup"),
         dropoff_point=point_end_dto(session, version, "dropoff"),
         pickup_window_start=ensure_aware_utc(version.pickup_window_start),
@@ -405,9 +395,7 @@ def thread_dto(
     versions = marketplace_service.thread_versions(session, thread.id)
     current = next((v for v in versions if v.id == thread.current_version_id), None)
     shown = versions if include_versions else ([current] if current else [])
-    stop_ids = sorted({v.pickup_stop_id for v in shown} | {v.dropoff_stop_id for v in shown})
     ports = get_ports()
-    stops = ports.geo.stops_by_ids(session, stop_ids) if stop_ids else {}
     policies = (
         ports.fees.policy_refs(session, sorted({v.fee_policy_id for v in shown}))
         if viewer_side is ActorSide.DRIVER and shown
@@ -430,10 +418,10 @@ def thread_dto(
         state=thread.state,
         client=party(ActorSide.CLIENT),
         driver=party(ActorSide.DRIVER),
-        current_version=_version_dto(session, thread, current, viewer_side, stops, policies,
+        current_version=_version_dto(session, thread, current, viewer_side, policies,
                                      *_promo_preview(session, thread, current, listing, viewer_side),
                                      viewer_user_id=viewer_user_id) if current else None,
-        versions=[_version_dto(session, thread, v, viewer_side, stops, policies) for v in versions] if include_versions else None,
+        versions=[_version_dto(session, thread, v, viewer_side, policies) for v in versions] if include_versions else None,
         booking_id=_booking_id(session, thread),
         trip_intent_id=_trip_intent_id(session, thread) if viewer_side is ActorSide.CLIENT else None,
         driver_summary=_driver_summary(session, thread, listing) if viewer_side is ActorSide.CLIENT else None,
@@ -484,8 +472,6 @@ def _booking_id(session: Session, thread: ProposalThread) -> str | None:
 
 
 def listing_offer_dtos(session: Session, offers: list) -> list[ListingOfferDTO]:
-    stop_ids = sorted({o.version.pickup_stop_id for o in offers} | {o.version.dropoff_stop_id for o in offers})
-    stops = get_ports().geo.stops_by_ids(session, stop_ids) if stop_ids else {}
     reputations = _offer_reputations(session, offers)
     return [
         ListingOfferDTO(
@@ -498,8 +484,8 @@ def listing_offer_dtos(session: Session, offers: list) -> list[ListingOfferDTO]:
             unit_price_minor=offer.version.unit_price_minor,
             total_minor=offer.version.total_minor,
             currency=Currency(offer.version.currency),
-            pickup_stop=stop_ref_dto(stops.get(offer.version.pickup_stop_id)),
-            dropoff_stop=stop_ref_dto(stops.get(offer.version.dropoff_stop_id)),
+            pickup_point=point_end_dto(session, offer.version, "pickup"),
+            dropoff_point=point_end_dto(session, offer.version, "dropoff"),
             pickup_window_start=ensure_aware_utc(offer.version.pickup_window_start),
             pickup_window_end=ensure_aware_utc(offer.version.pickup_window_end),
             vehicle_class=vehicle_class(offer.trip.seat_capacity),

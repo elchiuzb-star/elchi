@@ -99,19 +99,9 @@ export const entryMessages = {
     ru: "Перенесите одну из точек ближе к направлению ELCHI.",
   },
   "home.estimatedTime": { uz: "Taxminiy yo'l vaqti · {corridor}", ru: "Примерное время в пути · {corridor}" },
-  "home.routeDistricts": { uz: "Yo'nalishdagi tumanlar", ru: "Районы по направлению" },
-  "home.routeLoading": { uz: "Yo'nalish yuklanmoqda...", ru: "Загружаем направление..." },
-  "home.districtDriversNote": {
-    uz: "Shu tumanlardagi haydovchilar ham e'loningizni ko'radi.",
-    ru: "Водители из этих районов тоже увидят ваше объявление.",
-  },
   "home.viewRoute": { uz: "Yo'nalishni ko'rish", ru: "Посмотреть направление" },
   "home.passengerClosed": { uz: "Yo'lovchi xizmati bu hududda hali ochilmagan.", ru: "Пассажирские перевозки в этом регионе пока не открыты." },
   "home.parcelClosed": { uz: "Pochta xizmati bu hududda hali ochilmagan.", ru: "Доставка посылок в этом регионе пока не открыта." },
-  "home.sameStop": {
-    uz: "Olib ketish va yetkazish joyi bir xil bo'lishi mumkin emas.", ru: "Места отправления и доставки не могут совпадать.",
-  },
-  "home.noConfirmedRoute": { uz: "Bu ikki joy orasida tasdiqlangan yo'nalish yo'q.", ru: "Между этими местами нет утверждённого направления."},
 
   // --- driver offers (client side) ---
   "offers.title": { uz: "Haydovchi e'lonlari", ru: "Объявления водителей" },

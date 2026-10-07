@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
 
 from app.contracts.crypto import PURPOSE_BOOKING_PROOF_CODE, build_keyring, derive_proof_code, derive_subkey, verify_proof_code
 from app.contracts.enums import (
@@ -22,10 +20,8 @@ from app.contracts.enums import (
     ProofKind,
     ServiceType,
 )
-from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.events import EventAudience, payload_for_audience
 from app.modules.bookings import rules
-from app.modules.bookings.service import evaluate_detour_quotes
 
 VERSIONS = Path(__file__).resolve().parents[3] / "alembic" / "versions"
 
@@ -107,73 +103,3 @@ def test_pickup_code_is_not_a_delivery_code_and_rotation_invalidates() -> None:
     assert verify_proof_code(ring, booking, "pickup_code", 0, pickup)
     rotated_code = derive_proof_code(ring.current, booking, "pickup_code", 1)
     assert rotated_code == pickup or not verify_proof_code(ring, booking, "pickup_code", 1, pickup)
-
-
-# --- AC17 / Q25 / Q46 detour re-check under lock, no router ------------------------------------------------------------
-
-NOW = datetime(2026, 9, 20, 6, 0, tzinfo=timezone.utc)
-
-
-def _context(*, used_s: int = 0, max_minutes: int = 15):  # noqa: ANN202
-    from app.modules.geo.types import OccurrenceTiming, TripRouteContext
-
-    return TripRouteContext(
-        route_version_id=7,
-        trip_version=3,
-        occurrences=tuple(OccurrenceTiming(seq, 100 + seq, NOW + timedelta(hours=seq), 0) for seq in (1, 2, 3, 4)),
-        max_detour_minutes=max_minutes,
-        max_detour_m=5000,
-        detour_used_s=used_s,
-        pickup_wait_minutes=10,
-        route_version_public_id="rtv_" + "c" * 26,
-    )
-
-
-def _quote(after_seq: int, extra_s: int, *, trip_version: int = 3, expires: timedelta = timedelta(minutes=10)):  # noqa: ANN202
-    from app.modules.geo.types import DetourQuote
-
-    return DetourQuote(
-        route_version_id="rtv_" + "c" * 26, trip_version=trip_version, after_seq=after_seq, extra_s=extra_s, extra_m=500,
-        measured_at=NOW - timedelta(minutes=1), expires_at=NOW + expires, stop_id=999, arrive_offset_s=600,
-        provider="fake", provider_version="v1",
-    )
-
-
-def test_ac17_cumulative_detour_budget_in_seconds() -> None:
-    # 10 min already used + 10 min more > 15 min budget: rejected although each detour alone fits.
-    with pytest.raises(DomainError) as info:
-        evaluate_detour_quotes(_context(used_s=600), [_quote(1, 600)], [], production=False, now=NOW)
-    assert info.value.code is ErrorCode.DETOUR_LIMIT_EXCEEDED
-    change = evaluate_detour_quotes(_context(used_s=240), [_quote(1, 600)], [], production=False, now=NOW)
-    assert change.seq_map == {1: 1, 2: 3, 3: 4, 4: 5} and change.inserted_seqs == (2,)
-
-
-def test_q46_detour_fails_closed_in_production_and_stale_quotes_are_route_changed() -> None:
-    with pytest.raises(DomainError) as info:
-        evaluate_detour_quotes(_context(), [_quote(1, 60)], [], production=True, now=NOW)
-    assert info.value.code is ErrorCode.ROUTE_CHANGED
-    with pytest.raises(DomainError) as stale:
-        evaluate_detour_quotes(_context(), [_quote(1, 60, trip_version=2)], [], production=False, now=NOW)
-    assert stale.value.code is ErrorCode.ROUTE_CHANGED
-    with pytest.raises(DomainError) as expired:
-        evaluate_detour_quotes(_context(), [_quote(1, 60, expires=timedelta(seconds=-30))], [], production=False, now=NOW)
-    assert expired.value.code is ErrorCode.ROUTE_CHANGED
-
-
-def test_q25_two_detours_on_one_leg_rejected() -> None:
-    with pytest.raises(DomainError) as info:
-        evaluate_detour_quotes(_context(), [_quote(1, 60), _quote(1, 60)], [], production=False, now=NOW)
-    assert info.value.code is ErrorCode.ROUTE_MISMATCH
-
-
-def test_existing_booking_window_breaking_insertion_is_time_window_conflict() -> None:
-    from app.modules.geo.types import BookingWindow
-
-    window = BookingWindow("bkg_existing", 2, "pickup", NOW + timedelta(hours=2), NOW + timedelta(hours=2, minutes=5))
-    with pytest.raises(DomainError) as info:
-        evaluate_detour_quotes(_context(), [_quote(1, 900)], [window], production=False, now=NOW)
-    assert info.value.code is ErrorCode.TIME_WINDOW_CONFLICT
-
-
-def test_no_quotes_is_a_no_op() -> None:
-    assert evaluate_detour_quotes(_context(), [], [], production=True, now=NOW) is None

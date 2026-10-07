@@ -20,7 +20,6 @@ export const adminShellMessages = {
   "admin.nav.group.system": { uz: "Tizim", ru: "Система" },
   "admin.nav.opsQueues": { uz: "Operator navbatlari", ru: "Очереди оператора" },
   "admin.nav.trustOps": { uz: "Ishonch va operatsiyalar", ru: "Доверие и операции" },
-  "admin.nav.vehicles": { uz: "Avtomobillar tasdig'i", ru: "Проверка автомобилей" },
   "admin.nav.priceBands": { uz: "Narx referensi", ru: "Ценовой ориентир" },
   "admin.nav.disputesV2": { uz: "Nizolar (v2)", ru: "Споры (v2)" },
   "admin.nav.support": { uz: "Murojaat va ishonch", ru: "Обращения и доверие" },

@@ -187,54 +187,64 @@ class Corridor:
     id: int
     name: str
     route_public_id: str
-    stop_public_ids: list[str]
-    stop_names: list[str]
+    #: ADR-0028 / Q160: the two ends of the road as marked places (``PointEndInput`` JSON) - no stops.
+    origin: dict
+    destination: dict
+    origin_name: str
+    destination_name: str
 
 
 def pick_corridor(session: Session) -> Corridor:
-    """The open corridor whose first confirmed route passes the most active stops - the trip hangs on that route.
+    """The first open corridor with a confirmed road - the demo trip drives that road from its start to its end.
 
     Chosen from the data rather than hardcoded, because which corridors exist depends on which of the geo
     seeders has been run. If none qualifies the script stops and says so - silently seeding into a closed
-    corridor would produce listings nobody can see, which looks like a bug in the app.
+    corridor would produce listings nobody can see, which looks like a bug in the app. Each end of the road is
+    a marked place in the district whose centre is nearest to it.
     """
-    row = session.execute(
+    rows = session.execute(
         text(
             """
-            SELECT c.id, c.name, rv.id AS route_id, rv.public_id AS route_public_id,
-                   (SELECT count(*) FROM route_version_stops rvs JOIN corridor_stops cs ON cs.id = rvs.stop_id
-                     WHERE rvs.route_version_id = rv.id AND cs.is_active) AS stops
+            SELECT c.id, c.name, rv.public_id AS route_public_id,
+                   ST_Y(ST_StartPoint(rv.geometry)) AS o_lat, ST_X(ST_StartPoint(rv.geometry)) AS o_lng,
+                   ST_Y(ST_EndPoint(rv.geometry)) AS d_lat, ST_X(ST_EndPoint(rv.geometry)) AS d_lng
             FROM service_corridors c
-            LEFT JOIN LATERAL (SELECT id, public_id FROM route_versions
-                                WHERE corridor_id = c.id AND status = 'confirmed' ORDER BY id LIMIT 1) rv ON true
+            JOIN LATERAL (SELECT public_id, geometry FROM route_versions
+                           WHERE corridor_id = c.id AND status = 'confirmed' ORDER BY id LIMIT 1) rv ON true
             WHERE c.rollout_state IN ('pilot', 'active')
-            ORDER BY stops DESC, c.id
+            ORDER BY c.id
             """
         )
     ).all()
-    for corridor_id, name, route_id, route_public_id, stops in row:
-        if route_public_id is None or stops < 2:
-            continue
-        # The trip runs the confirmed route, so its stops are the *route's* stops in the route's order. A corridor
-        # may hold more active stops than one route passes (the geo fixture: 6 stops, two 4-stop routes); putting
-        # every corridor stop on the trip is what create_trip refused with ROUTE_CHANGED (stops_not_on_route_version).
-        stop_rows = session.execute(
+
+    def place(lat: float, lng: float) -> tuple[dict, str] | None:
+        district = session.execute(
             text(
-                "SELECT cs.public_id, cs.name_uz FROM route_version_stops rvs "
-                "JOIN corridor_stops cs ON cs.id = rvs.stop_id "
-                "WHERE rvs.route_version_id = :r AND cs.is_active ORDER BY rvs.seq"
+                "SELECT public_id, name_uz FROM geo_districts WHERE center_lat IS NOT NULL AND is_active "
+                "ORDER BY ST_Distance(ST_SetSRID(ST_MakePoint(center_lng::float8, center_lat::float8), 4326)::geography, "
+                "ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) LIMIT 1"
             ),
-            {"r": route_id},
-        ).all()
+            {"lat": lat, "lng": lng},
+        ).first()
+        if district is None:
+            return None
+        return {"lat": lat, "lng": lng, "district_id": format_public_id(PublicIdPrefix.DISTRICT, district[0])}, district[1]
+
+    for row in rows:
+        origin, destination = place(row.o_lat, row.o_lng), place(row.d_lat, row.d_lng)
+        if origin is None or destination is None:
+            continue
         return Corridor(
-            id=corridor_id,
-            name=name,
-            route_public_id=format_public_id(PublicIdPrefix.ROUTE_VERSION, route_public_id),
-            stop_public_ids=[format_public_id(PublicIdPrefix.STOP, r[0]) for r in stop_rows],
-            stop_names=[r[1] for r in stop_rows],
+            id=row.id,
+            name=row.name,
+            route_public_id=format_public_id(PublicIdPrefix.ROUTE_VERSION, row.route_public_id),
+            origin=origin[0],
+            destination=destination[0],
+            origin_name=origin[1],
+            destination_name=destination[1],
         )
     raise SystemExit(
-        "no open corridor with a confirmed route and two active stops.\n"
+        "no open corridor with a confirmed road and placed districts.\n"
         "Seed the geo fixture first: py scripts/seed_geo_fixtures.py --actor-user-id 1"
     )
 
@@ -275,8 +285,8 @@ def ensure_request(
     body = {
         "kind": "request",
         "service_type": service,
-        "origin_stop_id": corridor.stop_public_ids[0],
-        "destination_stop_id": corridor.stop_public_ids[-1],
+        "origin_point": corridor.origin,
+        "destination_point": corridor.destination,
         "departure_window_start": start.isoformat(),
         "departure_window_end": (start + timedelta(hours=2)).isoformat(),
         "price_basis": "per_seat" if service == "passenger" else "total",
@@ -310,42 +320,6 @@ def ensure_request(
     return publish(session, listing, client_id)
 
 
-def ensure_trip_offer(
-    session: Session, *, driver_id: int, trip_public_id: str, corridor: Corridor, service: str,
-    start: datetime, price_minor: int,
-) -> str:
-    """Q92/Q99: one trip carries both services, so this is called twice for the same trip."""
-    existing = owned_listing(session, driver_id, "trip_offer", service)
-    if existing is not None:
-        return publish(session, existing, driver_id)
-    listing = marketplace_service.create_listing(
-        session,
-        owner_user_id=driver_id,
-        data=ListingCreate.model_validate(
-            {
-                "kind": "trip_offer",
-                "service_type": service,
-                "trip_id": trip_public_id,
-                "origin_stop_id": corridor.stop_public_ids[0],
-                "destination_stop_id": corridor.stop_public_ids[-1],
-                "departure_window_start": start.isoformat(),
-                "departure_window_end": (start + timedelta(hours=1)).isoformat(),
-                "price_basis": "per_seat" if service == "passenger" else "total",
-                "unit_price_minor": price_minor,
-                "comment": f"{MARKER} haydovchi e'loni",
-                # What the driver will take, not what is being sent (`OFFER_PARCEL_REQUIRED`).
-                **(
-                    {}
-                    if service == "passenger"
-                    else {"parcel": {"max_weight_g": 60_000, "max_volume_ml": 300_000, "max_dimension_cm": 90}}
-                ),
-            }
-        ),
-    )
-    session.flush()
-    return publish(session, listing, driver_id)
-
-
 def ensure_trip(session: Session, *, driver_id: int, vehicle_public_id: str, corridor: Corridor,
                 start: datetime) -> str:
     """One planned trip per demo driver, on the corridor's confirmed route."""
@@ -358,24 +332,15 @@ def ensure_trip(session: Session, *, driver_id: int, vehicle_public_id: str, cor
     ).scalar_one_or_none()
     if existing is not None:
         return format_public_id(PublicIdPrefix.TRIP, existing)
-    hops = len(corridor.stop_public_ids)
     trip = trips_service.create_trip(
         session,
         driver_user_id=driver_id,
         data=TripCreate.model_validate(
             {
                 "vehicle_id": vehicle_public_id,
-                "route_version_id": corridor.route_public_id,
-                "stops": [
-                    {
-                        "stop_id": stop_id,
-                        "seq": index + 1,
-                        "planned_arrival_at": (start + timedelta(hours=index)).isoformat(),
-                    }
-                    for index, stop_id in enumerate(corridor.stop_public_ids)
-                ],
+                "route_version_id": corridor.route_public_id,  # ADR-0028: the whole road, A to B
                 "planned_start_at": start.isoformat(),
-                "planned_end_at": (start + timedelta(hours=hops)).isoformat(),
+                "planned_end_at": (start + timedelta(hours=6)).isoformat(),
                 "seat_capacity": 4,
                 "baggage_capacity_ml": 300_000,
                 "cargo_capacity_weight_g": 80_000,
@@ -412,8 +377,6 @@ def ensure_proposal(
     if existing is not None:
         return format_public_id(PublicIdPrefix.PROPOSAL_THREAD, existing)
     body = {
-        "pickup_stop_id": corridor.stop_public_ids[0],
-        "dropoff_stop_id": corridor.stop_public_ids[-1],
         "pickup_window_start": start.isoformat(),
         "pickup_window_end": (start + timedelta(hours=2)).isoformat(),
         "quantity": quantity,
@@ -561,8 +524,8 @@ def seed(session: Session) -> dict[str, object]:
         raise SystemExit("no active super_admin; run scripts/seed_admin_required_data.py first")
 
     corridor = pick_corridor(session)
-    print(f"corridor: {corridor.name} ({len(corridor.stop_public_ids)} bekat)")
-    print(f"  {corridor.stop_names[0]} -> {corridor.stop_names[-1]}")
+    print(f"corridor: {corridor.name}")
+    print(f"  {corridor.origin_name} -> {corridor.destination_name}")
 
     people = {person.phone: ensure_person(session, person) for person in CAST}
     session.flush()
@@ -586,15 +549,7 @@ def seed(session: Session) -> dict[str, object]:
         start=start, price_minor=12_000_000,
     )
 
-    # The driver's side: Q99 - the same trip advertised for both services.
-    passenger_offer = ensure_trip_offer(
-        session, driver_id=people[DRIVER_A], trip_public_id=trips[DRIVER_A], corridor=corridor,
-        service="passenger", start=start + timedelta(hours=1), price_minor=15_000_000,
-    )
-    parcel_offer = ensure_trip_offer(
-        session, driver_id=people[DRIVER_A], trip_public_id=trips[DRIVER_A], corridor=corridor,
-        service="parcel", start=start + timedelta(hours=1), price_minor=9_000_000,
-    )
+    # Q138: drivers publish no listings - they answer client requests with their own (internal) trips.
 
     # Two drivers bidding on the same request: this is what the Q40 competing-offer board needs to show.
     thread_a = ensure_proposal(
@@ -614,13 +569,6 @@ def seed(session: Session) -> dict[str, object]:
             message="Biroz arzonlashtirsangiz roziman.",
         )
 
-    # The other direction (Q92): a client answering a driver's trip offer.
-    thread_c = ensure_proposal(
-        session, listing_public_id=passenger_offer, actor_id=people[CLIENT_B], trip_public_id=None,
-        corridor=corridor, start=start + timedelta(hours=1), quantity=1, price_basis="per_seat",
-        price_minor=13_000_000, message="Bitta o'rin kerak.",
-    )
-
     money = {
         phone: ensure_wallet_money(session, driver_id=people[phone], admin_id=admin_id)
         for phone in (DRIVER_A, DRIVER_B)
@@ -628,7 +576,7 @@ def seed(session: Session) -> dict[str, object]:
 
     views = record_views(
         session,
-        [parcel_request, passenger_request, passenger_offer, parcel_offer],
+        [parcel_request, passenger_request],
         [people[CLIENT_B], people[DRIVER_A], people[DRIVER_B], people[DRIVER_NEW]],
     )
 
@@ -638,10 +586,8 @@ def seed(session: Session) -> dict[str, object]:
         "listings": {
             "client parcel request": parcel_request,
             "client passenger request": passenger_request,
-            "driver passenger offer": passenger_offer,
-            "driver parcel offer": parcel_offer,
         },
-        "threads": [t for t in (thread_a, thread_b, thread_c) if t is not None],
+        "threads": [t for t in (thread_a, thread_b) if t is not None],
         "views": views,
         "money": money,
     }

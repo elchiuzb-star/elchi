@@ -1,4 +1,4 @@
-"""Q42 corridor price bands on PostgreSQL, and the N4 routing cache cleanup job (wave 1.6)."""
+"""Q42 corridor price bands on PostgreSQL (ADR-0028 / Q160: corridor-wide only), and the N4 routing cache cleanup job."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.ids import new_public_uuid
 from app.modules.geo import service
 from app.modules.geo.jobs import ROUTING_CACHE_CLEANUP_LOCK_KEY, cleanup_routing_cache, routing_cache_cleanup_task
-from app.modules.geo.types import LatLng
 from tests.fixtures.geo.loader import load_geo_fixture
 from tests.pg.conftest import PgDatabase
 from tests.pg.geo.geo_pg_helpers import create_user
@@ -28,14 +27,12 @@ def geo(pg_db: PgDatabase):  # noqa: ANN201
     return pg_db, fx, admin
 
 
-def set_band(db, fx, admin, *, service_type=ServiceType.PASSENGER, origin=None, dest=None, floor=10_000, ceiling=50_000, active=True, version=None, reason="pilot pricing"):  # noqa: ANN001, ANN201
+def set_band(db, fx, admin, *, service_type=ServiceType.PASSENGER, floor=10_000, ceiling=50_000, active=True, version=None, reason="pilot pricing"):  # noqa: ANN001, ANN201
     return service.set_price_band(
         db,
         actor_user_id=admin,
         corridor_api_id=fx.corridor.api_id,
         service_type=service_type,
-        origin_stop_api_id=fx.stops[origin].api_id if origin else None,
-        destination_stop_api_id=fx.stops[dest].api_id if dest else None,
         floor_minor=floor,
         ceiling_minor=ceiling,
         is_active=active,
@@ -44,64 +41,47 @@ def set_band(db, fx, admin, *, service_type=ServiceType.PASSENGER, origin=None, 
     )
 
 
-def resolve(db, fx, origin: str, dest: str, service_type=ServiceType.PASSENGER):  # noqa: ANN001, ANN201
-    return service.resolve_price_band(
-        db, corridor_id=fx.corridor.id, service_type=service_type, origin_stop_id=fx.stop_id(origin), destination_stop_id=fx.stop_id(dest)
-    )
+def resolve(db, fx, service_type=ServiceType.PASSENGER):  # noqa: ANN001, ANN201
+    return service.resolve_price_band(db, corridor_id=fx.corridor.id, service_type=service_type)
 
 
-def test_resolution_precedence_versioning_and_history(geo) -> None:  # noqa: ANN001
+def test_resolution_versioning_and_history(geo) -> None:  # noqa: ANN001
     pg_db, fx, admin = geo
     with pg_db.session() as db:
-        assert resolve(db, fx, "toshkent", "qarshi") is None  # no band configured -> no limit
+        assert resolve(db, fx) is None  # no band configured -> no reference
         corridor_band = set_band(db, fx, admin)
-        segment = set_band(db, fx, admin, origin="toshkent", dest="qarshi", floor=20_000, ceiling=30_000)
         db.commit()
-        assert (corridor_band.version, segment.version) == (1, 1)
-        picked = resolve(db, fx, "toshkent", "qarshi")
-        assert picked.scope == "segment" and (picked.floor_minor, picked.ceiling_minor) == (20_000, 30_000)
-        assert resolve(db, fx, "samarqand", "qarshi").scope == "corridor"
-        assert resolve(db, fx, "qarshi", "toshkent").scope == "corridor"  # reverse is another segment
-        assert resolve(db, fx, "toshkent", "qarshi", ServiceType.PARCEL) is None
+        assert corridor_band.version == 1
+        picked = resolve(db, fx)
+        assert picked.scope == "corridor" and (picked.floor_minor, picked.ceiling_minor) == (10_000, 50_000)
+        assert resolve(db, fx, ServiceType.PARCEL) is None
 
-        updated = set_band(db, fx, admin, origin="toshkent", dest="qarshi", floor=20_000, ceiling=30_000, active=False, version=1, reason="retire")
+        updated = set_band(db, fx, admin, floor=20_000, ceiling=30_000, active=False, version=1, reason="retire")
         db.commit()
         assert updated.version == 2 and not updated.is_active
-        assert resolve(db, fx, "toshkent", "qarshi").scope == "corridor"
+        assert resolve(db, fx) is None
         parcel = set_band(db, fx, admin, service_type=ServiceType.PARCEL, floor=40_000, ceiling=90_000)
         db.commit()
         assert parcel.price_basis.value == "total"
-        assert [(b.service_type.value, b.origin_stop_id is not None) for b in service.list_price_bands(db, fx.corridor)] == [
-            ("parcel", False), ("passenger", False), ("passenger", True)
-        ]
+        assert [b.service_type.value for b in service.list_price_bands(db, fx.corridor)] == ["parcel", "passenger"]
         history, _ = service.list_price_band_history(db, corridor=fx.corridor, after_id=None, limit=10)
     assert [(h.service_type.value, h.band_version, h.old_is_active, h.new_is_active, h.reason) for h in history] == [
         ("parcel", 1, None, True, "pilot pricing"),
         ("passenger", 2, True, False, "retire"),
         ("passenger", 1, None, True, "pilot pricing"),
-        ("passenger", 1, None, True, "pilot pricing"),
     ]
     with pg_db.engine.connect() as conn:
-        assert conn.scalar(text("SELECT count(*) FROM audit_logs WHERE entity_type = 'corridor_price_band'")) == 4
+        assert conn.scalar(text("SELECT count(*) FROM audit_logs WHERE entity_type = 'corridor_price_band'")) == 3
 
 
 def test_validation_and_version_conflicts(geo) -> None:  # noqa: ANN001
     pg_db, fx, admin = geo
     with pg_db.session() as db:
-        other = service.create_corridor(
-            db, actor_user_id=admin, name="Boshqa koridor", origin_region_api_id=fx.regions["toshkent"].api_id,
-            destination_region_api_id=fx.regions["samarqand"].api_id, search_radius_m=3000, default_max_detour_minutes=10, default_max_detour_m=1000,
-        )
-        foreign = service.create_stop(
-            db, actor_user_id=admin, corridor_api_id=other.api_id, name_uz="Begona", name_ru=None,
-            district_api_id=fx.district_api_ids["samarqand"], point=LatLng(39.6, 66.9), meeting_note="x", sequence_hint=0, is_active=True,
-        )
-        db.commit()
 
         def invalid(**kw) -> tuple[str, str]:  # noqa: ANN003
             params = dict(
-                actor_user_id=admin, corridor_api_id=fx.corridor.api_id, service_type=ServiceType.PASSENGER, origin_stop_api_id=None,
-                destination_stop_api_id=None, floor_minor=10, ceiling_minor=20, is_active=True, reason="r",
+                actor_user_id=admin, corridor_api_id=fx.corridor.api_id, service_type=ServiceType.PASSENGER,
+                floor_minor=10, ceiling_minor=20, is_active=True, reason="r",
             )
             params.update(kw)
             with pytest.raises(DomainError) as info:
@@ -111,9 +91,7 @@ def test_validation_and_version_conflicts(geo) -> None:  # noqa: ANN001
 
         assert invalid(floor_minor=21) == ("VALIDATION_ERROR", "floor_above_ceiling")
         assert invalid(floor_minor=0) == ("VALIDATION_ERROR", "positive_integer_required")
-        assert invalid(origin_stop_api_id=fx.stops["toshkent"].api_id) == ("VALIDATION_ERROR", "segment_needs_both_stops")
-        assert invalid(origin_stop_api_id=fx.stops["toshkent"].api_id, destination_stop_api_id=fx.stops["toshkent"].api_id) == ("VALIDATION_ERROR", "same_stop")
-        assert invalid(origin_stop_api_id=fx.stops["toshkent"].api_id, destination_stop_api_id=foreign.api_id) == ("VALIDATION_ERROR", "stop_not_in_corridor")
+        assert invalid(reason="  ") == ("VALIDATION_ERROR", "required")
         assert invalid(expected_version=1) == ("VERSION_CONFLICT", None)
         set_band(db, fx, admin)
         db.commit()
@@ -132,24 +110,10 @@ def test_db_constraints_immutability_and_append_only(geo) -> None:  # noqa: ANN0
         ({"f": 30}, "ck_corridor_price_bands_amounts"),
         ({"f": 0}, "ck_corridor_price_bands_amounts"),
         ({"b": "total"}, "ck_corridor_price_bands_price_basis"),
-        ({"o": fx.stop_id("toshkent")}, "ck_corridor_price_bands_segment"),
     ):
         with pytest.raises(IntegrityError, match=message):
             with pg_db.engine.begin() as conn:
                 conn.execute(insert, {**base, **overrides, "p": new_public_uuid()})
-    with pg_db.session() as db:
-        other = service.create_corridor(
-            db, actor_user_id=admin, name="Begona koridor", origin_region_api_id=fx.regions["toshkent"].api_id,
-            destination_region_api_id=fx.regions["samarqand"].api_id, search_radius_m=3000, default_max_detour_minutes=10, default_max_detour_m=1000,
-        )
-        foreign = service.create_stop(
-            db, actor_user_id=admin, corridor_api_id=other.api_id, name_uz="Begona", name_ru=None,
-            district_api_id=fx.district_api_ids["samarqand"], point=LatLng(39.6, 66.9), meeting_note="x", sequence_hint=0, is_active=True,
-        )
-        db.commit()
-    with pytest.raises(DBAPIError, match="must belong to the corridor"):
-        with pg_db.engine.begin() as conn:
-            conn.execute(insert, {**base, "o": fx.stop_id("toshkent"), "d": foreign.id, "p": new_public_uuid()})
     with pg_db.engine.begin() as conn:
         conn.execute(insert, {**base, "p": new_public_uuid()})
         band_id = conn.scalar(text("SELECT id FROM corridor_price_bands WHERE corridor_id = :c"), {"c": fx.corridor.id})
@@ -172,7 +136,7 @@ def test_concurrent_first_write_and_concurrent_edits(geo) -> None:  # noqa: ANN0
     pg_db, fx, admin = geo
 
     def create(worker: int, session) -> int:  # noqa: ANN001
-        info = set_band(session, fx, admin, origin="samarqand", dest="qarshi", floor=10_000 + worker, ceiling=60_000)
+        info = set_band(session, fx, admin, floor=10_000 + worker, ceiling=60_000)  # the corridor-wide scope
         session.commit()
         return info.id
 
@@ -181,7 +145,7 @@ def test_concurrent_first_write_and_concurrent_edits(geo) -> None:  # noqa: ANN0
     assert len(report.errors_of(DomainError)) == 7 and all(r.error.code is ErrorCode.VERSION_CONFLICT for r in report.errors_of(DomainError))
 
     def edit(worker: int, session) -> int:  # noqa: ANN001
-        info = set_band(session, fx, admin, origin="samarqand", dest="qarshi", floor=20_000 + worker, ceiling=60_000, version=1, reason=f"edit {worker}")
+        info = set_band(session, fx, admin, floor=20_000 + worker, ceiling=60_000, version=1, reason=f"edit {worker}")
         session.commit()
         return info.version
 

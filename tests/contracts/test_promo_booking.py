@@ -155,7 +155,7 @@ def test_late_platform_capture_does_not_disqualify_an_in_time_service() -> None:
         booking_id=1, trip_id=1, service_type="passenger", client_user_id=2, driver_user_id=3, created_at=T0,
         completed_at=DEADLINE - timedelta(days=1), cash_confirmed_at=DEADLINE - timedelta(days=1),
         captured_at=DEADLINE + timedelta(days=3), net_captured_minor=1_200_000, open_dispute=False,
-        cancelled_or_refunded=False, handover_at=None, delivery_at=None, pickup_stop_id=None, dropoff_stop_id=None,
+        cancelled_or_refunded=False, handover_at=None, delivery_at=None, pickup_position_m=None, dropoff_position_m=None,
         cash_status_confirmed=True, cash_first_recorded_at=DEADLINE - timedelta(days=1), hold_open=False,
     )
     judged = _judge(evidence, enrollment, now=DEADLINE + timedelta(days=6))

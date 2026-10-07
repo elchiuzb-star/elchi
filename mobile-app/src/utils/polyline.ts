@@ -2,7 +2,7 @@
  * Google encoded-polyline decoder (the format `RouteVersionDTO.geometry_polyline` uses).
  *
  * Written here rather than pulled from the Maps SDK on purpose: the route line must draw even when the map
- * itself cannot load (no API key, offline, quota spent), because the stop list and the shape of the road are
+ * itself cannot load (no API key, offline, quota spent), because the places and the shape of the road are
  * information the driver needs and the map is only one way of showing it.
  *
  * Algorithm: https://developers.google.com/maps/documentation/utilities/polylinealgorithm

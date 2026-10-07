@@ -60,7 +60,7 @@ export function ownerListingActions(status: string): { canPause: boolean; canRes
 }
 
 /**
- * A trip offer's window is derived from its trip's planned stop times - an invented one would be refused at the
+ * A trip offer's window is derived from its trip's planned times - an invented one would be refused at the
  * first proposal - so only a client request lets its owner move the window.
  */
 export function windowEditable(listing: Pick<EditableListing, "kind">): boolean {

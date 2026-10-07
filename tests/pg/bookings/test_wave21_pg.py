@@ -528,8 +528,8 @@ def test_t10_manifest_phones_follow_q44_and_access(bw: BW, client) -> None:  # n
         trip, entries = bookings_service.trip_manifest(s, trip_public_id_value=trip_public, viewer_user_id=bw.w.driver_id, now=bw.base)
         assert [(e.booking.id, e.client_first_name, e.contact_phone) for e in entries] == [(booking.id, "Aziza", None)]
         dto = manifest_dto(s, trip, entries)
-        assert [stop.seq for stop in dto.stops] == [1, 2, 3, 4]
-        assert [i.booking_id for i in dto.stops[0].pickups] == [_public(booking)] and [i.booking_id for i in dto.stops[3].dropoffs] == [_public(booking)]
+        assert [place.seq for place in dto.places] == [1, 2]  # Q160: the booking's own two places, in road order
+        assert [i.booking_id for i in dto.places[0].pickups] == [_public(booking)] and [i.booking_id for i in dto.places[1].dropoffs] == [_public(booking)]
         assert domain_error(lambda: bookings_service.trip_manifest(s, trip_public_id_value=trip_public, viewer_user_id=bw.w.client2_id)).code \
             is ErrorCode.NOT_FOUND
         _, staff_entries = bookings_service.trip_manifest(s, trip_public_id_value=trip_public, viewer_user_id=bw.operator_id, now=bw.base)
@@ -541,7 +541,7 @@ def test_t10_manifest_phones_follow_q44_and_access(bw: BW, client) -> None:  # n
         assert [e.contact_phone for e in started] == [CLIENT_PHONE]  # Q44: phone from the service start
     response = client.get(f"/api/v2/trips/{trip_public}/manifest", headers=auth(bw.w.driver_id, "driver"))
     assert response.status_code == 200, response.text
-    item = response.json()["data"]["stops"][0]["pickups"][0]
+    item = response.json()["data"]["places"][0]["pickups"][0]
     assert (item["booking_id"], item["service_status"], item["seats"]) == (_public(booking), "onboard", 2)
 
 

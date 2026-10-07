@@ -1,23 +1,14 @@
-/** Stop search and the public referral code check (Q117: reveals nothing about the owner). SYNTHETIC. */
+/** The public referral code check (Q117: reveals nothing about the owner). SYNTHETIC. */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../api/v2/safety.api", () => ({ searchStops: vi.fn(), checkReferralCode: vi.fn() }));
+vi.mock("../../api/v2/safety.api", () => ({ checkReferralCode: vi.fn() }));
 
 import * as api from "../../api/v2/safety.api";
-import type { StopDTO } from "../../api/v2/safety.api";
 import { ApiError } from "../../types/api";
-import { ReferralCodeCheck } from "./StopSearch";
+import { ReferralCodeCheck } from "./ReferralCodeCheck";
 
 const m = vi.mocked(api);
-const stop: StopDTO = {
-  id: "stp_1",
-  name_uz: "Qarshi avtovokzal",
-  district: { id: "dst_1", name_uz: "Qarshi shahri" },
-  point: { lat: 38.8, lng: 65.8 },
-  is_active: true,
-  meeting_note: "Kassa oldida",
-};
 
 beforeEach(() => vi.resetAllMocks());
 

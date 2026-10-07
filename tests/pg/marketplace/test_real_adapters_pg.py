@@ -16,16 +16,11 @@ pytestmark = pytest.mark.pg
 def test_geo_adapter_matches_seeded_catalogue(world: World) -> None:
     geo = GeoServiceAdapter()
     with world.db.session() as s:
-        stops = geo.stops_by_public_ids(s, [world.stop_public_ids["A"], "stp_bad"])
-        assert set(stops) == {world.stop_public_ids["A"]}
-        stop = stops[world.stop_public_ids["A"]]
-        assert (stop.id, stop.corridor_id, stop.is_active) == (world.stop_ids["A"], world.corridor_id, True)
-        assert geo.stops_by_ids(s, [stop.id])[stop.id].public_id == stop.public_id
         corridor = geo.corridors_by_ids(s, [world.corridor_id])[world.corridor_id]
         assert (corridor.rollout_state, corridor.is_open) == ("pilot", True)
         route = geo.route_version_by_public_id(s, world.route_public_id)
         assert route is not None and route.is_confirmed
-        assert [(r.seq, r.stop_id) for r in route.stops] == [(i, world.stop_ids[n]) for i, n in enumerate("ABCD")]
+        assert (route.distance_m, route.duration_s) == (520_000, 25_200)
         assert geo.route_versions_by_ids(s, [world.route_id])[world.route_id].public_id == world.route_public_id
 
 

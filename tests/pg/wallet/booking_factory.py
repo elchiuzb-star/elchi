@@ -22,12 +22,14 @@ from tests.pg.identity.a1_world import World, add_user, make_trip, make_vehicle,
 _INSERT_BOOKING = text(
     "INSERT INTO bookings (public_id, service_type, service_status, commission_status, client_user_id, driver_user_id, "
     "trip_id, corridor_id, request_listing_id, proposal_thread_id, accepted_proposal_version_id, route_version_id, "
-    "trip_version, pickup_stop_id, dropoff_stop_id, pickup_occurrence_seq, dropoff_occurrence_seq, pickup_window_start, "
+    "trip_version, pickup_point, dropoff_point, pickup_district_id, dropoff_district_id, "
+    "pickup_position_m, dropoff_position_m, pickup_window_start, "
     "pickup_window_end, quantity, seats, price_basis, unit_price_minor, total_minor, fee_policy_id, fee_bps, "
     "commission_minor, listing_version, listing_terms_version, terms_snapshot) "
     "SELECT gen_random_uuid(), 'passenger', 'confirmed', CASE WHEN v.fee_bps = 0 THEN 'exempt' ELSE 'held' END, "
-    "t.client_user_id, :driver, t.trip_id, l.corridor_id, l.id, t.id, v.id, :route, tr.version, v.pickup_stop_id, "
-    "v.dropoff_stop_id, COALESCE(v.pickup_occurrence_seq, 1), COALESCE(v.dropoff_occurrence_seq, 4), "
+    "t.client_user_id, :driver, t.trip_id, l.corridor_id, l.id, t.id, v.id, :route, tr.version, "
+    "v.pickup_point, v.dropoff_point, v.pickup_district_id, v.dropoff_district_id, "
+    "v.pickup_position_m, v.dropoff_position_m, "
     "v.pickup_window_start, v.pickup_window_end, v.quantity, v.quantity, v.price_basis, v.unit_price_minor, "
     "v.total_minor, v.fee_policy_id, v.fee_bps, v.commission_minor, v.listing_version, l.terms_version, "
     "'{\"source\": \"wallet_test_factory\"}'::jsonb "
@@ -59,8 +61,8 @@ class BookingFactory:
         listing_body = ListingCreate.model_validate({
             "kind": "request",
             "service_type": "passenger",
-            "origin_stop_id": w.stop_public_ids["A"],
-            "destination_stop_id": w.stop_public_ids["D"],
+            "origin_point": w.point("A"),
+            "destination_point": w.point("D"),
             "departure_window_start": start.isoformat(),
             "departure_window_end": (start + timedelta(hours=1)).isoformat(),
             "price_basis": "per_seat",
@@ -70,8 +72,6 @@ class BookingFactory:
         })
         proposal_body = ProposalCreate.model_validate({
             "trip_id": trip_public_id,
-            "pickup_stop_id": w.stop_public_ids["A"],
-            "dropoff_stop_id": w.stop_public_ids["D"],
             "pickup_window_start": start.isoformat(),
             "pickup_window_end": (start + timedelta(minutes=30)).isoformat(),
             "quantity": 1,

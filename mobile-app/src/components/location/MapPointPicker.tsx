@@ -8,7 +8,7 @@ import { resolvePlace, reverseGeocode, suggestPlaces, type PlaceSuggestion } fro
 import { translate } from "../../i18n";
 
 /**
- * "Joyni belgilang" - the client marks a place on the map instead of picking a verified stop (Q88).
+ * "Joyni belgilang" - the client marks a place on the map (Q88, ADR-0028: point A -> point B).
  *
  * The pin sits at the centre of the viewport and the map moves under it: there is nothing to aim at with a
  * fingertip, and the chosen place is always exactly what the person is looking at. The address underneath is

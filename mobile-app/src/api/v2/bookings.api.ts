@@ -75,7 +75,7 @@ export function completeBooking(bookingId: string, expectedVersion: number) {
 }
 
 /**
- * B9: ask the other side to change the booking (quantity, window, stops, unit price). The answer carries the new
+ * B9: ask the other side to change the booking (quantity, window, unit price). The answer carries the new
  * amounts and the fee delta; nothing changes until the counterpart accepts (AC42).
  */
 export function proposeAmendment(bookingId: string, body: AmendmentCreate, idempotencyKey: string) {

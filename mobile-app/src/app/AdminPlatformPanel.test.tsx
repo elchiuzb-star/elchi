@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const CORRIDOR = {
   id: "cor_" + "a".repeat(26), name: "Toshkent — Samarqand", origin_region: { id: "reg_1", code: "UZ-TK", name_uz: "Toshkent" },
-  destination_region: { id: "reg_2", code: "UZ-SA", name_uz: "Samarqand" }, enabled_services: [], stops_count: 1,
+  destination_region: { id: "reg_2", code: "UZ-SA", name_uz: "Samarqand" }, enabled_services: [],
   rollout_state: "internal", config_version: 1, config: { revision: 1, search_radius_m: 3000, default_max_detour_minutes: 15, default_max_detour_m: 5000 },
   version: 4, updated_at: "2026-09-24T00:00:00Z",
 };
@@ -19,9 +19,6 @@ const api = vi.hoisted(() => ({
   adminCorridors: vi.fn(),
   adminCreateCorridor: vi.fn(),
   adminPatchCorridor: vi.fn(),
-  adminCreateStop: vi.fn(),
-  adminPatchStop: vi.fn(),
-  adminCorridorStops: vi.fn(),
   adminQ47Violations: vi.fn(),
   adminRegions: vi.fn(),
   adminDistricts: vi.fn(),
@@ -53,7 +50,6 @@ beforeEach(() => {
   api.adminQ47Violations.mockResolvedValue([]);
   api.adminRegions.mockResolvedValue([]);
   api.adminDistricts.mockResolvedValue([]);
-  api.adminCorridorStops.mockResolvedValue([]);
   api.adminOutbox.mockResolvedValue({ items: [], nextCursor: null });
   api.adminParcelPolicies.mockResolvedValue([]);
   api.activeParcelPolicy.mockResolvedValue({ approved: false, notice: "Ro'yxat tasdiqlanmagan", items: [] });
@@ -141,13 +137,14 @@ describe("flag gating (Q5, Q138)", () => {
 });
 
 describe("corridors", () => {
-  it("lists Q47 violations and patches a corridor only after confirmation", async () => {
+  it("lists corridors without a confirmed road and patches a corridor only after confirmation", async () => {
     api.adminQ47Violations.mockResolvedValue([
-      { corridor_id: "cor_x", name: "Buxoro", rollout_state: "pilot", active_stops: 1, stops_missing_evidence: ["stp_9"], reasons: ["needs_two_active_stops"] },
+      { corridor_id: "cor_x", name: "Buxoro", rollout_state: "pilot", reasons: ["needs_confirmed_road"] },
     ]);
     api.adminPatchCorridor.mockResolvedValue({ ...CORRIDOR, name: "Yangi nom", version: 5 });
     render(<AdminPlatformPanel initialTab="corridors" />);
-    expect(await screen.findByText(/Q47 buzilgan koridorlar: 1/)).toBeInTheDocument();
+    expect(await screen.findByText(/Yo'lsiz pilot\/faol koridorlar: 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Buxoro.*kamida bitta tasdiqlangan yo'l kerak/)).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /Toshkent — Samarqand/ }));
     fireEvent.change(screen.getByLabelText("Nomi"), { target: { value: "Yangi nom" } });
     fireEvent.change(screen.getAllByLabelText("Sabab (audit)")[0], { target: { value: "nomlash" } });
@@ -161,34 +158,11 @@ describe("corridors", () => {
     expect(typeof key).toBe("string");
   });
 
-  it("creates an internal route anchor point with an idempotency key after confirmation", async () => {
-    api.adminDistricts.mockResolvedValue([{ id: "dis_1", name_uz: "Chilonzor", region: { id: "reg_1", code: "UZ-TK", name_uz: "Toshkent" }, stops_count: 0 }]);
-    const created = {
-      id: "stp_1", name_uz: "Chilonzor tayanch", district: { id: "dis_1", name_uz: "Chilonzor" }, point: { lat: 41.3, lng: 69.2 },
-      is_active: false, corridor_id: CORRIDOR.id, sequence_hint: 0, version: 1, meeting_note: "Kafe oldida",
-    };
-    api.adminCreateStop.mockResolvedValue(created);
-    // The staff list is re-read from the server after a save: empty first, then with the new stop.
-    api.adminCorridorStops.mockResolvedValueOnce([]).mockResolvedValue([created]);
+  it("shows a corridor with no stop list or stop editor at all (ADR-0028, Q160)", async () => {
     render(<AdminPlatformPanel initialTab="corridors" />);
     fireEvent.click(await screen.findByRole("button", { name: /Toshkent — Samarqand/ }));
-    await screen.findByRole("option", { name: "Toshkent: Chilonzor" });
-    fireEvent.change(screen.getByLabelText("Nomi (uz)"), { target: { value: "Chilonzor tayanch" } });
-    fireEvent.change(screen.getByLabelText("Tuman"), { target: { value: "dis_1" } });
-    fireEvent.change(screen.getByLabelText("Kenglik (lat)"), { target: { value: "41.3" } });
-    fireEvent.change(screen.getByLabelText("Uzunlik (lng)"), { target: { value: "69.2" } });
-    fireEvent.change(screen.getByLabelText("Ichki izoh (dalil)"), { target: { value: "Kafe oldida" } });
-    // 06.10.2026: the nodes are presented as internal anchors, never as passenger stops
-    expect(screen.getByText(/Mijoz va haydovchiga ko'rinmaydi/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Tayanch nuqta qo'shish…" }));
-    expect(api.adminCreateStop).not.toHaveBeenCalled();
-    confirm();
-    await waitFor(() => expect(api.adminCreateStop).toHaveBeenCalledTimes(1));
-    const [id, body, key] = api.adminCreateStop.mock.calls[0];
-    expect(id).toBe(CORRIDOR.id);
-    expect(body).toMatchObject({ name_uz: "Chilonzor tayanch", district_id: "dis_1", point: { lat: 41.3, lng: 69.2 }, meeting_note: "Kafe oldida", is_active: false });
-    expect(typeof key).toBe("string");
-    expect(await screen.findByText(/v1 · dalil bor/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Koridorni saqlash…" })).toBeInTheDocument();
+    expect(screen.queryByText(/tayanch nuqta|oraliq nuqta|bekat/i)).toBeNull();
   });
 });
 

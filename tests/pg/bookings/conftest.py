@@ -42,7 +42,6 @@ from tests.pg.identity.a1_world import (  # noqa: F401  (shared A1 fixture)
     add_user,
     make_trip,
     make_vehicle,
-    passenger_offer,
     world,
 )
 
@@ -150,8 +149,8 @@ def passenger_request_body(bw: BW, *, seats: int = 2, unit: int = 20_000_000, or
         {
             "kind": "request",
             "service_type": "passenger",
-            "origin_stop_id": bw.w.stop_public_ids[origin],
-            "destination_stop_id": bw.w.stop_public_ids[destination],
+            "origin_point": bw.w.point(origin),
+            "destination_point": bw.w.point(destination),
             "departure_window_start": start.isoformat(),
             "departure_window_end": (start + timedelta(hours=1)).isoformat(),
             "price_basis": "per_seat",
@@ -167,8 +166,8 @@ def parcel_request_body(bw: BW, *, origin: str = "A", destination: str = "C", un
         {
             "kind": "request",
             "service_type": "parcel",
-            "origin_stop_id": bw.w.stop_public_ids[origin],
-            "destination_stop_id": bw.w.stop_public_ids[destination],
+            "origin_point": bw.w.point(origin),
+            "destination_point": bw.w.point(destination),
             "departure_window_start": start.isoformat(),
             "departure_window_end": (start + timedelta(hours=2)).isoformat(),
             "price_basis": "total",
@@ -202,19 +201,11 @@ def _ref(session: Session, listing_public_id: str, thread) -> ThreadRef:  # noqa
     return ThreadRef(listing_public_id, marketplace_service.thread_public_id(thread), marketplace_service.version_public_id(version), version.revision)
 
 
-def occurrence_window(bw: BW, stop: str) -> tuple[datetime, datetime]:
-    offset = {"A": 0, "B": 1, "C": 2, "D": 3}[stop]
-    start = bw.base + timedelta(hours=offset)
-    return start, start + timedelta(minutes=30)
-
-
 def propose(bw: BW, listing_public_id: str, actor_id: int, *, trip_public_id: str | None, quantity: int = 2, unit: int = 19_000_000,
             pickup: str = "A", dropoff: str = "D", price_basis: str = "per_seat", parcel: dict | None = None) -> ThreadRef:
-    window = occurrence_window(bw, pickup)
+    window = place_window(bw, pickup)
     payload = {
         "trip_id": trip_public_id,
-        "pickup_stop_id": bw.w.stop_public_ids[pickup],
-        "dropoff_stop_id": bw.w.stop_public_ids[dropoff],
         "pickup_window_start": window[0].isoformat(),
         "pickup_window_end": window[1].isoformat(),
         "quantity": quantity,
@@ -270,11 +261,40 @@ def accept(bw: BW, ref: ThreadRef, actor_id: int, *, session: Session | None = N
             s.close()
 
 
+def place_position(bw: BW, place: str) -> int:
+    """ADR-0028: a world place as metres along the world's road."""
+    return bw.w.place_positions[place]
+
+
+def place_eta(bw: BW, place: str) -> datetime:
+    """When a whole-road world trip starting at ``bw.base`` reaches ``place`` (linear in the road position, 3 h A -> D)."""
+    positions = bw.w.place_positions
+    span = positions["D"] - positions["A"]
+    return bw.base + timedelta(hours=3) * ((positions[place] - positions["A"]) / span)
+
+
+def place_window(bw: BW, place: str) -> tuple[datetime, datetime]:
+    """A 30-minute pickup window starting at the whole-road trip's ETA at ``place`` (to the minute)."""
+    start = place_eta(bw, place).replace(second=0, microsecond=0)
+    return start, start + timedelta(minutes=30)
+
+
 def seats_used(bw: BW, trip_id: int) -> list[int]:
+    """Seats taken on each hop A-B, B-C, C-D of the world road (ADR-0028: the peak of the active road claims)."""
+    from app.contracts.route_position import peak_load
     from app.modules.trips import service as trips_service
 
+    positions = [bw.w.place_positions[p] for p in ("A", "B", "C", "D")]
     with bw.db.session() as s:
-        return [load.seats_used for load in trips_service.get_segment_loads(s, trip_id)]
+        claims = trips_service.active_claims(s, trip_id)
+    return [peak_load(claims, start, end)["seats"][0] if claims else 0 for start, end in zip(positions, positions[1:])]
+
+
+def claims_of(bw: BW, booking_id: int) -> list[tuple]:
+    """ADR-0028: a booking's road claims, oldest first: (from_m, to_m, seats, active)."""
+    return [tuple(r) for r in rows(
+        bw.db, "SELECT from_m, to_m, seats, active FROM trip_capacity_claims WHERE booking_id = :b ORDER BY id", b=booking_id
+    )]
 
 
 def wallet(bw: BW, driver_id: int) -> tuple[int, int]:
@@ -298,7 +318,7 @@ def request_proposal(bw: BW, trip_public: str, client_id: int, *, driver_id: int
     Replaces the retired "client proposes on the driver's trip offer" setup; the client is the accepting party.
     """
     listing = publish_listing(bw, client_id, passenger_request_body(bw, seats=quantity, unit=unit, origin=pickup, destination=dropoff,
-                                                                    start=occurrence_window(bw, pickup)[0]))
+                                                                    start=place_window(bw, pickup)[0]))
     return propose(bw, listing, driver_id or bw.w.driver_id, trip_public_id=trip_public, quantity=quantity, unit=unit,
                    pickup=pickup, dropoff=dropoff)
 

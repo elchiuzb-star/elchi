@@ -517,97 +517,6 @@
         "title": "AdminOrderStatusUpdate",
         "type": "object"
       },
-      "AdminStopDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "corridor_id": {
-            "title": "Corridor Id",
-            "type": "string"
-          },
-          "district": {
-            "$ref": "#/components/schemas/DistrictRefDTO"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "is_active": {
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "meeting_note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Note"
-          },
-          "meeting_photo_file_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Photo File Id"
-          },
-          "meeting_photo_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Photo Url"
-          },
-          "name_ru": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name Ru"
-          },
-          "name_uz": {
-            "title": "Name Uz",
-            "type": "string"
-          },
-          "point": {
-            "$ref": "#/components/schemas/PointDTO"
-          },
-          "sequence_hint": {
-            "title": "Sequence Hint",
-            "type": "integer"
-          },
-          "version": {
-            "title": "Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "name_uz",
-          "district",
-          "point",
-          "is_active",
-          "corridor_id",
-          "sequence_hint",
-          "version"
-        ],
-        "title": "AdminStopDTO",
-        "type": "object"
-      },
       "AdminTripSearchDTO": {
         "additionalProperties": false,
         "description": "Staff trip lookup row (admin panel). The driver is named by first name only - no phone, no plate - so this\nread leaves no contact-view audit row. The full trip is ``GET /trips/{id}`` (staff see the full view).",
@@ -1167,28 +1076,6 @@
       "AmendmentChanges": {
         "additionalProperties": false,
         "properties": {
-          "dropoff_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dropoff Stop Id"
-          },
-          "pickup_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pickup Stop Id"
-          },
           "pickup_window_end": {
             "anyOf": [
               {
@@ -2069,7 +1956,7 @@
             ]
           },
           "dropoff": {
-            "$ref": "#/components/schemas/BookingStopDTO"
+            "$ref": "#/components/schemas/BookingEndDTO"
           },
           "id": {
             "title": "Id",
@@ -2123,7 +2010,7 @@
             "$ref": "#/components/schemas/PaymentMethod"
           },
           "pickup": {
-            "$ref": "#/components/schemas/BookingStopDTO"
+            "$ref": "#/components/schemas/BookingEndDTO"
           },
           "policy_versions": {
             "$ref": "#/components/schemas/BookingPolicyVersionsDTO"
@@ -2430,7 +2317,7 @@
             ]
           },
           "dropoff": {
-            "$ref": "#/components/schemas/BookingStopDTO"
+            "$ref": "#/components/schemas/BookingEndDTO"
           },
           "fee": {
             "$ref": "#/components/schemas/BookingFeeDTO"
@@ -2487,7 +2374,7 @@
             "$ref": "#/components/schemas/PaymentMethod"
           },
           "pickup": {
-            "$ref": "#/components/schemas/BookingStopDTO"
+            "$ref": "#/components/schemas/BookingEndDTO"
           },
           "policy_versions": {
             "$ref": "#/components/schemas/BookingPolicyVersionsDTO"
@@ -2610,6 +2497,59 @@
           "vehicle"
         ],
         "title": "BookingDriverDTO",
+        "type": "object"
+      },
+      "BookingEndDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "planned_arrival_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Arrival At"
+          },
+          "point": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PointEndDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "window_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window End"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Start"
+          }
+        },
+        "title": "BookingEndDTO",
         "type": "object"
       },
       "BookingFeeDTO": {
@@ -2835,76 +2775,6 @@
           "currency"
         ],
         "title": "BookingPromoDriverDTO",
-        "type": "object"
-      },
-      "BookingStopDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "occurrence_seq": {
-            "title": "Occurrence Seq",
-            "type": "integer"
-          },
-          "planned_arrival_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Planned Arrival At"
-          },
-          "point": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PointEndDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "window_end": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Window End"
-          },
-          "window_start": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Window Start"
-          }
-        },
-        "required": [
-          "occurrence_seq"
-        ],
-        "title": "BookingStopDTO",
         "type": "object"
       },
       "BookingTrackingDTO": {
@@ -5243,10 +5113,6 @@
           "rollout_state": {
             "$ref": "#/components/schemas/CorridorRolloutState"
           },
-          "stops_count": {
-            "title": "Stops Count",
-            "type": "integer"
-          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -5263,7 +5129,6 @@
           "origin_region",
           "destination_region",
           "enabled_services",
-          "stops_count",
           "rollout_state",
           "config_version",
           "config",
@@ -5376,10 +5241,6 @@
           },
           "origin_region": {
             "$ref": "#/components/schemas/RegionRefDTO"
-          },
-          "stops_count": {
-            "title": "Stops Count",
-            "type": "integer"
           }
         },
         "required": [
@@ -5387,8 +5248,7 @@
           "name",
           "origin_region",
           "destination_region",
-          "enabled_services",
-          "stops_count"
+          "enabled_services"
         ],
         "title": "CorridorDTO",
         "type": "object"
@@ -5401,25 +5261,19 @@
             "$ref": "#/components/schemas/DistrictDTO"
           },
           "on_confirmed_route": {
-            "description": "A confirmed route version of this corridor really stops in the district. False = the corridor owns a stop there, but no confirmed road reaches it yet (spec 6.1: proximity is not a route).",
+            "default": true,
+            "description": "Always true (ADR-0028): a district is listed only when its centre lies within the corridor's radius of a confirmed road. A district the road does not reach is not listed (spec 6.1: proximity is not a route).",
             "title": "On Confirmed Route",
             "type": "boolean"
           },
           "sequence": {
             "title": "Sequence",
             "type": "integer"
-          },
-          "stops_count": {
-            "description": "Active stops of this corridor inside the district.",
-            "title": "Stops Count",
-            "type": "integer"
           }
         },
         "required": [
           "district",
-          "sequence",
-          "stops_count",
-          "on_confirmed_route"
+          "sequence"
         ],
         "title": "CorridorDistrictDTO",
         "type": "object"
@@ -5682,7 +5536,7 @@
       },
       "DirectionOfferCreate": {
         "additionalProperties": false,
-        "description": "Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027).",
+        "description": "Q152: an offer from a direction. The trip, window and quantity are the system's (ADR-0027).",
         "properties": {
           "listing_id": {
             "maxLength": 64,
@@ -6431,18 +6285,12 @@
           },
           "region": {
             "$ref": "#/components/schemas/RegionRefDTO"
-          },
-          "stops_count": {
-            "description": "Active stops of publicly visible corridors in this district. 0 means the place can be named but no verified stop serves it yet - the client says so instead of promising a ride.",
-            "title": "Stops Count",
-            "type": "integer"
           }
         },
         "required": [
           "id",
           "region",
-          "name_uz",
-          "stops_count"
+          "name_uz"
         ],
         "title": "DistrictDTO",
         "type": "object"
@@ -7376,60 +7224,6 @@
           "data"
         ],
         "title": "Envelope[AccountDeletionDTO]",
-        "type": "object"
-      },
-      "Envelope_AdminStopDTO_": {
-        "additionalProperties": false,
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/AdminStopDTO"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          },
-          "meta": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PageMeta"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "success": {
-            "const": true,
-            "default": true,
-            "title": "Success",
-            "type": "boolean"
-          },
-          "warnings": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ApiWarning"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Warnings"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "Envelope[AdminStopDTO]",
         "type": "object"
       },
       "Envelope_AmendmentDTO_": {
@@ -12545,64 +12339,6 @@
         "title": "Envelope[list[AdminDriverDirectionDTO]]",
         "type": "object"
       },
-      "Envelope_list_AdminStopDTO__": {
-        "additionalProperties": false,
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/AdminStopDTO"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          },
-          "meta": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PageMeta"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "success": {
-            "const": true,
-            "default": true,
-            "title": "Success",
-            "type": "boolean"
-          },
-          "warnings": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ApiWarning"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Warnings"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "Envelope[list[AdminStopDTO]]",
-        "type": "object"
-      },
       "Envelope_list_AdminTripSearchDTO__": {
         "additionalProperties": false,
         "properties": {
@@ -15271,64 +15007,6 @@
         "title": "Envelope[list[SplitAdjustmentSignalDTO]]",
         "type": "object"
       },
-      "Envelope_list_StopDTO__": {
-        "additionalProperties": false,
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/StopDTO"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          },
-          "meta": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PageMeta"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "success": {
-            "const": true,
-            "default": true,
-            "title": "Success",
-            "type": "boolean"
-          },
-          "warnings": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ApiWarning"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Warnings"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "Envelope[list[StopDTO]]",
-        "type": "object"
-      },
       "Envelope_list_SupportThreadAdminDTO__": {
         "additionalProperties": false,
         "properties": {
@@ -16321,7 +15999,7 @@
             "type": "integer"
           },
           "match_scope": {
-            "default": "confirmed_stops",
+            "default": "confirmed_roads",
             "title": "Match Scope",
             "type": "string"
           },
@@ -17856,25 +17534,7 @@
             "type": "string"
           },
           "destination_point": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PointEndInput"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "destination_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Destination Stop Id"
+            "$ref": "#/components/schemas/PointEndInput"
           },
           "expires_at": {
             "anyOf": [
@@ -17892,25 +17552,7 @@
             "$ref": "#/components/schemas/ListingKind"
           },
           "origin_point": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PointEndInput"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "origin_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Stop Id"
+            "$ref": "#/components/schemas/PointEndInput"
           },
           "parcel": {
             "anyOf": [
@@ -17968,6 +17610,8 @@
         "required": [
           "kind",
           "service_type",
+          "origin_point",
+          "destination_point",
           "departure_window_start",
           "departure_window_end",
           "price_basis",
@@ -18022,16 +17666,6 @@
               }
             ]
           },
-          "destination_stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "expires_at": {
             "format": "date-time",
             "title": "Expires At",
@@ -18048,16 +17682,6 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PointEndDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "origin_stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
               },
               {
                 "type": "null"
@@ -18221,16 +17845,6 @@
               }
             ]
           },
-          "dropoff_stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "is_mine": {
             "title": "Is Mine",
             "type": "boolean"
@@ -18244,16 +17858,6 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PointEndDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "pickup_stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
               },
               {
                 "type": "null"
@@ -18381,25 +17985,7 @@
             "type": "string"
           },
           "destination_point": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PointEndInput"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "destination_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Destination Stop Id"
+            "$ref": "#/components/schemas/PointEndInput"
           },
           "expires_at": {
             "anyOf": [
@@ -18417,25 +18003,7 @@
             "$ref": "#/components/schemas/ListingKind"
           },
           "origin_point": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PointEndInput"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "origin_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Stop Id"
+            "$ref": "#/components/schemas/PointEndInput"
           },
           "owner_user_id": {
             "title": "Owner User Id",
@@ -18499,6 +18067,8 @@
           "consent_reference",
           "kind",
           "service_type",
+          "origin_point",
+          "destination_point",
           "departure_window_start",
           "departure_window_end",
           "price_basis",
@@ -18565,17 +18135,6 @@
             ],
             "title": "Departure Window Start"
           },
-          "destination_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Destination Stop Id"
-          },
           "expected_version": {
             "minimum": 1.0,
             "title": "Expected Version",
@@ -18592,17 +18151,6 @@
               }
             ],
             "title": "Expires At"
-          },
-          "origin_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Stop Id"
           },
           "parcel": {
             "anyOf": [
@@ -18680,16 +18228,6 @@
               }
             ]
           },
-          "destination_stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -18701,16 +18239,6 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PointEndDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "origin_stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
               },
               {
                 "type": "null"
@@ -18944,7 +18472,7 @@
         "title": "ManifestItemDTO",
         "type": "object"
       },
-      "ManifestStopDTO": {
+      "ManifestPlaceDTO": {
         "additionalProperties": false,
         "properties": {
           "dropoffs": {
@@ -18979,16 +18507,6 @@
           "seq": {
             "title": "Seq",
             "type": "integer"
-          },
-          "stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "required": [
@@ -18997,7 +18515,7 @@
           "pickups",
           "dropoffs"
         ],
-        "title": "ManifestStopDTO",
+        "title": "ManifestPlaceDTO",
         "type": "object"
       },
       "MatchGroup": {
@@ -19009,17 +18527,13 @@
         "type": "string"
       },
       "MatchReason": {
-        "description": "Stable reason codes explaining a match decision (spec §6.4, §8; FeedItemDTO.match.reasons).\n\nPromoted from ``app.modules.geo.types`` (A2) in integration pass 1; geo re-exports it.",
+        "description": "Stable reason codes explaining a match decision (spec §6.4, §8; FeedItemDTO.match.reasons).\n\nPromoted from ``app.modules.geo.types`` (A2) in integration pass 1. Q160: no stop reasons - a place is on the road.",
         "enum": [
           "full_route",
           "intermediate_segment",
-          "pickup_at_stop",
-          "dropoff_at_stop",
           "pickup_detour",
           "dropoff_detour",
-          "nearby_stop",
           "time_differs",
-          "same_stop",
           "pickup_not_on_route",
           "dropoff_not_on_route",
           "reverse_direction",
@@ -20936,17 +20450,6 @@
             "title": "Changed At",
             "type": "string"
           },
-          "destination_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Destination Stop Id"
-          },
           "new_ceiling_minor": {
             "title": "New Ceiling Minor",
             "type": "integer"
@@ -20992,17 +20495,6 @@
             ],
             "title": "Old Is Active"
           },
-          "origin_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Stop Id"
-          },
           "reason": {
             "title": "Reason",
             "type": "string"
@@ -21041,17 +20533,6 @@
           "currency": {
             "$ref": "#/components/schemas/Currency"
           },
-          "destination_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Destination Stop Id"
-          },
           "enforced": {
             "default": false,
             "title": "Enforced",
@@ -21064,17 +20545,6 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
-          },
-          "origin_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Stop Id"
           },
           "price_basis": {
             "$ref": "#/components/schemas/PriceBasis"
@@ -21124,26 +20594,13 @@
       },
       "PriceBandUpsert": {
         "additionalProperties": false,
-        "description": "Q42. Omit both stop ids for the corridor-wide band; send both for a segment band.",
+        "description": "Q42: the corridor-wide band of one service (ADR-0028: there is no stop pair to price).",
         "properties": {
           "ceiling_minor": {
             "exclusiveMinimum": 0.0,
             "maximum": 9000000000000000.0,
             "title": "Ceiling Minor",
             "type": "integer"
-          },
-          "destination_stop_id": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Destination Stop Id"
           },
           "enforced": {
             "default": false,
@@ -21172,19 +20629,6 @@
             "default": true,
             "title": "Is Active",
             "type": "boolean"
-          },
-          "origin_stop_id": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Stop Id"
           },
           "reason": {
             "maxLength": 500,
@@ -22184,17 +21628,6 @@
               }
             ]
           },
-          "dropoff_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dropoff Stop Id"
-          },
           "expected_revision": {
             "minimum": 1.0,
             "title": "Expected Revision",
@@ -22233,17 +21666,6 @@
                 "type": "null"
               }
             ]
-          },
-          "pickup_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pickup Stop Id"
           },
           "pickup_window_end": {
             "anyOf": [
@@ -22324,17 +21746,6 @@
               }
             ]
           },
-          "dropoff_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dropoff Stop Id"
-          },
           "message": {
             "anyOf": [
               {
@@ -22368,17 +21779,6 @@
                 "type": "null"
               }
             ]
-          },
-          "pickup_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pickup Stop Id"
           },
           "pickup_window_end": {
             "format": "date-time",
@@ -23000,16 +22400,6 @@
               }
             ]
           },
-          "dropoff_stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "expires_at": {
             "format": "date-time",
             "title": "Expires At",
@@ -23056,16 +22446,6 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PointEndDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "pickup_stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
               },
               {
                 "type": "null"
@@ -23303,8 +22683,8 @@
             "title": "Departure Window Start",
             "type": "string"
           },
-          "destination_stop_name": {
-            "title": "Destination Stop Name",
+          "destination_name": {
+            "title": "Destination Name",
             "type": "string"
           },
           "kind": {
@@ -23322,8 +22702,8 @@
             "description": "Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). A public id is not a secret (ADR-0002); no owner data is added.",
             "title": "Listing Id"
           },
-          "origin_stop_name": {
-            "title": "Origin Stop Name",
+          "origin_name": {
+            "title": "Origin Name",
             "type": "string"
           },
           "price_basis": {
@@ -23356,8 +22736,8 @@
         "required": [
           "kind",
           "service_type",
-          "origin_stop_name",
-          "destination_stop_name",
+          "origin_name",
+          "destination_name",
           "departure_date",
           "departure_window_start",
           "departure_window_end",
@@ -23442,12 +22822,8 @@
       },
       "Q47ViolationDTO": {
         "additionalProperties": false,
-        "description": "F1: a pilot/active corridor that already violates Q47 (repair runbook: app.modules.geo.checks).",
+        "description": "F1: a pilot/active corridor without a confirmed road (ADR-0028; repair runbook: app.modules.geo.checks).",
         "properties": {
-          "active_stops": {
-            "title": "Active Stops",
-            "type": "integer"
-          },
           "corridor_id": {
             "title": "Corridor Id",
             "type": "string"
@@ -23465,21 +22841,12 @@
           },
           "rollout_state": {
             "$ref": "#/components/schemas/CorridorRolloutState"
-          },
-          "stops_missing_evidence": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Stops Missing Evidence",
-            "type": "array"
           }
         },
         "required": [
           "corridor_id",
           "name",
           "rollout_state",
-          "active_stops",
-          "stops_missing_evidence",
           "reasons"
         ],
         "title": "Q47ViolationDTO",
@@ -24341,24 +23708,30 @@
       },
       "RoutePreviewRequest": {
         "additionalProperties": false,
+        "description": "A road to propose for confirmation (ADR-0028): from A to B on a corridor - no intermediate point.",
         "properties": {
+          "corridor_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Corridor Id",
+            "type": "string"
+          },
           "departure_at": {
             "format": "date-time",
             "title": "Departure At",
             "type": "string"
           },
-          "stop_ids": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 25,
-            "minItems": 2,
-            "title": "Stop Ids",
-            "type": "array"
+          "destination": {
+            "$ref": "#/components/schemas/PointDTO"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/PointDTO"
           }
         },
         "required": [
-          "stop_ids",
+          "corridor_id",
+          "origin",
+          "destination",
           "departure_at"
         ],
         "title": "RoutePreviewRequest",
@@ -24502,19 +23875,11 @@
             ],
             "title": "Status",
             "type": "string"
-          },
-          "stops": {
-            "items": {
-              "$ref": "#/components/schemas/RouteVersionStopDTO"
-            },
-            "title": "Stops",
-            "type": "array"
           }
         },
         "required": [
           "id",
           "status",
-          "stops",
           "distance_m",
           "duration_s",
           "geometry_polyline",
@@ -24524,35 +23889,6 @@
           "attribution"
         ],
         "title": "RouteVersionDTO",
-        "type": "object"
-      },
-      "RouteVersionStopDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "cumulative_distance_m": {
-            "title": "Cumulative Distance M",
-            "type": "integer"
-          },
-          "cumulative_duration_s": {
-            "title": "Cumulative Duration S",
-            "type": "integer"
-          },
-          "seq": {
-            "title": "Seq",
-            "type": "integer"
-          },
-          "stop_id": {
-            "title": "Stop Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "stop_id",
-          "seq",
-          "cumulative_distance_m",
-          "cumulative_duration_s"
-        ],
-        "title": "RouteVersionStopDTO",
         "type": "object"
       },
       "SavedSearchCreate": {
@@ -24580,17 +23916,6 @@
             ],
             "title": "Destination Region Id"
           },
-          "destination_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Destination Stop Id"
-          },
           "notify": {
             "default": true,
             "title": "Notify",
@@ -24617,17 +23942,6 @@
               }
             ],
             "title": "Origin Region Id"
-          },
-          "origin_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Stop Id"
           },
           "quantity": {
             "default": 1,
@@ -24692,17 +24006,6 @@
             ],
             "title": "Destination Region Id"
           },
-          "destination_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Destination Stop Id"
-          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -24745,17 +24048,6 @@
             ],
             "title": "Origin Region Id"
           },
-          "origin_stop_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Stop Id"
-          },
           "quantity": {
             "title": "Quantity",
             "type": "integer"
@@ -24788,55 +24080,6 @@
           "created_at"
         ],
         "title": "SavedSearchDTO",
-        "type": "object"
-      },
-      "SegmentAvailabilityDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "baggage_remaining_ml": {
-            "title": "Baggage Remaining Ml",
-            "type": "integer"
-          },
-          "cargo_remaining_volume_ml": {
-            "title": "Cargo Remaining Volume Ml",
-            "type": "integer"
-          },
-          "cargo_remaining_weight_g": {
-            "title": "Cargo Remaining Weight G",
-            "type": "integer"
-          },
-          "from_seq": {
-            "title": "From Seq",
-            "type": "integer"
-          },
-          "from_stop_id": {
-            "title": "From Stop Id",
-            "type": "string"
-          },
-          "seats_remaining": {
-            "title": "Seats Remaining",
-            "type": "integer"
-          },
-          "to_seq": {
-            "title": "To Seq",
-            "type": "integer"
-          },
-          "to_stop_id": {
-            "title": "To Stop Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "from_seq",
-          "to_seq",
-          "from_stop_id",
-          "to_stop_id",
-          "seats_remaining",
-          "baggage_remaining_ml",
-          "cargo_remaining_weight_g",
-          "cargo_remaining_volume_ml"
-        ],
-        "title": "SegmentAvailabilityDTO",
         "type": "object"
       },
       "SelectDriverRequest": {
@@ -25387,289 +24630,44 @@
         "title": "StaffMfaStepUpDTO",
         "type": "object"
       },
-      "StopCreate": {
+      "StretchAvailabilityDTO": {
         "additionalProperties": false,
+        "description": "ADR-0028: what is still free on ``[from_m, to_m)`` of the trip's road - one row per piece between bookings'\nplaces (the use is constant inside a piece).",
         "properties": {
-          "district_id": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "District Id",
-            "type": "string"
+          "baggage_remaining_ml": {
+            "title": "Baggage Remaining Ml",
+            "type": "integer"
           },
-          "is_active": {
-            "default": false,
-            "title": "Is Active",
-            "type": "boolean"
+          "cargo_remaining_volume_ml": {
+            "title": "Cargo Remaining Volume Ml",
+            "type": "integer"
           },
-          "meeting_note": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Note"
+          "cargo_remaining_weight_g": {
+            "title": "Cargo Remaining Weight G",
+            "type": "integer"
           },
-          "meeting_photo_file_id": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Photo File Id"
+          "from_m": {
+            "title": "From M",
+            "type": "integer"
           },
-          "name_ru": {
-            "anyOf": [
-              {
-                "maxLength": 120,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name Ru"
+          "seats_remaining": {
+            "title": "Seats Remaining",
+            "type": "integer"
           },
-          "name_uz": {
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Name Uz",
-            "type": "string"
-          },
-          "point": {
-            "$ref": "#/components/schemas/PointDTO"
-          },
-          "sequence_hint": {
-            "default": 0,
-            "maximum": 100000.0,
-            "minimum": 0.0,
-            "title": "Sequence Hint",
+          "to_m": {
+            "title": "To M",
             "type": "integer"
           }
         },
         "required": [
-          "name_uz",
-          "district_id",
-          "point"
+          "from_m",
+          "to_m",
+          "seats_remaining",
+          "baggage_remaining_ml",
+          "cargo_remaining_weight_g",
+          "cargo_remaining_volume_ml"
         ],
-        "title": "StopCreate",
-        "type": "object"
-      },
-      "StopDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "district": {
-            "$ref": "#/components/schemas/DistrictRefDTO"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "is_active": {
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "meeting_note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Note"
-          },
-          "name_ru": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name Ru"
-          },
-          "name_uz": {
-            "title": "Name Uz",
-            "type": "string"
-          },
-          "point": {
-            "$ref": "#/components/schemas/PointDTO"
-          }
-        },
-        "required": [
-          "id",
-          "name_uz",
-          "district",
-          "point",
-          "is_active"
-        ],
-        "title": "StopDTO",
-        "type": "object"
-      },
-      "StopPatch": {
-        "additionalProperties": false,
-        "properties": {
-          "district_id": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "District Id"
-          },
-          "expected_version": {
-            "minimum": 1.0,
-            "title": "Expected Version",
-            "type": "integer"
-          },
-          "is_active": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Active"
-          },
-          "meeting_note": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Note"
-          },
-          "meeting_photo_file_id": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Photo File Id"
-          },
-          "name_ru": {
-            "anyOf": [
-              {
-                "maxLength": 120,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name Ru"
-          },
-          "name_uz": {
-            "anyOf": [
-              {
-                "maxLength": 120,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name Uz"
-          },
-          "point": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PointDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sequence_hint": {
-            "anyOf": [
-              {
-                "maximum": 100000.0,
-                "minimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sequence Hint"
-          }
-        },
-        "required": [
-          "expected_version"
-        ],
-        "title": "StopPatch",
-        "type": "object"
-      },
-      "StopRefDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "district_name_uz": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, never by a stop name (ELCHI works point A -> point B).",
-            "title": "District Name Uz"
-          },
-          "id": {
-            "description": "Opaque stop id (stp_...).",
-            "title": "Id",
-            "type": "string"
-          },
-          "name_ru": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name Ru"
-          },
-          "name_uz": {
-            "title": "Name Uz",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name_uz"
-        ],
-        "title": "StopRefDTO",
+        "title": "StretchAvailabilityDTO",
         "type": "object"
       },
       "StrikeDTO": {
@@ -27241,12 +26239,12 @@
             "title": "Computed At",
             "type": "string"
           },
-          "segments": {
+          "stretches": {
             "description": "Computed remaining capacity; not a reservation.",
             "items": {
-              "$ref": "#/components/schemas/SegmentAvailabilityDTO"
+              "$ref": "#/components/schemas/StretchAvailabilityDTO"
             },
-            "title": "Segments",
+            "title": "Stretches",
             "type": "array"
           },
           "trip_id": {
@@ -27262,7 +26260,7 @@
           "trip_id",
           "trip_version",
           "computed_at",
-          "segments"
+          "stretches"
         ],
         "title": "TripAvailabilityDTO",
         "type": "object"
@@ -27347,6 +26345,32 @@
             "title": "Planned Start At",
             "type": "string"
           },
+          "route_end_m": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0028: where on the road the trip ends.",
+            "title": "Route End M"
+          },
+          "route_start_m": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0028: where on the confirmed road the trip starts, metres from its start.",
+            "title": "Route Start M"
+          },
           "route_version_id": {
             "title": "Route Version Id",
             "type": "string"
@@ -27357,15 +26381,6 @@
             "title": "Seat Capacity",
             "type": "integer"
           },
-          "stops": {
-            "items": {
-              "$ref": "#/components/schemas/TripStopInput"
-            },
-            "maxItems": 50,
-            "minItems": 2,
-            "title": "Stops",
-            "type": "array"
-          },
           "vehicle_id": {
             "title": "Vehicle Id",
             "type": "string"
@@ -27374,7 +26389,6 @@
         "required": [
           "vehicle_id",
           "route_version_id",
-          "stops",
           "planned_start_at",
           "planned_end_at",
           "seat_capacity",
@@ -27466,6 +26480,30 @@
             "title": "Planned Start At",
             "type": "string"
           },
+          "route_end_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0028: where on the road the trip ends (metres).",
+            "title": "Route End M"
+          },
+          "route_start_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0028: where on the road the trip starts (metres).",
+            "title": "Route Start M"
+          },
           "route_version_id": {
             "title": "Route Version Id",
             "type": "string"
@@ -27476,13 +26514,6 @@
           },
           "status": {
             "$ref": "#/components/schemas/TripStatus"
-          },
-          "stops": {
-            "items": {
-              "$ref": "#/components/schemas/TripStopDTO"
-            },
-            "title": "Stops",
-            "type": "array"
           },
           "timezone": {
             "title": "Timezone",
@@ -27502,7 +26533,6 @@
           "version",
           "vehicle",
           "route_version_id",
-          "stops",
           "planned_start_at",
           "planned_end_at",
           "timezone",
@@ -27740,16 +26770,6 @@
               }
             ],
             "title": "Lng"
-          },
-          "stop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/StopRefDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "title": "TripIntentEndDTO",
@@ -27757,7 +26777,7 @@
       },
       "TripIntentEndInput": {
         "additionalProperties": false,
-        "description": "One end: a verified stop, or a district with an optional marked place (Q88) - what the search used.",
+        "description": "One end: a district with an optional marked place (Q88). Retired with ADR-0025 (Q138): kept for the shape.",
         "properties": {
           "address": {
             "anyOf": [
@@ -27772,16 +26792,9 @@
             "title": "Address"
           },
           "district_id": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "District Id"
+            "maxLength": 64,
+            "title": "District Id",
+            "type": "string"
           },
           "lat": {
             "anyOf": [
@@ -27808,20 +26821,11 @@
               }
             ],
             "title": "Lng"
-          },
-          "stop_id": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stop Id"
           }
         },
+        "required": [
+          "district_id"
+        ],
         "title": "TripIntentEndInput",
         "type": "object"
       },
@@ -27930,7 +26934,6 @@
         "properties": {
           "status": {
             "enum": [
-              "same_stop",
               "same_district",
               "different"
             ],
@@ -28480,11 +27483,11 @@
       "TripManifestDTO": {
         "additionalProperties": false,
         "properties": {
-          "stops": {
+          "places": {
             "items": {
-              "$ref": "#/components/schemas/ManifestStopDTO"
+              "$ref": "#/components/schemas/ManifestPlaceDTO"
             },
-            "title": "Stops",
+            "title": "Places",
             "type": "array"
           },
           "trip_id": {
@@ -28499,7 +27502,7 @@
         "required": [
           "trip_id",
           "trip_version",
-          "stops"
+          "places"
         ],
         "title": "TripManifestDTO",
         "type": "object"
@@ -28562,21 +27565,30 @@
             ],
             "title": "Planned Start At"
           },
-          "stops": {
+          "route_end_m": {
             "anyOf": [
               {
-                "items": {
-                  "$ref": "#/components/schemas/TripStopInput"
-                },
-                "maxItems": 50,
-                "minItems": 2,
-                "type": "array"
+                "minimum": 1.0,
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Stops"
+            "title": "Route End M"
+          },
+          "route_start_m": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ADR-0028: a new road stretch (no claim yet).",
+            "title": "Route Start M"
           }
         },
         "required": [
@@ -28605,13 +27617,6 @@
           "status": {
             "$ref": "#/components/schemas/TripStatus"
           },
-          "stops": {
-            "items": {
-              "$ref": "#/components/schemas/TripPublicStopDTO"
-            },
-            "title": "Stops",
-            "type": "array"
-          },
           "timezone": {
             "title": "Timezone",
             "type": "string"
@@ -28624,36 +27629,11 @@
           "id",
           "status",
           "vehicle",
-          "stops",
           "planned_start_at",
           "planned_end_at",
           "timezone"
         ],
         "title": "TripPublicDTO",
-        "type": "object"
-      },
-      "TripPublicStopDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "planned_arrival_at": {
-            "format": "date-time",
-            "title": "Planned Arrival At",
-            "type": "string"
-          },
-          "seq": {
-            "title": "Seq",
-            "type": "integer"
-          },
-          "stop": {
-            "$ref": "#/components/schemas/StopRefDTO"
-          }
-        },
-        "required": [
-          "seq",
-          "stop",
-          "planned_arrival_at"
-        ],
-        "title": "TripPublicStopDTO",
         "type": "object"
       },
       "TripPublicVehicleDTO": {
@@ -28687,81 +27667,6 @@
         ],
         "title": "TripStatus",
         "type": "string"
-      },
-      "TripStopDTO": {
-        "additionalProperties": false,
-        "properties": {
-          "dwell_minutes": {
-            "title": "Dwell Minutes",
-            "type": "integer"
-          },
-          "eta_arrival_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Eta Arrival At"
-          },
-          "planned_arrival_at": {
-            "format": "date-time",
-            "title": "Planned Arrival At",
-            "type": "string"
-          },
-          "seq": {
-            "title": "Seq",
-            "type": "integer"
-          },
-          "stop": {
-            "$ref": "#/components/schemas/StopRefDTO"
-          }
-        },
-        "required": [
-          "seq",
-          "stop",
-          "planned_arrival_at",
-          "dwell_minutes"
-        ],
-        "title": "TripStopDTO",
-        "type": "object"
-      },
-      "TripStopInput": {
-        "additionalProperties": false,
-        "properties": {
-          "dwell_minutes": {
-            "default": 0,
-            "maximum": 240.0,
-            "minimum": 0.0,
-            "title": "Dwell Minutes",
-            "type": "integer"
-          },
-          "planned_arrival_at": {
-            "format": "date-time",
-            "title": "Planned Arrival At",
-            "type": "string"
-          },
-          "seq": {
-            "maximum": 50.0,
-            "minimum": 1.0,
-            "title": "Seq",
-            "type": "integer"
-          },
-          "stop_id": {
-            "title": "Stop Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "stop_id",
-          "seq",
-          "planned_arrival_at"
-        ],
-        "title": "TripStopInput",
-        "type": "object"
       },
       "TripTrackingAdminDTO": {
         "additionalProperties": false,
@@ -31301,247 +30206,6 @@
           }
         ],
         "summary": "Admin Set Price Band",
-        "tags": [
-          "Geo v2"
-        ]
-      }
-    },
-    "/api/v2/admin/corridors/{corridor_id}/stops": {
-      "get": {
-        "description": "Every stop of a corridor for staff - inactive ones and draft corridors included, with the ``version`` a\n``PATCH /admin/stops/{id}`` needs and the Q27 evidence. The public list shows only active stops of open corridors.",
-        "operationId": "admin_list_corridor_stops_api_v2_admin_corridors__corridor_id__stops_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "corridor_id",
-            "required": true,
-            "schema": {
-              "maxLength": 64,
-              "title": "Corridor Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_list_AdminStopDTO__"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Admin List Corridor Stops",
-        "tags": [
-          "Geo v2"
-        ]
-      },
-      "post": {
-        "operationId": "admin_create_stop_api_v2_admin_corridors__corridor_id__stops_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "corridor_id",
-            "required": true,
-            "schema": {
-              "maxLength": 64,
-              "title": "Corridor Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StopCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_AdminStopDTO_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Admin Create Stop",
         "tags": [
           "Geo v2"
         ]
@@ -39141,124 +37805,6 @@
         ]
       }
     },
-    "/api/v2/admin/stops/{stop_id}": {
-      "patch": {
-        "operationId": "admin_patch_stop_api_v2_admin_stops__stop_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "stop_id",
-            "required": true,
-            "schema": {
-              "maxLength": 64,
-              "title": "Stop Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StopPatch"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_AdminStopDTO_"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Admin Patch Stop",
-        "tags": [
-          "Geo v2"
-        ]
-      }
-    },
     "/api/v2/admin/support-threads": {
       "get": {
         "operationId": "admin_list_support_threads_api_v2_admin_support_threads_get",
@@ -41174,6 +39720,25 @@
               ],
               "description": "Omit for every status.",
               "title": "Status"
+            }
+          },
+          {
+            "description": "Only this driver's vehicles (usr_ public id); omit for everyone.",
+            "in": "query",
+            "name": "owner_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this driver's vehicles (usr_ public id); omit for everyone.",
+              "title": "Owner User Id"
             }
           },
           {
@@ -44968,7 +43533,7 @@
     },
     "/api/v2/corridors/{corridor_id}/districts": {
       "get": {
-        "description": "G17: which districts this direction really passes, in travel order (wave 10).\n\nThis is what \"Toshkent -> Qarshi\" covers: the districts of the stops on the corridor's confirmed routes.\nDistricts whose stops no confirmed route reaches are still listed, with ``on_confirmed_route=false``, so\nthe client can offer them without claiming they are on the way (spec 6.1, 6.5).",
+        "description": "G17: which districts this direction really passes, in travel order (wave 10).\n\nThis is what \"Toshkent -> Qarshi\" covers: the districts whose centre lies on a confirmed road of the corridor\n(ADR-0028). A district the road does not reach is not listed (spec 6.1, 6.5).",
         "operationId": "list_corridor_districts_api_v2_corridors__corridor_id__districts_get",
         "parameters": [
           {
@@ -45181,109 +43746,6 @@
           }
         },
         "summary": "List Corridor Routes",
-        "tags": [
-          "Geo v2"
-        ]
-      }
-    },
-    "/api/v2/corridors/{corridor_id}/stops": {
-      "get": {
-        "operationId": "list_corridor_stops_api_v2_corridors__corridor_id__stops_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "corridor_id",
-            "required": true,
-            "schema": {
-              "maxLength": 64,
-              "title": "Corridor Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_list_StopDTO__"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "summary": "List Corridor Stops",
         "tags": [
           "Geo v2"
         ]
@@ -46753,22 +45215,6 @@
           },
           {
             "in": "query",
-            "name": "origin_stop_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Origin Stop Id"
-            }
-          },
-          {
-            "in": "query",
             "name": "origin_region_id",
             "required": false,
             "schema": {
@@ -46799,22 +45245,6 @@
               ],
               "description": "District end (wave 10); one end, one kind.",
               "title": "Origin District Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "destination_stop_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Destination Stop Id"
             }
           },
           {
@@ -54970,139 +53400,6 @@
         "summary": "Revoke Share Link",
         "tags": [
           "v2 Operations"
-        ]
-      }
-    },
-    "/api/v2/stops/search": {
-      "get": {
-        "operationId": "search_stops_api_v2_stops_search_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "q",
-            "required": true,
-            "schema": {
-              "maxLength": 80,
-              "minLength": 2,
-              "title": "Q",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "region_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 64,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Region Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 50,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Envelope_list_StopDTO__"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          }
-        },
-        "summary": "Search Stops",
-        "tags": [
-          "Geo v2"
         ]
       }
     },

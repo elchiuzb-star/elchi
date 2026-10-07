@@ -34,7 +34,7 @@ from app.contracts.enums import (
     TrackingWindowReason,
     VehicleClass,
 )
-from app.contracts.feed import MATCH_SCOPE_CONFIRMED_STOPS
+from app.contracts.feed import MATCH_SCOPE_CONFIRMED_ROADS
 from app.contracts.operations import (
     SHARE_LINK_DEFAULT_TTL_HOURS,
     SHARE_LINK_MAX_TTL_HOURS,
@@ -382,7 +382,7 @@ class FeedPageMeta(PageMeta):
     """M1/M2 ``meta``: ``ranking_version`` (feed.RANKING_VERSION), ``match_scope``, ``degraded`` (e.g. ROUTING_UNAVAILABLE)."""
 
     ranking_version: str
-    match_scope: str = MATCH_SCOPE_CONFIRMED_STOPS
+    match_scope: str = MATCH_SCOPE_CONFIRMED_ROADS
     degraded: list[str] = Field(default_factory=list, description='e.g. ["ROUTING_UNAVAILABLE"]: detours not measured.')
 
 
@@ -418,8 +418,8 @@ class PublicListingPageDTO(ContractModel):
 
     kind: ListingKind
     service_type: ServiceType
-    origin_stop_name: str
-    destination_stop_name: str
+    origin_name: str
+    destination_name: str
     departure_date: str = Field(description="Local date (Asia/Tashkent) of the departure window start.")
     departure_window_start: UtcDateTime
     departure_window_end: UtcDateTime

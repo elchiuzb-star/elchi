@@ -2,6 +2,9 @@
  * Haydovchilar (v1, DESIGN-ADMIN-DIFF §17): driver profiles, documents, routes, orders and the verification
  * decisions. Approve / reject / block / unblock are admin+ on the server; the operator may only correct the
  * vehicle (Q94) - the buttons follow the same split so nobody is offered an action the server would refuse.
+ *
+ * The v2 vehicle verification lives here too, under the documents ("Hujjatlar va avtomobil"): staff check the
+ * papers and the car on one card instead of in two sections. The list marks drivers whose car waits for a decision.
  */
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -58,6 +61,7 @@ import {
 import { formatAdminMoney } from "../utils/money";
 import { statusToneClass } from "../utils/orderStatus";
 import { formatDate, formatDateTime } from "../utils/v2Format";
+import { DriverVehicles, usePendingVehicles } from "./AdminDriverVehicles";
 
 type DriversPanelProps = {
   user: AuthUser;
@@ -539,7 +543,7 @@ function DriverDrawer(props: {
           <div className="mt-4 flex gap-2 overflow-x-auto border-b border-border">
             {([
               ["overview", "admin.orders.tab.overview"],
-              ["documents", "driverDocs.title"],
+              ["documents", "admin.drivers.docsAndVehicle"],
               ["routes", "app.nav.routes"],
               ["orders", "orders.title"],
               ["audit", "admin.orders.tab.audit"],
@@ -577,6 +581,9 @@ function DriverDrawer(props: {
           {tab === "documents" && (
             <section className="grid gap-3 md:grid-cols-2">
               {documents.map((document) => <DocumentCard key={document.document_type} document={document} onPreview={setPreviewDocument} />)}
+              <div className="md:col-span-2">
+                <DriverVehicles ownerUserId={driver.user_public_id} />
+              </div>
             </section>
           )}
 
@@ -629,6 +636,10 @@ export function AdminDriversPanel({ user, initialSearch }: DriversPanelProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  // Bumped after every mutation so the "car waiting" marks follow a decision made on the card.
+  const [pendingKey, setPendingKey] = useState(0);
+  const pendingVehicles = usePendingVehicles(pendingKey);
+  const pendingOwners = useMemo(() => new Set(pendingVehicles.vehicles.map((vehicle) => vehicle.owner.user_id)), [pendingVehicles]);
 
   async function loadDrivers(nextFilters = filters) {
     setBusy(true);
@@ -760,6 +771,7 @@ export function AdminDriversPanel({ user, initialSearch }: DriversPanelProps) {
       }
       if (selectedDriver) setSelectedDriver(await getAdminDriverDetail(selectedDriver.id));
       await loadDrivers();
+      setPendingKey((key) => key + 1);
     } catch (err) {
       setError(adminErrorMessage(err));
     } finally {
@@ -782,6 +794,24 @@ export function AdminDriversPanel({ user, initialSearch }: DriversPanelProps) {
 
       {error && <div className="rounded-[12px] border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">{error}</div>}
       {notice && <div className="rounded-[12px] border border-warning/28 bg-warning/14 px-4 py-3 text-sm font-medium text-warning">{notice}</div>}
+
+      {pendingVehicles.vehicles.length > 0 && (
+        <section className="rounded-[12px] border border-warning/28 bg-warning/14 p-4 text-sm" aria-label={t("admin.vehicles.pendingBanner", { count: pendingOwners.size })}>
+          <p className="font-bold text-warning">
+            {t("admin.vehicles.pendingBanner", { count: `${pendingOwners.size}${pendingVehicles.more ? "+" : ""}` })}
+          </p>
+          <p className="mt-1 text-secondary-foreground">{t("admin.vehicles.pendingHint")}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {/* The v1 profile and the v2 car carry the same plate (the driver form writes both), so the plate finds
+                the driver in this list without exposing an internal id. */}
+            {pendingVehicles.vehicles.map((vehicle) => (
+              <Button key={vehicle.id} onClick={() => setDraftFilters({ ...draftFilters, search: vehicle.plate_number ?? vehicle.make_model })}>
+                <Car size={15} /> {vehicle.make_model} · {vehicle.plate_number ?? vehicle.plate_masked}
+              </Button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
         {summary.map(([label, count, Icon, tone]) => (
@@ -877,7 +907,14 @@ export function AdminDriversPanel({ user, initialSearch }: DriversPanelProps) {
                   </td>
                   <td className="px-4 py-3">{[driver.car_model, driver.car_color].filter(Boolean).join(" · ") || "-"}</td>
                   <td className="px-4 py-3 font-mono font-semibold text-secondary-foreground">{value(driver.plate_number)}</td>
-                  <td className="px-4 py-3"><Badge className={getDriverVerificationBadgeClass(driver.verification_status)}>{getDriverVerificationLabel(driver.verification_status)}</Badge></td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      <Badge className={getDriverVerificationBadgeClass(driver.verification_status)}>{getDriverVerificationLabel(driver.verification_status)}</Badge>
+                      {driver.user_public_id && pendingOwners.has(driver.user_public_id) && (
+                        <Badge className="border-warning/28 bg-warning/14 text-warning">{t("admin.vehicles.pendingBadge")}</Badge>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">{getAvailabilityLabel(driver.is_available, driver.verification_status)}</td>
                   <td className="px-4 py-3">{t("admin.drivers.docsUploaded", { done: driver.documents_count ?? 0, total: driver.required_documents_count ?? 5 })}</td>
                   <td className="px-4 py-3">{t("admin.drivers.routesCount", { active: driver.active_routes_count ?? 0, total: driver.total_routes_count ?? 0 })}</td>

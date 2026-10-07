@@ -280,8 +280,7 @@ const baseMessages = {
     ru: "Это не полное совпадение с вашим запросом, но близкие варианты. Проверьте время и место перед предложением.",
   },
   "match.reason.time_differs": { uz: "Vaqti boshqa", ru: "Другое время" },
-  "match.reason.nearby_stop": { uz: "Yaqin joy", ru: "Рядом"},
-  "match.confirmedStopsNote": {
+  "match.confirmedRoadsNote": {
     uz:
       "Mosliklar tasdiqlangan yo'nalish bo'yicha hisoblangan. Aniq uchrashuv joyini bron chatida kelishasiz.", ru: "Совпадения рассчитаны по утверждённому направлению. Точное место встречи вы согласуете в чате брони.",
   },
@@ -614,13 +613,6 @@ const baseMessages = {
   "tracking.shareTitle": { uz: "Yaqinlaringiz bilan kuzatuv", ru: "Отслеживание для близких" },
   "listingShare.title": { uz: "E'lonni ulashish", ru: "Поделиться объявлением" },
   "trip.detailsTitle": { uz: "Safar tafsilotlari", ru: "Детали поездки" },
-  "tripPlan.stopSearchLabel": { uz: "Joy nomi bo'yicha marshrut topish", ru: "Найти маршрут по названию места"},
-  "tripPlan.stopFilter": { uz: "{name} orqali o'tadigan marshrutlar", ru: "Маршруты через {name}" },
-  "tripPlan.stopFilterClear": { uz: "Filtrni olib tashlash", ru: "Сбросить фильтр" },
-  "tripPlan.stopFilterNone": {
-    uz: "Bu yo'nalishning tasdiqlangan marshrutlari {name} orqali o'tmaydi.",
-    ru: "Утверждённые маршруты этого направления не проходят через {name}.",
-  },
 
   // --- the language switch itself ---------------------------------------------------------------------------
   "settings.language": { uz: "Til", ru: "Язык" },

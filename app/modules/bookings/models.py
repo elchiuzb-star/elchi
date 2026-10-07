@@ -35,6 +35,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.contracts.route_position import ROAD_POSITION_COMMENT
 from app.db.base import Base
 from app.modules.geo.models import Geometry
 import app.modules.geo.models  # noqa: E402,F401  (FK targets: corridor_stops, route_versions, service_corridors)
@@ -181,8 +182,12 @@ class Booking(Base):
     )
     dropoff_address: Mapped[str | None] = mapped_column(Text)
     dropoff_route_offset_m: Mapped[int | None] = mapped_column(Integer)
-    pickup_occurrence_seq: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    dropoff_occurrence_seq: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    # ADR-0028 phase 3 (0100): NULL on a road-stretch trip (no legacy stop echo) - the positions below say where.
+    pickup_occurrence_seq: Mapped[int | None] = mapped_column(SmallInteger)
+    dropoff_occurrence_seq: Mapped[int | None] = mapped_column(SmallInteger)
+    # ADR-0028 (0097, Q159): the agreed places as metres along the confirmed road (not the lateral *_route_offset_m).
+    pickup_position_m: Mapped[int | None] = mapped_column(Integer, comment=ROAD_POSITION_COMMENT)
+    dropoff_position_m: Mapped[int | None] = mapped_column(Integer, comment=ROAD_POSITION_COMMENT)
     pickup_window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     pickup_window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     dropoff_window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

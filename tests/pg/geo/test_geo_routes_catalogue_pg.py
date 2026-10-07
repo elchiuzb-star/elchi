@@ -86,9 +86,8 @@ def test_the_catalogue_lists_the_confirmed_roads_of_the_corridor(client: TestCli
     for route in routes:
         assert route["id"].startswith("rtv_") and route["status"] == "confirmed"
         assert route["distance_m"] > 0 and route["duration_s"] > 0
-        assert len(route["stops"]) >= 2 and route["attribution"], "a road without stops cannot carry a trip"
-        seqs = [stop["seq"] for stop in route["stops"]]
-        assert seqs == sorted(seqs), "the stop order is the travel order"
+        assert route["attribution"] and route["geometry_polyline"], "a road is its geometry from A to B"
+        assert "stops" not in route  # Q160: nothing in between
 
 
 def test_a_draft_route_is_not_offered_as_a_road(client: TestClient, world) -> None:  # noqa: ANN001
@@ -128,7 +127,9 @@ def test_a_driver_can_plan_a_trip_while_the_routing_provider_refuses(client: Tes
     preview = client.post(
         "/api/v2/routes/preview",
         json={
-            "stop_ids": [fixture.stops["toshkent"].api_id, fixture.stops["qarshi"].api_id],
+            "corridor_id": fixture.corridor.api_id,
+            "origin": {"lat": fixture.places["toshkent"].lat, "lng": fixture.places["toshkent"].lng},
+            "destination": {"lat": fixture.places["qarshi"].lat, "lng": fixture.places["qarshi"].lng},
             "departure_at": (datetime.now(UTC) + timedelta(days=2)).isoformat(),
         },
         headers={"Authorization": f"Bearer {admin}", "Idempotency-Key": "qa-f01"},

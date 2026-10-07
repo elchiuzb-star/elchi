@@ -52,3 +52,4 @@ def set_support_phone(monkeypatch, phone: str = "+998711234567") -> None:  # noq
     from app.modules.trust_support import config as support_config
 
     monkeypatch.setattr(support_config, "support_contacts", lambda settings=None: (True, phone, None))
+

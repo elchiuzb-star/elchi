@@ -1,20 +1,16 @@
 """Driver directions (ADR-0027): a driver names "where from -> where to", the system does the rest.
 
 Q150: the driver gives two ends - a region and, unless the region is a city without districts, a district - and the
-car. No time, coordinate, stop, corridor or route is asked. This module resolves the ends onto the confirmed roads
+car. No time, coordinate, corridor or route is asked. This module resolves the ends onto the confirmed roads
 of an open corridor (the same projection Q88 uses for a client's map point) and keeps the direction.
 
 Q152: when the driver makes an offer from a direction, the marketplace asks this module for the direction's trip -
 the active one, or a new one planned around the client's pickup time (``plan_trip_create``). Trips stay the internal
 model they always were (Q93, Q138): the direction is never shown to a client.
 
-Placement rules (one end on one confirmed route):
-
-* every active stop of the corridor that sits in the end's district (or region, for a region-only end) and is on
-  the route is a candidate at its own position on the line;
-* the district (or region) centre is a candidate when it projects onto the route within the corridor's radius;
-* the origin takes the earliest candidate along the road, the destination the latest - the stretch of road the
-  driver covers is as long as the two areas allow, never longer.
+Placement rule (one end on one confirmed road, ADR-0028 / Q160): an area meets the road where its centre (the
+district's, or the region's for a region-only end) projects onto it within the corridor's radius. An area without a
+known centre is not placed - a data gap the operator closes, never a guess.
 """
 
 from __future__ import annotations
@@ -29,20 +25,28 @@ from sqlalchemy.orm import Session
 
 from app.contracts.enums import Capability, TripStatus
 from app.contracts.errors import DomainError, ErrorCode
-from app.contracts.ids import PublicIdPrefix, format_public_id, new_public_uuid, parse_public_id
+from app.contracts.ids import (
+    PublicIdPrefix,
+    format_public_id,
+    new_public_uuid,
+    parse_public_id,
+)
+from app.contracts.route_position import peak_load, travel_s
 from app.contracts.timeutil import ensure_aware_utc, utc_now
 from app.modules.identity import service as identity_service
 from app.modules.platform.service import constraint_name_of
 from app.modules.trips import service as trips_service
 from app.modules.trips.models import DriverDirection, Trip, Vehicle
-from app.modules.trips.rules import DEFAULT_PICKUP_WAIT_MINUTES, VehicleVerificationStatus
+from app.modules.trips.rules import (
+    DEFAULT_PICKUP_WAIT_MINUTES,
+    VehicleVerificationStatus,
+)
 from app.modules.trips.schemas import (
     DirectionEndInput,
     DriverDirectionCreate,
     DriverDirectionPatch,
     TripCreate,
     TripPatch,
-    TripStopInput,
 )
 
 LIVE_ENDS_INDEX = "uq_driver_directions_live_ends"
@@ -157,11 +161,9 @@ def stored_end(session: Session, region_id: int, district_id: int | None, *, reg
 
 @dataclass(frozen=True)
 class RoutePlace:
-    """Where an area meets a confirmed road: position on the line and the segment it falls in."""
+    """Where an area meets a confirmed road: position on the line (0..1) and the distance from it."""
 
     fraction: float
-    seq_before: int
-    seq_after: int
     cumulative_duration_s: int
     offset_m: int
 
@@ -175,18 +177,6 @@ class DirectionRoute:
     destination: RoutePlace
 
 
-def _stop_place(route, stop_id: int) -> RoutePlace | None:  # noqa: ANN001
-    stops = list(route.stops)
-    for index, stop in enumerate(stops):
-        if stop.stop_id == stop_id:
-            after = stops[min(index + 1, len(stops) - 1)]
-            return RoutePlace(
-                fraction=float(stop.line_fraction), seq_before=stop.seq, seq_after=after.seq,
-                cumulative_duration_s=stop.cumulative_duration_s, offset_m=0,
-            )
-    return None
-
-
 def _point_place(session: Session, route, point: tuple[float, float], radius_m: int) -> RoutePlace | None:  # noqa: ANN001
     from app.modules.geo.geometry import LatLng
     from app.modules.geo.service import project_point_on_route
@@ -197,53 +187,28 @@ def _point_place(session: Session, route, point: tuple[float, float], radius_m: 
     if projection is None:
         return None
     return RoutePlace(
-        fraction=projection.fraction, seq_before=projection.seq_before, seq_after=projection.seq_after,
-        cumulative_duration_s=projection.cumulative_duration_s, offset_m=projection.offset_m,
+        fraction=projection.fraction, cumulative_duration_s=projection.cumulative_duration_s, offset_m=projection.offset_m
     )
 
 
-def _place_end(
-    session: Session,
-    route,  # noqa: ANN001 - geo RouteVersionInfo
-    end: DirectionEnd,
-    *,
-    stops: list,
-    district_regions: dict[int, int],
-    radius_m: int,
-    first: bool,
-) -> RoutePlace | None:
-    candidates: list[RoutePlace] = []
-    for stop in stops:
-        if end.covers(district_id=stop.district_id, region_id=district_regions.get(stop.district_id)):
-            place = _stop_place(route, stop.id)
-            if place is not None:
-                candidates.append(place)
-    if end.center is not None:
-        place = _point_place(session, route, end.center, radius_m)
-        if place is not None:
-            candidates.append(place)
-    if not candidates:
-        return None
-    return (min if first else max)(candidates, key=lambda place: place.fraction)
+def _place_end(session: Session, route, end: DirectionEnd, *, radius_m: int) -> RoutePlace | None:  # noqa: ANN001
+    """ADR-0028: an area meets the road where its centre projects onto it."""
+    return None if end.center is None else _point_place(session, route, end.center, radius_m)
 
 
 def _routes_for(session: Session, corridor, origin: DirectionEnd, destination: DirectionEnd) -> list[DirectionRoute]:  # noqa: ANN001
     from app.modules.geo.service import (
         corridor_point_offset_m,
-        districts_by_ids,
         get_route_version,
         list_corridor_routes,
-        list_corridor_stops,
     )
 
-    stops = list_corridor_stops(session, corridor)
-    district_regions = {did: info.region_id for did, info in districts_by_ids(session, {s.district_id for s in stops}).items()}
     radius = corridor_point_offset_m(session, corridor.id)
     result: list[DirectionRoute] = []
     for ref in list_corridor_routes(session, corridor, limit=ROUTES_PER_CORRIDOR):
         route = get_route_version(session, ref.id)
-        o = _place_end(session, route, origin, stops=stops, district_regions=district_regions, radius_m=radius, first=True)
-        d = _place_end(session, route, destination, stops=stops, district_regions=district_regions, radius_m=radius, first=False)
+        o = _place_end(session, route, origin, radius_m=radius)
+        d = _place_end(session, route, destination, radius_m=radius)
         if o is not None and d is not None and o.fraction < d.fraction:
             result.append(DirectionRoute(route=route, origin=o, destination=d))
     return result
@@ -258,7 +223,7 @@ def resolve_corridor(session: Session, origin: DirectionEnd, destination: Direct
     from app.modules.geo.service import list_public_corridors
 
     best = None
-    for corridor, _services, _stops in sorted(list_public_corridors(session), key=lambda row: row[0].id):
+    for corridor, _services in sorted(list_public_corridors(session), key=lambda row: row[0].id):
         routes = _routes_for(session, corridor, origin, destination)
         if not routes:
             continue
@@ -290,17 +255,32 @@ def direction_routes(session: Session, direction: DriverDirection) -> list[Direc
 
 
 def via_district_names(session: Session, direction_route: DirectionRoute) -> list[str]:
-    """Districts of the road's stops strictly between the two ends - "Samarqand, Chiroqchi orqali"."""
-    from app.modules.geo.service import get_stops
+    """Districts the road passes strictly between the two ends - "Samarqand, Chiroqchi orqali" (ADR-0028: a district
+    is on the road when its centre is, see ``geo.service.corridor_districts``)."""
+    from app.modules.geo.service import (
+        corridor_districts,
+        corridor_point_offset_m,
+        get_corridor,
+        project_point_on_route,
+    )
+    from app.modules.geo.types import LatLng
 
     route = direction_route.route
-    inner = [s for s in route.stops if direction_route.origin.fraction < float(s.line_fraction) < direction_route.destination.fraction]
-    infos = get_stops(session, [s.stop_id for s in inner])
+    radius = corridor_point_offset_m(session, route.corridor_id)
+    inner: list[tuple[float, str]] = []
+    for entry in corridor_districts(session, get_corridor(session, route.corridor_id)):
+        district = entry.district
+        if district.center_lat is None or district.center_lng is None:
+            continue
+        place = project_point_on_route(
+            session, route_version_id=route.id, point=LatLng(lat=district.center_lat, lng=district.center_lng), max_offset_m=radius
+        )
+        if place is not None and direction_route.origin.fraction < place.fraction < direction_route.destination.fraction:
+            inner.append((place.fraction, district.name_uz))
     names: list[str] = []
-    for stop in inner:
-        info = infos.get(stop.stop_id)
-        if info is not None and info.district_name_uz not in names:
-            names.append(info.district_name_uz)
+    for _fraction, name in sorted(inner):
+        if name not in names:
+            names.append(name)
     return names
 
 
@@ -481,35 +461,20 @@ def active_trip(session: Session, direction: DriverDirection) -> Trip | None:
 
 
 def seats_booked(session: Session, trip: Trip) -> int:
-    loads = trips_service.get_segment_loads(session, trip.id)
-    return max((load.seats_used for load in loads), default=0)
+    """The most seats taken at once anywhere on the trip's road (ADR-0028: from the road claims)."""
+    claims = trips_service.active_claims(session, trip.id)
+    if not claims:
+        return 0
+    return peak_load(claims, min(c.from_m for c in claims), max(c.to_m for c in claims))["seats"][0]
 
 
-def _arrival_offsets(route, from_seq: int, to_seq: int) -> list[tuple[object, timedelta]]:  # noqa: ANN001
-    """Each included route stop with its arrival offset from the departure (driving time + dwell at earlier stops).
-
-    The same rule as ``geo.planned_occurrences_from_route_version``: no dwell before the first stop, one dwell
-    per intermediate stop already passed.
-    """
-    included = [s for s in route.stops if from_seq <= s.seq <= to_seq]
-    base = included[0].cumulative_duration_s
-    return [
-        (stop, timedelta(seconds=stop.cumulative_duration_s - base, minutes=DWELL_MINUTES * max(0, index - 1)))
-        for index, stop in enumerate(included)
-    ]
+def _drive(route, from_m: int, to_m: int) -> timedelta:  # noqa: ANN001
+    return timedelta(seconds=travel_s(from_m, max(to_m, from_m), distance_m=route.distance_m, duration_s=route.duration_s))
 
 
-def pickup_offset(route, *, from_seq: int, to_seq: int, place_seq_before: int, place_cumulative_s: int) -> timedelta:  # noqa: ANN001
-    """Time from the trip's departure to a place on the road, interpolated inside its segment."""
-    offsets = _arrival_offsets(route, from_seq, to_seq)
-    by_seq = {stop.seq: (stop, offset) for stop, offset in offsets}
-    before = by_seq.get(place_seq_before)
-    if before is None:
-        return offsets[0][1]
-    stop, offset = before
-    extra = max(0, place_cumulative_s - stop.cumulative_duration_s)
-    dwell = timedelta(minutes=DWELL_MINUTES) if offsets[0][0].seq != stop.seq else timedelta(0)
-    return offset + (dwell if extra else timedelta(0)) + timedelta(seconds=extra)
+def pickup_offset(route, *, start_m: int, place_position_m: int) -> timedelta:  # noqa: ANN001
+    """Time from the trip's departure (at ``start_m`` of the road) to a place on it - the trip's own ETA rule."""
+    return _drive(route, start_m, place_position_m)
 
 
 def departure_for(pickup_at: datetime, offset: timedelta, now: datetime) -> datetime:
@@ -521,25 +486,18 @@ def departure_for(pickup_at: datetime, offset: timedelta, now: datetime) -> date
 
 
 def plan_trip_create(
-    direction: DriverDirection, route, *, vehicle_public_id: str, from_seq: int, to_seq: int, departure: datetime  # noqa: ANN001
+    direction: DriverDirection, route, *, vehicle_public_id: str, start_m: int, end_m: int, departure: datetime  # noqa: ANN001
 ) -> TripCreate:
-    from app.modules.geo.service import stop_api_id
-
-    offsets = _arrival_offsets(route, from_seq, to_seq)
-    stops = [
-        TripStopInput(
-            stop_id=stop_api_id(stop.stop_public_id), seq=index + 1, planned_arrival_at=departure + offset,
-            dwell_minutes=DWELL_MINUTES if 0 < index < len(offsets) - 1 else 0,
-        )
-        for index, (stop, offset) in enumerate(offsets)
-    ]
-    end = departure + offsets[-1][1]
+    """ADR-0028 phase 3: a road-stretch trip - ``[start_m, end_m]`` of the road, no stop echo; it ends after the
+    road's linear driving time for that stretch."""
+    end = departure + _drive(route, start_m, end_m)
     if end <= departure:
         end = departure + timedelta(minutes=1)
     return TripCreate(
         vehicle_id=vehicle_public_id,
         route_version_id=route.api_id,
-        stops=stops,
+        route_start_m=start_m,
+        route_end_m=end_m,
         planned_start_at=departure,
         planned_end_at=end,
         seat_capacity=direction.seat_capacity,
@@ -552,24 +510,24 @@ def plan_trip_create(
 
 
 def create_trip_for_direction(
-    session: Session, direction: DriverDirection, route, *, from_seq: int, to_seq: int, departure: datetime, now: datetime  # noqa: ANN001
+    session: Session, direction: DriverDirection, route, *, start_m: int, end_m: int, departure: datetime, now: datetime  # noqa: ANN001
 ) -> Trip:
     vehicle = trips_service.get_vehicle(session, direction.vehicle_id)
     data = plan_trip_create(
-        direction, route, vehicle_public_id=trips_service.vehicle_public_id(vehicle), from_seq=from_seq, to_seq=to_seq,
+        direction, route, vehicle_public_id=trips_service.vehicle_public_id(vehicle), start_m=start_m, end_m=end_m,
         departure=departure,
     )
     return trips_service.create_trip(session, driver_user_id=direction.driver_user_id, data=data, now=now, direction_id=direction.id)
 
 
 def retime_trip(
-    session: Session, direction: DriverDirection, trip: Trip, route, *, from_seq: int, to_seq: int, departure: datetime, now: datetime  # noqa: ANN001
+    session: Session, direction: DriverDirection, trip: Trip, route, *, start_m: int, end_m: int, departure: datetime, now: datetime  # noqa: ANN001
 ) -> Trip:
     """Move an empty planned trip (no booking, no open offer) to a new time and stretch - the driver's plan follows the
     client they are now answering. ``patch_trip`` refuses it the moment any capacity is reserved (Q63)."""
     vehicle = trips_service.get_vehicle(session, direction.vehicle_id)
     plan = plan_trip_create(
-        direction, route, vehicle_public_id=trips_service.vehicle_public_id(vehicle), from_seq=from_seq, to_seq=to_seq,
+        direction, route, vehicle_public_id=trips_service.vehicle_public_id(vehicle), start_m=start_m, end_m=end_m,
         departure=departure,
     )
     return trips_service.patch_trip(
@@ -578,7 +536,7 @@ def retime_trip(
         actor_user_id=direction.driver_user_id,
         data=TripPatch(
             expected_version=trip.version, planned_start_at=plan.planned_start_at, planned_end_at=plan.planned_end_at,
-            stops=plan.stops,
+            route_start_m=plan.route_start_m, route_end_m=plan.route_end_m,
         ),
         now=now,
     )

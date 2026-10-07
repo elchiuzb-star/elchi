@@ -99,7 +99,6 @@ export const driverDirectionsMessages = {
   "dir.passed": { uz: "Bu joydan o'tib ketdingiz", ru: "Вы уже проехали это место" },
 
   // --- Q158: a trip read by districts, not by internal route nodes ---
-  "tripDetail.alongTheRoad": { uz: "Yo'l bo'yi va taxminiy vaqt", ru: "По пути и примерное время" },
 
   // --- the client's view of a driver's time proposal (Q153) ---
   "offer.timeProposal": {

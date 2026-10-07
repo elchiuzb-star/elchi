@@ -99,7 +99,6 @@ import {
   listDistricts,
   listRegions,
   listCorridorRoutes,
-  listCorridorStops,
   listCorridors,
   listListingOffers,
   listListingProposals,
@@ -126,11 +125,9 @@ import {
   type ListingOfferDTO,
   type MapPointDTO,
   type MediaRefDTO,
-  type StopRefDTO,
   type ProposalThreadDTO,
   type RegionDTO,
   type RouteVersionDTO,
-  type StopDTO,
 } from "../api/v2/marketplace.api";
 import { newIdempotencyKey } from "../api/v2/http";
 import { LOCALES, translate, translateDynamic } from "../i18n";
@@ -190,7 +187,7 @@ import { BookingLiveTracking } from "./v2/BookingLiveTracking";
 import { DriverTrackingBar } from "./v2/DriverTrackingBar";
 import { driverTracker } from "./v2/driverTracker";
 import { trackableTrip } from "./gpsOutbox";
-import { bookingCounterparty, canShareListing, canShareTracking, routesThroughStop } from "./safetyMounts";
+import { bookingCounterparty, canShareListing, canShareTracking } from "./safetyMounts";
 import {
   createTrip,
   createVehicle,
@@ -458,19 +455,17 @@ const emptyOrder: CreateOrderPayload = {
 /**
  * One end of the direction the person is composing.
  *
- * Q88: an end is a verified stop **or** a place marked on the map, never both - `corridorId` is filled once a
- * stop pins the end to a corridor. The district and region travel along as the labels the person chose them
- * by, not as anything the matcher decides on.
+ * ADR-0028 (Q160): an end is a place marked on the map - point A or point B, nothing else. The district and
+ * region travel along as the labels the person chose them by, not as anything the matcher decides on; the
+ * corridor is the server's answer for the two places (the direction preview).
  */
 type DirectionEnd = {
   region: RegionDTO | null;
   district: DistrictDTO | null;
-  stop: StopDTO | null;
   point: MarkedPoint | null;
-  corridorId: string;
 };
 
-const emptyDirectionEnd: DirectionEnd = { region: null, district: null, stop: null, point: null, corridorId: "" };
+const emptyDirectionEnd: DirectionEnd = { region: null, district: null, point: null };
 
 /** Q68: the parcel kinds the contract allows, in the words the app uses for them. */
 const PARCEL_TYPES: Array<[string, string]> = [
@@ -524,7 +519,6 @@ function directionEndLabel(end: DirectionEnd): string {
       end.point.address?.trim() || [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ")
     );
   }
-  if (end.stop) return [end.stop.district.name_uz, end.region?.name_uz].filter(Boolean).join(", "); // Q158: a place, not a stop
   if (end.district) return [end.district.name_uz, end.region?.name_uz].filter(Boolean).join(", ");
   return end.region?.name_uz ?? "";
 }
@@ -577,7 +571,7 @@ const CASH_RECORDABLE: Record<string, string[]> = {
 /** The passenger ladder, for a booking this client did not create but a driver may still be carrying. */
 const PASSENGER_PROGRESS: Array<[string, string]> = [
   labelledPair("confirmed", "status.confirmed"),
-  labelledPair("awaiting_pickup", "app.progress.driverAtStop"),
+  labelledPair("awaiting_pickup", "app.progress.driverArrived"),
   labelledPair("onboard", "status.in_transit"),
   labelledPair("completed", "app.progress.completed"),
 ];
@@ -620,8 +614,8 @@ function matchLabel(value: string): string {
   return translateDynamic(`match.${value}`) ?? value;
 }
 
-function confirmedStopsNote(): string {
-  return translate("match.confirmedStopsNote");
+function confirmedRoadsNote(): string {
+  return translate("match.confirmedRoadsNote");
 }
 
 /** Q98: how many *people* opened this listing. Zero is shown in words, because "0" next to a listing reads
@@ -630,7 +624,7 @@ function viewCountLabel(count: number): string {
   return count > 0 ? `${count} ${translate("listing.viewsSuffix")}` : translate("listing.viewsNone");
 }
 
-/** Why a suggestion is only a suggestion: the clock or the map. Null when the server gave no reason we
+/** Why a suggestion is only a suggestion: a different time. Null when the server gave no reason we
     can put into words - the card then carries the plain "Muqobil" badge and nothing invented. */
 function alternativeReasonLabel(reasons: readonly string[]): string | null {
   const reason = alternativeReason(reasons);
@@ -911,50 +905,18 @@ function moneyNumber(value: number | string | null | undefined): number {
 }
 
 /**
- * When this trip can be at the request's pickup stop, inside the window the client asked for.
+ * The pickup window a driver's proposal carries for this request.
  *
- * The trip's planned arrival is the honest anchor: the driver offers the half hour around it, not the client's
- * whole window. `null` means the trip simply does not serve that stop in time, and nothing is offered.
+ * ADR-0028 (Q160): a request is two marked places, so there is nothing on the trip to anchor a narrower window
+ * on. The screen offers the client's own window and the server derives the real pickup ETA from the projection
+ * of the place onto the trip's road - refusing it there if the trip cannot be at that place in time.
  */
 function proposalPickupWindow(
   trip: TripDTO | undefined,
   request: FeedItemDTO,
 ): { start: string; end: string } | null {
   if (!trip) return null;
-  // Q88: a point-ended request has no stop to anchor on. The server derives the window from the projection
-  // when the proposal is sent, so the screen simply offers the client's own window and lets the server refuse.
-  const originStopId = request.listing.origin_stop?.id;
-  if (!originStopId) {
-    return { start: request.listing.departure_window_start, end: request.listing.departure_window_end };
-  }
-  const at = trip.stops.find((stop) => stop.stop.id === originStopId);
-  if (!at) return null;
-  const arrival = new Date(at.eta_arrival_at ?? at.planned_arrival_at).getTime();
-  const askedFrom = new Date(request.listing.departure_window_start).getTime();
-  const askedTo = new Date(request.listing.departure_window_end).getTime();
-  const start = Math.max(askedFrom, arrival - 30 * 60 * 1000);
-  const end = Math.min(askedTo, arrival + 30 * 60 * 1000);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
-  return { start: new Date(start).toISOString(), end: new Date(end).toISOString() };
-}
-
-/**
- * The departure window a driver's trip offer advertises for one of its stops.
- *
- * The anchor is the same one the driver's own proposals use: when the car is planned to be at that stop, plus
- * or minus half an hour. That is not a cosmetic choice - a client answering this offer sends exactly this
- * window back, and the server checks it against the trip's real ETA at that stop. An invented window would be
- * published and then refused at the first proposal.
- */
-function offerWindowForTrip(trip: TripDTO | undefined, originStopId: string): { start: string; end: string } | null {
-  const at = trip?.stops.find((stop) => stop.stop.id === originStopId);
-  if (!at) return null;
-  const arrival = new Date(at.eta_arrival_at ?? at.planned_arrival_at).getTime();
-  if (!Number.isFinite(arrival)) return null;
-  return {
-    start: new Date(arrival - 30 * 60 * 1000).toISOString(),
-    end: new Date(arrival + 30 * 60 * 1000).toISOString(),
-  };
+  return { start: request.listing.departure_window_start, end: request.listing.departure_window_end };
 }
 
 function StatusTimeline({ status }: { status: OrderStatus }) {
@@ -1428,13 +1390,6 @@ function CashAcknowledgement({
 }
 
 /**
- * What to call one end of a direction (Q88).
- *
- * An end is either a verified stop or a place the client marked on the map, never both. The reverse-geocoded
- * address is the friendlier name for a marked place, so it wins when there is one; a district is the fallback
- * because "Samarqand (fixture)" still tells the person where this is, and a bare coordinate does not.
- */
-/**
  * What a list shows while its answer is still in flight.
  *
  * Before this, a loading list rendered its empty state - the screen said "there are no offers yet" about an
@@ -1452,40 +1407,47 @@ function ListSkeleton({ rows = 3 }: { rows?: number }) {
 }
 
 /** The name a driver saved a direction end by - never the opaque id the API returns. */
-function savedEndLabel(districtId: string | null | undefined, stopId: string | null | undefined, names: Record<string, string>): string {
+function savedEndLabel(districtId: string | null | undefined, names: Record<string, string>): string {
   if (districtId) return names[districtId] ?? translate("app.savedEnd.district");
-  if (stopId) return translate("app.savedEnd.stop");
   return "-";
 }
 
+/**
+ * What to call one end of a direction (Q88, ADR-0028).
+ *
+ * An end is a place the client marked on the map. The reverse-geocoded address is the friendlier name, so it
+ * wins when there is one; a district is the fallback because "Samarqand (fixture)" still tells the person where
+ * this is, and a bare coordinate does not.
+ */
 function endLabel(
-  stop: StopRefDTO | null | undefined,
   point: MapPointDTO | null | undefined,
   fallback = translate("app.endLabel.mapPlace"),
 ): string {
-  // Q158: a legacy stop end is shown as the district it is in - ELCHI works point A -> point B, no stops on screen.
-  if (stop) return stop.district_name_uz || fallback;
   if (!point) return fallback;
   return point.address?.trim() || point.district?.name_uz || fallback;
 }
 
-/** Q158: the client's own end as the route map draws it - a place with a name, never a stop. */
+/** Q158: the client's own end as the route map draws it - a place with a name. */
 function routePoint(end: DirectionEnd): RouteMapPoint | null {
-  const at = end.point ?? end.stop?.point;
+  const at = end.point;
   if (!at) return null;
   const name = end.point?.address?.trim() || [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ") || "-";
   return { lat: at.lat, lng: at.lng, name };
 }
 
-/** Q158: a trip is named by the districts it runs between, never by its internal route nodes. */
-function tripEndName(trip: TripDTO, which: "first" | "last"): string {
-  const node = which === "first" ? trip.stops[0] : trip.stops[trip.stops.length - 1];
-  return node?.stop.district_name_uz || "-";
+/**
+ * Q158/ADR-0028: a trip is a stretch of road, named by the areas of the direction it was planned for. A trip
+ * no direction points at (an older or native-created one) is named by its route times instead - never by
+ * internal route positions.
+ */
+function tripDirectionName(trip: TripDTO, directions: DriverDirectionDTO[], ru: boolean, arrow = "->"): string | null {
+  const direction = directions.find((item) => item.active_trip?.id === trip.id);
+  if (!direction) return null;
+  return `${directionEndName(direction.origin, ru)} ${arrow} ${directionEndName(direction.destination, ru)}`;
 }
 
-/** The row label of an end: always a place ("Olib ketish joyi"), whatever the end is stored as. */
-function endRowLabel(stop: StopRefDTO | null | undefined, stopWord: string, pointWord: string): string {
-  return stop ? stopWord : pointWord;
+function tripRouteName(trip: TripDTO, directions: DriverDirectionDTO[], ru: boolean): string {
+  return tripDirectionName(trip, directions, ru) ?? `${shortDate(trip.planned_start_at)} -> ${shortDate(trip.planned_end_at)}`;
 }
 
 /**
@@ -1619,7 +1581,7 @@ function ListingCard({ listing, onClick }: { listing: ListingDTO; onClick?: () =
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
           <MapPin size={14} color="var(--primary)" />
-          {endLabel(listing.origin_stop, listing.origin_point)} {"->"} {endLabel(listing.destination_stop, listing.destination_point)}
+          {endLabel(listing.origin_point)} {"->"} {endLabel(listing.destination_point)}
         </span>
         <StatusBadge status={listing.status} />
       </div>
@@ -1700,8 +1662,6 @@ export function ConnectedApp() {
   const [dropoffEnd, setDropoffEnd] = useState<DirectionEnd>(emptyDirectionEnd);
   const [routeVersion, setRouteVersion] = useState<RouteVersionDTO | null>(null);
   const [routeDistricts, setRouteDistricts] = useState<CorridorDistrictDTO[]>([]);
-  const [corridorStops, setCorridorStops] = useState<StopDTO[]>([]);
-  /** Verified stops for the end being marked, offered on the map as a shortcut (Q88). */
   const [listingForm, setListingForm] = useState({
     windowStart: "",
     windowEnd: "",
@@ -1732,7 +1692,7 @@ export function ConnectedApp() {
   const [proposalTotal, setProposalTotal] = useState(0);
   const [listingDetail, setListingDetail] = useState<ListingDTO | null>(null);
   const [listingThreads, setListingThreads] = useState<ProposalThreadDTO[]>([]);
-  // Stage-2 driver side: trips replace the v1 saved routes, and the feed answers on verified stops.
+  // Stage-2 driver side: trips replace the v1 saved routes, and the feed answers on confirmed roads.
   const [directionOwner, setDirectionOwner] = useState<"client" | "driver">("client");
   const [trips, setTrips] = useState<TripDTO[]>([]);
   const [vehicles, setVehicles] = useState<VehicleDTO[]>([]);
@@ -1753,7 +1713,7 @@ export function ConnectedApp() {
   const [selectedRequest, setSelectedRequest] = useState<FeedItemDTO | null>(null);
   const [proposalTripId, setProposalTripId] = useState("");
   // ADR-0027: the driver's directions ("where from -> where to"), the one whose requests are on screen, the add form
-  // and the offer being written from a direction. Trips, stops and the departure are the server's (Q150-Q152).
+  // and the offer being written from a direction. Trips and the departure are the server's (Q150-Q152).
   const [directions, setDirections] = useState<DriverDirectionDTO[]>([]);
   const [activeDirectionId, setActiveDirectionId] = useState("");
   const [directionFeed, setDirectionFeed] = useState<DirectionRequestsDTO | null>(null);
@@ -1780,8 +1740,6 @@ export function ConnectedApp() {
   const [offerForm, setOfferForm] = useState({
     tripId: "",
     serviceType: "passenger" as "passenger" | "parcel",
-    originStopId: "",
-    destinationStopId: "",
     price: "",
   });
   // ADR-0026 (Q141): the booking-bound operator chat on screen ("Shikoyat qilish"), and the person's list of them.
@@ -1884,8 +1842,6 @@ export function ConnectedApp() {
   const [error, setError] = useState("");
   // The trip the driver opened from "Yo'nalishlarim" (DriverTripDetail loads it itself).
   const [openTripId, setOpenTripId] = useState<string | null>(null);
-  // Trip planning: a stop found by name narrows the corridor's routes to the ones through it.
-  const [routeStopFilter, setRouteStopFilter] = useState<{ id: string; name: string } | null>(null);
 
   const go = (next: Screen) => {
     setError("");
@@ -2078,17 +2034,17 @@ export function ConnectedApp() {
       setPickupEnd(end);
       setOrderForm((current) => ({
         ...current,
-        pickup_address: end.stop || end.point ? directionEndLabel(end) : "",
-        pickup_lat: end.point?.lat ?? end.stop?.point.lat ?? null,
-        pickup_lng: end.point?.lng ?? end.stop?.point.lng ?? null,
+        pickup_address: end.point ? directionEndLabel(end) : "",
+        pickup_lat: end.point?.lat ?? null,
+        pickup_lng: end.point?.lng ?? null,
       }));
     } else {
       setDropoffEnd(end);
       setOrderForm((current) => ({
         ...current,
-        dropoff_address: end.stop || end.point ? directionEndLabel(end) : "",
-        dropoff_lat: end.point?.lat ?? end.stop?.point.lat ?? null,
-        dropoff_lng: end.point?.lng ?? end.stop?.point.lng ?? null,
+        dropoff_address: end.point ? directionEndLabel(end) : "",
+        dropoff_lat: end.point?.lat ?? null,
+        dropoff_lng: end.point?.lng ?? null,
       }));
     }
   }
@@ -2097,19 +2053,18 @@ export function ConnectedApp() {
    * Step 1: the region.
    *
    * Tashkent city is its own unit (wave 10), so `requires_district` decides whether step 2 is asked at all -
-   * and when it is not, the next screen is the **map**, not a list of stops. Sending a person who chose
-   * "Toshkent shahri" to a stop catalogue was the old stop-first model: Q88 replaced it, because a place is
-   * marked on a map and only six of the country's districts have a verified stop to offer.
+   * and when it is not, the next screen is the **map**: a place is marked on a map (Q88, ADR-0028), there is
+   * no catalogue of places to pick from.
    */
   function selectRegionForLocation(region: RegionDTO) {
-    applyEnd({ region, district: null, stop: null, point: null, corridorId: "" });
+    applyEnd({ region, district: null, point: null });
     setDistrictMode(locationSelectorMode === "pickup" ? "client-pickup" : "client-dropoff");
     go(region.requires_district ? "client-district-selector" : "client-point-picker");
   }
 
-  /** Step 2. The map is the last step (Q88): a place, not a stop from a catalogue. */
+  /** Step 2. The map is the last step (Q88): a place marked on the map. */
   function selectGeoDistrict(district: DistrictDTO) {
-    applyEnd({ ...activeEnd, district, stop: null, point: null, corridorId: "" });
+    applyEnd({ ...activeEnd, district, point: null });
     go("client-point-picker");
   }
 
@@ -2132,7 +2087,7 @@ export function ConnectedApp() {
         : [];
       district = nearestDistrict(withinRegion.length ? withinRegion : catalogue, point);
     }
-    applyEnd({ ...activeEnd, district, stop: null, point });
+    applyEnd({ ...activeEnd, district, point });
     go(directionOwner === "driver" ? "driver-feed" : "client-home");
   }
 
@@ -2183,7 +2138,7 @@ export function ConnectedApp() {
 
       setLocationSelectorMode("pickup");
       setDirectionOwner("client");
-      setPickupEnd({ region, district: nearest, stop: null, point: { ...here, address }, corridorId: "" });
+      setPickupEnd({ region, district: nearest, point: { ...here, address } });
       setOrderForm((current) => ({
         ...current,
         pickup_lat: here.lat,
@@ -2201,12 +2156,6 @@ export function ConnectedApp() {
     } finally {
       setLocating(false);
     }
-  }
-
-  /** Step 3: the verified stop the booking is actually agreed on. */
-  function selectGeoStop(stop: StopDTO, corridorId: string) {
-    applyEnd({ ...activeEnd, stop, point: null, corridorId });
-    go(directionOwner === "driver" ? "driver-feed" : "client-home");
   }
 
   function normalizeCityText(value: string) {
@@ -2246,13 +2195,10 @@ export function ConnectedApp() {
     ]));
   }
 
-  // Both ends of a listing sit on one corridor; if they do not, no confirmed road joins them (spec §6.2).
-  const directionCorridorId = pickupEnd.corridorId || dropoffEnd.corridorId;
-  const sameCorridor = !pickupEnd.corridorId || !dropoffEnd.corridorId || pickupEnd.corridorId === dropoffEnd.corridorId;
-  // Q88: a stop pair resolves locally; a point pair is only ready once the server found a route for it.
-  const bothStops = Boolean(pickupEnd.stop && dropoffEnd.stop && pickupEnd.stop.id !== dropoffEnd.stop.id && sameCorridor);
-  const bothPoints = Boolean(pickupEnd.point && dropoffEnd.point && preview);
-  const directionReady = bothStops || bothPoints;
+  // ADR-0028: the corridor is the server's answer for the two marked places (the direction preview); a pair
+  // is only ready once the server found a confirmed road for it.
+  const directionCorridorId = preview?.corridor_id ?? "";
+  const directionReady = Boolean(pickupEnd.point && dropoffEnd.point && preview);
   /** Q5: a service is open per corridor, and which service is being asked about depends on the mode. */
   const serviceClosed =
     serviceMode === "passenger" ? flags?.passenger_enabled === false : flags?.parcel_enabled === false;
@@ -2383,14 +2329,13 @@ export function ConnectedApp() {
 
   /**
    * The districts this direction passes, in travel order (G17). `on_confirmed_route` is what makes the
-   * recommendation honest: a district the corridor owns a stop in but no confirmed road reaches yet is not
-   * "on your way" (Q46 - without a routing provider only confirmed stop matches exist).
+   * recommendation honest: a district of the corridor that no confirmed road reaches yet is not "on your way"
+   * (Q46 - without a routing provider only confirmed roads match).
    */
   useEffect(() => {
     if (!directionCorridorId || !directionReady) {
       setRouteVersion(null);
       setRouteDistricts([]);
-      setCorridorStops([]);
       return;
     }
     let isActive = true;
@@ -2400,9 +2345,6 @@ export function ConnectedApp() {
     void listCorridorDistricts(directionCorridorId)
       .then((items) => { if (isActive) setRouteDistricts(items); })
       .catch(() => { if (isActive) setRouteDistricts([]); });
-    void listCorridorStops(directionCorridorId)
-      .then((items) => { if (isActive) setCorridorStops(items); })
-      .catch(() => { if (isActive) setCorridorStops([]); });
     return () => { isActive = false; };
   }, [directionCorridorId, directionReady]);
 
@@ -2428,23 +2370,21 @@ export function ConnectedApp() {
    * draft instead of opening a second listing. The free-text comment is filtered by the server (Q43) and the
    * warnings it returns are shown as they come back - the screen never hides that something was masked.
    */
-  /** Q88: one end is a verified stop **or** a marked place - the body carries exactly one of the two. */
+  /** ADR-0028 (Q160): an end is a marked place - the body carries `*_point`, never a stop id. */
   function endFields(end: DirectionEnd, prefix: "origin" | "destination") {
-    if (end.point && end.district) {
-      return {
-        [`${prefix}_point`]: {
-          lat: end.point.lat,
-          lng: end.point.lng,
-          district_id: end.district.id,
-          address: end.point.address,
-        },
-      };
-    }
-    return { [`${prefix}_stop_id`]: end.stop?.id };
+    if (!end.point || !end.district) return {};
+    return {
+      [`${prefix}_point`]: {
+        lat: end.point.lat,
+        lng: end.point.lng,
+        district_id: end.district.id,
+        address: end.point.address,
+      },
+    };
   }
 
   async function publishListingDraft() {
-    const haveEnds = (pickupEnd.stop || pickupEnd.point) && (dropoffEnd.stop || dropoffEnd.point);
+    const haveEnds = pickupEnd.point && dropoffEnd.point;
     if (!haveEnds) return;
     const passenger = serviceMode === "passenger";
     const body = {
@@ -2662,7 +2602,7 @@ export function ConnectedApp() {
   /**
    * Saved searches come back as ids. A driver reading `dst_9f2c...` learns nothing, so the district catalogue
    * is fetched alongside and the ids are resolved to the names the driver picked them by. An id that cannot be
-   * resolved is described ("bekat") rather than printed.
+   * resolved is described ("tuman") rather than printed.
    */
 
   async function loadSavedSearches() {
@@ -2792,7 +2732,6 @@ export function ConnectedApp() {
     setDropoffEnd(emptyDirectionEnd);
     setRouteVersion(null);
     setRouteDistricts([]);
-    setCorridorStops([]);
     setListingForm({
       windowStart: "",
       windowEnd: "",
@@ -2838,13 +2777,12 @@ export function ConnectedApp() {
   /**
    * M1: the open client requests this driver may answer.
    *
-   * The ends are the ones the driver picked in the same selector the client uses. When a district was chosen
-   * the question widens from "this exact stop" to "anywhere in this district", which is how a driver going
-   * Toshkent -> Qarshi also sees the requests of the districts on the way - still on verified stops and the
-   * confirmed route order, never merely "administratively nearby" (spec §6.1, Q46).
+   * The ends are the region/district the driver picked in the same selector the client uses, which is how a
+   * driver going Toshkent -> Qarshi also sees the requests of the districts on the way - still on confirmed
+   * roads and in route order, never merely "administratively nearby" (spec §6.1, Q46, ADR-0028).
    */
   async function loadRequestFeed(mode: "parcel" | "passenger" = driverServiceMode) {
-    if (!pickupEnd.stop && !pickupEnd.district) {
+    if (!pickupEnd.district) {
       setRequestFeed([]);
       return;
     }
@@ -2853,9 +2791,7 @@ export function ConnectedApp() {
       // React has not applied yet would fetch the service the driver just switched away from.
       service_type: mode,
       origin_district_id: pickupEnd.district?.id,
-      origin_stop_id: pickupEnd.district ? undefined : pickupEnd.stop?.id,
       destination_district_id: dropoffEnd.district?.id,
-      destination_stop_id: dropoffEnd.district ? undefined : dropoffEnd.stop?.id,
       limit: 30,
     });
     setRequestFeed(result.data);
@@ -2909,7 +2845,7 @@ export function ConnectedApp() {
    * Q92, the other half of the same market: the driver trip offers that serve where this client is going.
    *
    * The client picked two places on the home sheet; the district of each is what the feed is asked with, so a
-   * client going Toshkent -> Qarshi sees every offer that calls at a verified stop in those districts. Nothing
+   * client going Toshkent -> Qarshi sees every offer whose road passes those districts. Nothing
    * is matched merely because it is administratively nearby - the server still answers on the confirmed route.
    *
    * Seats matter for a passenger offer: a per-seat price is only comparable for the number of seats asked for,
@@ -3798,17 +3734,6 @@ export function ConnectedApp() {
                 {offRouteNote && <p className="mt-1.5 text-[12px] leading-5 text-warning">{offRouteNote}</p>}
               </div>
             )}
-            {!previewBusy && !preview && !previewError && directionReady && (
-              <div className="mt-3 rounded-[14px] bg-accent px-4 py-3">
-                <p className="text-[12px] font-semibold text-primary">{translate("home.routeDistricts")}</p>
-                <p className="mt-0.5 text-[15px] font-semibold text-foreground">
-                  {routeDistricts.filter((item) => item.on_confirmed_route).map((item) => item.district.name_uz).join(" - ") || translate("home.routeLoading")}
-                </p>
-                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                  {translate("home.districtDriversNote")}
-                </p>
-              </div>
-            )}
             {/* No counts here. This sheet asks one question - where to and where from - and a tally of
                 listings, proposals and finished orders answers a different one. It lives on "Buyurtmalar",
                 which is where somebody goes when that is what they want to know. */}
@@ -3829,16 +3754,6 @@ export function ConnectedApp() {
               {/* Q92: ELCHI is a market in both directions. The button above publishes this client's own
                   request with their own price; answering a driver who published theirs is the other way in,
                   and it now has its own place in the drawer rather than a second button under this one. */}
-              {pickupEnd.stop && dropoffEnd.stop && pickupEnd.stop.id === dropoffEnd.stop.id && (
-                <p className="mt-2 text-center text-[12px] leading-5 text-destructive">
-                  {translate("home.sameStop")}
-                </p>
-              )}
-              {pickupEnd.stop && dropoffEnd.stop && !sameCorridor && (
-                <p className="mt-2 text-center text-[12px] leading-5 text-destructive">
-                  {translate("home.noConfirmedRoute")}
-                </p>
-              )}
             </div>
           </section>
         </main>
@@ -3890,12 +3805,11 @@ export function ConnectedApp() {
           <TopBar title={translate("routeSummary.direction")} back={() => go("client-home")} />
           <section className="el-enter min-h-0 flex-1 overflow-y-auto px-5 py-5">
             <div className="overflow-hidden rounded-[18px] border border-border bg-card">
-              {/* A Q88 end is a marked place, so its name is the reverse-geocoded address - the stop name is
-                  only there for the minority of ends chosen from the verified catalogue. Reading the stop
-                  alone is why every marked place used to render as "Manzil kiritilmagan". */}
+              {/* A Q88 end is a marked place, so its name is the reverse-geocoded address; the coordinate is
+                  the fallback, so a marked place never renders as "Manzil kiritilmagan". */}
               <RouteSummaryRow
                 label={translate("routeSummary.pickup")}
-                address={pickupEnd.point?.address ?? pickupEnd.stop?.district.name_uz ?? ""}
+                address={pickupEnd.point?.address ?? ""}
                 fallback={pickupEnd.point ? coordinateLabel(pickupEnd.point.lat, pickupEnd.point.lng) : undefined}
                 city={pickupEnd.region?.name_uz}
                 district={pickupEnd.district?.name_uz}
@@ -3904,7 +3818,7 @@ export function ConnectedApp() {
               />
               <RouteSummaryRow
                 label={translate("routeSummary.dropoff")}
-                address={dropoffEnd.point?.address ?? dropoffEnd.stop?.district.name_uz ?? ""}
+                address={dropoffEnd.point?.address ?? ""}
                 fallback={dropoffEnd.point ? coordinateLabel(dropoffEnd.point.lat, dropoffEnd.point.lng) : undefined}
                 city={dropoffEnd.region?.name_uz}
                 district={dropoffEnd.district?.name_uz}
@@ -4150,20 +4064,18 @@ export function ConnectedApp() {
           />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
             {/* Every row carries a fact or it is not here.
-                This screen used to print "-" three times over: two stop rows, which a Q88 direction never
-                has because its ends are marked places, and the districts on the route, which were read from
-                a corridor id that only a stop end ever sets. A review that shows a dash is asking somebody
-                to confirm something it did not manage to tell them. */}
+                A review that shows a dash is asking somebody to confirm something it did not manage to tell
+                them, so the ends are the marked places and the districts on the route come from the preview. */}
             {(() => {
               const endRow = (label: string, end: DirectionEnd): [string, string, string?] => {
                 const place =
                   end.point?.address
                   || (end.point ? coordinateLabel(end.point.lat, end.point.lng) : "");
                 const where = [end.district?.name_uz, end.region?.name_uz].filter(Boolean).join(", ");
-                return [label, place || where || "-", end.stop ? translate("orderForm.review.verifiedStop", { where }) : where];
+                return [label, place || where || "-", where];
               };
               // The districts come from the preview, which is the answer for *these two places*; the
-              // corridor-wide list is only populated when an end was picked from the stop catalogue.
+              // corridor-wide list is the fallback while it is still loading.
               const onRoute =
                 (preview?.districts_on_route ?? []).join(" - ")
                 || routeDistricts.filter((item) => item.on_confirmed_route).map((item) => item.district.name_uz).join(" - ");
@@ -4284,8 +4196,8 @@ export function ConnectedApp() {
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
                       <MapPin size={14} color="var(--primary)" />
-                      {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
-                  {endLabel(booking.dropoff.stop, booking.dropoff.point)}
+                      {endLabel(booking.pickup.point)} {"->"}{" "}
+                  {endLabel(booking.dropoff.point)}
                     </span>
                     <StatusBadge status={booking.service_status} label={bookingBadgeLabel(booking)} />
                   </div>
@@ -4392,8 +4304,8 @@ export function ConnectedApp() {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
                   <MapPin size={14} color="var(--primary)" />
-                  {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
-                  {endLabel(booking.dropoff.stop, booking.dropoff.point)}
+                  {endLabel(booking.pickup.point)} {"->"}{" "}
+                  {endLabel(booking.dropoff.point)}
                 </span>
                 <StatusBadge status={booking.service_status} label={bookingBadgeLabel(booking)} />
               </div>
@@ -4527,7 +4439,7 @@ export function ConnectedApp() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-[15px] font-semibold text-foreground">
-                        {version ? `${endLabel(version.pickup_stop, version.pickup_point)} -> ${endLabel(version.dropoff_stop, version.dropoff_point)}` : "-"}
+                        {version ? `${endLabel(version.pickup_point)} -> ${endLabel(version.dropoff_point)}` : "-"}
                       </p>
                       <p className="mt-1 text-[13px] text-muted-foreground">
                         {version ? `${shortDate(version.pickup_window_start)} - ${shortDate(version.pickup_window_end)}` : "-"}
@@ -5003,7 +4915,7 @@ export function ConnectedApp() {
     if (screen === "driver-saved-searches") {
       // The direction currently on the feed is what gets saved - the driver has already chosen it there, and
       // asking for it a second time in a second form is how a screen like this stops being used.
-      const canSave = Boolean((pickupEnd.district || pickupEnd.stop) && (dropoffEnd.district || dropoffEnd.stop));
+      const canSave = Boolean(pickupEnd.district && dropoffEnd.district);
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
           <TopBar title={translate("savedSearches.title")} back={() => go("driver-feed")} />
@@ -5027,9 +4939,7 @@ export function ConnectedApp() {
                         service_type: driverServiceMode,
                         side: "requests",
                         origin_district_id: pickupEnd.district?.id,
-                        origin_stop_id: pickupEnd.district ? undefined : pickupEnd.stop?.id,
                         destination_district_id: dropoffEnd.district?.id,
-                        destination_stop_id: dropoffEnd.district ? undefined : dropoffEnd.stop?.id,
                         time_window_start: from.toISOString(),
                         time_window_end: to.toISOString(),
                         quantity: 1,
@@ -5053,8 +4963,8 @@ export function ConnectedApp() {
             {busy && !saved.length ? <ListSkeleton rows={2} /> : saved.length ? saved.map((item) => (
               <div key={item.id} className="rounded-[16px] border border-border bg-card p-4">
                 <p className="text-[14px] font-semibold text-foreground">
-                  {savedEndLabel(item.origin_district_id, item.origin_stop_id, districtNames)} {"->"}{" "}
-                  {savedEndLabel(item.destination_district_id, item.destination_stop_id, districtNames)}
+                  {savedEndLabel(item.origin_district_id, districtNames)} {"->"}{" "}
+                  {savedEndLabel(item.destination_district_id, districtNames)}
                 </p>
                 <p className="mt-1 text-[12px] text-muted-foreground">
                   {shortDate(item.time_window_start)} - {shortDate(item.time_window_end)}
@@ -5378,8 +5288,8 @@ export function ConnectedApp() {
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
             <ListingCard listing={listing} />
             {[
-              [endRowLabel(listing.origin_stop, translate("listingDetail.pickupStop"), translate("listingDetail.pickupPoint")), endLabel(listing.origin_stop, listing.origin_point)],
-              [endRowLabel(listing.destination_stop, translate("listingDetail.dropoffStop"), translate("listingDetail.dropoffPoint")), endLabel(listing.destination_stop, listing.destination_point)],
+              [translate("listingDetail.pickupPoint"), endLabel(listing.origin_point)],
+              [translate("listingDetail.dropoffPoint"), endLabel(listing.destination_point)],
               [translate("listingDetail.departureWindow"), `${shortDate(listing.departure_window_start)} - ${shortDate(listing.departure_window_end)}`],
               [translate("common.price"), formatUzs(listing.total_minor / 100)],
               [translate("listingDetail.parcel"), listing.parcel
@@ -5443,7 +5353,7 @@ export function ConnectedApp() {
                     <div>
                       <p className="text-[16px] font-semibold text-foreground">{thread.driver.label}</p>
                       <p className="text-[13px] text-muted-foreground">
-                        {version ? `${endLabel(version.pickup_stop, version.pickup_point)} -> ${endLabel(version.dropoff_stop, version.dropoff_point)}` : "-"}
+                        {version ? `${endLabel(version.pickup_point)} -> ${endLabel(version.dropoff_point)}` : "-"}
                       </p>
                       <p className="mt-1 text-[13px] text-muted-foreground">
                         {version ? `${shortDate(version.pickup_window_start)} - ${shortDate(version.pickup_window_end)}` : "-"}
@@ -6226,7 +6136,7 @@ export function ConnectedApp() {
                 >
                   <span className="flex items-start justify-between gap-2">
                     <span className="text-[15px] font-semibold leading-6 text-foreground">
-                      {tripEndName(trip, "first")} {"->"} {tripEndName(trip, "last")}
+                      {tripRouteName(trip, directions, locale === "ru")}
                     </span>
                     <ChevronRight size={18} className="mt-1 shrink-0 text-muted-foreground" />
                   </span>
@@ -6260,7 +6170,7 @@ export function ConnectedApp() {
                     {translate("driverRoutes.boardingWindowHint")}
                   </p>
                 )}
-                {/* Q138 (ADR-0026): a trip is the driver's internal plan (vehicle, stops, seats and cargo per segment). It is
+                {/* Q138 (ADR-0026): a trip is the driver's internal plan (vehicle, road stretch, seats and cargo). It is
                     never published to clients; the driver answers client requests from the feed with it. */}
               </div>
               );
@@ -6273,11 +6183,15 @@ export function ConnectedApp() {
 
     if (screen === "driver-trip-detail" && openTripId) {
       // The trip's own view (availability, manifest). Q138: a trip is internal - nothing on it is shared with clients.
+      const openTrip = trips.find((item) => item.id === openTripId);
       return (
         <main className="flex min-h-0 flex-1 flex-col bg-background">
           <TopBar title={translate("trip.detailsTitle")} back={() => go("driver-routes")} />
           <section className="el-enter min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-28 pt-5">
-            <DriverTripDetail tripId={openTripId} />
+            <DriverTripDetail
+              tripId={openTripId}
+              routeName={(openTrip && tripDirectionName(openTrip, directions, locale === "ru", "→")) ?? undefined}
+            />
           </section>
         </main>
       );
@@ -6548,7 +6462,7 @@ export function ConnectedApp() {
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
               <MapPin size={14} color="var(--primary)" />
-              {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+              {endLabel(item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_point)}
             </span>
             <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-[12px] font-semibold text-primary">{matchLabel(item.match_type)}</span>
           </div>
@@ -6609,7 +6523,7 @@ export function ConnectedApp() {
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
                 <MapPin size={14} color="var(--primary)" />
-                {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+                {endLabel(item.listing.origin_point)} {"->"} {endLabel(item.listing.destination_point)}
               </span>
               <span
                 className={cls(
@@ -6731,7 +6645,7 @@ export function ConnectedApp() {
               <LocationPointRow
                 label={translate("driverFeed.from")}
                 address={directionEndLabel(pickupEnd)}
-                hasPoint={Boolean(pickupEnd.district || pickupEnd.stop)}
+                hasPoint={Boolean(pickupEnd.district)}
                 onClick={() => openLocationSelector("pickup", "driver")}
                 node="origin"
               />
@@ -6739,7 +6653,7 @@ export function ConnectedApp() {
               <LocationPointRow
                 label={translate("driverFeed.to")}
                 address={directionEndLabel(dropoffEnd)}
-                hasPoint={Boolean(dropoffEnd.district || dropoffEnd.stop)}
+                hasPoint={Boolean(dropoffEnd.district)}
                 onClick={() => openLocationSelector("dropoff", "driver")}
                 node="destination"
               />
@@ -6754,9 +6668,9 @@ export function ConnectedApp() {
             >
               {translate("driverFeed.savedSearches")}
             </button>
-            {matchScope === "confirmed_stops" && requestFeed.length > 0 && (
+            {matchScope === "confirmed_roads" && requestFeed.length > 0 && (
               <p className="rounded-[12px] bg-warning/14 px-3 py-2.5 text-[12px] leading-5 text-warning">
-                {confirmedStopsNote()}
+                {confirmedRoadsNote()}
               </p>
             )}
             {busy && !requestFeed.length ? <ListSkeleton /> : requestFeed.length ? (
@@ -6778,7 +6692,7 @@ export function ConnectedApp() {
               <EmptyState
                 icon={Package}
                 title={translate("driverFeed.emptyTitle")}
-                subtitle={pickupEnd.stop || pickupEnd.district ? translate("driverFeed.emptyTryOther") : translate("driverFeed.emptyPickFirst")}
+                subtitle={pickupEnd.district ? translate("driverFeed.emptyTryOther") : translate("driverFeed.emptyPickFirst")}
               />
             )}
           </section>
@@ -6803,8 +6717,8 @@ export function ConnectedApp() {
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
                       <MapPin size={14} color="var(--primary)" />
-                      {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
-                  {endLabel(booking.dropoff.stop, booking.dropoff.point)}
+                      {endLabel(booking.pickup.point)} {"->"}{" "}
+                  {endLabel(booking.dropoff.point)}
                     </span>
                     <StatusBadge status={booking.service_status} label={bookingBadgeLabel(booking)} />
                   </div>
@@ -6841,8 +6755,8 @@ export function ConnectedApp() {
         );
       }
       const plannedTrips = trips.filter((trip) => trip.status === "planned");
-      // The offered pickup window is when this trip is actually at that stop, clipped to what the client asked
-      // for. The server refuses a window the trip cannot keep, so the screen says so before sending.
+      // The offered pickup window is the client's own; the server checks it against the trip's ETA at the
+      // request's place and refuses a window the trip cannot keep.
       const chosenTrip = plannedTrips.find((trip) => trip.id === proposalTripId);
       const pickupWindow = proposalPickupWindow(chosenTrip, request);
       return (
@@ -6851,8 +6765,8 @@ export function ConnectedApp() {
           <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
             <div className="rounded-[14px] bg-background p-4">
               <p className="font-semibold text-foreground">
-                {endLabel(request.listing.origin_stop, request.listing.origin_point)} {"->"}{" "}
-                {endLabel(request.listing.destination_stop, request.listing.destination_point)}
+                {endLabel(request.listing.origin_point)} {"->"}{" "}
+                {endLabel(request.listing.destination_point)}
               </p>
               <p className="text-[13px] text-muted-foreground">{translate("driverBid.clientPrice", { price: formatUzs(request.listing.total_minor / 100) })}</p>
               <ParcelCategoryLine category={request.listing.parcel_category} />
@@ -6870,7 +6784,7 @@ export function ConnectedApp() {
               value={proposalTripId}
               options={plannedTrips.map((trip) => [
                 trip.id,
-                tripEndName(trip, "first") + " -> " + tripEndName(trip, "last") + " · " + shortDate(trip.planned_start_at),
+                tripRouteName(trip, directions, locale === "ru") + " · " + shortDate(trip.planned_start_at),
               ] as [string, string])}
               onChange={setProposalTripId}
             />
@@ -6921,9 +6835,7 @@ export function ConnectedApp() {
                     request.listing.id,
                     {
                       trip_id: proposalTripId,
-                      // Q88: a point-ended request supplies its own places; sending stop ids is refused.
-                      pickup_stop_id: request.listing.origin_stop?.id ?? null,
-                      dropoff_stop_id: request.listing.destination_stop?.id ?? null,
+                      // ADR-0028: the proposal inherits the request's own places - nothing to send for them.
                       pickup_window_start: pickupWindow?.start ?? request.listing.departure_window_start,
                       pickup_window_end: pickupWindow?.end ?? request.listing.departure_window_end,
                       price_basis: request.listing.price_basis,
@@ -6995,8 +6907,8 @@ export function ConnectedApp() {
           <section className="el-enter flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
             <div className="rounded-[14px] bg-background p-4">
               <p className="font-semibold text-foreground">
-                {endLabel(item.listing.origin_stop, item.listing.origin_point)} {"->"}{" "}
-                {endLabel(item.listing.destination_stop, item.listing.destination_point)}
+                {endLabel(item.listing.origin_point)} {"->"}{" "}
+                {endLabel(item.listing.destination_point)}
               </p>
               <p className="text-[13px] text-muted-foreground">{translate("driverBid.clientPrice", { price: formatUzs(item.listing.total_minor / 100) })}</p>
               <ParcelCategoryLine category={item.listing.parcel_category} />
@@ -7073,8 +6985,8 @@ export function ConnectedApp() {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
                   <MapPin size={14} color="var(--primary)" />
-                  {endLabel(booking.pickup.stop, booking.pickup.point)} {"->"}{" "}
-                  {endLabel(booking.dropoff.stop, booking.dropoff.point)}
+                  {endLabel(booking.pickup.point)} {"->"}{" "}
+                  {endLabel(booking.dropoff.point)}
                 </span>
                 <StatusBadge status={booking.service_status} label={bookingBadgeLabel(booking)} />
               </div>
@@ -7085,10 +6997,8 @@ export function ConnectedApp() {
             </div>
             <PromoMoneyCard promo={booking.promo} />
             {[
-              [endRowLabel(booking.pickup.stop, translate("driverBooking.pickupStop"), translate("driverBooking.pickupPoint")),
-               endLabel(booking.pickup.stop, booking.pickup.point)],
-              [endRowLabel(booking.dropoff.stop, translate("driverBooking.dropoffStop"), translate("driverBooking.dropoffPoint")),
-               endLabel(booking.dropoff.stop, booking.dropoff.point)],
+              [translate("driverBooking.pickupPoint"), endLabel(booking.pickup.point)],
+              [translate("driverBooking.dropoffPoint"), endLabel(booking.dropoff.point)],
               [translate("dispute.side.client"), booking.client?.display_name ?? translate("driverBooking.clientHidden")],
               // Q44: the participant phones open when the service starts, not at accept. A parcel's sender phone never
               // reaches the driver; the receiver's opens when the trip departs (Q142) - with no code, that is how the

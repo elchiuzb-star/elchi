@@ -142,8 +142,8 @@ class BookingEvidence:
     cancelled_or_refunded: bool
     handover_at: datetime | None
     delivery_at: datetime | None
-    pickup_stop_id: int | None
-    dropoff_stop_id: int | None
+    pickup_position_m: int | None
+    dropoff_position_m: int | None
     receiver_key: str | None = None
     cash_status_confirmed: bool = False  # bookings.cash_status = acknowledged
     cash_first_recorded_at: datetime | None = None  # server time the confirmed report was stored (never user input)
@@ -181,7 +181,7 @@ class BookingEvidence:
 _EVIDENCE_SQL = text(
     """
     SELECT b.id, b.trip_id, b.service_type, b.client_user_id, b.driver_user_id, b.created_at, b.service_status,
-           b.completed_at, b.cancelled_at, b.cash_status, b.pickup_stop_id, b.dropoff_stop_id,
+           b.completed_at, b.cancelled_at, b.cash_status, b.pickup_position_m, b.dropoff_position_m,
            (SELECT max(r.decided_at) FROM cash_receipts r WHERE r.booking_id = b.id
               AND r.status IN ('acknowledged', 'resolved_paid')) AS cash_at,
            (SELECT min(r.created_at) FROM cash_receipts r WHERE r.booking_id = b.id
@@ -224,7 +224,7 @@ def read_evidence(session: Session, booking_id: int) -> BookingEvidence | None:
         net_captured_minor=int(row["net_minor"] or 0), open_dispute=bool(row["disputed"]),
         cancelled_or_refunded=row["cancelled_at"] is not None or int(row["reversed_minor"] or 0) > 0,
         handover_at=_aware(row["handover_at"]), delivery_at=_aware(row["delivery_at"]),
-        pickup_stop_id=row["pickup_stop_id"], dropoff_stop_id=row["dropoff_stop_id"],
+        pickup_position_m=row["pickup_position_m"], dropoff_position_m=row["dropoff_position_m"],
         receiver_key=_receiver_key(row["receiver_phone"]),
         cash_status_confirmed=confirmed,
         cash_first_recorded_at=_aware(row["cash_recorded_at"]) if confirmed else None,
@@ -537,7 +537,7 @@ def _evaluate(session: Session, enrollment: PromoEnrollment, version: PromoCampa
     progress = client_referral_progress(service_type, [
         ServiceEvidence(booking_id=j.evidence.booking_id, trip_id=j.evidence.trip_id,
                         client_user_id=j.evidence.client_user_id, qualified=True, booked_at=j.evidence.created_at,
-                        pickup_stop_id=j.evidence.pickup_stop_id, dropoff_stop_id=j.evidence.dropoff_stop_id,
+                        pickup_position_m=j.evidence.pickup_position_m, dropoff_position_m=j.evidence.dropoff_position_m,
                         receiver_key=j.evidence.receiver_key)
         for j in judged])
     far_future = datetime.max.replace(tzinfo=now.tzinfo)

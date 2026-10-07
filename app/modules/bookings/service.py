@@ -5,10 +5,10 @@ Every status write goes through ``app.contracts.state_machines`` (``assert_trans
 
 Global lock order (ADR-0017, STATE_MACHINES §0.2) - modes in parentheses:
 
-* accept:   users client+driver (FOR NO KEY UPDATE, id ASC) -> trip (FOR NO KEY UPDATE) -> listings request+supply
-            (FOR NO KEY UPDATE, id ASC) -> thread + current version (FOR NO KEY UPDATE) -> trip segments (reserve,
-            under the trip lock) -> [other open threads of the listing, behind the listing lock] -> booking insert
-            -> allocations insert -> wallet (FOR UPDATE, A3) -> hold insert
+* accept:   users client+driver (FOR NO KEY UPDATE, id ASC) -> trip (FOR NO KEY UPDATE) -> request listing
+            (FOR NO KEY UPDATE) -> thread + current version (FOR NO KEY UPDATE) -> trip road claims (under the trip
+            lock) -> [other open threads of the listing, behind the listing lock] -> booking insert -> road claim
+            insert -> wallet (FOR UPDATE, A3) -> hold insert
 * cancel:   trip -> listings -> booking -> (pending no-show review, read) -> wallet -> hold
 * actions:  booking -> proofs / reviews / custody cases -> wallet (complete -> capture)
 * no-show:  trip -> listings -> booking -> no_show_review -> wallet
@@ -21,7 +21,7 @@ Signatures other modules may rely on (read-side hooks, functions only):
 * ``blocking_state_for_user(session, user_id, *, lock=False) -> BookingBlockingState``      (N4, v1 deletion)
 * ``driver_v2_obligations(session, driver_user_id) -> DriverV2Obligations``                (Q15, v1 block_driver)
 * ``trip_has_active_allocations(session, trip_id) -> bool``                                (A1 N6, patch_trip)
-* ``trip_has_allocations(session, trip_id) -> bool``                                       (A1: segment rewrite)
+* ``trip_has_allocations(session, trip_id) -> bool``                                       (A1: stretch lock)
 * ``count_active_bookings_on_corridor(session, corridor_id) -> int`` + ``register_geo_hooks()`` (A2 counter)
 * ``booking_public_id_for_proposal_version(session, proposal_version_id) -> str | None``   (A1 thread DTO)
 * ``set_blocking_dispute_probe(fn)`` / ``set_payment_dispute_opener(fn)``                  (A12 wiring)
@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -50,7 +50,6 @@ from app.contracts import proofs as proof_policy
 from app.contracts.crypto import PROOF_CODE_KEY_VERSION, derive_proof_code, proof_code_hash, verify_proof_code
 from app.contracts.detour import DETOUR_INSERTION_ENABLED, DETOUR_NOT_AVAILABLE_REASON
 from app.contracts.detour import DetourQuote as ContractDetourQuote
-from app.contracts.detour import total_detour_seconds
 from app.contracts.enums import (
     OPERATOR_COMMAND_CAPABILITY,
     ActorSide,
@@ -102,7 +101,6 @@ from app.models import AuditLog
 from app.modules.bookings import rules
 from app.modules.bookings.models import (
     Booking,
-    BookingAllocation,
     BookingAmendment,
     BookingProof,
     BookingProofAttempt,
@@ -149,7 +147,6 @@ __all__ = [
     "driver_v2_obligations",
     "emit_confirmation_overdue_signals",
     "emit_hold_escalation_signals",
-    "evaluate_detour_quotes",
     "expire_due_amendments",
     "get_booking_by_public_id",
     "get_booking_for_viewer",
@@ -387,16 +384,6 @@ def latest_custody_case(session: Session, booking_id: int) -> CustodyCase | None
     ).scalar_one_or_none()
 
 
-def active_allocations(session: Session, booking_id: int) -> list[BookingAllocation]:
-    return list(
-        session.execute(
-            select(BookingAllocation)
-            .where(BookingAllocation.booking_id == booking_id, BookingAllocation.active.is_(True))
-            .order_by(BookingAllocation.segment_from_seq)
-        ).scalars()
-    )
-
-
 def booking_public_id_for_proposal_version(session: Session, proposal_version_id: int) -> str | None:
     value = session.execute(
         select(Booking.public_id).where(Booking.accepted_proposal_version_id == proposal_version_id)
@@ -513,106 +500,10 @@ def _set_commission_status(
 # ==============================================================================================================
 
 
-def _supply_listing_id(session: Session, listing: Listing, trip_id: int) -> int | None:
-    if listing.kind == ListingKind.TRIP_OFFER.value:
-        return listing.id
-    for candidate in marketplace_service.listings_for_trip(session, trip_id):
-        if (
-            candidate.kind == ListingKind.TRIP_OFFER.value
-            and candidate.service_type == listing.service_type
-            and candidate.status in OPEN_LISTING_STATUSES
-        ):
-            return candidate.id
-    return None
-
-
-def _offer_span(session: Session, trip_id: int, listing: Listing) -> tuple[int, int] | None:
-    return trips_service.occurrence_seqs_for_stops(session, trip_id, listing.origin_stop_id, listing.destination_stop_id)
-
-
-def _offer_has_capacity(session: Session, trip_id: int, listing: Listing) -> bool:
-    """A trip offer stays open while some segment of its span still has the service's resource (§1 system_fulfil)."""
-    span = _offer_span(session, trip_id, listing)
-    if span is None:
-        return False
-    loads = [load for load in trips_service.get_segment_loads(session, trip_id) if span[0] <= load.from_seq < span[1]]
-    if listing.service_type == ServiceType.PASSENGER.value:
-        return any(load.seat_capacity - load.seats_used > 0 for load in loads)
-    return any(
-        load.cargo_capacity_weight_g - load.cargo_used_weight_g > 0
-        and load.cargo_capacity_volume_ml - load.cargo_used_volume_ml > 0
-        for load in loads
-    )
-
-
-def _trip_route_context(session: Session, trip: Trip):  # noqa: ANN202 - geo TripRouteContext
-    from app.modules.geo.types import OccurrenceTiming, TripRouteContext
-
-    from app.modules.trips.ports import get_geo_port
-
-    occurrences = trips_service.list_occurrences(session, trip.id)
-    route = get_geo_port().route_versions_by_ids(session, [trip.route_version_id]).get(trip.route_version_id)
-    if route is None:
-        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "route_version_missing"})
-    return TripRouteContext(
-        route_version_id=trip.route_version_id,
-        trip_version=trip.version,
-        occurrences=tuple(
-            OccurrenceTiming(o.seq, o.stop_id, ensure_aware_utc(o.planned_arrival_at), o.dwell_minutes) for o in occurrences
-        ),
-        max_detour_minutes=trip.max_detour_minutes,
-        max_detour_m=trip.max_detour_m,
-        detour_used_s=trip.detour_used_s,
-        detour_used_m=trip.detour_used_m,
-        pickup_wait_minutes=trip.pickup_wait_minutes,
-        route_version_public_id=route.public_id,
-    )
-
-
-def evaluate_detour_quotes(
-    context: Any,
-    quotes: Sequence[Any],
-    existing_windows: Sequence[Any],
-    *,
-    production: bool,
-    now: datetime,
-) -> Any:
-    """Detour re-check under the trip lock, without any router call (spec §15, AC17, Q25, Q46). Pure.
-
-    * production: no routing provider exists (Q46) -> a detour quote fails closed (``ROUTE_CHANGED``);
-    * every quote must belong to the locked route/trip version and be unexpired (``validate_detour_quotes``);
-    * the trip's cumulative detour budget in seconds and metres must hold (AC17, ``DETOUR_LIMIT_EXCEEDED``);
-    * no existing booking window may break (``TIME_WINDOW_CONFLICT``).
-    Returns geo's ``TimelineChange`` (new occurrence timeline + ``seq_map``).
-    """
-    from app.modules.geo import matching
-
-    if not quotes:
-        return None
-    if production:
-        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "detour_not_available_in_production"})
-    matching.validate_detour_quotes(list(quotes), context, now=now)
-    added_s = total_detour_seconds(tuple(quotes))
-    added_m = sum(int(quote.extra_m) for quote in quotes)
-    if not matching.cumulative_detour_allowed(
-        detour_used_s=context.detour_used_s,
-        detour_used_m=context.detour_used_m,
-        added_s=added_s,
-        added_m=added_m,
-        max_detour_minutes=context.max_detour_minutes,
-        max_detour_m=context.max_detour_m,
-    ):
-        raise DomainError(
-            ErrorCode.DETOUR_LIMIT_EXCEEDED,
-            details={"detour_used_s": context.detour_used_s, "added_s": added_s, "max_detour_s": context.max_detour_s},
-        )
-    return matching.verify_existing_windows(context, list(existing_windows), list(quotes))
-
-
 def _version_detour_quotes(version: ProposalVersion) -> tuple[ContractDetourQuote, ...]:
     """Detour quotes snapshotted on the proposal version (A1 request: ``proposal_versions.detour_quotes``).
 
-    A1 currently accepts only existing trip stops at submit/counter (no detour), so versions carry none.
+    Detours are not offered (Q46, Q62), so versions carry none.
     """
     return tuple(getattr(version, "detour_quotes", None) or ())
 
@@ -630,7 +521,7 @@ def accept_proposal(
     client_session: str | None = None,
     promo_driver_ack: promo_booking.DriverAck | None = None,
 ) -> Booking:
-    """P8: ``active -> accepted`` + booking ``confirmed`` + allocations + hold (or exempt), in one transaction.
+    """P8: ``active -> accepted`` + booking ``confirmed`` + road claim + hold (or exempt), in one transaction.
 
     Referral stage 4 (ADR-0023 §18): the promo terms are decided under the wallet and lot locks, reserved together
     with the booking, and the hold is C_net. ``client_features`` is the actor's ``X-Elchi-Client-Features``
@@ -650,16 +541,14 @@ def accept_proposal(
         raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "thread_without_trip"})
     trip_id = thread.trip_id
     request_id = listing.id if listing.kind == ListingKind.REQUEST.value else None
-    supply_id = _supply_listing_id(session, listing, trip_id)
     client_id, driver_id = thread.client_user_id, thread.driver_user_id
 
     # 1. users (FOR NO KEY UPDATE, id ASC): serialises with the admin eligibility block (AC41).
     identity_service.lock_user_eligibility(session, [client_id, driver_id], mode="update")
     # 2. trip (FOR NO KEY UPDATE): the physical capacity source.
     trip = trips_service.lock_trip(session, trip_id)
-    # 3. listings (FOR NO KEY UPDATE, id ASC).
-    locked_listings = {row.id: row for row in marketplace_service.lock_listings(session, [i for i in (request_id, supply_id) if i])}
-    listing = locked_listings[listing.id]
+    # 3. the listing (FOR NO KEY UPDATE). Q138: there is no supply (driver) listing any more.
+    listing = marketplace_service.lock_listings(session, [listing.id])[0]
     # 4. thread and its current version (FOR NO KEY UPDATE).
     thread = marketplace_service.lock_thread(session, thread.id)
     version = marketplace_service.current_version(session, thread, for_update=True)
@@ -712,42 +601,22 @@ def accept_proposal(
         raise DomainError(ErrorCode.BOOKING_CUTOFF_PASSED, details={"trip_status": trip.status})
     if version.route_version_id != trip.route_version_id:
         raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "route_version_changed"})
-    # Not raw trip.version (card §1.4): the same occurrences must still exist and the pickup ETA window must still
-    # meet the agreed pickup window (the proposal validated it against the timeline of its time).
-    pickup_seq, dropoff_seq = version.pickup_occurrence_seq, version.dropoff_occurrence_seq
-    occurrences = {o.seq: o for o in trips_service.list_occurrences(session, trip.id)}
-    if pickup_seq is None or dropoff_seq is None or pickup_seq not in occurrences or dropoff_seq not in occurrences:
-        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "occurrences_changed"})
-    if version.pickup_point is None and version.dropoff_point is None:
-        if (
-            occurrences[pickup_seq].stop_id != version.pickup_stop_id
-            or occurrences[dropoff_seq].stop_id != version.dropoff_stop_id
-        ):
-            raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "occurrences_changed"})
-    elif marketplace_service.point_segment_for_trip(session, listing, trip) != (pickup_seq, dropoff_seq):
-        # Q88: a point end has no stop id to compare, so the places are re-projected onto the trip as it
-        # stands now. Different segments means the road moved under the agreement.
-        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "point_segments_changed"})
-    from app.contracts.timeutil import windows_intersect
-    from app.modules.geo.matching import eta_window
-
-    if version.pickup_point is None:
-        pickup_occ = occurrences[pickup_seq]
-        eta_start, eta_end = eta_window(pickup_occ.planned_arrival_at, pickup_occ.dwell_minutes, pickup_wait_minutes=trip.pickup_wait_minutes)
-        if not windows_intersect(eta_start, eta_end, version.pickup_window_start, version.pickup_window_end):
-            raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "schedule_changed"})
-    else:
-        # ADR-0027 Q155: a map-point pickup sits *inside* its segment, so its ETA is interpolated exactly as the
-        # proposal was validated - not the arrival at the stop that opens the segment (which made every place just
-        # before a stop unbookable: ROUTE_CHANGED on a trip nobody changed).
-        eta = marketplace_service.pickup_eta_on_trip(session, listing, trip, pickup_seq)
-        wait = timedelta(minutes=trip.pickup_wait_minutes or 0)
-        window_start, window_end = ensure_aware_utc(version.pickup_window_start), ensure_aware_utc(version.pickup_window_end)
-        if eta is None or not (window_start - wait <= ensure_aware_utc(eta) <= window_end + wait):
-            raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "schedule_changed"})
+    # Not raw trip.version (card §1.4): the agreed places (ADR-0028: road positions on the same road) must still lie on
+    # the trip's stretch, and the pickup ETA window must still meet the agreed pickup window.
+    pickup_position, dropoff_position = marketplace_service.version_positions(session, version, trip)
+    start_m, end_m = trips_service.trip_stretch(session, trip)
+    if pickup_position is None or dropoff_position is None or not start_m <= pickup_position < dropoff_position <= end_m:
+        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "outside_trip_stretch"})
+    # ADR-0027 Q155 / ADR-0028: the pickup ETA is its road position on the trip's plan - exactly what the proposal was
+    # validated with.
+    eta = None if pickup_position is None else trips_service.trip_eta_at(trip, pickup_position)
+    wait = timedelta(minutes=trip.pickup_wait_minutes or 0)
+    window_start, window_end = ensure_aware_utc(version.pickup_window_start), ensure_aware_utc(version.pickup_window_end)
+    if eta is None or not (window_start - wait <= ensure_aware_utc(eta) <= window_end + wait):
+        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "schedule_changed"})
     if moving:
         marketplace_service.assert_pickup_ahead(
-            session, listing=listing, trip=trip, pickup_seq=pickup_seq, pickup_place=None, now=now
+            session, listing=listing, trip=trip, pickup_place=None, now=now, pickup_position_m=pickup_position
         )
 
     # Eligibility re-checked under the users lock (Q21, D16, AC41).
@@ -783,10 +652,14 @@ def accept_proposal(
     if fee_status is CommissionStatus.EXEMPT:
         wallet_service.require_money_invariants(session, new_business=True)  # N1/Q48 also for exempt bookings
 
-    # 5. capacity on every segment [pickup, dropoff) under the trip lock (AC07, AC10-AC12).
+    # 5. capacity on the road interval [pickup, dropoff) under the trip lock (AC07, AC10-AC12; ADR-0028).
     demand = marketplace_service.version_demand(version, service_type=service)
+    if pickup_position is None or dropoff_position is None:
+        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "positions_unknown"})
     if not demand.is_empty:
-        trips_service.reserve(session, trip.id, pickup_seq, dropoff_seq, demand)
+        trips_service.require_claim_capacity(
+            session, trip.id, pickup_position, max(dropoff_position, pickup_position + 1), demand
+        )
 
     # 5a. promo terms (ADR-0023 §18): wallet_accounts -> promo_consents -> promo_campaigns -> promo_lots, decided
     # before the booking row because its frozen terms_snapshot records whether promo terms exist.
@@ -806,12 +679,8 @@ def accept_proposal(
     if request_id is not None:
         marketplace_service.close_open_threads(session, listing=listing, reason="demand_fulfilled", now=now)
         marketplace_service.fulfil_listing(session, listing=listing, now=now)
-    supply = locked_listings.get(supply_id) if supply_id is not None else None
-    if supply is not None and supply.status == ListingStatus.PUBLISHED.value and not _offer_has_capacity(session, trip.id, supply):
-        marketplace_service.close_open_threads(session, listing=supply, reason="capacity_gone", now=now)
-        marketplace_service.fulfil_listing(session, listing=supply, now=now)
 
-    # 7. booking + allocations + history.
+    # 7. booking + road claim + history.
     booking = Booking(
         public_id=new_public_uuid(),
         service_type=service.value,
@@ -823,16 +692,14 @@ def accept_proposal(
         trip_id=trip.id,
         corridor_id=listing.corridor_id,
         request_listing_id=request_id,
-        supply_listing_id=supply_id,
+        supply_listing_id=None,
         proposal_thread_id=thread.id,
         trip_intent_id=thread.trip_intent_id,
         accepted_proposal_version_id=version.id,
         route_version_id=trip.route_version_id,
         trip_version=trip.version,
-        pickup_stop_id=version.pickup_stop_id,
-        dropoff_stop_id=version.dropoff_stop_id,
         # Q88: the accepted places are copied, not re-derived. A booking is the frozen agreement - if the
-        # client later edits the listing, or an operator moves a stop, what was agreed must not move with it.
+        # client later edits the listing, what was agreed must not move with it.
         pickup_point=version.pickup_point,
         dropoff_point=version.dropoff_point,
         pickup_district_id=version.pickup_district_id,
@@ -841,8 +708,8 @@ def accept_proposal(
         dropoff_address=version.dropoff_address,
         pickup_route_offset_m=version.pickup_route_offset_m,
         dropoff_route_offset_m=version.dropoff_route_offset_m,
-        pickup_occurrence_seq=pickup_seq,
-        dropoff_occurrence_seq=dropoff_seq,
+        pickup_position_m=pickup_position,
+        dropoff_position_m=dropoff_position,
         pickup_window_start=ensure_aware_utc(version.pickup_window_start),
         pickup_window_end=ensure_aware_utc(version.pickup_window_end),
         quantity=version.quantity,
@@ -893,19 +760,7 @@ def accept_proposal(
         marketplace_intents.bind_booking(session, trip_intent, booking_id=booking.id, accepted_thread_id=thread.id,
                                          now=now)
     if not demand.is_empty:
-        for seq in range(pickup_seq, dropoff_seq):
-            session.add(
-                BookingAllocation(
-                    booking_id=booking.id,
-                    trip_id=trip.id,
-                    segment_from_seq=seq,
-                    seats=demand.seats,
-                    baggage_ml=demand.baggage_ml,
-                    cargo_weight_g=demand.cargo_weight_g,
-                    cargo_volume_ml=demand.cargo_volume_ml,
-                    active=True,
-                )
-            )
+        _claim_road(session, booking, trip.id, demand)
     actor_side_value = side or ActorSide.SYSTEM
     _history(session, booking, machine="service", from_status=None, to_status=PB.CONFIRMED.value, command="accept",
              actor_user_id=actor_user_id, side=actor_side_value)
@@ -1004,37 +859,24 @@ def _lock_booking_wallet(session: Session, booking: Booking) -> None:
 # ==============================================================================================================
 
 
-def _release_allocations(session: Session, booking: Booking, trip_id: int, now: datetime) -> bool:
-    """ADR-0017 §11: flip ``active`` true -> false under the trip lock and release once, only on that flip."""
-    rows = session.execute(
-        update(BookingAllocation)
-        .where(BookingAllocation.booking_id == booking.id, BookingAllocation.active.is_(True))
-        .values(active=False, released_at=now)
-        .returning(
-            BookingAllocation.segment_from_seq,
-            BookingAllocation.seats,
-            BookingAllocation.baggage_ml,
-            BookingAllocation.cargo_weight_g,
-            BookingAllocation.cargo_volume_ml,
-        )
-        .execution_options(synchronize_session=False)
-    ).all()
-    if not rows:
-        return False
-    rows = sorted(rows, key=lambda row: row.segment_from_seq)
-    first = rows[0]
-    demand = ResourceDemand(
-        seats=first.seats, baggage_ml=first.baggage_ml, cargo_weight_g=first.cargo_weight_g, cargo_volume_ml=first.cargo_volume_ml
+def _release_capacity(session: Session, booking: Booking, trip_id: int, now: datetime) -> bool:
+    """ADR-0017 §11 / ADR-0028: flip the booking's road claim ``active`` true -> false under the trip lock, once.
+
+    Q160: a booking made before the road claims also has legacy segment allocations; they are frozen history (0101)
+    and never touched - the claim alone holds capacity. True when a claim was released.
+    """
+    return trips_service.release_claim(session, booking_id=booking.id, now=now)
+
+
+def _claim_road(session: Session, booking: Booking, trip_id: int, demand: ResourceDemand) -> None:
+    """ADR-0028 (Q159): occupy the booking's road interval - the capacity decision."""
+    if booking.pickup_position_m is None or booking.dropoff_position_m is None:
+        raise RuntimeError(f"booking {booking.id} has no road positions (ADR-0028)")
+    from_m = booking.pickup_position_m
+    trips_service.claim(
+        session, trip_id=trip_id, booking_id=booking.id, from_m=from_m,
+        to_m=max(booking.dropoff_position_m, from_m + 1), demand=demand,
     )
-    seqs = [row.segment_from_seq for row in rows]
-    if seqs != list(range(seqs[0], seqs[0] + len(seqs))) or any(
-        (row.seats, row.baggage_ml, row.cargo_weight_g, row.cargo_volume_ml)
-        != (demand.seats, demand.baggage_ml, demand.cargo_weight_g, demand.cargo_volume_ml)
-        for row in rows
-    ):
-        raise RuntimeError(f"booking {booking.id} allocations are not one contiguous uniform span")
-    trips_service.release(session, trip_id, seqs[0], seqs[-1] + 1, demand)
-    return True
 
 
 def _release_fee(session: Session, booking: Booking, *, actor_user_id: int | None, side: ActorSide, promo_fault: PromoFault,
@@ -1066,16 +908,7 @@ def _listing_effects_after_cancel(
                 now=now,
             ):
                 marketplace_service.reopen_listing(session, listing=request, now=now)  # Q19 + client notified by listing/booking events
-    if booking.supply_listing_id is not None:
-        supply = listings.get(booking.supply_listing_id)
-        if (
-            supply is not None
-            and supply.status == ListingStatus.FULFILLED.value
-            and ensure_aware_utc(supply.expires_at) > now
-            and ensure_aware_utc(supply.departure_window_end) > now
-            and _offer_has_capacity(session, booking.trip_id, supply)
-        ):
-            marketplace_service.reopen_listing(session, listing=supply, now=now)
+    # Q138: a retired driver listing (an old booking's supply listing) is never reopened.
 
 
 def _cancel_locked(
@@ -1093,7 +926,7 @@ def _cancel_locked(
     now: datetime,
     fault_decided: bool = False,
 ) -> None:
-    """One transaction (AC21): status, allocations release, fee release, listing effects, event.
+    """One transaction (AC21): status, road claim release, fee release, listing effects, event.
 
     Q129: the actor and the cause are kept apart - the promo cause comes from the recorded ``fault_side``; an
     operator/system cancel without a decided cause is ``undetermined`` (a person reviews), never "platform"."""
@@ -1109,7 +942,7 @@ def _cancel_locked(
     booking.fault_side = fault_side.value
     _touch(booking, now)
     session.flush()
-    _release_allocations(session, booking, trip.id, now)
+    _release_capacity(session, booking, trip.id, now)
     _release_fee(session, booking, actor_user_id=actor_user_id, side=side,
                  promo_fault=promo_booking.fault_for_cancel(fault_side, decided=fault_decided))
     session.flush()
@@ -1755,7 +1588,7 @@ def operator_command(
             _decide_review(session, booking, review, command="confirm_no_show", actor_user_id=actor_user_id, reason=reason, now=now)
             _touch(booking, now)
             session.flush()
-            _release_allocations(session, booking, trip.id, now)
+            _release_capacity(session, booking, trip.id, now)
             # pilot: no penalty (D2). Q129: an operator-confirmed *client* no-show is the client's cause - the only
             # no-show that is; a driver no-show or a disputed one is never written to the client
             _release_fee(session, booking, actor_user_id=actor_user_id, side=side, promo_fault=PromoFault.CLIENT)
@@ -2432,7 +2265,7 @@ def accept_amendment(
     client_features: frozenset[str] | None = None, promo_consent: promo_booking.ConsentInput | None = None,
     promo_driver_ack: promo_booking.DriverAck | None = None, client_session: str | None = None,
 ) -> Booking:
-    """B10 (D10): trip -> booking -> amendment -> wallet; the single hold changes; allocations re-reserved."""
+    """B10 (D10): trip -> booking -> amendment -> wallet; the single hold changes; the road claim is re-taken."""
     now = _now(now)
     unlocked, snapshot, side = _amendment_scope(session, amendment_public_id, actor_user_id)
     # BR L3 / Q61: extra capacity is new business. The amendment content is immutable and the booking version is
@@ -2477,15 +2310,11 @@ def accept_amendment(
     session.flush()
 
     if amendment.new_quantity != booking.quantity and booking.service_type == ServiceType.PASSENGER.value:
-        _release_allocations(session, booking, trip.id, now)
+        _release_capacity(session, booking, trip.id, now)
         demand = ResourceDemand(seats=amendment.new_quantity, baggage_ml=booking.baggage_ml,
                                 cargo_weight_g=booking.cargo_weight_g, cargo_volume_ml=booking.cargo_volume_ml)
-        trips_service.reserve(session, trip.id, booking.pickup_occurrence_seq, booking.dropoff_occurrence_seq, demand)
         session.flush()
-        for seq in range(booking.pickup_occurrence_seq, booking.dropoff_occurrence_seq):
-            session.add(BookingAllocation(booking_id=booking.id, trip_id=trip.id, segment_from_seq=seq, seats=demand.seats,
-                                          baggage_ml=demand.baggage_ml, cargo_weight_g=demand.cargo_weight_g,
-                                          cargo_volume_ml=demand.cargo_volume_ml, active=True))
+        _claim_road(session, booking, trip.id, demand)
         booking.seats = demand.seats
     booking.quantity = amendment.new_quantity
     booking.unit_price_minor = amendment.new_unit_price_minor
@@ -2752,18 +2581,16 @@ def driver_v2_obligations(session: Session, driver_user_id: int) -> DriverV2Obli
 
 
 def trip_has_active_allocations(session: Session, trip_id: int) -> bool:
-    """A1 N6: ``trips.patch_trip`` must refuse a stops change while this is true."""
-    return session.execute(
-        select(BookingAllocation.id).where(BookingAllocation.trip_id == trip_id, BookingAllocation.active.is_(True)).limit(1)
-    ).first() is not None
+    """A1 N6: ``trips.patch_trip`` must refuse a stretch change while this is true (ADR-0028: active road claims)."""
+    return trips_service.trip_has_claims(session, trip_id, active_only=True)
 
 
 blocking_bookings_for_user = blocking_state_for_user  # name used by the A4 card (N4)
 
 
 def trip_has_allocations(session: Session, trip_id: int) -> bool:
-    """Q63 (A1 ``patch_trip`` stops): any booking ever allocated on the trip, released rows included. Read-only."""
-    return session.execute(select(BookingAllocation.id).where(BookingAllocation.trip_id == trip_id).limit(1)).first() is not None
+    """Q63 / ADR-0028: any booking ever on the trip (a road claim, released ones included). Read-only."""
+    return trips_service.trip_has_claims(session, trip_id)
 
 
 # ==============================================================================================================

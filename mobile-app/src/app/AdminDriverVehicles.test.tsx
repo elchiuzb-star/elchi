@@ -1,5 +1,6 @@
 /**
- * Staff vehicle queue: loading, empty, error, the confirm-then-act flow and the refresh after a decision.
+ * The vehicles block of the driver card: loading, empty, error, the confirm-then-act flow and the refresh after a
+ * decision.
  * SYNTHETIC data only; the API wrappers are mocked so the test proves which wrapper gets which arguments.
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -21,7 +22,7 @@ vi.mock("../api/v2/ops.api", async (importOriginal) => ({ ...(await importOrigin
 
 const ADMIN_CAPS = { roles: ["admin"], capabilities: ["ops.view", "ops.driver_eligibility_manage"], driver_eligibility: null };
 
-import { AdminVehiclesPanel } from "./AdminVehiclesPanel";
+import { DriverVehicles } from "./AdminDriverVehicles";
 
 function vehicle(overrides: Partial<AdminVehicle> = {}): AdminVehicle {
   return {
@@ -64,38 +65,36 @@ beforeEach(() => {
   caps.capabilities.mockResolvedValue(ADMIN_CAPS);
 });
 
-describe("AdminVehiclesPanel", () => {
-  it("shows loading, then asks the server for the pending queue by default", async () => {
+describe("DriverVehicles", () => {
+  it("shows loading, then asks the server for this driver's vehicles in every status", async () => {
     let resolve: (value: unknown) => void = () => undefined;
     api.adminVehicles.mockReturnValue(new Promise((r) => (resolve = r)));
-    const { container } = render(<AdminVehiclesPanel />);
+    const { container } = render(<DriverVehicles ownerUserId="usr_synthetic" />);
     expect(container.querySelector("[aria-busy='true']")).not.toBeNull();
-    await waitFor(() => expect(api.adminVehicles).toHaveBeenCalledWith({ status: "pending", limit: 20 }));
+    await waitFor(() => expect(api.adminVehicles).toHaveBeenCalledWith({ owner_user_id: "usr_synthetic", limit: 50 }));
     resolve({ items: [], nextCursor: null });
-    expect(await screen.findByText("Tasdiq kutayotgan avtomobil yo'q.")).toBeInTheDocument();
+    expect(await screen.findByText("Haydovchi hali avtomobil ro'yxatdan o'tkazmagan.")).toBeInTheDocument();
   });
 
   it("shows the server's error and retries on request", async () => {
     api.adminVehicles.mockRejectedValueOnce(new ApiError(403, { code: "CAPABILITY_REQUIRED", message: "no" }));
     api.adminVehicles.mockResolvedValueOnce({ items: [vehicle()], nextCursor: null });
-    render(<AdminVehiclesPanel />);
+    render(<DriverVehicles ownerUserId="usr_synthetic" />);
     expect(await screen.findByText("Bu amal uchun ruxsatingiz yo'q")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Qayta urinish"));
     expect(await screen.findByText(/Chevrolet Cobalt · oq · 01A123BC/)).toBeInTheDocument();
   });
 
-  it("changes the filter and sends no status for 'all'", async () => {
-    api.adminVehicles.mockResolvedValue({ items: [], nextCursor: null });
-    render(<AdminVehiclesPanel />);
-    await screen.findByText("Tasdiq kutayotgan avtomobil yo'q.");
-    fireEvent.click(screen.getByText("Hammasi"));
-    await waitFor(() => expect(api.adminVehicles).toHaveBeenLastCalledWith({ status: undefined, limit: 20 }));
+  it("asks nothing when the driver has no account id", async () => {
+    render(<DriverVehicles ownerUserId={null} />);
+    expect(await screen.findByText(/Haydovchi akkaunti topilmadi/)).toBeInTheDocument();
+    expect(api.adminVehicles).not.toHaveBeenCalled();
   });
 
   it("approves only after confirmation, with the row version, then reloads", async () => {
     api.adminVehicles.mockResolvedValue({ items: [vehicle()], nextCursor: null });
     api.adminVerifyVehicle.mockResolvedValue({});
-    render(<AdminVehiclesPanel />);
+    render(<DriverVehicles ownerUserId="usr_synthetic" />);
     fireEvent.click(await screen.findByText("Tasdiqlash"));
     expect(api.adminVerifyVehicle).not.toHaveBeenCalled();
     expect(screen.getByText("Avtomobilni tasdiqlaysizmi?")).toBeInTheDocument();
@@ -111,7 +110,7 @@ describe("AdminVehiclesPanel", () => {
   it("requires a reason to reject and keeps the dialog open on a server refusal", async () => {
     api.adminVehicles.mockResolvedValue({ items: [vehicle()], nextCursor: null });
     api.adminVerifyVehicle.mockRejectedValue(new ApiError(409, { code: "VERSION_CONFLICT", message: "stale" }));
-    render(<AdminVehiclesPanel />);
+    render(<DriverVehicles ownerUserId="usr_synthetic" />);
     fireEvent.click(await screen.findByText("Rad etish"));
     const confirm = screen.getByText("Ha, tasdiqlayman").closest("button") as HTMLButtonElement;
     expect(confirm).toBeDisabled();
@@ -135,7 +134,7 @@ describe("AdminVehiclesPanel", () => {
     });
     api.adminVehicles.mockResolvedValue({ items: [row], nextCursor: null });
     api.adminSetDriverEligibility.mockResolvedValue({});
-    render(<AdminVehiclesPanel />);
+    render(<DriverVehicles ownerUserId="usr_synthetic" />);
     expect(await screen.findByText(/haydovchi profilini tasdiqlamaydi/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("Yangi ishini bloklash"));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Hujjat tekshirilmoqda" } });
@@ -151,15 +150,15 @@ describe("AdminVehiclesPanel", () => {
 
   it("offers no decision the server would refuse for the row's status", async () => {
     api.adminVehicles.mockResolvedValue({ items: [vehicle({ verification_status: "blocked" })], nextCursor: null });
-    render(<AdminVehiclesPanel />);
+    render(<DriverVehicles ownerUserId="usr_synthetic" />);
     await screen.findByText(/Chevrolet Cobalt/);
     expect(screen.queryByText("Tasdiqlash")).toBeNull();
     expect(screen.queryByText("Rad etish")).toBeNull();
   });
 
-  it("explains to the operator that the queue is admin+ and asks the server nothing (ops.driver_eligibility_manage)", async () => {
+  it("explains to the operator that vehicles are admin+ and asks the server nothing (ops.driver_eligibility_manage)", async () => {
     caps.capabilities.mockResolvedValue({ roles: ["operator"], capabilities: ["ops.view", "ops.booking_command"], driver_eligibility: null });
-    render(<AdminVehiclesPanel />);
+    render(<DriverVehicles ownerUserId="usr_synthetic" />);
     expect(await screen.findByText(/faqat admin va undan yuqori/)).toBeInTheDocument();
     expect(api.adminVehicles).not.toHaveBeenCalled();
     expect(screen.queryByText("Tasdiqlash")).toBeNull();
@@ -169,19 +168,18 @@ describe("AdminVehiclesPanel", () => {
   it("still asks the server when the capability call fails, and shows its answer", async () => {
     caps.capabilities.mockRejectedValue(new Error("offline"));
     api.adminVehicles.mockResolvedValue({ items: [vehicle()], nextCursor: null });
-    render(<AdminVehiclesPanel />);
+    render(<DriverVehicles ownerUserId="usr_synthetic" />);
     expect(await screen.findByText(/O'rinlar \(haydovchisiz\): 4/)).toBeInTheDocument();
     expect(screen.queryByText("Tasdiqlash")).toBeNull();
   });
 
-  it("counts the loaded rows on the selected chip and opens the documents modal", async () => {
+  it("opens the vehicle's documents modal", async () => {
     api.adminVehicles.mockResolvedValue({
       items: [vehicle({ document_file_ids: ["https://files.example/tex-pasport.jpg", "car_document/2026/09/u1/abc.pdf"] })],
-      nextCursor: "c1",
+      nextCursor: null,
     });
-    render(<AdminVehiclesPanel />);
-    expect(await screen.findByRole("button", { name: "Kutilmoqda · 1+" })).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Hujjatlarni ko'rish"));
+    render(<DriverVehicles ownerUserId="usr_synthetic" />);
+    fireEvent.click(await screen.findByText("Hujjatlarni ko'rish"));
     const modal = await screen.findByRole("dialog", { name: "Hujjat: tex-pasport.jpg" });
     expect(modal.querySelector("img")?.getAttribute("src")).toBe("https://files.example/tex-pasport.jpg");
     expect(screen.getByText("Yangi oynada ochish")).toBeInTheDocument();

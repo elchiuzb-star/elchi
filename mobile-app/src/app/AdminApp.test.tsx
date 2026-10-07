@@ -43,7 +43,6 @@ vi.mock("./AdminOpsPanel", () => ({
 }));
 vi.mock("./AdminPriceBandsPanel", () => ({ AdminPriceBandsPanel: () => <div data-testid="panel-priceBands" /> }));
 vi.mock("./AdminPromoPanel", () => ({ AdminPromoPanel: () => <div data-testid="panel-promotions" /> }));
-vi.mock("./AdminVehiclesPanel", () => ({ AdminVehiclesPanel: () => <div data-testid="panel-vehicles" /> }));
 vi.mock("./AdminFinancePanel", () => ({ AdminFinancePanel: () => <div data-testid="panel-finance" /> }));
 vi.mock("./AdminPlatformPanel", () => ({ AdminPlatformPanel: () => <div data-testid="panel-platform" /> }));
 vi.mock("./AdminTrustPanel", () => ({ AdminTrustPanel: () => <div data-testid="panel-trustOps" /> }));
@@ -81,8 +80,10 @@ describe("role matrix (§2: design HIDE and the rules)", () => {
   it("admin and super_admin see every panel", () => {
     expect(visible("admin")).toEqual(ALL_SECTIONS);
     expect(visible("super_admin")).toEqual(ALL_SECTIONS);
-    // ADR-0027 added «Yo'nalishlar» (driverDirections) to the market group.
-    expect(ALL_SECTIONS).toHaveLength(25);
+    // ADR-0027 added «Yo'nalishlar» (driverDirections) to the market group; the vehicle verification moved from its
+    // own section onto the driver card («Haydovchilar», next to the documents).
+    expect(ALL_SECTIONS).toHaveLength(24);
+    expect(ALL_SECTIONS).not.toContain("vehicles");
   });
 
   it("operator does not see Moliya, Xodimlar or Audit jurnali", () => {

@@ -7,10 +7,9 @@ CLI::
 Staff API: ``GET /api/v2/admin/geo/checks/q47`` (``ops.view``). Readiness/alerts may include
 ``geo.service.production_invariant_notices(db)`` as a notice (never a 503).
 
-Q47 check: a corridor in ``pilot`` or ``active`` must have at least two active stops, each with meeting
-evidence (a meeting note or a photo, Q27). New changes are enforced by the service and the 0046/0053 DB
-triggers; this finds corridors that already violate it (rows written before 0046, or with triggers
-bypassed).
+Q47 check (ADR-0028 replaces its stop conditions): a corridor in ``pilot`` or ``active`` must have a confirmed road.
+New changes are enforced by the service (``start_pilot`` / ``activate`` guards); this finds corridors that already
+violate it.
 
 Runbook (repair a violating corridor):
 1. Find it: ``python -m app.modules.geo.checks q47`` or the staff endpoint.
@@ -18,8 +17,8 @@ Runbook (repair a violating corridor):
    ``active`` -> ``PATCH /api/v2/admin/corridors/{id}`` ``rollout_state=pilot`` (``return_to_pilot``), then
    ``pilot`` -> ``rollout_state=internal`` (``return_to_internal``). Existing bookings keep running (AC38);
    the corridor leaves the public list, so no new public listings.
-3. Fix the stops while ``internal``: at least two active stops, each with a meeting note or photo.
-4. Return it: ``rollout_state=pilot`` (``start_pilot`` re-checks Q27/Q47), then ``activate`` if it was active.
+3. Confirm a road from A to B while ``internal`` (``POST /routes/preview`` + ``/routes/{id}/confirm``).
+4. Return it: ``rollout_state=pilot`` (``start_pilot`` re-checks), then ``activate`` if it was active.
 5. Re-run the check; it must report no violations.
 """
 
@@ -33,7 +32,7 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.modules.geo.checks")
     sub = parser.add_subparsers(dest="check", required=True)
-    sub.add_parser("q47", help="corridors in pilot/active violating Q47 (>=2 active stops with meeting evidence)")
+    sub.add_parser("q47", help="corridors in pilot/active without a confirmed road (ADR-0028)")
     args = parser.parse_args(argv)
 
     from app.db.session import SessionLocal

@@ -1,6 +1,6 @@
 /** ADR-0027: the driver's direction ("where from -> where to") and what the system does with it.
  *
- * The driver names two ends only. Trips, stops, the departure time and the corridor are the server's: the first
+ * The driver names two ends only. Trips, the departure time and the corridor are the server's: the first
  * offer from a direction plans the trip around the client's pickup time, later offers ride on it, an empty trip
  * follows the next client, and a trip already on the road still takes pickups ahead of the car (Q150-Q154).
  */

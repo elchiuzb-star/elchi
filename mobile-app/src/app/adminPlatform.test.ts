@@ -9,7 +9,6 @@ import {
   policySummary,
   resolveFlag,
   scopeRefProblem,
-  stopHasEvidence,
 } from "./adminPlatform";
 
 const CORRIDOR = "cor_" + "a".repeat(26);
@@ -63,22 +62,18 @@ describe("refusal messages", () => {
     expect(flagRefusalMessage(new Error("x"))).toBeNull();
   });
 
-  it("explains a Q47 rollout refusal", () => {
-    const error = new ApiError(409, {
-      code: "INVALID_STATE_TRANSITION", message: "x",
-      details: { reason: "stops_missing_meeting_evidence", stop_ids: ["stp_1"] },
-    });
-    expect(corridorRefusalMessage(error)).toMatch(/dalil.*stp_1/s);
+  it("explains a corridor without a confirmed road (ADR-0028)", () => {
+    const error = new ApiError(409, { code: "INVALID_STATE_TRANSITION", message: "x", details: { reason: "needs_confirmed_road" } });
+    expect(corridorRefusalMessage(error)).toMatch(/tasdiqlangan yo'l/);
+  });
+
+  it("explains a corridor that still has active bookings", () => {
+    const error = new ApiError(409, { code: "INVALID_STATE_TRANSITION", message: "x", details: { reason: "active_bookings" } });
+    expect(corridorRefusalMessage(error)).toMatch(/faol bronlar/);
   });
 });
 
-describe("stops and parcel policy", () => {
-  it("counts a note or a photo as evidence, not a blank note", () => {
-    expect(stopHasEvidence({ meeting_note: "  " })).toBe(false);
-    expect(stopHasEvidence({ meeting_note: "Bekat oldida" })).toBe(true);
-    expect(stopHasEvidence({ meeting_photo_file_id: "f1" })).toBe(true);
-  });
-
+describe("parcel policy", () => {
   it("never reads an empty or unconfirmed list as 'everything allowed'", () => {
     expect(policySummary([])).toMatch(/yopiq/);
     expect(policySummary([{ status: "draft", item_count: 3 }])).toMatch(/hammasi mumkin.*emas/);

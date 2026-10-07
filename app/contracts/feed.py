@@ -24,8 +24,8 @@ EXPERIENCE_LOG_BASE_TRIPS = 100  # E = min(1, ln(1 + completed_trips) / ln(101))
 
 SAVED_SEARCH_MAX_PER_USER = 10  # (pilot) -> 409 SAVED_SEARCH_LIMIT_REACHED details {limit}
 SAVED_SEARCH_MAX_WINDOW_DAYS = 60  # (pilot) time_window_end - time_window_start
-# FeedPageMeta.match_scope: production matches confirmed corridor stops only (Q46, no detour measurement).
-MATCH_SCOPE_CONFIRMED_STOPS = "confirmed_stops"
+# FeedPageMeta.match_scope: matches are places on confirmed roads only (Q46: no detour measurement; ADR-0028).
+MATCH_SCOPE_CONFIRMED_ROADS = "confirmed_roads"
 FEED_DEFAULT_LIMIT = 20
 FEED_MAX_LIMIT = 50
 

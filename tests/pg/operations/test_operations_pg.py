@@ -66,10 +66,10 @@ def test_share_link_is_stored_as_a_hash_and_opens_a_page_without_identity(bw: BW
         s.commit()
     assert page.status_open is True and page.cta == "open_app_to_offer"
     assert page.total_minor > 0 and page.currency == "UZS"
-    assert page.origin_stop_name and page.destination_stop_name
+    assert page.origin_name and page.destination_name
     # the page object carries no identity field at all (Q43)
     assert {field for field in page.__slots__} == {
-        "kind", "service_type", "origin_stop_name", "destination_stop_name", "departure_window_start",
+        "kind", "service_type", "origin_name", "destination_name", "departure_window_start",
         "departure_window_end", "timezone", "price_basis", "unit_price_minor", "quantity", "total_minor",
         "currency", "status_open", "cta",
         "listing_id",  # the listing's public id (not a secret, no identity) so the app link opens it
@@ -295,7 +295,7 @@ def test_public_page_and_share_link_through_http(bw: BW, ops_client) -> None:  #
     body = page.json()["data"]
     assert body["status_open"] is True and body["cta"] == "open_app_to_offer"
     assert set(body) == {
-        "kind", "service_type", "origin_stop_name", "destination_stop_name", "departure_date",
+        "kind", "service_type", "origin_name", "destination_name", "departure_date",
         "departure_window_start", "departure_window_end", "timezone", "price_basis", "unit_price_minor",
         "quantity", "total_minor", "currency", "status_open", "cta", "listing_id",
     }
@@ -318,8 +318,7 @@ def _published_point_listing(bw: BW) -> tuple[str, str]:
 
 
 def test_map_point_listing_is_named_by_its_district_never_by_the_street_address(bw: BW) -> None:
-    """A Q88 listing has no stop ids. Its share text and public page used to say "? - ?"; they now name the
-    district the place was marked in - never the reverse-geocoded street address (Q43: public, before accept)."""
+    """A listing's share text and public page name the district each place was marked in (Q160: no stops) - never the reverse-geocoded street address (Q43: public, before accept)."""
     listing, district = _published_point_listing(bw)
     assert district
     _public_id, token, share_text, _url = _create_link(bw, listing, bw.w.client_id)
@@ -330,19 +329,7 @@ def test_map_point_listing_is_named_by_its_district_never_by_the_street_address(
     with bw.db.session() as s:
         page = service.open_public_listing(s, token=token)
         s.commit()
-    assert (page.origin_stop_name, page.destination_stop_name) == (district, district)
-
-
-def test_stop_listing_keeps_its_stop_names(bw: BW) -> None:
-    listing = _published_listing(bw, origin="A", destination="D")
-    _public_id, token, share_text, _url = _create_link(bw, listing, bw.w.client_id)
-    with bw.db.session() as s:
-        page = service.open_public_listing(s, token=token)
-        s.commit()
-    names = {r.name_uz for r in rows(bw.db, "SELECT name_uz FROM corridor_stops WHERE id IN (:a, :d)",
-                                     a=bw.w.stop_ids["A"], d=bw.w.stop_ids["D"])}
-    assert {page.origin_stop_name, page.destination_stop_name} == names
-    assert share_text.split("\n")[0].endswith(f": {page.origin_stop_name} - {page.destination_stop_name}")
+    assert (page.origin_name, page.destination_name) == (district, district)
 
 
 def test_share_url_uses_the_public_web_base_only_when_no_template_is_set(bw: BW, monkeypatch) -> None:  # noqa: ANN001

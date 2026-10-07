@@ -66,7 +66,7 @@ DTO:
 - Tuman katalogi **operator ma’lumoti**: `scripts/import_legacy_districts.py` legacy v1 `districts` jadvalidan `legacy_city_mappings` orqali ko‘chiradi (`--apply`siz faqat hisobot), noaniq moslik — o‘tkazib yuboriladi. Hech bir tuman nomi o‘ylab topilmaydi.
 
 **Wave 1.7 (A2):**
-- G13 non-fatal ogohlantirish `WarningCode.CORRIDOR_FLOOR_ABOVE_SEGMENT_FLOOR` (`Envelope.warnings`, `details {service_type, corridor_floor_minor, lowest_segment_floor_minor}`) — koridor floor segment floor’dan yuqori; band saqlanadi (Q53).
+- *(ADR-0028 2-bosqich: endi chiqarilmaydi — bekat juftligi bandlari o'qilmaydi va yangisi yaratilmaydi (`segment_bands_retired`); kod katalogda qoladi)* G13 non-fatal ogohlantirish `WarningCode.CORRIDOR_FLOOR_ABOVE_SEGMENT_FLOOR` (`Envelope.warnings`, `details {service_type, corridor_floor_minor, lowest_segment_floor_minor}`) — koridor floor segment floor’dan yuqori; band saqlanadi (Q53).
 - Narx diapazoni details yagona manbada: `app/modules/geo/pricing.py` (`floor_minor, ceiling_minor, currency, price_basis, scope`); A1 `marketplace/service.py::_check_price_band` shu funksiyalarni chaqiradi — o‘z details’ini qurmaydi. **Q90 (wave 15):** `evaluate_price_band` → ogohlantirish (`WarningCode.PRICE_OUTSIDE_REFERENCE`), `assert_price_within_band` → faqat `enforced` band uchun `400 PRICE_OUT_OF_BAND`. Ogohlantirish kodi xato kodi bilan **hech qachon bir xil yozilmaydi** (`tests/contracts/test_wave16_contact_filter.py`).
 - Q47 CLI: `python -m app.modules.geo.checks q47` (mavjud buzilishlarni ro‘yxatlaydi). 0053 trigger semantikasi: koridor tekshiruvi faqat pilot/active’ga **tashqaridan kirishda** va `pilot → active`da (buzilgan koridorni `active → pilot → internal` qilib tuzatish mumkin); bekat o‘zgarishlari har doim tekshiriladi.
 - **Q56:** production’da v2 xizmat flag’ini yoqish Q48 gate o‘tmasa `503 PRODUCTION_INVARIANTS_FAILED` `details.reason = gate_unavailable` (gate funksiyasi yo‘q) | `gate_error` | `gate_failed`; faqat aniq `true` o‘tadi. Flag qatori `FOR NO KEY UPDATE` bilan lock qilinadi. DB’da ham trigger (0053).
@@ -104,7 +104,7 @@ DTO: `EffectiveFlagsDTO {corridor_id, flags {passenger_enabled, parcel_enabled, 
 | T1 | `POST /vehicles` | driver roli | `VehicleCreate` | `VehicleDTO` (`pending`) | Y | — | `VALIDATION_ERROR` (dublikat plate: `details.field="plate_number"`) | §13 |
 | T2 | `GET /me/vehicles` | driver roli | — | `list[VehicleDTO]` | — | — | — | — |
 | T3 | `POST /admin/vehicles/{vehicle_id}/verify` | `ops.driver_eligibility_manage` | `VehicleVerifyRequest` | `VehicleDTO` | Y | Y | `VERSION_CONFLICT` | §17.1 |
-| T3a | `GET /admin/vehicles?status&cursor&limit` (24.09.2026) | `ops.driver_eligibility_manage` | — | `list[AdminVehicleDTO]` (egasi: user id, profil holati, yangi biznes huquqi va `eligibility_version`; telefon/ism yo'q) | — | — | `VALIDATION_ERROR`, `INVALID_CURSOR` | §17.1, Q61 |
+| T3a | `GET /admin/vehicles?status&owner_user_id&cursor&limit` (24.09.2026; `owner_user_id` 07.10.2026 — additiv, bitta haydovchining avtomobillari, admin haydovchi kartasi uchun; egasi capability tekshiruvidan keyin aniqlanadi) | `ops.driver_eligibility_manage` | — | `list[AdminVehicleDTO]` (egasi: user id, profil holati, yangi biznes huquqi va `eligibility_version`; telefon/ism yo'q) | — | — | `VALIDATION_ERROR`, `INVALID_CURSOR`, `NOT_FOUND` (noma'lum `owner_user_id`) | §17.1, Q61 |
 | T3s | `GET /admin/trips/search?q&limit` (04.10.2026, admin panel, additiv) | `ops.view` | `q`: `trp_…` yoki kod boshi (≥4 belgi, prefiks ixtiyoriy) yoki haydovchi `usr_…` | `list[AdminTripSearchDTO]` {id, status, driver_id, driver_display_name (ism), vehicle_id, planned_start_at, planned_end_at, seat_capacity} — telefon/raqam yo‘q | — | — | `VALIDATION_ERROR` | — |
 | T4 | `POST /trips` | `trip.create` | `TripCreate` | `TripDTO` | Y | — | `SCHEDULE_CONFLICT`, `VEHICLE_NOT_ELIGIBLE`, `DRIVER_NOT_ELIGIBLE`, `ROUTE_CHANGED` | AC13 |
 | T5 | `GET /trips/{trip_id}` | Driver egasi, O → `TripDTO`; bron ishtirokchisi → `TripPublicDTO` | — | union | — | — | — | §10.6 |
@@ -654,3 +654,44 @@ Mavjud endpointlar o'zgarmaydi (native ilovalar `POST /trips` + `GET /feed` bila
   (`details.reason = pickup_passed`, `eta` yoki `ahead_m`); `interrupted` — avvalgidek rad. Yo'lda yaratilgan bron
   `awaiting_pickup` (pochta `in_progress` safarda `in_transit`).
 - P8 nuqtali olishda `ROUTE_CHANGED (schedule_changed)` endi interpolyatsiya qilingan ETA bo'yicha (Q155).
+
+## 18. ADR-0028 (07.10.2026, Q159) — A→B pozitsiyalari, 2-bosqich (DTO shakli o'zgarmagan)
+- `CAPACITY_UNAVAILABLE` / `CARGO_LIMIT_EXCEEDED` tafsiloti: yangi `positions[{at_m, resource, remaining, requested}]` (safar
+  to'lgan joy, yo'l boshidan metr) + eski `segments[{from_seq, ...}]` (o'sha joy tushgan legacy bo'lak; Q156 additiv).
+- Sig'im aniq yo'l oralig'i bo'yicha: bitta legacy bo'lak ichidagi ketma-ket ikki nuqta bitta o'rinni almashib ishlata oladi.
+  `TripAvailabilityDTO.segments` / trip DTO dagi bo'lak yuki — da'volardan hosil qilingan eng yuqori yuk.
+- Olish ETA'si — safar rejasi bo'yicha chiziqli (bekat jadvali va dwell emas); `TIME_WINDOW_CONFLICT`/`ROUTE_CHANGED
+  schedule_changed` shu ETA bilan.
+- `GET /feed` (`side=requests`) va saqlangan qidiruv: mezon uchlari maydon (bekat id — o'sha bekat nuqtasi), so'rov
+  yo'l bo'yidagi joylashuvi bilan; `alternative` faqat vaqt farqi (`nearby_stop` sababi endi chiqmaydi).
+- G13: bekat juftligi bandi yaratish/qayta yoqish `400 VALIDATION_ERROR` `reason: segment_bands_retired` (faqat
+  `is_active=false` mumkin); narx ma'lumotnomasi faqat koridor bandi.
+- Koridor `start_pilot`/`activate`: `INVALID_STATE_TRANSITION` `reason: needs_confirmed_road` (bekat soni/dalili emas);
+  `GET /admin/geo/checks/q47` `reasons: ["needs_confirmed_road"]`.
+
+**3-bosqich (additiv, 07.10.2026):**
+- `TripCreate.stops` ixtiyoriy; yangi `route_start_m`/`route_end_m` (ikkalasi yoki hech biri; bekat bilan birga emas).
+  `TripPatch` ham shu maydonlarni oladi. Bekatsiz safarning `TripDTO.stops` va bo'lak mavjudligi — bo'sh ro'yxat.
+- `RoutePreviewRequest`: `stop_ids` (legacy) **yoki** `corridor_id` + `origin` + `destination` (A/B).
+- `BookingStopDTO.occurrence_seq` nullable; `planned_arrival_at` — pozitsiya ETA'si. Bekatsiz safar manifesti
+  (`ManifestStopDTO`) — joylar yo'l tartibida (`stop` yoki `point`).
+- `POST /listings`: `origin/destination_stop_id` nuqta uchiga tarjima qilinadi (javobda `*_point`, `*_stop` — null).
+  `POST /listings/{id}/proposals` / counter: bekat id faqat e'lon joyining o'zi bo'lsa; aks holda `400 VALIDATION_ERROR
+  reason: listing_ends_are_points`. Teskari yo'nalishdagi so'rov — `ROUTE_MISMATCH`.
+- `POST /admin/corridors/{id}/stops` → `409 INVALID_STATE_TRANSITION reason: stops_retired`.
+
+## 19. ADR-0028 4-bosqich (07.10.2026, Q160) — bekat yo'q
+
+«Bekat» tushunchasi v2 API'dan butunlay olib tashlandi (breaking, foydalanuvchi qarori: native API bekat id ni rad
+etadi). Kirish: e'lon uchlari faqat `origin_point`/`destination_point` (majburiy); taklif/qarshi taklif/amendment da
+bekat id yo'q (joylar e'londan meros); safar faqat `route_start_m`/`route_end_m`; yo'l preview faqat
+`corridor_id + origin + destination`; lenta va saqlangan qidiruv uchlari — tuman yoki hudud. Eski bekat maydoni
+`400 VALIDATION_ERROR` (lentadagi `origin_stop_id`/`destination_stop_id` — `reason: stops_retired`). Olib tashlangan
+endpointlar: `GET /corridors/{id}/stops`, `GET /stops/search`, `GET|POST /admin/corridors/{id}/stops`,
+`PATCH /admin/stops/{id}`. Javob: `*_stop`, `stops`, `stops_count`, `StopRefDTO`, `occurrence_seq` yo'q;
+`BookingEndDTO {point, planned_arrival_at, window_start, window_end}`; `TripManifestDTO.places[ManifestPlaceDTO]`;
+`TripAvailabilityDTO.stretches[{from_m,to_m,...}]`; `PublicListingPageDTO.origin_name/destination_name`;
+`Q47ViolationDTO {corridor_id,name,rollout_state,reasons}`; `PriceBand*` — faqat koridor bandi; `MatchReason` dan
+bekat sabablari olib tashlandi; `FeedPageMeta.match_scope = "confirmed_roads"`; sig'im xatosi tafsiloti faqat
+`positions[{at_m,resource,remaining,requested}]`. DB xatosi `stops_retired` → `409 INTEGRITY_CONFLICT`.
+

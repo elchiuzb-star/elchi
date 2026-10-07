@@ -25,7 +25,6 @@ const m = <T,>(fn: T) => fn as unknown as ReturnType<typeof vi.fn>;
 const band = {
   corridor_id: "cor_1", service_type: "parcel", price_basis: "total", floor_minor: 8_000_000, ceiling_minor: 18_000_000,
   currency: "UZS", is_active: true, enforced: false, reason: "pilot", updated_at: "2026-09-26T05:00:00Z", version: 2,
-  origin_stop_id: null, destination_stop_id: null,
 };
 
 beforeEach(() => {

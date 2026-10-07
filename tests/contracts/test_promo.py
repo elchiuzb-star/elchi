@@ -787,7 +787,7 @@ def test_milestones_need_distinct_clients_too() -> None:
 
 def _shipment(booking_id, trip_id=1, *, minutes=0, receiver="r1", pickup=10, dropoff=20, **overrides):
     kw = dict(booking_id=booking_id, trip_id=trip_id, client_user_id=2, qualified=True,
-              booked_at=NOW + timedelta(minutes=minutes), pickup_stop_id=pickup, dropoff_stop_id=dropoff,
+              booked_at=NOW + timedelta(minutes=minutes), pickup_position_m=pickup, dropoff_position_m=dropoff,
               receiver_key=receiver)
     kw.update(overrides)
     return ServiceEvidence(**kw)

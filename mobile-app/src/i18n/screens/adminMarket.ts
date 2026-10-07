@@ -373,15 +373,28 @@ export const adminMarketMessages = {
   },
 
   // --- Avtomobillar tasdig'i (§6) ---
-  "admin.vehicles.title": { uz: "Avtomobillar tasdig'i", ru: "Подтверждение автомобилей" },
+  "admin.vehicles.title": { uz: "Avtomobil tasdig'i", ru: "Подтверждение автомобиля" },
   "admin.vehicles.subtitle": {
-    uz: "Yangi avtomobil «kutilmoqda» holatida tug'iladi va tasdiqlanmaguncha safar ochib bo'lmaydi. Eng eski so'rov birinchi.",
-    ru: "Новый автомобиль создаётся со статусом «ожидает», и пока он не одобрен, рейс открыть нельзя. Сначала самые старые заявки.",
+    uz: "Yangi avtomobil «kutilmoqda» holatida tug'iladi va tasdiqlanmaguncha safar ochib bo'lmaydi.",
+    ru: "Новый автомобиль создаётся со статусом «ожидает», и пока он не одобрен, рейс открыть нельзя.",
   },
   "admin.vehicles.noAccess": {
-    uz: "Avtomobillar navbatini ko'rish va tasdiqlash — faqat admin va undan yuqori (haydovchi ruxsatini boshqarish huquqi).",
-    ru: "Просмотр и подтверждение очереди автомобилей — только для администратора и выше (право управлять допуском водителей).",
+    uz: "Avtomobilni ko'rish va tasdiqlash — faqat admin va undan yuqori (haydovchi ruxsatini boshqarish huquqi).",
+    ru: "Просмотр и подтверждение автомобиля — только для администратора и выше (право управлять допуском водителей).",
   },
+  "admin.vehicles.noOwner": {
+    uz: "Haydovchi akkaunti topilmadi — avtomobillarini ko'rsatib bo'lmaydi.",
+    ru: "Аккаунт водителя не найден — его автомобили показать нельзя.",
+  },
+  "admin.vehicles.pendingBanner": {
+    uz: "Avtomobil tasdig'ini kutayotgan haydovchilar: {count}",
+    ru: "Водители, ожидающие подтверждения автомобиля: {count}",
+  },
+  "admin.vehicles.pendingHint": {
+    uz: "Haydovchini oching — avtomobil «Hujjatlar va avtomobil» bo'limida hujjatlar bilan birga tasdiqlanadi.",
+    ru: "Откройте водителя — автомобиль подтверждается во вкладке «Документы и автомобиль» вместе с документами.",
+  },
+  "admin.vehicles.pendingBadge": { uz: "Avtomobil kutmoqda", ru: "Автомобиль ожидает" },
   "admin.vehicles.status.pending": { uz: "Tasdiq kutilmoqda", ru: "Ожидает подтверждения" },
   "admin.vehicles.status.approved": { uz: "Tasdiqlangan", ru: "Одобрен" },
   "admin.vehicles.status.rejected": { uz: "Rad etilgan", ru: "Отклонён" },
@@ -407,12 +420,12 @@ export const adminMarketMessages = {
   "admin.vehicles.lastDecision": { uz: "Oxirgi qaror: {date}", ru: "Последнее решение: {date}" },
   "admin.vehicles.decisionReason": { uz: "Qaror sababi: {reason}", ru: "Причина решения: {reason}" },
   "admin.vehicles.ownerLine": {
-    uz: "Haydovchi: {name} · {profile} · {eligibility} · faol safarlar: {count}",
-    ru: "Водитель: {name} · {profile} · {eligibility} · активных рейсов: {count}",
+    uz: "Haydovchi: {profile} · {eligibility} · faol safarlar: {count}",
+    ru: "Водитель: {profile} · {eligibility} · активных рейсов: {count}",
   },
   "admin.vehicles.ownerNoDriver": {
-    uz: "Haydovchi: {id} · bu akkauntda endi haydovchi roli yo'q — ruxsatni boshqarib bo'lmaydi.",
-    ru: "Водитель: {id} · у этого аккаунта больше нет роли водителя — допуском управлять нельзя.",
+    uz: "Bu akkauntda endi haydovchi roli yo'q — ruxsatni boshqarib bo'lmaydi.",
+    ru: "У этого аккаунта больше нет роли водителя — допуском управлять нельзя.",
   },
   "admin.vehicles.mayTakeNew": { uz: "yangi ish olishi mumkin", ru: "может брать новые заказы" },
   "admin.vehicles.mayNotTakeNew": { uz: "yangi ish ololmaydi", ru: "не может брать новые заказы" },
@@ -420,8 +433,8 @@ export const adminMarketMessages = {
   "admin.vehicles.reasonLine": { uz: "Sabab: {reasons}", ru: "Причина: {reasons}" },
   "admin.vehicles.blockReason": { uz: "Blok sababi: {reason}", ru: "Причина блокировки: {reason}" },
   "admin.vehicles.notProfile": {
-    uz: "Avtomobil tasdig'i haydovchi profilini tasdiqlamaydi — profil «Haydovchilar» bo'limida tekshiriladi.",
-    ru: "Одобрение автомобиля не одобряет профиль водителя — профиль проверяется в разделе «Водители».",
+    uz: "Avtomobil tasdig'i haydovchi profilini tasdiqlamaydi — profil yuqoridagi «Tasdiqlash» tugmasi bilan tasdiqlanadi.",
+    ru: "Одобрение автомобиля не одобряет профиль водителя — профиль одобряется кнопкой «Подтвердить» вверху.",
   },
   "admin.vehicles.viewDocs": { uz: "Hujjatlarni ko'rish", ru: "Посмотреть документы" },
   "admin.vehicles.blockNew": { uz: "Yangi ishini bloklash", ru: "Заблокировать новые заказы" },
@@ -449,8 +462,11 @@ export const adminMarketMessages = {
   "admin.vehicles.reasonRequired": { uz: "Sabab (majburiy, audit uchun)", ru: "Причина (обязательно, для аудита)" },
   "admin.vehicles.noteOptional": { uz: "Izoh (ixtiyoriy)", ru: "Комментарий (необязательно)" },
   "admin.vehicles.sending": { uz: "Yuborilmoqda...", ru: "Отправка..." },
-  "admin.vehicles.emptyPending": { uz: "Tasdiq kutayotgan avtomobil yo'q.", ru: "Нет автомобилей, ожидающих подтверждения." },
-  "admin.vehicles.empty": { uz: "Bu holatda avtomobil yo'q.", ru: "Автомобилей в этом статусе нет." },
+  "admin.vehicles.empty": {
+    uz: "Haydovchi hali avtomobil ro'yxatdan o'tkazmagan.",
+    ru: "Водитель ещё не зарегистрировал автомобиль.",
+  },
+  "admin.drivers.docsAndVehicle": { uz: "Hujjatlar va avtomobil", ru: "Документы и автомобиль" },
   "admin.vehicles.docTitle": { uz: "Hujjat: {name}", ru: "Документ: {name}" },
   "admin.vehicles.docN": { uz: "{n}-fayl", ru: "Файл {n}" },
   "admin.vehicles.docNoLink": {
@@ -497,11 +513,6 @@ export const adminMarketMessages = {
   "admin.bands.scope": { uz: "Doira", ru: "Область" },
   "admin.bands.range": { uz: "Diapazon", ru: "Диапазон" },
   "admin.bands.wholeCorridor": { uz: "Butun koridor", ru: "Весь коридор" },
-  "admin.bands.legacyPair": { uz: "Eski (tayanch nuqtalar juftligi)", ru: "Старый (пара опорных точек)" },
-  "admin.bands.legacyPairNote": {
-    uz: "«Eski» qatorlar ichki tayanch nuqtalar juftligi uchun avval yaratilgan; ular faqat ko'rish uchun. Yangi diapazon faqat butun koridorga qo'yiladi.",
-    ru: "Строки «Старый» созданы раньше для пары внутренних опорных точек; они только для просмотра. Новый диапазон задаётся только на весь коридор.",
-  },
   "admin.bands.rangeTotal": { uz: "{min} – {max} so'm · jami", ru: "{min} – {max} сум · за всё" },
   "admin.bands.rangePerSeat": { uz: "{min} – {max} so'm · bir o'rin uchun", ru: "{min} – {max} сум · за место" },
   "admin.bands.advisory": { uz: "Maslahat", ru: "Рекомендация" },

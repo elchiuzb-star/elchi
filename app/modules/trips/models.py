@@ -16,6 +16,7 @@ from datetime import datetime
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Identity,
@@ -32,8 +33,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, TSTZRANGE
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
 import app.modules.geo.models  # noqa: E402,F401  (FK targets: route_versions, corridor_stops)
+from app.contracts.route_position import ROAD_POSITION_COMMENT
+from app.db.base import Base
 
 BigIdentity = BigInteger().with_variant(Integer(), "sqlite")
 TextArray = ARRAY(Text()).with_variant(JSON(), "sqlite")
@@ -119,6 +121,9 @@ class Trip(Base):
     direction_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("driver_directions.id", name="fk_trips_direction_id")
     )
+    # ADR-0028 (0097, Q159): the part of the confirmed road the trip drives, metres from the road's start.
+    route_start_m: Mapped[int | None] = mapped_column(Integer, comment=ROAD_POSITION_COMMENT)
+    route_end_m: Mapped[int | None] = mapped_column(Integer, comment=ROAD_POSITION_COMMENT)
     cancel_reason: Mapped[str | None] = mapped_column(Text)
     interrupted_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -166,6 +171,53 @@ class TripSegmentResource(Base):
     cargo_capacity_volume_ml: Mapped[int] = mapped_column(Integer, nullable=False)
     cargo_used_volume_ml: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class TripCapacityClaim(Base):
+    """ADR-0028 (0097, Q159): the road interval ``[from_m, to_m)`` a booking occupies on its trip, and the resources.
+
+    One active claim per booking. Content is immutable; ``active`` goes true -> false once (release contract). The
+    DB checks, under the trip row lock, that the active claims fit the trip at every point of the road. Phase 1:
+    written next to ``booking_allocations`` (dual write, deferred parity trigger); the segment model still decides.
+    """
+
+    __tablename__ = "trip_capacity_claims"
+    __table_args__ = (
+        Index(
+            "uq_trip_capacity_claims_booking_active",
+            "booking_id",
+            unique=True,
+            postgresql_where=text("active"),
+            sqlite_where=text("active"),
+        ),
+        Index(
+            "ix_trip_capacity_claims_trip_active",
+            "trip_id",
+            "from_m",
+            postgresql_where=text("active"),
+            sqlite_where=text("active"),
+        ),
+        Index("ix_trip_capacity_claims_booking", "booking_id", "id"),
+        Index("ix_trip_capacity_claims_trip", "trip_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigIdentity, Identity(always=True), primary_key=True)
+    trip_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("trips.id", name="fk_trip_capacity_claims_trip_id"), nullable=False
+    )
+    # bookings.models imports this module, so the target resolves lazily by name (no ORM relationship, ADR-0001).
+    booking_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("bookings.id", name="fk_trip_capacity_claims_booking_id"), nullable=False
+    )
+    from_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    to_m: Mapped[int] = mapped_column(Integer, nullable=False)
+    seats: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    baggage_ml: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    cargo_weight_g: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    cargo_volume_ml: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class DriverDirection(Base):

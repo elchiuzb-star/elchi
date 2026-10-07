@@ -11,7 +11,7 @@ profit: the report shows the amount with the number of bookings behind it and ne
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 from sqlalchemy import text
@@ -68,28 +68,13 @@ def test_seat_km_ratio_uses_the_confirmed_route_distance(bw: BW) -> None:  # noq
     metrics = _collect(bw, _trip_day(bw))
     numerator, denominator = metrics[KpiMetric.BOOKED_SEAT_KM_RATIO.value]
 
-    # reconcile against the source rows: seats x (dropoff - pickup) cumulative distance, capacity x route length
+    # reconcile against the source rows (ADR-0028): seats x road metres between the agreed places, capacity x the
+    # stretch of road the trip drives
     expected_booked = scalar(
-        bw.db,
-        """
-        SELECT b.seats * (ds.cumulative_distance_m - ps.cumulative_distance_m)
-          FROM bookings b
-          JOIN trip_stop_occurrences po ON po.trip_id = b.trip_id AND po.seq = b.pickup_occurrence_seq
-          JOIN trip_stop_occurrences do_ ON do_.trip_id = b.trip_id AND do_.seq = b.dropoff_occurrence_seq
-          JOIN route_version_stops ps ON ps.route_version_id = b.route_version_id AND ps.seq = po.route_version_stop_seq
-          JOIN route_version_stops ds ON ds.route_version_id = b.route_version_id AND ds.seq = do_.route_version_stop_seq
-         WHERE b.id = :b
-        """,
-        b=booking.id,
+        bw.db, "SELECT seats * (dropoff_position_m - pickup_position_m) FROM bookings WHERE id = :b", b=booking.id
     )
     expected_offered = scalar(
-        bw.db,
-        """
-        SELECT t.seat_capacity * (SELECT max(cumulative_distance_m) FROM route_version_stops
-                                   WHERE route_version_id = t.route_version_id)
-          FROM trips t WHERE t.id = :t
-        """,
-        t=trip_id,
+        bw.db, "SELECT seat_capacity * (route_end_m - route_start_m) FROM trips WHERE id = :t", t=trip_id
     )
     assert numerator == int(expected_booked)
     assert denominator == int(expected_offered)
@@ -105,26 +90,10 @@ def test_trip_without_a_route_distance_leaves_both_sides_and_is_reported(bw: BW)
     day = _trip_day(bw)
     with_distance = _collect(bw, day)[KpiMetric.BOOKED_SEAT_KM_RATIO.value]
 
-    # A second trip whose route version has no per-stop distances recorded. (A route version itself must carry a
-    # positive distance - the DB refuses 0 - so the realistic gap is a version whose stop distances are missing.)
+    # A second trip whose road stretch is unknown (a legacy trip the 0097 backfill could not place).
     second_trip, _second_public = driver_trip(bw, bw.w.driver2_id, "01A701AA")
     with bw.db.session() as session:
-        session.execute(
-            text(
-                "INSERT INTO route_versions (public_id, corridor_id, created_by_user_id, source, provider, "
-                "provider_version, request_hash, geometry, distance_m, duration_s, is_estimate, status, "
-                "confirmed_at, created_at, updated_at) "
-                "SELECT gen_random_uuid(), corridor_id, created_by_user_id, source, provider, provider_version, "
-                "       'no-stop-distance-' || id, geometry, distance_m, duration_s, true, status, confirmed_at, "
-                "       now(), now() "
-                "  FROM route_versions ORDER BY id LIMIT 1"
-            )
-        )
-        new_route = session.execute(text("SELECT max(id) FROM route_versions")).scalar_one()
-        # the version exists, its stop distances do not
-        session.execute(
-            text("UPDATE trips SET route_version_id = :new WHERE id = :t"), {"new": new_route, "t": second_trip}
-        )
+        session.execute(text("UPDATE trips SET route_start_m = NULL, route_end_m = NULL WHERE id = :t"), {"t": second_trip})
         session.commit()
 
     metrics = _collect(bw, day)

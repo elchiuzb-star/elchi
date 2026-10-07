@@ -4,10 +4,10 @@ The user asked for two things on 17.09.2026: every region except Tashkent city i
 and a driver who picked Toshkent -> Qarshi should also be recommended the districts along the way. These tests
 guard the honest half of that, which is where such a feature usually goes wrong:
 
-* a district that no verified stop serves must say so (``stops_count = 0``) instead of looking like a place
-  you can be picked up from;
-* "on the way" is decided by the confirmed route, never by the district belonging to the corridor's region -
-  the spec (§6.1, §6.5) says in as many words that not every Toshkent -> Qarshi road passes Chiroqchi.
+* "on the way" is decided by the confirmed road (ADR-0028: the district's centre lies on it), never by the district
+  belonging to the corridor's region - the spec (§6.1, §6.5) says in as many words that not every Toshkent -> Qarshi
+  road passes Chiroqchi;
+* a district whose centre is unknown or off every road is not placed on the corridor - no guess, no stop (Q160).
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def test_only_tashkent_city_is_chosen_without_a_district(client: TestClient) -> 
     assert sorted(code for code, item in regions.items() if item["requires_district"]) == ["UZ-QA", "UZ-SA"]
 
 
-def test_districts_are_listed_per_region_with_their_stop_counts(client: TestClient, world) -> None:  # noqa: ANN001
+def test_districts_are_listed_per_region_with_their_map_centres(client: TestClient, world) -> None:  # noqa: ANN001
     pg_db, _ = world
     qashqadaryo = region_id(pg_db, "UZ-QA")
     districts = ok(client.get("/api/v2/districts", params={"region_id": qashqadaryo}))
@@ -85,17 +85,15 @@ def test_districts_are_listed_per_region_with_their_stop_counts(client: TestClie
     assert names == sorted(names), "the picker gets one ordering, not the insert order"
     assert {"Chiroqchi", "Kitob", "Qarshi"} <= set(names)
     for item in districts:
-        assert item["id"].startswith("dst_") and item["region"]["code"] == "UZ-QA"
-    # The fixture corridor is `pilot`, so its stops count. The fixture now hangs its stops on the real
-    # catalogue districts rather than inventing "Qarshi (fixture)" beside "Qarshi" (wave 19), so the count
-    # lands on the row a traveller actually sees.
-    assert {item["name_uz"]: item["stops_count"] for item in districts}["Qarshi"] == 1
+        assert item["id"].startswith("dst_") and item["region"]["code"] == "UZ-QA" and "stops_count" not in item
+    qarshi = next(item for item in districts if item["name_uz"] == "Qarshi")
+    assert qarshi["center_lat"] is not None and qarshi["center_lng"] is not None
 
 
-def test_a_district_without_a_verified_stop_says_zero_instead_of_looking_available(
+def test_a_district_without_a_centre_is_listed_but_never_placed_on_a_road(
     client: TestClient, world  # noqa: ANN001
 ) -> None:
-    pg_db, _ = world
+    pg_db, fixture = world
     with pg_db.session() as db:
         db.execute(
             text(
@@ -105,7 +103,9 @@ def test_a_district_without_a_verified_stop_says_zero_instead_of_looking_availab
         )
         db.commit()
     districts = {item["name_uz"]: item for item in ok(client.get("/api/v2/districts", params={"region_id": region_id(pg_db, "UZ-QA")}))}
-    assert districts["Yangi tuman (fixture)"]["stops_count"] == 0
+    assert districts["Yangi tuman (fixture)"]["center_lat"] is None
+    on_road = [item["district"]["name_uz"] for item in ok(client.get(f"/api/v2/corridors/{fixture.corridor.api_id}/districts"))]
+    assert "Yangi tuman (fixture)" not in on_road
 
 
 def test_search_and_unknown_region_behave_like_a_catalogue(client: TestClient, world) -> None:  # noqa: ANN001
@@ -116,52 +116,32 @@ def test_search_and_unknown_region_behave_like_a_catalogue(client: TestClient, w
     assert ok(client.get("/api/v2/districts", params={"q": "x"})) == []
 
 
-def test_corridor_districts_are_the_confirmed_route_in_travel_order(client: TestClient, world) -> None:  # noqa: ANN001
+def test_corridor_districts_are_the_confirmed_road_in_travel_order(client: TestClient, world) -> None:  # noqa: ANN001
     _, fixture = world
     items = ok(client.get(f"/api/v2/corridors/{fixture.corridor.api_id}/districts"))
     names = [item["district"]["name_uz"] for item in items]
-    assert names[0] == "Toshkent shahri" and names[-1] != "Toshkent shahri"
     assert [item["sequence"] for item in items] == list(range(len(items)))
-    on_route = [item["district"]["name_uz"] for item in items if item["on_confirmed_route"]]
-    # Both fixture routes start in Tashkent and end in Qarshi; Chiroqchi and Kattaqo'rg'on are on one each.
-    assert {"Toshkent shahri", "Qarshi", "Chiroqchi"} <= set(on_route)
-    assert on_route[0] == "Toshkent shahri" and on_route[-1] == "Qarshi"
-    # Kitob owns a stop of the corridor but no confirmed route calls there: listed, last, and not "on route".
-    assert "Kitob" in names and "Kitob" not in on_route
-    assert names.index("Kitob") > names.index("Qarshi")
+    assert all(item["on_confirmed_route"] for item in items) and all("stops_count" not in item for item in items)
+    # Both fixture roads start in Tashkent and end in Qarshi; Chiroqchi and Kattaqo'rg'on are on one each.
+    assert {"Toshkent shahri", "Samarqand", "Chiroqchi", "Kattaqo'rg'on", "Qarshi"} <= set(names)
+    assert names.index("Toshkent shahri") < names.index("Samarqand") < names.index("Qarshi")
+    # Kitob is in the corridor's region but no confirmed road passes its centre: not on the corridor (spec 6.1).
+    assert "Kitob" not in names
 
 
-def test_a_district_no_confirmed_route_reaches_is_listed_but_not_called_on_route(
-    client: TestClient, world  # noqa: ANN001
-) -> None:
-    """Spec §6.1: owning a stop on the corridor is not the same as being on the road the driver confirmed."""
+def test_a_district_off_every_road_is_not_on_the_corridor(client: TestClient, world) -> None:  # noqa: ANN001
+    """Spec §6.1: being in the corridor's region is not the same as being on the road the driver confirmed."""
     pg_db, fixture = world
     with pg_db.session() as db:
-        district = db.execute(
-            text(
-                "INSERT INTO geo_districts (public_id, region_id, name_uz) "
-                "SELECT gen_random_uuid(), id, 'Yo''l tashqarisi (fixture)' FROM regions WHERE code = 'UZ-QA' "
-                "RETURNING id"
-            )
-        ).scalar_one()
-        admin = db.execute(text("SELECT id FROM users ORDER BY id LIMIT 1")).scalar_one()
         db.execute(
             text(
-                "INSERT INTO corridor_stops (public_id, corridor_id, geo_district_id, name_uz, point, is_active, "
-                "verified_by, verified_at, meeting_note, sequence_hint) VALUES (gen_random_uuid(), :c, :d, "
-                "'Chekka bekat (fixture)', ST_SetSRID(ST_MakePoint(66.0, 39.0), 4326), true, :a, now(), 'Bekat', 99)"
-            ),
-            {"c": fixture.corridor.id, "d": district, "a": admin},
+                "INSERT INTO geo_districts (public_id, region_id, name_uz, center_lat, center_lng) "
+                "SELECT gen_random_uuid(), id, 'Yo''l tashqarisi (fixture)', 39.0, 66.0 FROM regions WHERE code = 'UZ-QA'"
+            )
         )
         db.commit()
-
-    items = ok(client.get(f"/api/v2/corridors/{fixture.corridor.api_id}/districts"))
-    entry = next(item for item in items if item["district"]["name_uz"] == "Yo'l tashqarisi (fixture)")
-    assert entry["on_confirmed_route"] is False and entry["stops_count"] == 1
-    # Everything a confirmed route really covers comes first; the unproven ones follow.
-    flags = [item["on_confirmed_route"] for item in items]
-    assert flags == sorted(flags, reverse=True)
-    assert entry["sequence"] >= flags.index(False)
+    names = [item["district"]["name_uz"] for item in ok(client.get(f"/api/v2/corridors/{fixture.corridor.api_id}/districts"))]
+    assert "Yo'l tashqarisi (fixture)" not in names
 
 
 def test_corridor_districts_hide_a_corridor_that_is_not_public(client: TestClient, world) -> None:  # noqa: ANN001

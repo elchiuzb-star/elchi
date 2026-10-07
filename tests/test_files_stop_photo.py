@@ -82,9 +82,6 @@ def test_staff_upload_attaches_as_stop_evidence(clients) -> None:  # noqa: ANN00
     # H0 attach rules with the geo expectation (expected_upload_type="stop_photo").
     stored = file_access.resolve_attachment(file_url, user_id=admin_id, expected_upload_type="stop_photo")
     assert stored is not None and "stop_photo/" in stored
-    from app.modules.geo import service as geo_service
-
-    assert geo_service._resolve_meeting_photo(file_url, actor_user_id=admin_id) == stored
     # Someone else cannot attach the admin's photo.
     other_id, _ = users["operator"]
     with pytest.raises(file_access.FileReferenceError):

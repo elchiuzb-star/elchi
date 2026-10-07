@@ -1,14 +1,15 @@
 """Loads ``corridor_fixture.json`` (synthetic dev/test geography) through the geo service.
 
-Used by tests/pg/geo and scripts/seed_geo_fixtures.py. Route versions are built with
-the deterministic fake router and confirmed, following the real transaction pattern:
-read -> end transaction -> router -> write -> commit.
+Used by tests/pg/geo and scripts/seed_geo_fixtures.py. Roads are built with the deterministic fake router through the
+fixture's town centres and confirmed, following the real transaction pattern: read -> end transaction -> router ->
+write -> commit. ADR-0028 / Q160: the town centres are only where the line is drawn through - nothing is stored for
+them; a road is its geometry from A to B. Each district gets its town centre as its map centre.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -29,11 +30,14 @@ class GeoFixture:
     corridor: service.CorridorInfo
     regions: dict[str, service.RegionInfo] = field(default_factory=dict)
     district_api_ids: dict[str, str] = field(default_factory=dict)
-    stops: dict[str, service.StopInfo] = field(default_factory=dict)
+    places: dict[str, LatLng] = field(default_factory=dict)
     routes: dict[str, service.RouteVersionInfo] = field(default_factory=dict)
 
-    def stop_id(self, key: str) -> int:
-        return self.stops[key].id
+    def point(self, key: str) -> dict:
+        """A fixture place as ``PointEndInput`` JSON, in its district."""
+        place = self.places[key]
+        district = next(item["district"] for item in load_json()["places"] if item["key"] == key)
+        return {"lat": place.lat, "lng": place.lng, "district_id": self.district_api_ids[district]}
 
 
 def load_json() -> dict:
@@ -41,11 +45,22 @@ def load_json() -> dict:
 
 
 def build_route(
-    db: Session, provider: RoutingProvider, *, actor_user_id: int, stop_api_ids: list[str], confirm: bool = True
+    db: Session,
+    provider: RoutingProvider,
+    *,
+    actor_user_id: int,
+    corridor: service.CorridorInfo,
+    through: list[LatLng],
+    confirm: bool = True,
 ) -> service.RouteVersionInfo:
+    """A confirmed road drawn by ``provider`` through ``through`` (first = A, last = B). Only the geometry is stored."""
     departure = datetime.now(timezone.utc) + timedelta(days=1)
     try:
-        plan = service.prepare_route_preview(db, provider, stop_api_ids=stop_api_ids, departure_at=departure)
+        plan = service.prepare_road_preview(
+            db, provider, corridor_api_id=corridor.api_id, origin=through[0], destination=through[-1], departure_at=departure
+        )
+        waypoints = tuple(through)
+        plan = replace(plan, waypoints=waypoints, request_hash=service.routing_request_hash(provider.name, provider.version, waypoints))
     finally:
         db.rollback()
     result, from_cache = service.fetch_route_outside_transaction(db, provider, plan)
@@ -79,16 +94,11 @@ def load_geo_fixture(db: Session, *, actor_user_id: int, provider: RoutingProvid
             row.id, row.public_id, row.code, row.name_uz, row.name_ru, bool(row.requires_district)
         )
 
-    # The fixture hangs its stops on the *real* catalogue districts wherever the catalogue has them.
-    #
-    # It used to create its own - "Qarshi (fixture)" beside the real "Qarshi" - and in a development database
-    # both showed up in the district picker, so a tester had to know which of two identically-named rows was
-    # the one the corridor actually used. The stops keep their "(fixture)" names, which is the honest label for
-    # synthetic geography; the districts no longer duplicate anything.
-    #
-    # One row still has to be invented: Tashkent city is itself the direction unit (wave 10), so it has no
-    # districts at all, and a stop cannot exist without one. It is never shown - a region with
+    # The fixture uses the *real* catalogue districts wherever the catalogue has them (a duplicate "Qarshi (fixture)"
+    # beside the real "Qarshi" confused testers). One row still has to be invented: Tashkent city is itself the
+    # direction unit (wave 10), so it has no districts at all; it is never shown - a region with
     # `requires_district = false` sends the client straight to the map.
+    centres = {item["district"]: (item["lat"], item["lng"]) for item in data["places"]}
     district_ids: dict[str, str] = {}
     for item in data["districts"]:
         region = regions[item["region"]]
@@ -100,6 +110,9 @@ def load_geo_fixture(db: Session, *, actor_user_id: int, provider: RoutingProvid
         if row is None:
             row = GeoDistrict(public_id=new_public_uuid(), region_id=region.id, name_uz=item["name_uz"])
             db.add(row)
+            db.flush()
+        if row.center_lat is None and item["key"] in centres:  # the map opens on the town (advisory, never a match input)
+            row.center_lat, row.center_lng = centres[item["key"]]
             db.flush()
         district_ids[item["key"]] = service.district_api_id(row.public_id)
 
@@ -115,19 +128,8 @@ def load_geo_fixture(db: Session, *, actor_user_id: int, provider: RoutingProvid
         default_max_detour_m=spec["default_max_detour_m"],
     )
     fixture = GeoFixture(corridor=corridor, regions=regions, district_api_ids=district_ids)
-    for item in data["stops"]:
-        fixture.stops[item["key"]] = service.create_stop(
-            db,
-            actor_user_id=actor_user_id,
-            corridor_api_id=corridor.api_id,
-            name_uz=item["name_uz"],
-            name_ru=None,
-            district_api_id=district_ids[item["district"]],
-            point=LatLng(item["lat"], item["lng"]),
-            meeting_note="Fixture stop - not a verified meeting point",
-            sequence_hint=item["sequence_hint"],
-            is_active=True,
-        )
+    for item in data["places"]:
+        fixture.places[item["key"]] = LatLng(item["lat"], item["lng"])
     fixture.corridor = service.patch_corridor(
         db,
         actor_user_id=actor_user_id,
@@ -136,20 +138,26 @@ def load_geo_fixture(db: Session, *, actor_user_id: int, provider: RoutingProvid
         reason="fixture rollout",
         changes={"rollout_state": "internal"},
     )
+    db.commit()
+
+    # ADR-0028 (0099): a pilot corridor needs a confirmed road, so the roads are confirmed while it is internal. Without
+    # ``with_routes`` the first road alone is built - the one a public corridor cannot be without.
+    routes = list(data["routes"].items()) if with_routes else list(data["routes"].items())[:1]
+    for name, keys in routes:
+        fixture.routes[name] = build_route(
+            db, router, actor_user_id=actor_user_id, corridor=fixture.corridor, through=[fixture.places[k] for k in keys]
+        )
     if spec["rollout_state"] == "pilot":
+        current = service.get_corridor_by_api_id(db, corridor.api_id)
         fixture.corridor = service.patch_corridor(
             db,
             actor_user_id=actor_user_id,
             corridor_api_id=corridor.api_id,
-            expected_version=fixture.corridor.version,
+            expected_version=current.version,
             reason="fixture rollout",
             changes={"rollout_state": "pilot"},
         )
-    db.commit()
-
-    if with_routes:
-        for name, keys in data["routes"].items():
-            fixture.routes[name] = build_route(db, router, actor_user_id=actor_user_id, stop_api_ids=[fixture.stops[k].api_id for k in keys])
+        db.commit()
     return fixture
 
 
@@ -157,8 +165,7 @@ def load_geo_fixture(db: Session, *, actor_user_id: int, provider: RoutingProvid
 #:
 #: Production defaults stay `false` for all of them (`PRODUCTION_FLAG_DEFAULTS`) - that is the safe value and
 #: nothing here changes it. What a developer needs is a corridor where the *whole* marketplace is reachable,
-#: including `driver_listing_enabled`: without it a driver cannot publish a trip offer at all, so half of the
-#: two-sided auction (Q92) is closed and the supply side looks broken for a configuration reason.
+#: including `driver_listing_enabled` (kept for the retired driver listing switch, Q138).
 DEV_CORRIDOR_SERVICE_FLAGS: tuple[str, ...] = (
     "passenger_enabled",
     "parcel_enabled",

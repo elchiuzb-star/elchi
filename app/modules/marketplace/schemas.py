@@ -29,7 +29,6 @@ from app.contracts.enums import (
 )
 from app.modules.marketplace.rules import LISTING_TIMEZONE, PROPOSAL_MESSAGE_MAX_LENGTH
 from app.modules.trips.schemas import DirectionTripRefDTO
-from app.modules.trips.schemas import StopRefDTO
 
 REASON_CODE_PATTERN = r"^[a-z][a-z0-9_]{2,63}$"
 
@@ -191,11 +190,9 @@ class DirectionPreviewDTO(ContractModel):
 class ListingCreate(ContractModel):
     kind: ListingKind
     service_type: ServiceType
-    # Q88: each end is a verified stop **or** a map point - exactly one of the two (CHECK in migration 0076).
-    origin_stop_id: str | None = None
-    destination_stop_id: str | None = None
-    origin_point: PointEndInput | None = None
-    destination_point: PointEndInput | None = None
+    # Q88 / Q160: each end is a place marked on the map - A and B. ELCHI has no stops.
+    origin_point: PointEndInput
+    destination_point: PointEndInput
     departure_window_start: UtcDateTime
     departure_window_end: UtcDateTime
     timezone: str = Field(default=LISTING_TIMEZONE, pattern=r"^Asia/Tashkent$")
@@ -213,19 +210,8 @@ class ListingCreate(ContractModel):
     def _shape(self) -> ListingCreate:
         if self.departure_window_end <= self.departure_window_start:
             raise ValueError("departure_window_end must be after departure_window_start")
-        for end in ("origin", "destination"):
-            stop, point = getattr(self, f"{end}_stop_id"), getattr(self, f"{end}_point")
-            if (stop is None) == (point is None):
-                raise ValueError(f"{end} must be exactly one of {end}_stop_id or {end}_point")
-        if self.origin_stop_id is not None and self.origin_stop_id == self.destination_stop_id:
-            raise ValueError("origin and destination stops must differ")
-        if self.origin_point is not None and self.destination_point is not None:
-            same = (self.origin_point.lat, self.origin_point.lng) == (self.destination_point.lat, self.destination_point.lng)
-            if same:
-                raise ValueError("origin and destination points must differ")
-        if self.kind is ListingKind.TRIP_OFFER and (self.origin_point or self.destination_point):
-            # A trip offer is the driver's own route; its ends are the stops the trip actually calls at.
-            raise ValueError("a trip offer is published on verified stops, not on map points")
+        if (self.origin_point.lat, self.origin_point.lng) == (self.destination_point.lat, self.destination_point.lng):
+            raise ValueError("origin and destination points must differ")
         if self.kind is ListingKind.TRIP_OFFER and not self.trip_id:
             raise ValueError("trip_id is required for trip_offer listings")
         if self.kind is ListingKind.REQUEST and self.trip_id:
@@ -256,9 +242,7 @@ class ListingDTO(ContractModel):
     terms_version: int = Field(description="Bumped only by proposal-invalidating edits; send it on accept (Q54).")
     owner: ListingOwnerDTO
     corridor_id: str
-  # Q88: exactly one of the two is set - a verified stop, or the place the client marked on the map.
-    origin_stop: StopRefDTO | None = None
-    destination_stop: StopRefDTO | None = None
+    # Q88 / Q160: the places the client marked on the map.
     origin_point: PointEndDTO | None = None
     destination_point: PointEndDTO | None = None
     departure_window_start: UtcDateTime
@@ -294,9 +278,7 @@ class ListingPublicDTO(ContractModel):
     kind: ListingKind
     service_type: ServiceType
     status: ListingStatus
-  # Q88: exactly one of the two is set - a verified stop, or the place the client marked on the map.
-    origin_stop: StopRefDTO | None = None
-    destination_stop: StopRefDTO | None = None
+    # Q88 / Q160: the places the client marked on the map.
     origin_point: PointEndDTO | None = None
     destination_point: PointEndDTO | None = None
     departure_window_start: UtcDateTime
@@ -324,8 +306,6 @@ class ListingPublicDTO(ContractModel):
 
 
 class ListingPatch(VersionedCommand):
-    origin_stop_id: str | None = None
-    destination_stop_id: str | None = None
     departure_window_start: UtcDateTime | None = None
     departure_window_end: UtcDateTime | None = None
     price_basis: PriceBasis | None = None
@@ -388,10 +368,7 @@ class ProposalPromoConsent(ContractModel):
 
 class ProposalCreate(ContractModel):
     trip_id: str | None = Field(default=None, description="Required when a driver answers a request.")
-    # Q88: omitted when the listing's ends are map points - the proposal inherits them. A driver cannot move
-    # the place the client marked, so there is nothing to send.
-    pickup_stop_id: str | None = None
-    dropoff_stop_id: str | None = None
+    # Q88: the proposal inherits the request's places - a driver cannot move where the client is met.
     pickup_window_start: UtcDateTime
     pickup_window_end: UtcDateTime
     quantity: StrictInt = Field(ge=1, le=60)
@@ -419,10 +396,6 @@ class ProposalCreate(ContractModel):
         _one_demand_kind(self.baggage, self.parcel)
         if self.pickup_window_end <= self.pickup_window_start:
             raise ValueError("pickup_window_end must be after pickup_window_start")
-        if self.pickup_stop_id is not None and self.pickup_stop_id == self.dropoff_stop_id:
-            raise ValueError("pickup and dropoff stops must differ")
-        if (self.pickup_stop_id is None) != (self.dropoff_stop_id is None):
-            raise ValueError("send both stop ids or neither (a point-ended listing supplies both)")
         return self
 
 
@@ -433,8 +406,6 @@ class ProposalCounter(ContractModel):
         description="ADR-0027 Q153: a driver's counter may move the pickup outside the request window when true. A "
         "counter that keeps the current window keeps its time proposal; a client cannot move it outside.",
     )
-    pickup_stop_id: str | None = None
-    dropoff_stop_id: str | None = None
     pickup_window_start: UtcDateTime | None = None
     pickup_window_end: UtcDateTime | None = None
     quantity: StrictInt | None = Field(default=None, ge=1, le=60)
@@ -448,8 +419,6 @@ class ProposalCounter(ContractModel):
     def _has_change(self) -> ProposalCounter:
         _one_demand_kind(self.baggage, self.parcel)
         changes = (
-            self.pickup_stop_id,
-            self.dropoff_stop_id,
             self.pickup_window_start,
             self.pickup_window_end,
             self.quantity,
@@ -549,9 +518,7 @@ class ProposalVersionDTO(ContractModel):
     author_side: ActorSide
     status: ProposalStatus
     status_reason: str | None
-  # Q88: exactly one of the two is set - a verified stop, or the place the client marked on the map.
-    pickup_stop: StopRefDTO | None = None
-    dropoff_stop: StopRefDTO | None = None
+    # Q88 / Q160: the request's places, inherited by every version.
     pickup_point: PointEndDTO | None = None
     dropoff_point: PointEndDTO | None = None
     pickup_window_start: UtcDateTime
@@ -649,9 +616,7 @@ class ListingOfferDTO(ContractModel):
     unit_price_minor: int
     total_minor: int
     currency: Currency
-  # Q88: exactly one of the two is set - a verified stop, or the place the client marked on the map.
-    pickup_stop: StopRefDTO | None = None
-    dropoff_stop: StopRefDTO | None = None
+    # Q88 / Q160: the request's places.
     pickup_point: PointEndDTO | None = None
     dropoff_point: PointEndDTO | None = None
     pickup_window_start: UtcDateTime
@@ -683,18 +648,15 @@ class TripIntentRef(ContractModel):
 
 
 class TripIntentEndInput(ContractModel):
-    """One end: a verified stop, or a district with an optional marked place (Q88) - what the search used."""
+    """One end: a district with an optional marked place (Q88). Retired with ADR-0025 (Q138): kept for the shape."""
 
-    stop_id: str | None = Field(default=None, max_length=64)
-    district_id: str | None = Field(default=None, max_length=64)
+    district_id: str = Field(max_length=64)
     lat: float | None = Field(default=None, ge=-90, le=90)
     lng: float | None = Field(default=None, ge=-180, le=180)
     address: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
     def _shape(self) -> TripIntentEndInput:
-        if self.stop_id is None and self.district_id is None:
-            raise ValueError("an end needs a stop_id or a district_id")
         if (self.lat is None) != (self.lng is None):
             raise ValueError("send lat and lng together")
         return self
@@ -747,7 +709,6 @@ class TripIntentCommand(ContractModel):
 
 
 class TripIntentEndDTO(ContractModel):
-    stop: StopRefDTO | None = None
     district: DistrictRefDTO | None = None
     lat: float | None = None
     lng: float | None = None
@@ -818,7 +779,7 @@ class TripIntentFitCapacityDTO(ContractModel):
 
 
 class TripIntentFitEndDTO(ContractModel):
-    status: Literal["same_stop", "same_district", "different"]
+    status: Literal["same_district", "different"]
 
 
 class TripIntentFitPriceDTO(ContractModel):
@@ -923,7 +884,7 @@ class DirectionRequestsDTO(ContractModel):
 
 
 class DirectionOfferCreate(ContractModel):
-    """Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027)."""
+    """Q152: an offer from a direction. The trip, window and quantity are the system's (ADR-0027)."""
 
     listing_id: str = Field(min_length=1, max_length=64)
     unit_price_minor: StrictInt = Field(gt=0)

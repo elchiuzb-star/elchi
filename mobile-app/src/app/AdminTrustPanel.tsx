@@ -294,15 +294,14 @@ export function applicableCommands(booking: AdminBookingDTO): OperatorBookingCom
 }
 
 /**
- * A booking end as a place (06.10.2026: ELCHI is point A -> point B, staff never see "stops"): the district and the
- * address the person marked. An old row whose end is only a catalogue node has no district in its DTO, so its
- * name is shown as a plain place name - the word "stop" is not put in front of it.
+ * A booking end as a place (ADR-0028: ELCHI is point A -> point B): the district and the address the person
+ * marked.
  */
 export function placeText(end: AdminBookingDTO["pickup"]): string {
   const district = end.point?.district;
   const districtName = typeof district === "string" ? district : district?.name_uz;
   const point = [districtName, end.point?.address].filter(Boolean).join(", ");
-  return point || end.stop?.name_uz || "-";
+  return point || "-";
 }
 
 export function serviceLabel(service: string | null | undefined): string {
@@ -1264,7 +1263,7 @@ const EMPTY_FORM = {
   kind: "request" as const,  // Q138 (ADR-0026): drivers publish no listings - on-behalf is a client request only
   service: "passenger" as "passenger" | "parcel",
   tripId: "",
-  // 06.10.2026: an end is a place (region -> district, optional address), never a catalogue stop
+  // 06.10.2026: an end is a place (region -> district, optional address)
   originRegion: "",
   originDistrict: "",
   originAddress: "",

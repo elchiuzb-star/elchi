@@ -1,16 +1,12 @@
 """Corridor price bands (decision Q42): pure selection and checks, no I/O.
 
-A band is an operator-configured floor/ceiling for one corridor and service type, either for one
-segment (origin stop -> destination stop) or corridor-wide. Amounts are integer minor units:
-passenger bands are per seat (``per_seat``), parcel bands are the delivery total (``total``).
+A band is an operator-configured floor/ceiling for one corridor and service type. Amounts are integer minor
+units: passenger bands are per seat (``per_seat``), parcel bands are the delivery total (``total``). With no active
+band there is no reference (``None``). Marketplace use (proposal submit/counter) is A1's; geo only resolves and
+compares.
 
-Precedence: an active segment band for the exact (origin, destination) wins over the active
-corridor-wide band; with neither, there is no band (``None``) and no price limit applies.
-Marketplace enforcement (proposal submit/counter) is A1's; geo only resolves and compares.
-
-Q53 operating model: corridor-wide bands are loose safety limits (catch obvious typos and abuse);
-exact segment bands set the real price range for a segment. G13 warns the operator when a
-corridor-wide floor exceeds the lowest active segment floor (``service.price_band_warnings``).
+ADR-0028 / Q160: bands are corridor-wide only - ELCHI has no stops, so there is no stop pair to price. Legacy
+stop-pair rows are frozen history and never read.
 """
 
 from __future__ import annotations
@@ -37,8 +33,6 @@ def _positive_int(value: object, name: str) -> int:
 class PriceBand:
     corridor_id: int
     service_type: ServiceType
-    origin_stop_id: int | None
-    destination_stop_id: int | None
     floor_minor: int
     ceiling_minor: int
     is_active: bool
@@ -55,10 +49,6 @@ class PriceBand:
         _positive_int(self.version, "version")
         if self.floor_minor > self.ceiling_minor:
             raise ValueError("floor_minor must not exceed ceiling_minor")
-        if (self.origin_stop_id is None) != (self.destination_stop_id is None):
-            raise ValueError("a segment band needs both origin and destination stops")
-        if self.origin_stop_id is not None and self.origin_stop_id == self.destination_stop_id:
-            raise ValueError("segment origin and destination must differ")
 
     @property
     def price_basis(self) -> PriceBasis:
@@ -66,35 +56,15 @@ class PriceBand:
 
     @property
     def scope(self) -> str:
-        return "corridor" if self.origin_stop_id is None else "segment"
+        return "corridor"
 
 
-def select_price_band(
-    bands: Iterable[PriceBand],
-    *,
-    corridor_id: int,
-    service_type: ServiceType,
-    origin_stop_id: int | None,
-    destination_stop_id: int | None,
-) -> PriceBand | None:
-    """Segment band over corridor-wide band; inactive bands and other corridors/services are ignored.
-
-    Q88: a map-point end has no stop id, so there is no segment to look up and the corridor-wide band - the
-    broad reference for the whole direction - is what applies. That is a *reference*, not a fare: it feeds the
-    ranking score and the advisory warning exactly as it does for a stop pair (Q90).
-    """
+def select_price_band(bands: Iterable[PriceBand], *, corridor_id: int, service_type: ServiceType) -> PriceBand | None:
+    """The corridor's active band for the service (newest version); inactive bands and other corridors/services are
+    ignored. A *reference*, not a fare: it feeds the ranking score and the advisory warning (Q90)."""
     service = ServiceType(service_type)
     relevant = [b for b in bands if b.is_active and b.corridor_id == corridor_id and b.service_type is service]
-    if origin_stop_id is not None and destination_stop_id is not None:
-        segment = [
-            b for b in relevant if b.origin_stop_id == origin_stop_id and b.destination_stop_id == destination_stop_id
-        ]
-        if segment:
-            return max(segment, key=lambda b: b.version)
-    corridor_wide = [b for b in relevant if b.origin_stop_id is None]
-    if corridor_wide:
-        return max(corridor_wide, key=lambda b: b.version)
-    return None
+    return max(relevant, key=lambda b: b.version) if relevant else None
 
 
 def price_within_band(band: PriceBand, *, price_basis: PriceBasis, unit_price_minor: int, quantity: int) -> bool:

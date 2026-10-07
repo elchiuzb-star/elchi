@@ -28,6 +28,7 @@ from tests.pg.bookings.conftest import (
     propose,
     publish_listing,
     request_with_driver_proposal,
+    claims_of,
     rows,
     run_trip_action,
     scalar,
@@ -145,7 +146,7 @@ def test_ac21_client_cancel_releases_allocation_and_hold_atomically(bw: BW) -> N
     with bw.db.session() as s:
         assert marketplace_service.get_listing_by_public_id(s, listing).status == "cancelled"  # the client closed its demand
         booking_row = s.get(Booking, booking.id)
-        assert bookings_service._release_allocations(s, booking_row, trip_id, bw.base) is False  # noqa: SLF001 - release contract
+        assert bookings_service._release_capacity(s, booking_row, trip_id, bw.base) is False  # noqa: SLF001 - release contract
         s.rollback()
     again = domain_error(lambda: act(bw, booking.id, bw.w.client_id, "complete"))
     assert again.code is ErrorCode.INVALID_STATE_TRANSITION
@@ -355,7 +356,8 @@ def test_d10_amendment_changes_quantity_reserves_again_and_adjusts_the_single_ho
         assert (updated.quantity, updated.total_minor, updated.commission_minor, updated.fee_bps) == (2, 40_000_000, 6_000_000, 1500)
     assert seats_used(bw, trip_id) == [2, 2, 2]
     assert wallet(bw, bw.w.driver_id)[1] == 6_000_000 and scalar(bw.db, "SELECT count(*) FROM wallet_holds") == 1
-    assert scalar(bw.db, "SELECT count(*) FROM booking_allocations WHERE booking_id = :b AND NOT active", b=booking.id) == 3
+    # ADR-0028: the amendment released the 1-seat road claim and took a 2-seat one on the same places
+    assert [(c[2], c[3]) for c in claims_of(bw, booking.id)] == [(1, False), (2, True)]
 
     listing, _, _, ref = request_with_driver_proposal(bw, plate="01B151AA", client_id=bw.w.client2_id, driver_id=bw.w.driver2_id)
     request_booking = accept(bw, ref, bw.w.client2_id)

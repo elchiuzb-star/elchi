@@ -186,7 +186,7 @@ ERROR_CATALOGUE: dict[ErrorCode, ErrorSpec] = {
     ErrorCode.DETOUR_LIMIT_EXCEEDED: ErrorSpec(409, "Cumulative detour exceeds the trip limit (AC17)."),
     ErrorCode.TIME_WINDOW_CONFLICT: ErrorSpec(409, "Pickup ETA window does not intersect or breaks others' windows."),
     ErrorCode.BOOKING_CUTOFF_PASSED: ErrorSpec(409, "New bookings are closed for this trip (spec §7)."),
-    ErrorCode.CORRIDOR_NOT_ACTIVE: ErrorSpec(409, "Service corridor or stop is not active for this service."),
+    ErrorCode.CORRIDOR_NOT_ACTIVE: ErrorSpec(409, "Service corridor is not active for this service."),
     ErrorCode.ROUTING_UNAVAILABLE: ErrorSpec(503, "Routing/maps provider unavailable; no fake match (AC35)."),
     ErrorCode.TRIP_HAS_UNRESOLVED_BOOKINGS: ErrorSpec(409, "Trip cannot complete while bookings are unresolved (AC42)."),
     ErrorCode.PROOF_INVALID: ErrorSpec(409, "Boarding/pickup/delivery/return code does not match this action."),
@@ -224,7 +224,7 @@ ERROR_CATALOGUE: dict[ErrorCode, ErrorSpec] = {
         "(state_machines.TRIP_STATUSES_ALLOWING_SERVICE_START).",
     ),
     ErrorCode.TRIP_STOPS_LOCKED: ErrorSpec(
-        409, "Trip stops cannot change once any booking was allocated on the trip, even if released (Q63)."
+        409, "Trip road stretch cannot change once any booking was made on the trip, even if released (Q63, ADR-0028)."
     ),
     ErrorCode.PROOF_REISSUE_LIMITED: ErrorSpec(
         429, "Self-service proof code reissue limit reached; details {retry_after_s, reissues_left} (proofs.py)."

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.contracts.enums import ListingKind, ListingStatus, MatchType, PriceBasis, ServiceType, TripStatus
 from app.contracts.errors import DomainError, ErrorCode
+from app.contracts.route_position import position_m
 from app.contracts.timeutil import ensure_aware_utc, utc_now
 from app.modules.identity import service as identity_service
 from app.modules.marketplace import service as marketplace_service
@@ -32,6 +33,7 @@ from app.modules.marketplace.schemas import ProposalCreate
 from app.modules.trips import directions as trip_directions
 from app.modules.trips import service as trips_service
 from app.modules.trips.models import DriverDirection, Trip
+from app.modules.trips.rules import ResourceDemand
 
 FIT_NO_TRIP, FIT_TRIP, FIT_TIME_DIFFERS = "no_trip", "fits_trip", "time_differs"
 #: The offered pickup window around the trip's ETA - the same half-width the native offer form uses (OfferRules).
@@ -71,16 +73,10 @@ class _Fit:
 
 
 def _end_area(session: Session, listing: Listing, which: str) -> tuple[int | None, int | None]:
-    """(district id, region id) of a request end: the point's district, or the stop's."""
-    from app.modules.geo.service import districts_by_ids, get_stops
+    """(district id, region id) of a request place."""
+    from app.modules.geo.service import districts_by_ids
 
-    if which == "origin":
-        district_id, stop_id = listing.origin_district_id, listing.origin_stop_id
-    else:
-        district_id, stop_id = listing.destination_district_id, listing.destination_stop_id
-    if district_id is None and stop_id is not None:
-        stop = get_stops(session, [stop_id]).get(stop_id)
-        district_id = stop.district_id if stop is not None else None
+    district_id = listing.origin_district_id if which == "origin" else listing.destination_district_id
     if district_id is None:
         return None, None
     info = districts_by_ids(session, [district_id]).get(district_id)
@@ -120,22 +116,27 @@ def _best_fit(session: Session, listing: Listing, routes, origin, destination, *
     return fits[0]
 
 
-def _dropoff_seq(fit: _Fit) -> int:
-    """Route stop the ride ends at: the dropoff stop itself, or the stop after a map point (it sits in a segment)."""
-    return fit.dropoff.seq_before if fit.dropoff.point is None else fit.dropoff.seq_after
+def road_match(session: Session, listing: Listing, routes, origin, destination) -> MatchType | None:  # noqa: ANN001
+    """Public (ADR-0028 phase 2, the old ``/feed`` and saved searches): does the request ride inside the stretch of a
+    road between these two areas, pickup before dropoff - ``exact`` when both its places lie in the areas themselves,
+    ``on_route`` when they lie in between. Positions along the road decide."""
+    fit = _best_fit(session, listing, routes, origin, destination, prefer_route_id=None)
+    return None if fit is None else fit.match_type
 
 
-def _trip_span(session: Session, trip: Trip) -> tuple[int, int]:
-    """First and last route stop seq the trip drives (a direction trip may cover part of the road)."""
-    occurrences = trips_service.list_occurrences(session, trip.id)
-    return occurrences[0].route_version_stop_seq, occurrences[-1].route_version_stop_seq
+def _positions(fit: _Fit) -> tuple[int, int]:
+    """ADR-0028: the request's two places as metres along the road of the fit."""
+    route = fit.direction_route.route
+    return position_m(fit.pickup.fraction, route.distance_m), position_m(fit.dropoff.fraction, route.distance_m)
 
 
 def _trip_serves(session: Session, trip: Trip, fit: _Fit) -> bool:
+    """The trip drives the road the request is on, over both places (ADR-0028: its road span, not its stops)."""
     if trip.route_version_id != fit.direction_route.route.id:
         return False
-    first, last = _trip_span(session, trip)
-    return first <= fit.pickup.seq_before and _dropoff_seq(fit) <= last
+    pickup_m, dropoff_m = _positions(fit)
+    start_m, end_m = trips_service.trip_stretch(session, trip)
+    return start_m <= pickup_m and dropoff_m <= end_m
 
 
 def _trip_eta(session: Session, trip: Trip, fit: _Fit) -> datetime:
@@ -143,17 +144,19 @@ def _trip_eta(session: Session, trip: Trip, fit: _Fit) -> datetime:
 
 
 def _span_for(fit: _Fit) -> tuple[int, int]:
-    """Route stops a new trip covers: the direction's stretch, widened to the request's own segments if needed."""
+    """The road a new trip drives (ADR-0028, metres): the direction's stretch, widened to the request's own
+    places when they lie beyond it."""
     dr = fit.direction_route
-    return min(dr.origin.seq_before, fit.pickup.seq_before), max(dr.destination.seq_after, _dropoff_seq(fit))
+    distance = dr.route.distance_m
+    pickup_m, dropoff_m = _positions(fit)
+    start = min(position_m(dr.origin.fraction, distance), pickup_m)
+    end = max(position_m(dr.destination.fraction, distance), dropoff_m)
+    return start, max(end, start + 1)
 
 
 def _offset_for(fit: _Fit) -> timedelta:
-    from_seq, to_seq = _span_for(fit)
-    return trip_directions.pickup_offset(
-        fit.direction_route.route, from_seq=from_seq, to_seq=to_seq,
-        place_seq_before=fit.pickup.seq_before, place_cumulative_s=fit.pickup.cumulative_duration_s,
-    )
+    start_m, _end_m = _span_for(fit)
+    return trip_directions.pickup_offset(fit.direction_route.route, start_m=start_m, place_position_m=_positions(fit)[0])
 
 
 def _wait(trip: Trip | None) -> timedelta:
@@ -172,24 +175,14 @@ def _has_room(session: Session, listing: Listing, *, trip: Trip | None, directio
             return listing.quantity <= direction.seat_capacity
     elif trip is None:
         return direction.cargo_capacity_weight_g > 0 or direction.cargo_capacity_volume_ml > 0
-    from app.modules.marketplace.feed.service import segment_availability
-
-    seqs = trips_service.occurrence_seqs_for_stops(
-        session, trip.id, *_route_stop_ids(fit.direction_route.route, fit.pickup.seq_before, _dropoff_seq(fit))
-    )
-    if seqs is None:
-        return False
-    availability = segment_availability(session, trip, seqs[0], seqs[1])
-    if availability is None:
-        return False
+    # ADR-0028 phase 2: the exact road interval the request rides, against the trip's claims.
+    pickup_m, dropoff_m = _positions(fit)
+    to_m = max(dropoff_m, pickup_m + 1)
     if listing.service_type == ServiceType.PASSENGER.value:
-        return availability.min_remaining_seats >= listing.quantity
-    return availability.min_remaining_cargo_weight_g > 0 or availability.min_remaining_cargo_volume_ml > 0
-
-
-def _route_stop_ids(route, seq_from: int, seq_to: int) -> tuple[int, int]:  # noqa: ANN001
-    by_seq = {s.seq: s.stop_id for s in route.stops}
-    return by_seq[seq_from], by_seq[seq_to]
+        return not trips_service.check_claim_capacity(session, trip.id, pickup_m, to_m, ResourceDemand(seats=listing.quantity))
+    return not trips_service.check_claim_capacity(session, trip.id, pickup_m, to_m, ResourceDemand(cargo_weight_g=1)) or not (
+        trips_service.check_claim_capacity(session, trip.id, pickup_m, to_m, ResourceDemand(cargo_volume_ml=1))
+    )
 
 
 def _my_open_thread(session: Session, listing: Listing, driver_user_id: int) -> ProposalThread | None:
@@ -255,7 +248,7 @@ def direction_requests(
             if moving:
                 try:
                     eta = marketplace_service.assert_pickup_ahead(
-                        session, listing=listing, trip=trip, pickup_seq=0, pickup_place=fit.pickup, now=now
+                        session, listing=listing, trip=trip, pickup_place=fit.pickup, now=now
                     )
                 except DomainError:
                     continue  # Q154: the car is already past this pickup
@@ -304,8 +297,7 @@ def _retimable(session: Session, trip: Trip) -> bool:
     """An empty planned trip: no capacity reserved and no open negotiation quoted against its time."""
     if trip.status != TripStatus.PLANNED.value:
         return False
-    if any(load.seats_used or load.cargo_used_weight_g or load.cargo_used_volume_ml or load.baggage_used_ml
-           for load in trips_service.get_segment_loads(session, trip.id)):
+    if trips_service.trip_has_claims(session, trip.id):  # ADR-0028: any booking ever - its road stretch is locked
         return False
     open_thread = session.execute(
         select(ProposalThread.id).where(
@@ -395,37 +387,29 @@ def offer_from_direction(
         trip = trips_service.lock_trip(session, trip.id)
         if marketplace_service.trip_is_moving(trip):
             # Q154: "the car has passed it" is the answer, before any window is built around a time already gone.
-            marketplace_service.assert_pickup_ahead(
-                session, listing=listing, trip=trip, pickup_seq=0, pickup_place=fit.pickup, now=now
-            )
+            marketplace_service.assert_pickup_ahead(session, listing=listing, trip=trip, pickup_place=fit.pickup, now=now)
     else:
-        from_seq, to_seq = _span_for(fit)
+        start_m, end_m = _span_for(fit)
         offset = _offset_for(fit)
         target = ensure_aware_utc(pickup_at) if pickup_at is not None else ensure_aware_utc(listing.departure_window_start)
         departure = trip_directions.departure_for(target, offset, now)
         if trip is None:
             trip = trip_directions.create_trip_for_direction(
-                session, direction, fit.direction_route.route, from_seq=from_seq, to_seq=to_seq, departure=departure, now=now
+                session, direction, fit.direction_route.route, start_m=start_m, end_m=end_m, departure=departure, now=now
             )
             created = True
         else:
             trip = trip_directions.retime_trip(
                 session, direction, trips_service.lock_trip(session, trip.id), fit.direction_route.route,
-                from_seq=from_seq, to_seq=to_seq, departure=departure, now=now,
+                start_m=start_m, end_m=end_m, departure=departure, now=now,
             )
             retimed = True
     eta = _trip_eta(session, trip, fit)
 
     window_start, window_end = _offer_window(listing, eta, pickup_at)
     outside = not _windows_meet(listing, window_start, window_end)
-    stop_ended = listing.origin_stop_id is not None and listing.destination_stop_id is not None
-    from app.modules.geo.service import get_stops
-
-    stops = get_stops(session, [listing.origin_stop_id, listing.destination_stop_id]) if stop_ended else {}
     data = ProposalCreate(
         trip_id=trips_service.trip_public_id(trip),
-        pickup_stop_id=stops[listing.origin_stop_id].api_id if stop_ended else None,
-        dropoff_stop_id=stops[listing.destination_stop_id].api_id if stop_ended else None,
         pickup_window_start=window_start,
         pickup_window_end=window_end,
         quantity=listing.quantity,

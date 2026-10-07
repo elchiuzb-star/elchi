@@ -10,17 +10,6 @@ from app.contracts.dto import ContractModel, UtcDateTime, VersionedCommand
 from app.contracts.enums import ListingKind, ListingStatus, ServiceType, TripStatus
 
 
-class StopRefDTO(ContractModel):
-    id: str = Field(description="Opaque stop id (stp_...).")
-    name_uz: str
-    name_ru: str | None = None
-    district_name_uz: str | None = Field(
-        default=None,
-        description="Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, "
-        "never by a stop name (ELCHI works point A -> point B).",
-    )
-
-
 # --- vehicles --------------------------------------------------------------------------
 
 
@@ -97,24 +86,21 @@ class AdminVehicleDTO(VehicleDTO):
 # --- trips ----------------------------------------------------------------------------------
 
 
-class TripStopInput(ContractModel):
-    stop_id: str
-    seq: StrictInt = Field(ge=1, le=50)
-    planned_arrival_at: UtcDateTime
-    dwell_minutes: StrictInt = Field(default=0, ge=0, le=240)
-
-
-def _check_stop_sequence(stops: list[TripStopInput] | None) -> None:
-    if stops is None:
-        return
-    if [stop.seq for stop in stops] != list(range(1, len(stops) + 1)):
-        raise ValueError("stops must be listed with seq 1..n in order")
+def _check_span(start: int | None, end: int | None) -> None:
+    if (start is None) != (end is None):
+        raise ValueError("send both route_start_m and route_end_m or neither")
+    if start is not None and end is not None and start >= end:
+        raise ValueError("route_start_m must be before route_end_m")
 
 
 class TripCreate(ContractModel):
     vehicle_id: str
     route_version_id: str
-    stops: list[TripStopInput] = Field(min_length=2, max_length=50)
+    # ADR-0028 / Q160: a trip is the stretch [route_start_m, route_end_m] of the road (the whole road when omitted).
+    route_start_m: StrictInt | None = Field(
+        default=None, ge=0, description="ADR-0028: where on the confirmed road the trip starts, metres from its start."
+    )
+    route_end_m: StrictInt | None = Field(default=None, ge=1, description="ADR-0028: where on the road the trip ends.")
     planned_start_at: UtcDateTime
     planned_end_at: UtcDateTime
     seat_capacity: StrictInt = Field(ge=0, le=60)
@@ -128,16 +114,8 @@ class TripCreate(ContractModel):
 
     @model_validator(mode="after")
     def _validate(self) -> TripCreate:
-        _check_stop_sequence(self.stops)
+        _check_span(self.route_start_m, self.route_end_m)
         return self
-
-
-class TripStopDTO(ContractModel):
-    seq: int
-    stop: StopRefDTO
-    planned_arrival_at: UtcDateTime
-    dwell_minutes: int
-    eta_arrival_at: UtcDateTime | None = None
 
 
 class TripVehicleDTO(ContractModel):
@@ -166,7 +144,8 @@ class TripDTO(ContractModel):
     version: int
     vehicle: TripVehicleDTO
     route_version_id: str
-    stops: list[TripStopDTO]
+    route_start_m: int | None = Field(default=None, description="ADR-0028: where on the road the trip starts (metres).")
+    route_end_m: int | None = Field(default=None, description="ADR-0028: where on the road the trip ends (metres).")
     planned_start_at: UtcDateTime
     planned_end_at: UtcDateTime
     timezone: str
@@ -195,17 +174,10 @@ class TripPublicVehicleDTO(ContractModel):
     seat_capacity: int
 
 
-class TripPublicStopDTO(ContractModel):
-    seq: int
-    stop: StopRefDTO
-    planned_arrival_at: UtcDateTime
-
-
 class TripPublicDTO(ContractModel):
     id: str
     status: TripStatus
     vehicle: TripPublicVehicleDTO
-    stops: list[TripPublicStopDTO]
     planned_start_at: UtcDateTime
     planned_end_at: UtcDateTime
     timezone: str
@@ -214,21 +186,23 @@ class TripPublicDTO(ContractModel):
 class TripPatch(VersionedCommand):
     planned_start_at: UtcDateTime | None = None
     planned_end_at: UtcDateTime | None = None
-    stops: list[TripStopInput] | None = Field(default=None, min_length=2, max_length=50)
+    route_start_m: StrictInt | None = Field(default=None, ge=0, description="ADR-0028: a new road stretch (no claim yet).")
+    route_end_m: StrictInt | None = Field(default=None, ge=1)
     max_detour_minutes: StrictInt | None = Field(default=None, ge=0, le=240)
     max_detour_m: StrictInt | None = Field(default=None, ge=0, le=200_000)
 
     @model_validator(mode="after")
     def _validate(self) -> TripPatch:
-        _check_stop_sequence(self.stops)
+        _check_span(self.route_start_m, self.route_end_m)
         return self
 
 
-class SegmentAvailabilityDTO(ContractModel):
-    from_seq: int
-    to_seq: int
-    from_stop_id: str
-    to_stop_id: str
+class StretchAvailabilityDTO(ContractModel):
+    """ADR-0028: what is still free on ``[from_m, to_m)`` of the trip's road - one row per piece between bookings'
+    places (the use is constant inside a piece)."""
+
+    from_m: int
+    to_m: int
     seats_remaining: int
     baggage_remaining_ml: int
     cargo_remaining_weight_g: int
@@ -239,7 +213,7 @@ class TripAvailabilityDTO(ContractModel):
     trip_id: str
     trip_version: int
     computed_at: UtcDateTime
-    segments: list[SegmentAvailabilityDTO] = Field(description="Computed remaining capacity; not a reservation.")
+    stretches: list[StretchAvailabilityDTO] = Field(description="Computed remaining capacity; not a reservation.")
 
 
 class AdminTripSearchDTO(ContractModel):

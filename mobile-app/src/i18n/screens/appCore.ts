@@ -16,7 +16,7 @@ export const appCoreMessages = {
   "app.parcelType.other": { uz: "Boshqa", ru: "Другое" },
 
   // --- booking progress ladder ---
-  "app.progress.driverAtStop": { uz: "Haydovchi yetib keldi", ru: "Водитель на месте"},
+  "app.progress.driverArrived": { uz: "Haydovchi yetib keldi", ru: "Водитель на месте"},
   "app.progress.parcelPickedUp": { uz: "Yuk olindi", ru: "Груз забран" },
   "app.progress.completed": { uz: "Yakunlandi", ru: "Завершено" },
 
@@ -38,7 +38,6 @@ export const appCoreMessages = {
   "app.route.change": { uz: "O'zgartirish", ru: "Изменить" },
   "app.orderCard.bids": { uz: "{count} ta taklif", ru: "Предложений: {count}" },
   "app.savedEnd.district": { uz: "Tuman", ru: "Район" },
-  "app.savedEnd.stop": { uz: "Belgilangan joy", ru: "Выбранное место"},
   "app.endLabel.mapPlace": { uz: "Xaritadagi joy", ru: "Место на карте" },
 
   // --- parcel photo ---

@@ -5,7 +5,7 @@ Public functions take the caller's ``Session`` and never commit (AGENTS §4). Th
 
 * queues (O4)  -> ``bookings.service.admin_queue``, ``trust_support.service.admin_list_*``
 * listings (O1, O3, O7) -> ``marketplace.service`` / ``marketplace.views``
-* corridors and stops (names for the public page) -> the marketplace geo port
+* districts (names for the public page) -> geo service
 
 Business truthfulness (spec §9, §20.4):
 * the share page shows route, window and price - never a name, phone, plate or exact address (Q43);
@@ -59,7 +59,6 @@ from app.models import AuditLog
 from app.modules.identity import service as identity_service
 from app.modules.marketplace import service as marketplace_service
 from app.modules.marketplace.models import Listing
-from app.modules.marketplace.ports import get_ports
 from app.modules.operations import rules
 from app.ops import metrics
 from app.modules.operations.models import KpiDaily, ShareLink
@@ -113,8 +112,8 @@ class CreatedShareLink:
 class PublicListingPage:
     kind: str
     service_type: str
-    origin_stop_name: str
-    destination_stop_name: str
+    origin_name: str
+    destination_name: str
     departure_window_start: datetime
     departure_window_end: datetime
     timezone: str
@@ -139,41 +138,23 @@ def _owned_listing(session: Session, listing_public_id_value: str, actor_user_id
     return listing
 
 
-def _stop_names(session: Session, listing: Listing) -> tuple[str, str]:
-    """Public names of both ends: the district of the place (a stop end - the district of its internal node).
+def _place_names(session: Session, listing: Listing) -> tuple[str, str]:
+    """Public names of both places: the district each was marked in.
 
-    The share text and the public page are read by anyone with the link, so a map point is named by its
-    district only. ``origin_address`` / ``destination_address`` are street-level (reverse-geocoded) and would
-    put an exact address on a public page before any accept (Q43), so they are deliberately not used here.
+    The share text and the public page are read by anyone with the link, so a place is named by its district only.
+    ``origin_address`` / ``destination_address`` are street-level (reverse-geocoded) and would put an exact address
+    on a public page before any accept (Q43), so they are deliberately not used here.
     """
-    stop_ids = [value for value in (listing.origin_stop_id, listing.destination_stop_id) if value]
-    stops = get_ports().geo.stops_by_ids(session, stop_ids) if stop_ids else {}
-    district_ids = [
-        district_id
-        for stop_id, district_id in (
-            (listing.origin_stop_id, listing.origin_district_id),
-            (listing.destination_stop_id, listing.destination_district_id),
-        )
-        if district_id and stops.get(stop_id) is None
-    ]
-    districts: dict = {}
-    if district_ids:
-        from app.modules.geo import service as geo_service
+    from app.modules.geo import service as geo_service
 
-        districts = geo_service.districts_by_ids(session, district_ids)
+    district_ids = [value for value in (listing.origin_district_id, listing.destination_district_id) if value]
+    districts = geo_service.districts_by_ids(session, district_ids) if district_ids else {}
 
-    def name(stop_id: int | None, district_id: int | None) -> str:
-        stop = stops.get(stop_id) if stop_id else None
-        if stop is not None:
-            # Q158: a place is named by its district, never by an internal route node ("... bekati").
-            return stop.district_name_uz or stop.name_uz
+    def name(district_id: int | None) -> str:
         district = districts.get(district_id) if district_id else None
         return district.name_uz if district is not None else "?"
 
-    return (
-        name(listing.origin_stop_id, listing.origin_district_id),
-        name(listing.destination_stop_id, listing.destination_district_id),
-    )
+    return name(listing.origin_district_id), name(listing.destination_district_id)
 
 
 def create_share_link(
@@ -217,7 +198,7 @@ def create_share_link(
     )
     session.add(row)
     session.flush()
-    origin, destination = _stop_names(session, listing)
+    origin, destination = _place_names(session, listing)
     url = rules.public_url(token, os.environ.get(PUBLIC_URL_TEMPLATE_ENV), public_web_base_url())
     text_for_chat = rules.share_text(
         channel=channel_value,
@@ -283,13 +264,13 @@ def open_public_listing(session: Session, *, token: str, now: datetime | None = 
     row.opened_count += 1
     row.last_opened_at = now
     session.flush()
-    origin, destination = _stop_names(session, listing)
+    origin, destination = _place_names(session, listing)
     expired = ensure_aware_utc(listing.expires_at) <= now
     return PublicListingPage(
         kind=listing.kind,
         service_type=listing.service_type,
-        origin_stop_name=origin,
-        destination_stop_name=destination,
+        origin_name=origin,
+        destination_name=destination,
         departure_window_start=ensure_aware_utc(listing.departure_window_start),
         departure_window_end=ensure_aware_utc(listing.departure_window_end),
         timezone=listing.timezone,
@@ -819,16 +800,15 @@ _KPI_SQL: dict[str, str] = {
     """,
     # §20.4 booked seat-metres / offered seat-metres for trips departing that day.
     #
-    # Distance comes from `route_version_stops.cumulative_distance_m` - the distance stored with the route
-    # version a human confirmed. A trip whose route has no usable distance is excluded from BOTH sides (and
+    # Distance is the trip's stretch of the road a human confirmed (ADR-0028: route_end_m - route_start_m, metres along
+    # its geometry). A trip whose route has no usable distance is excluded from BOTH sides (and
     # counted by `seat_km_route_coverage`): a straight line is never substituted for a road, and no routing
     # provider is called from a metric. Parcel bookings hold no seat, so they do not appear in a seat-km ratio.
     # Cancelled and no-show bookings never consumed the seat, so they are not "booked".
     KpiMetric.BOOKED_SEAT_KM_RATIO.value: """
         WITH eligible_trips AS (
             SELECT t.id, t.seat_capacity, rv.corridor_id,
-                   (SELECT max(rvs.cumulative_distance_m) FROM route_version_stops rvs
-                     WHERE rvs.route_version_id = t.route_version_id) AS route_distance_m
+                   (t.route_end_m - t.route_start_m) AS route_distance_m  -- ADR-0028: the stretch the trip drives
               FROM trips t
               JOIN route_versions rv ON rv.id = t.route_version_id
              WHERE t.planned_start_at >= :start AND t.planned_start_at < :end
@@ -839,19 +819,12 @@ _KPI_SQL: dict[str, str] = {
             SELECT * FROM eligible_trips WHERE route_distance_m IS NOT NULL AND route_distance_m > 0
         ),
         booked AS (
-            SELECT COALESCE(sum(b.seats * (drop_stop.cumulative_distance_m - pick_stop.cumulative_distance_m)), 0)
-                       AS seat_metres
+            SELECT COALESCE(sum(b.seats * (b.dropoff_position_m - b.pickup_position_m)), 0) AS seat_metres
               FROM bookings b
               JOIN measurable m ON m.id = b.trip_id
-              JOIN trip_stop_occurrences pick ON pick.trip_id = b.trip_id AND pick.seq = b.pickup_occurrence_seq
-              JOIN trip_stop_occurrences drop_occ ON drop_occ.trip_id = b.trip_id AND drop_occ.seq = b.dropoff_occurrence_seq
-              JOIN route_version_stops pick_stop ON pick_stop.route_version_id = b.route_version_id
-                                               AND pick_stop.seq = pick.route_version_stop_seq
-              JOIN route_version_stops drop_stop ON drop_stop.route_version_id = b.route_version_id
-                                               AND drop_stop.seq = drop_occ.route_version_stop_seq
              WHERE b.seats > 0
                AND b.service_status NOT IN ('cancelled', 'no_show')
-               AND drop_stop.cumulative_distance_m > pick_stop.cumulative_distance_m
+               AND b.dropoff_position_m > b.pickup_position_m  -- ADR-0028: road positions
         )
         SELECT (SELECT seat_metres FROM booked)::BIGINT AS numerator,
                COALESCE((SELECT sum(seat_capacity * route_distance_m) FROM measurable), 0)::BIGINT AS denominator
@@ -859,9 +832,7 @@ _KPI_SQL: dict[str, str] = {
     # The coverage of the ratio above: without it, a number computed over half the trips would look like a fact
     # about all of them (§20.4 "kichik n'da foiz yonida son").
     KpiMetric.SEAT_KM_ROUTE_COVERAGE.value: """
-        SELECT count(*) FILTER (
-                   WHERE (SELECT max(rvs.cumulative_distance_m) FROM route_version_stops rvs
-                           WHERE rvs.route_version_id = t.route_version_id) > 0) AS numerator,
+        SELECT count(*) FILTER (WHERE t.route_end_m > t.route_start_m) AS numerator,
                count(*) AS denominator
           FROM trips t
           JOIN route_versions rv ON rv.id = t.route_version_id

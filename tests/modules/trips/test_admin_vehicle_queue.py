@@ -208,3 +208,31 @@ def test_owner_is_read_once_per_page_and_a_non_driver_has_no_version(owners: dic
     assert rows[0].owner is rows[1].owner
     non_driver = rows[2].owner
     assert non_driver.is_driver is False and non_driver.eligibility_version is None and non_driver.reasons == []
+
+
+def test_owner_filter_reaches_the_service_and_binds_the_cursor(client: tuple[TestClient, list[dict]]) -> None:
+    """The admin driver card lists one driver's cars (``owner_user_id``); a cursor from that list is not reusable
+    for another driver."""
+    http, seen = client
+    first = http.get("/api/v2/admin/vehicles", params={"owner_user_id": "usr_a", "limit": 1})
+    assert first.status_code == 200, first.text
+    assert seen[0]["owner_user_public_id"] == "usr_a"
+    cursor = first.json()["meta"]["next_cursor"]
+    assert cursor
+    other = http.get("/api/v2/admin/vehicles", params={"owner_user_id": "usr_b", "cursor": cursor})
+    assert other.status_code == 400 and other.json()["error"]["code"] == ErrorCode.INVALID_CURSOR.value
+    assert http.get("/api/v2/admin/vehicles").status_code == 200
+    assert seen[-1]["owner_user_public_id"] is None
+
+
+def test_owner_is_resolved_only_after_the_capability_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without the capability an unknown owner id answers CAPABILITY_REQUIRED, never NOT_FOUND: no id probing."""
+    monkeypatch.setattr(identity_service, "get_capabilities", lambda session, user_id, now=None: _caps(user_id))
+
+    def resolve(session: object, public_id: str) -> int:
+        raise AssertionError("the owner id was resolved before the capability check")
+
+    monkeypatch.setattr(identity_service, "resolve_user_id", resolve)
+    with pytest.raises(DomainError) as info:
+        trips_service.list_vehicles_for_review(object(), actor_user_id=STAFF_ID, owner_user_public_id="usr_x")  # type: ignore[arg-type]
+    assert info.value.code is ErrorCode.CAPABILITY_REQUIRED

@@ -154,8 +154,8 @@ def _listing(**overrides: object) -> dict:
     body = {
         "kind": "request",
         "service_type": "passenger",
-        "origin_stop_id": "stp_a",
-        "destination_stop_id": "stp_b",
+        "origin_point": {"lat": 41.3, "lng": 69.24, "district_id": "dst_a"},
+        "destination_point": {"lat": 38.86, "lng": 65.8, "district_id": "dst_b"},
         "departure_window_start": "2026-09-14T12:45:00+05:00",
         "departure_window_end": "2026-09-14T13:15:00+05:00",
         "price_basis": "per_seat",
@@ -176,6 +176,10 @@ def test_listing_create_requires_offset_and_shape() -> None:
         ListingCreate.model_validate(_listing(kind="trip_offer"))
     with pytest.raises(ValidationError):
         ListingCreate.model_validate(_listing(unit_price_minor=200000.0))
+    with pytest.raises(ValidationError):  # Q160: ends are places; a stop id is refused
+        ListingCreate.model_validate(_listing(origin_stop_id="stp_a"))
+    with pytest.raises(ValidationError):
+        ListingCreate.model_validate(_listing(destination_point=None))
 
 
 def test_counter_must_change_a_term() -> None:

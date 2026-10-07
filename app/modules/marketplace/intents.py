@@ -13,17 +13,13 @@ the ``marketplace.close_stale_intent_threads`` sweep. No function here commits (
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.contracts.enums import (
-    Capability,
-    ListingKind,
     PriceBasis,
     ServiceType,
     TripIntentStatus,
@@ -32,12 +28,10 @@ from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.ids import (
     PublicIdPrefix,
     format_public_id,
-    new_public_uuid,
     parse_public_id,
 )
 from app.contracts.state_machines import TRIP_INTENT
 from app.contracts.timeutil import ensure_aware_utc, utc_now
-from app.modules.identity import service as identity_service
 from app.modules.marketplace.models import (
     Listing,
     ProposalThread,
@@ -61,126 +55,6 @@ def _now(now: datetime | None) -> datetime:
 
 
 # --- terms: resolve, compare ------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class _End:
-    stop_id: int | None
-    district_id: int | None
-    lat: Decimal | None
-    lng: Decimal | None
-    address: str | None
-
-    def material(self) -> tuple:
-        return (self.stop_id, self.district_id, self.lat, self.lng)
-
-
-@dataclass(frozen=True)
-class _Terms:
-    origin: _End
-    destination: _End
-    window_start: datetime
-    window_end: datetime
-    quantity: int
-    price_basis: str | None
-    unit_price_minor: int | None
-    parcel_type: str | None
-    weight_g: int | None
-    length_cm: int | None
-    width_cm: int | None
-    height_cm: int | None
-    receiver_name: str | None
-    receiver_phone: str | None
-
-    def material(self) -> tuple:
-        """What an offer was made against. The price hint is not in it: a new hint never closes an offer."""
-        return (self.origin.material(), self.destination.material(), self.window_start, self.window_end,
-                self.quantity, self.parcel_type, self.weight_g, self.length_cm, self.width_cm, self.height_cm,
-                self.receiver_name, self.receiver_phone)
-
-
-def _coord(value: float | None) -> Decimal | None:
-    return None if value is None else Decimal(str(round(value, 7))).quantize(Decimal("0.0000001"))
-
-
-def _stop_district(session: Session, stop_id: int) -> int | None:
-    return session.execute(text("SELECT geo_district_id FROM corridor_stops WHERE id = :s"), {"s": stop_id}).scalar()
-
-
-def _end(session: Session, data: Any, field: str) -> _End:
-    from app.modules.marketplace import service as mp
-
-    stop_id = district_id = None
-    if data.stop_id is not None:
-        stop_id = mp._stop_refs_by_public_ids(session, [data.stop_id], f"{field}.stop_id")[0].id
-    if data.district_id is not None:
-        district_id = mp._district_pk(session, data.district_id)
-    elif stop_id is not None:
-        district_id = _stop_district(session, stop_id)
-    return _End(stop_id, district_id, _coord(data.lat), _coord(data.lng), data.address)
-
-
-def _terms(session: Session, data: Any, service: ServiceType, now: datetime) -> _Terms:
-    window_start, window_end = ensure_aware_utc(data.window_start), ensure_aware_utc(data.window_end)
-    if window_end <= now:
-        raise DomainError(ErrorCode.TRIP_INTENT_EXPIRED, details={"field": "window_end"})
-    parcel = data.parcel
-    if service is ServiceType.PARCEL:
-        if data.quantity != 1:  # D9: a parcel is one shipment
-            raise DomainError(ErrorCode.QUANTITY_MISMATCH, details={"required_quantity": 1, "quantity": data.quantity})
-        if data.price_basis is not None and PriceBasis(data.price_basis) is not PriceBasis.TOTAL:
-            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "price_basis", "reason": "parcel_price_is_total"})
-    elif parcel is not None:  # passenger and parcel data never mix
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "parcel", "reason": "passenger_request_has_no_parcel"})
-    origin, destination = _end(session, data.origin, "origin"), _end(session, data.destination, "destination")
-    if origin.material() == destination.material():
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "destination", "reason": "same_as_origin"})
-    receiver = parcel.receiver if parcel is not None else None
-    return _Terms(
-        origin=origin, destination=destination, window_start=window_start, window_end=window_end,
-        quantity=data.quantity, price_basis=None if data.price_basis is None else PriceBasis(data.price_basis).value,
-        unit_price_minor=data.unit_price_minor,
-        parcel_type=None if parcel is None or parcel.parcel_type is None else str(parcel.parcel_type.value),
-        weight_g=None if parcel is None else parcel.weight_g, length_cm=None if parcel is None else parcel.length_cm,
-        width_cm=None if parcel is None else parcel.width_cm, height_cm=None if parcel is None else parcel.height_cm,
-        receiver_name=None if receiver is None else receiver.name.strip(),
-        receiver_phone=None if receiver is None else receiver.phone.strip(),
-    )
-
-
-def _row_terms(row: TripIntentVersion) -> _Terms:
-    def dec(value: Any) -> Decimal | None:
-        return None if value is None else Decimal(value).quantize(Decimal("0.0000001"))
-
-    return _Terms(
-        origin=_End(row.origin_stop_id, row.origin_district_id, dec(row.origin_lat), dec(row.origin_lng), row.origin_address),
-        destination=_End(row.destination_stop_id, row.destination_district_id, dec(row.destination_lat),
-                         dec(row.destination_lng), row.destination_address),
-        window_start=ensure_aware_utc(row.window_start), window_end=ensure_aware_utc(row.window_end),
-        quantity=row.quantity, price_basis=row.price_basis, unit_price_minor=row.unit_price_minor,
-        parcel_type=row.parcel_type, weight_g=row.weight_g, length_cm=row.length_cm, width_cm=row.width_cm,
-        height_cm=row.height_cm, receiver_name=row.receiver_name, receiver_phone=row.receiver_phone,
-    )
-
-
-def _insert_version(session: Session, intent: TripIntent, terms: _Terms, now: datetime) -> TripIntentVersion:
-    row = TripIntentVersion(
-        intent_id=intent.id, version_no=intent.current_version_no, terms_version=intent.terms_version,
-        origin_stop_id=terms.origin.stop_id, origin_district_id=terms.origin.district_id, origin_lat=terms.origin.lat,
-        origin_lng=terms.origin.lng, origin_address=terms.origin.address,
-        destination_stop_id=terms.destination.stop_id, destination_district_id=terms.destination.district_id,
-        destination_lat=terms.destination.lat, destination_lng=terms.destination.lng,
-        destination_address=terms.destination.address,
-        window_start=terms.window_start, window_end=terms.window_end, quantity=terms.quantity,
-        price_basis=terms.price_basis, unit_price_minor=terms.unit_price_minor, parcel_type=terms.parcel_type,
-        weight_g=terms.weight_g, length_cm=terms.length_cm, width_cm=terms.width_cm, height_cm=terms.height_cm,
-        receiver_name=terms.receiver_name, receiver_phone=terms.receiver_phone, created_at=now,
-    )
-    session.add(row)
-    session.flush()
-    return row
-
-
 # --- reads ---------------------------------------------------------------------------------------------------------
 
 
@@ -239,17 +113,6 @@ def create_intent(session: Session, *, owner_user_id: int, data: Any, now: datet
     # Q138 (ADR-0026): saved requests answered driver listings, which are retired - history stays readable and
     # closable, but nothing new is created, edited, reopened or compared.
     raise DomainError(ErrorCode.TRIP_INTENT_RETIRED)
-    identity_service.require_capability(
-        identity_service.get_capabilities(session, owner_user_id, now=now), Capability.PROPOSAL_SUBMIT_AS_CLIENT)
-    service = ServiceType(data.service_type)
-    terms = _terms(session, data, service, now)
-    intent = TripIntent(public_id=new_public_uuid(), owner_user_id=owner_user_id, service_type=service.value,
-                        status=TripIntentStatus.ACTIVE.value, current_version_no=1, terms_version=1, version=1,
-                        created_at=now, updated_at=now)
-    session.add(intent)
-    session.flush()
-    _insert_version(session, intent, terms, now)
-    return intent
 
 
 def edit_intent(session: Session, *, intent_public_id: str, owner_user_id: int, data: Any,
@@ -260,27 +123,6 @@ def edit_intent(session: Session, *, intent_public_id: str, owner_user_id: int, 
     # Q138 (ADR-0026): saved requests answered driver listings, which are retired - history stays readable and
     # closable, but nothing new is created, edited, reopened or compared.
     raise DomainError(ErrorCode.TRIP_INTENT_RETIRED)
-    intent = _lock(session, get_own_intent(session, intent_public_id, owner_user_id).id)
-    if intent.status == TripIntentStatus.BOOKED.value:  # never turns into another booking group silently
-        raise DomainError(ErrorCode.TRIP_INTENT_BOOKED, details={"status": intent.status})
-    TRIP_INTENT.assert_transition(intent.status, TripIntentStatus.ACTIVE.value, "edit")
-    if intent.version != data.expected_version:
-        raise DomainError(ErrorCode.VERSION_CONFLICT, details={"current_version": intent.version})
-    terms = _terms(session, data, ServiceType(intent.service_type), now)
-    material = terms.material() != _row_terms(current_version(session, intent)).material()
-    if material:
-        affected = open_thread_count(session, intent)
-        if affected and not data.acknowledge_open_offers:
-            raise DomainError(ErrorCode.TRIP_INTENT_OFFERS_AFFECTED, details={"open_offers": affected})
-        intent.terms_version += 1
-    intent.current_version_no += 1
-    intent.version += 1
-    intent.updated_at = now
-    session.flush()
-    _insert_version(session, intent, terms, now)
-    if material:
-        close_open_threads(session, intent, reason=REASON_CHANGED, now=now)
-    return intent
 
 
 def close_intent(session: Session, *, intent_public_id: str, owner_user_id: int, expected_version: int,
@@ -311,24 +153,6 @@ def reopen_intent(session: Session, *, intent_public_id: str, owner_user_id: int
     # Q138 (ADR-0026): saved requests answered driver listings, which are retired - history stays readable and
     # closable, but nothing new is created, edited, reopened or compared.
     raise DomainError(ErrorCode.TRIP_INTENT_RETIRED)
-    identity_service.require_capability(
-        identity_service.get_capabilities(session, owner_user_id, now=now), Capability.PROPOSAL_SUBMIT_AS_CLIENT)
-    intent = _lock(session, get_own_intent(session, intent_public_id, owner_user_id).id)
-    if intent.version != expected_version:
-        raise DomainError(ErrorCode.VERSION_CONFLICT, details={"current_version": intent.version})
-    TRIP_INTENT.assert_transition(intent.status, TripIntentStatus.ACTIVE.value, "reopen")
-    if _booking_status(session, intent.booking_id) != "cancelled":
-        raise DomainError(ErrorCode.INVALID_STATE_TRANSITION,
-                          details={"machine": "trip_intent", "reason": "booking_not_cancelled"})
-    previous = _row_terms(current_version(session, intent))
-    intent.status, intent.booking_id = TripIntentStatus.ACTIVE.value, None
-    intent.terms_version += 1
-    intent.current_version_no += 1
-    intent.version += 1
-    intent.updated_at = now
-    session.flush()
-    _insert_version(session, intent, previous, now)
-    return intent
 
 
 def close_open_threads(session: Session, intent: TripIntent, *, reason: str, now: datetime,
@@ -457,94 +281,25 @@ def bind_booking(session: Session, intent: TripIntent, *, booking_id: int, accep
 # --- advisory fit -------------------------------------------------------------------------------------------------
 
 
-def _gap_minutes(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> int:
-    if a_start <= b_end and b_start <= a_end:
-        return 0
-    gap = (b_start - a_end) if b_start > a_end else (a_start - b_end)
-    return int(gap.total_seconds() // 60)
-
-
 def fit(session: Session, intent: TripIntent, listing: Listing, *, now: datetime | None = None) -> dict[str, Any]:
     """Read-only comparison of one driver offer with the request (nothing is reserved; submit/accept decide)."""
     # Q138 (ADR-0026): saved requests answered driver listings, which are retired - history stays readable and
     # closable, but nothing new is created, edited, reopened or compared.
     raise DomainError(ErrorCode.TRIP_INTENT_RETIRED)
-    from app.modules.marketplace import service as mp
-    from app.modules.trips import service as trips_service
-
-    now = _now(now)
-    version = current_version(session, intent)
-    service_match = listing.service_type == intent.service_type
-    expired = ensure_aware_utc(version.window_end) <= now
-    gap = _gap_minutes(ensure_aware_utc(version.window_start), ensure_aware_utc(version.window_end),
-                       ensure_aware_utc(listing.departure_window_start), ensure_aware_utc(listing.departure_window_end))
-    available: int | None = None
-    capacity = "unknown"
-    if listing.kind == ListingKind.TRIP_OFFER.value and listing.trip_id and listing.origin_stop_id and listing.destination_stop_id:
-        seqs = trips_service.occurrence_seqs_for_stops(session, listing.trip_id, listing.origin_stop_id,
-                                                       listing.destination_stop_id)
-        if seqs is not None:
-            loads = [load for load in trips_service.get_segment_loads(session, listing.trip_id)
-                     if seqs[0] <= load.from_seq < seqs[1]]
-            if loads and intent.service_type == ServiceType.PASSENGER.value:
-                available = min(load.seat_capacity - load.seats_used for load in loads)
-                capacity = "ok" if available >= version.quantity else "insufficient"
-            elif loads and version.weight_g and version.length_cm and version.width_cm and version.height_cm:
-                volume = version.length_cm * version.width_cm * version.height_cm
-                fits = all(load.cargo_capacity_weight_g - load.cargo_used_weight_g >= version.weight_g
-                           and load.cargo_capacity_volume_ml - load.cargo_used_volume_ml >= volume for load in loads)
-                capacity = "ok" if fits else "insufficient"
-
-    def end_status(prefix: str) -> str:
-        wanted_stop = getattr(version, f"{prefix}_stop_id")
-        wanted_district = getattr(version, f"{prefix}_district_id")
-        stop_id = getattr(listing, f"{prefix}_stop_id")
-        if stop_id is not None and wanted_stop == stop_id:
-            return "same_stop"
-        district = _stop_district(session, stop_id) if stop_id is not None else getattr(listing, f"{prefix}_district_id")
-        return "same_district" if district is not None and district == wanted_district else "different"
-
-    listing_total = compute_total_minor(PriceBasis(listing.price_basis), listing.unit_price_minor, version.quantity)
-    intent_total = None if version.price_basis is None else compute_total_minor(
-        PriceBasis(version.price_basis), version.unit_price_minor, version.quantity)
-    blockers = []
-    if not service_match:
-        blockers.append("service_mismatch")
-    if expired:
-        blockers.append("expired")
-    if capacity == "insufficient":
-        blockers.append("capacity_insufficient")
-    if intent.status != TripIntentStatus.ACTIVE.value:
-        blockers.append("intent_not_active")
-    return {
-        "listing_id": mp.listing_public_id(listing), "intent_version_no": version.version_no,
-        "service_match": service_match, "expired": expired,
-        "time": {"status": "within" if gap == 0 else "outside", "minutes_outside": gap},
-        "availability": {"status": capacity, "requested": version.quantity, "available": available},
-        "origin": {"status": end_status("origin")}, "destination": {"status": end_status("destination")},
-        "price": {"listing_price_basis": listing.price_basis, "listing_unit_price_minor": listing.unit_price_minor,
-                  "listing_total_minor": listing_total, "quantity": version.quantity,
-                  "intent_price_basis": version.price_basis, "intent_unit_price_minor": version.unit_price_minor,
-                  "intent_total_minor": intent_total},
-        "blockers": blockers,
-    }
 
 
 # --- DTO builders (owner view) -----------------------------------------------------------------------------------
 
 
 def _end_dto(session: Session, row: TripIntentVersion, prefix: str) -> dict[str, Any]:
+    """A saved end as history (Q160: no stop - the district and the marked place)."""
     from app.modules.geo.schemas import DistrictRefDTO
     from app.modules.geo.service import districts_by_ids
-    from app.modules.marketplace.ports import get_ports
-    from app.modules.trips.views import stop_ref_dto
 
-    stop_id, district_id = getattr(row, f"{prefix}_stop_id"), getattr(row, f"{prefix}_district_id")
-    stop = get_ports().geo.stops_by_ids(session, [stop_id]).get(stop_id) if stop_id else None
+    district_id = getattr(row, f"{prefix}_district_id")
     district = districts_by_ids(session, [district_id]).get(district_id) if district_id else None
     lat, lng = getattr(row, f"{prefix}_lat"), getattr(row, f"{prefix}_lng")
-    return {"stop": stop_ref_dto(stop) if stop else None,
-            "district": DistrictRefDTO(id=district.api_id, name_uz=district.name_uz) if district else None,
+    return {"district": DistrictRefDTO(id=district.api_id, name_uz=district.name_uz) if district else None,
             "lat": None if lat is None else float(lat), "lng": None if lng is None else float(lng),
             "address": getattr(row, f"{prefix}_address")}
 

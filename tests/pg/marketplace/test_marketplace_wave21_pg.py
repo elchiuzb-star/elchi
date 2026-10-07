@@ -32,7 +32,7 @@ MIGRATION_0054 = Path(__file__).resolve().parents[3] / "alembic" / "versions" / 
 def _parcel_request_pk(world: World) -> int:
     body = ListingCreate.model_validate({
         "kind": "request", "service_type": "parcel",
-        "origin_stop_id": world.stop_public_ids["A"], "destination_stop_id": world.stop_public_ids["C"],
+        "origin_point": world.point("A"), "destination_point": world.point("C"),
         "departure_window_start": world.base_time.isoformat(),
         "departure_window_end": (world.base_time + timedelta(hours=2)).isoformat(),
         "price_basis": "total", "unit_price_minor": 7_000_000,
@@ -105,40 +105,12 @@ def test_q59_close_open_threads_returns_the_number_closed(world: World) -> None:
 # --- Q67 ----------------------------------------------------------------------------------------------
 
 
-def test_q67_counter_rechecks_the_band_when_a_stop_changes(world: World) -> None:
-    listing_id, thread_public_id, _ = open_thread(world)  # driver: 19 000 000 per seat, A -> D
-    with world.db.session() as s:  # no band yet: the client moves the dropoff to C, price unchanged
-        marketplace_service.counter_proposal(
-            s, thread_public_id_value=thread_public_id, actor_user_id=world.client_id,
-            data=ProposalCounter(expected_revision=1, dropoff_stop_id=world.stop_public_ids["C"]),
-        )
-        s.commit()
-    with world.db.session() as s:
-        s.execute(
-            text(
-                "INSERT INTO corridor_price_bands (public_id, corridor_id, service_type, price_basis, floor_minor, ceiling_minor, "
-                "enforced, reason, updated_by) VALUES (gen_random_uuid(), :c, 'passenger', 'per_seat', 5000000, 8000000, "
-                "true, 'band (enforced: Q90 leaves only this kind able to refuse)', :a)"
-            ),
-            {"c": world.corridor_id, "a": world.admin_id},
-        )
-        s.commit()
-    with world.db.session() as s, pytest.raises(DomainError) as info:  # same price, dropoff back to D -> band re-checked
-        marketplace_service.counter_proposal(
-            s, thread_public_id_value=thread_public_id, actor_user_id=world.driver_id,
-            data=ProposalCounter(expected_revision=2, dropoff_stop_id=world.stop_public_ids["D"]),
-        )
-    assert info.value.code is ErrorCode.PRICE_OUT_OF_BAND
-    window = {
-        "pickup_window_start": (world.base_time - timedelta(minutes=10)).isoformat(),
-        "pickup_window_end": (world.base_time + timedelta(minutes=20)).isoformat(),
-    }
-    with world.db.session() as s:  # window-only change: price and stops unchanged -> no band check (Q53)
-        marketplace_service.counter_proposal(
-            s, thread_public_id_value=thread_public_id, actor_user_id=world.driver_id,
-            data=ProposalCounter.model_validate({"expected_revision": 2, **window}),
-        )
-        s.commit()
+def test_q67_a_counter_cannot_move_the_clients_places(world: World) -> None:
+    """ADR-0028: the request's places are the client's A and B; a counter changes price, quantity or time, never the
+    places (Q160: there is no field to name another place in). The band is re-read on a price change only."""
+    open_thread(world)  # driver: 19 000 000 per seat, A -> D
+    with pytest.raises(ValueError, match="dropoff_stop_id"):
+        ProposalCounter.model_validate({"expected_revision": 1, "dropoff_stop_id": "stp_x"})
 
 
 # --- Q68 ----------------------------------------------------------------------------------------------

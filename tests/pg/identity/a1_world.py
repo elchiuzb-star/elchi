@@ -3,8 +3,7 @@
 Seeds real rows into A2's geo tables and A3's ``commission_policies`` so every DB
 foreign key is exercised, then registers ports:
 
-* ``SqlGeoAdapter`` - TEST-ONLY stand-in for ``app.modules.geo.service`` lookups
-  (A2 has not published them yet); reads the real geo tables.
+* ``SqlGeoAdapter`` - TEST-ONLY geo port over the real geo tables (corridors, confirmed roads).
 * ``FakeFlags`` / ``FakeFees`` - narrow fakes for ``is_flag_enabled`` (A2) and
   ``quote_fee`` (A3). ``FakeFees`` returns the seeded real policy id with a
   mutable ``fee_bps`` so AC43 (policy change after a quote) can be simulated.
@@ -25,7 +24,6 @@ from sqlalchemy.orm import Session
 
 import app.models  # noqa: F401  (registers legacy mappers)
 from app.contracts.enums import FeatureFlagKey
-from app.contracts.errors import DomainError
 from app.contracts.ids import PublicIdPrefix, format_public_id, parse_public_id
 from app.contracts.timeutil import utc_now
 from app.models import DriverProfile, User
@@ -34,44 +32,24 @@ from app.modules.marketplace.ports import CorridorRef, FeeQuote, MarketplacePort
 from app.modules.marketplace.schemas import ListingCreate
 from app.modules.trips import ports as trips_ports
 from app.modules.trips import service as trips_service
-from app.modules.trips.ports import RouteStopRef, RouteVersionRef, StopRef
+from app.modules.trips.ports import RouteVersionRef
 from app.modules.trips.schemas import TripCreate, VehicleCreate
 from tests.pg.conftest import PgDatabase
 
-STOP_NAMES = ("A", "B", "C", "D")
-STOP_COORDS = {"A": (69.24, 41.30), "B": (67.90, 40.10), "C": (66.60, 39.20), "D": (65.80, 38.86)}
+#: ADR-0028 / Q160: the fixture road runs through four places A -> B -> C -> D. They are places (map points), not stops:
+#: each sits in its own district whose centre is the place itself, so a district end and a marked place agree.
+PLACE_NAMES = ("A", "B", "C", "D")
+PLACE_COORDS = {"A": (69.24, 41.30), "B": (67.90, 40.10), "C": (66.60, 39.20), "D": (65.80, 38.86)}  # (lng, lat)
+PLACE_DISTRICTS = {"A": ("UZ-TK", "Yunusobod"), "B": ("UZ-QA", "Jizzax yo'li"), "C": ("UZ-QA", "Chiroqchi"), "D": ("UZ-QA", "Qarshi")}
+ROAD_WKT = "LINESTRING(69.24 41.30, 67.90 40.10, 66.60 39.20, 65.80 38.86)"
+ROAD_DISTANCE_M, ROAD_DURATION_S = 520_000, 25_200
 
 
 # --- ports -------------------------------------------------------------------------------------------
 
 
-def _stop(row) -> StopRef:  # noqa: ANN001
-    return StopRef(
-        id=row["id"],
-        public_id=format_public_id(PublicIdPrefix.STOP, row["public_id"]),
-        corridor_id=row["corridor_id"],
-        name_uz=row["name_uz"],
-        name_ru=row["name_ru"],
-        is_active=row["is_active"],
-    )
-
-
 class SqlGeoAdapter:
-    _STOPS = "SELECT id, public_id, corridor_id, name_uz, name_ru, is_active FROM corridor_stops"
-
-    def stops_by_public_ids(self, session: Session, public_ids: Sequence[str]) -> dict[str, StopRef]:
-        wanted: dict[uuid.UUID, str] = {}
-        for public_id in public_ids:
-            try:
-                wanted[parse_public_id(public_id, PublicIdPrefix.STOP)] = public_id
-            except DomainError:
-                continue
-        rows = session.execute(text(f"{self._STOPS} WHERE public_id = ANY(:ids)"), {"ids": list(wanted)}).mappings()
-        return {wanted[row["public_id"]]: _stop(row) for row in rows}
-
-    def stops_by_ids(self, session: Session, ids: Sequence[int]) -> dict[int, StopRef]:
-        rows = session.execute(text(f"{self._STOPS} WHERE id = ANY(:ids)"), {"ids": list(ids)}).mappings()
-        return {row["id"]: _stop(row) for row in rows}
+    """TEST-ONLY geo port over the real geo tables (corridors and confirmed roads)."""
 
     def corridors_by_ids(self, session: Session, ids: Sequence[int]) -> dict[int, CorridorRef]:
         rows = session.execute(
@@ -89,24 +67,18 @@ class SqlGeoAdapter:
 
     def route_versions_by_ids(self, session: Session, ids: Sequence[int]) -> dict[int, RouteVersionRef]:
         routes = session.execute(
-            text("SELECT id, public_id, status FROM route_versions WHERE id = ANY(:ids)"), {"ids": list(ids)}
+            text("SELECT id, public_id, status, distance_m, duration_s FROM route_versions WHERE id = ANY(:ids)"), {"ids": list(ids)}
         ).mappings().all()
-        result = {}
-        for route in routes:
-            stops = session.execute(
-                text(
-                    "SELECT seq, stop_id, cumulative_distance_m, cumulative_duration_s FROM route_version_stops "
-                    "WHERE route_version_id = :id ORDER BY seq"
-                ),
-                {"id": route["id"]},
-            ).all()
-            result[route["id"]] = RouteVersionRef(
+        return {
+            route["id"]: RouteVersionRef(
                 id=route["id"],
                 public_id=format_public_id(PublicIdPrefix.ROUTE_VERSION, route["public_id"]),
                 status=route["status"],
-                stops=tuple(RouteStopRef(*row) for row in stops),
+                distance_m=route["distance_m"],
+                duration_s=route["duration_s"],
             )
-        return result
+            for route in routes
+        }
 
 
 @dataclass
@@ -145,14 +117,30 @@ class World:
     driver_id: int
     driver2_id: int
     corridor_id: int
-    stop_ids: dict[str, int]
-    stop_public_ids: dict[str, str]
+    region_ids: dict[str, int]  # code -> pk
+    region_public_ids: dict[str, str]  # code -> api id
+    district_ids: dict[str, int]  # place -> pk
+    district_public_ids: dict[str, str]  # place -> api id
+    place_positions: dict[str, int]  # place -> metres along the road
     route_id: int
     route_public_id: str
     policy_id: int
     flags: FakeFlags
     fees: FakeFees
     base_time: datetime
+
+    def point(self, place: str, *, address: str | None = None) -> dict:
+        """A marked place as ``PointEndInput`` JSON (Q88)."""
+        lng, lat = PLACE_COORDS[place]
+        body = {"lat": lat, "lng": lng, "district_id": self.district_public_ids[place]}
+        if address is not None:
+            body["address"] = address
+        return body
+
+    def end(self, place: str) -> dict:
+        """A district end (region + district) as ``DirectionEndInput`` JSON (Q150)."""
+        code = PLACE_DISTRICTS[place][0]
+        return {"region_id": self.region_public_ids[code], "district_id": self.district_public_ids[place]}
 
 
 def add_user(session: Session, phone: str, role: str, *, full_name: str | None = None, driver_status: str | None = None) -> int:
@@ -179,10 +167,6 @@ def build_world(db: PgDatabase) -> World:
             ).scalar_one()
             for code, name in (("UZ-TK", "Toshkent"), ("UZ-QA", "Qashqadaryo"))
         ]
-        district = s.execute(
-            text("INSERT INTO geo_districts (public_id, region_id, name_uz) VALUES (gen_random_uuid(), :r, 'Chiroqchi') RETURNING id"),
-            {"r": regions[1]},
-        ).scalar_one()
         corridor = s.execute(
             text(
                 "INSERT INTO service_corridors (public_id, name, origin_region_id, destination_region_id, rollout_state, "
@@ -197,39 +181,44 @@ def build_world(db: PgDatabase) -> World:
             ),
             {"c": corridor, "a": admin},
         )
-        stop_ids, stop_public_ids = {}, {}
-        for name in STOP_NAMES:
-            lng, lat = STOP_COORDS[name]
+        district_ids, district_public_ids = {}, {}
+        for place, (code, name) in PLACE_DISTRICTS.items():
+            lng, lat = PLACE_COORDS[place]
             row = s.execute(
                 text(
-                    "INSERT INTO corridor_stops (public_id, corridor_id, geo_district_id, name_uz, name_ru, point, is_active, "
-                    "verified_by, verified_at, meeting_note) VALUES (gen_random_uuid(), :c, :d, :n, :n, "
-                    "ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), true, :a, now(), 'Bekat oldida') RETURNING id, public_id"
+                    "INSERT INTO geo_districts (public_id, region_id, name_uz, center_lat, center_lng) "
+                    "SELECT gen_random_uuid(), id, :n, :lat, :lng FROM regions WHERE code = :c RETURNING id, public_id"
                 ),
-                {"c": corridor, "d": district, "n": f"Bekat {name}", "lng": lng, "lat": lat, "a": admin},
+                {"c": code, "n": name, "lat": lat, "lng": lng},
             ).one()
-            stop_ids[name] = row.id
-            stop_public_ids[name] = format_public_id(PublicIdPrefix.STOP, row.public_id)
-        for state in ("internal", "pilot"):  # A2 (0046): pilot needs >= 2 active stops with meeting notes
-            s.execute(text("UPDATE service_corridors SET rollout_state = :st WHERE id = :c"), {"st": state, "c": corridor})
+            district_ids[place] = row.id
+            district_public_ids[place] = format_public_id(PublicIdPrefix.DISTRICT, row.public_id)
         route = s.execute(
             text(
                 "INSERT INTO route_versions (public_id, corridor_id, created_by_user_id, source, provider, provider_version, "
                 "request_hash, geometry, distance_m, duration_s, is_estimate) VALUES (gen_random_uuid(), :c, :a, 'fixture', "
-                "'fake', 'v1', :h, ST_GeomFromText('LINESTRING(69.24 41.30, 67.90 40.10, 66.60 39.20, 65.80 38.86)', 4326), "
-                "520000, 25200, true) RETURNING id, public_id"
+                "'fake', 'v1', :h, ST_GeomFromText(:wkt, 4326), :dist, :dur, true) RETURNING id, public_id"
             ),
-            {"c": corridor, "a": admin, "h": uuid.uuid4().hex * 2},
+            {"c": corridor, "a": admin, "h": uuid.uuid4().hex * 2, "wkt": ROAD_WKT, "dist": ROAD_DISTANCE_M, "dur": ROAD_DURATION_S},
         ).one()
-        for seq, name in enumerate(STOP_NAMES):
-            s.execute(
-                text(
-                    "INSERT INTO route_version_stops (route_version_id, seq, stop_id, cumulative_distance_m, "
-                    "cumulative_duration_s, line_fraction) VALUES (:r, :seq, :stop, :dist, :dur, :frac)"
-                ),
-                {"r": route.id, "seq": seq, "stop": stop_ids[name], "dist": seq * 170000, "dur": seq * 8400, "frac": seq / 3},
-            )
         s.execute(text("UPDATE route_versions SET status = 'confirmed', confirmed_at = now() WHERE id = :r"), {"r": route.id})
+        for state in ("internal", "pilot"):  # ADR-0028: a public corridor needs a confirmed road
+            s.execute(text("UPDATE service_corridors SET rollout_state = :st WHERE id = :c"), {"st": state, "c": corridor})
+        # region centres (where a region-only end meets the road): Toshkent at A, Qashqadaryo at D
+        for code, place in (("UZ-TK", "A"), ("UZ-QA", "D")):
+            s.execute(text("UPDATE regions SET center_lat = :lat, center_lng = :lng WHERE code = :c"),
+                      {"c": code, "lng": PLACE_COORDS[place][0], "lat": PLACE_COORDS[place][1]})
+        place_positions = {
+            place: s.execute(
+                text(
+                    "SELECT round(ST_LineLocatePoint(rv.geometry, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)) * rv.distance_m)::int "
+                    "FROM route_versions rv WHERE rv.id = :r"
+                ),
+                {"r": route.id, "lng": PLACE_COORDS[place][0], "lat": PLACE_COORDS[place][1]},
+            ).scalar_one()
+            for place in PLACE_NAMES
+        }
+        region_rows = s.execute(text("SELECT id, code, public_id FROM regions")).all()
         policy = s.execute(
             text(
                 "INSERT INTO commission_policies (public_id, kind, scope_corridor_id, fee_bps, effective_from, reason, created_by) "
@@ -247,8 +236,11 @@ def build_world(db: PgDatabase) -> World:
         driver_id=driver,
         driver2_id=driver2,
         corridor_id=corridor,
-        stop_ids=stop_ids,
-        stop_public_ids=stop_public_ids,
+        region_ids={row.code: row.id for row in region_rows},
+        region_public_ids={row.code: format_public_id(PublicIdPrefix.REGION, row.public_id) for row in region_rows},
+        district_ids=district_ids,
+        district_public_ids=district_public_ids,
+        place_positions=place_positions,
         route_id=route.id,
         route_public_id=format_public_id(PublicIdPrefix.ROUTE_VERSION, route.public_id),
         policy_id=policy.id,
@@ -269,22 +261,6 @@ def world(pg_db: PgDatabase) -> Iterator[World]:
     finally:
         trips_ports.set_geo_port(None)
         marketplace_ports.configure_ports(None)
-
-
-COUNTER_TRIGGER = "trg_trip_segment_resources_counters_match_allocations"
-
-
-@pytest.fixture
-def unchecked_segment_counters(world: World) -> World:
-    """TEST-ONLY: disable the 0054 deferred counter trigger in this test's own database.
-
-    Pure capacity-arithmetic tests call ``trips_service.reserve`` / ``release`` and commit without booking
-    allocations (A4). In production every counter change is tied to an allocation change and the trigger
-    stays on; ``tests/pg/trips/test_trips_wave21_pg.py`` proves it rejects a bare counter change.
-    """
-    with world.db.engine.begin() as conn:
-        conn.execute(text(f"ALTER TABLE trip_segment_resources DISABLE TRIGGER {COUNTER_TRIGGER}"))
-    return world
 
 
 # --- builders ------------------------------------------------------------------------------------------
@@ -330,21 +306,20 @@ def trip_create(
     *,
     start: datetime,
     seats: int = 4,
-    stops: Sequence[str] = STOP_NAMES,
+    places: Sequence[str] = PLACE_NAMES,
     baggage_ml: int = 200_000,
     cargo_g: int = 50_000,
     cargo_ml: int = 300_000,
 ) -> TripCreate:
+    """A trip on the stretch of the road from ``places[0]`` to ``places[-1]`` (ADR-0028), one hour per place hop."""
     return TripCreate.model_validate(
         {
             "vehicle_id": vehicle_public_id,
             "route_version_id": world.route_public_id,
-            "stops": [
-                {"stop_id": world.stop_public_ids[name], "seq": index + 1, "planned_arrival_at": (start + timedelta(hours=index)).isoformat()}
-                for index, name in enumerate(stops)
-            ],
+            "route_start_m": world.place_positions[places[0]],
+            "route_end_m": world.place_positions[places[-1]],
             "planned_start_at": start.isoformat(),
-            "planned_end_at": (start + timedelta(hours=len(stops))).isoformat(),
+            "planned_end_at": (start + timedelta(hours=len(places) - 1)).isoformat(),
             "seat_capacity": seats,
             "baggage_capacity_ml": baggage_ml,
             "cargo_capacity_weight_g": cargo_g,
@@ -369,29 +344,13 @@ def passenger_request(
         {
             "kind": "request",
             "service_type": "passenger",
-            "origin_stop_id": world.stop_public_ids[origin],
-            "destination_stop_id": world.stop_public_ids[destination],
+            "origin_point": world.point(origin),
+            "destination_point": world.point(destination),
             "departure_window_start": start.isoformat(),
             "departure_window_end": (start + timedelta(hours=1)).isoformat(),
             "price_basis": "per_seat",
             "unit_price_minor": unit_price_minor,
             "passenger": {"seat_count": seats, "adults": seats, "baggage": {"pieces": 1, "total_weight_g": 15_000, "total_volume_ml": 40_000}},
-        }
-    )
-
-
-def passenger_offer(world: World, trip_public_id: str, *, start: datetime, unit_price_minor: int = 20_000_000) -> ListingCreate:
-    return ListingCreate.model_validate(
-        {
-            "kind": "trip_offer",
-            "service_type": "passenger",
-            "origin_stop_id": world.stop_public_ids["A"],
-            "destination_stop_id": world.stop_public_ids["D"],
-            "departure_window_start": start.isoformat(),
-            "departure_window_end": (start + timedelta(hours=1)).isoformat(),
-            "price_basis": "per_seat",
-            "unit_price_minor": unit_price_minor,
-            "trip_id": trip_public_id,
         }
     )
 

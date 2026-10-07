@@ -2,25 +2,22 @@
 
 Transaction rules (ADR-0001, spec §15):
 * Functions take the caller's ``Session`` and never commit.
-* Router/provider calls happen only in ``fetch_route_outside_transaction`` and
-  ``measure_detours_outside_transaction``, which refuse to run inside a transaction.
-  Typical flow: read (``prepare_route_preview``) -> end the transaction -> fetch -> write.
+* Router/provider calls happen only in ``fetch_route_outside_transaction``, which refuses to run inside a
+  transaction. Typical flow: read (``prepare_road_preview``) -> end the transaction -> fetch -> write.
 
 Production detection everywhere: ``platform.service.is_production(session)`` (settings OR DB
-marker, fail closed). There is no caller override. In production no routing provider is enabled
-(Q24/Q46), so detour matches never occur there; only verified-stop matches work.
+marker, fail closed). There is no caller override.
+
+ADR-0028 / Q160: ELCHI has no stops. A road is a confirmed geometry between A and B; a place is a position on it
+(``route_position_m``, ``project_point_on_route``). The stop tables are frozen history (migration 0101).
 
 Published for A1/A4/A5:
-* matching: ``evaluate_route_match``, ``measure_detours_outside_transaction``,
-  ``validate_detour_quote(s)``, ``apply_insertions``, ``verify_existing_windows``,
-  ``cumulative_detour_allowed``, ``find_candidates``, ``nearby_stop_ids``,
-  ``planned_occurrences_from_route_version``;
-* lookups: ``get_route_version`` / ``get_route_version_by_api_id``, ``get_stop`` / ``get_stops`` /
-  ``get_stops_by_api_ids`` / ``get_stop_by_api_id`` / ``get_stop_points``, ``get_corridor`` /
-  ``get_corridors`` / ``get_corridor_by_api_id``;
+* lookups: ``get_route_version`` / ``get_route_version_by_api_id``, ``list_corridor_routes``, ``get_corridor`` /
+  ``get_corridors`` / ``get_corridor_by_api_id``, ``districts_by_ids``, ``corridor_districts``;
+* places on a road: ``project_point_on_route``, ``route_position_m``, ``corridor_point_offset_m``;
 * flags: ``is_flag_enabled``, ``resolve_flags``, ``snapshot_flags``, ``production_flag_violations``;
-* price bands (Q42): ``resolve_price_band``, ``select_price_band``, ``price_within_band``,
-  ``assert_price_within_band`` (raises ``PRICE_OUT_OF_BAND``);
+* price bands (Q42/Q90, corridor-wide): ``resolve_price_band``, ``select_price_band``, ``price_within_band``,
+  ``assert_price_within_band`` (raises ``PRICE_OUT_OF_BAND`` for an enforced band);
 * hook for A4: ``set_active_booking_counter`` (corridor ``internal -> draft`` guard).
 """
 
@@ -33,7 +30,6 @@ import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select, text
@@ -67,27 +63,15 @@ from app.modules.geo.pricing import (
     price_within_band,
     select_price_band,
 )
-from app.modules.geo.geometry import linestring_ewkt, point_ewkt
-from app.modules.geo.matching import (
-    apply_insertions,
-    cumulative_detour_allowed,
-    evaluate_route_match,
-    measure_detours,
-    validate_detour_quote,
-    validate_detour_quotes,
-    verify_existing_windows,
-)
+from app.modules.geo.geometry import linestring_ewkt
 from app.modules.geo.models import (
     CorridorConfigVersion,
     CorridorPriceBand,
     CorridorPriceBandChange,
-    CorridorStop,
     FeatureFlagChange,
     FeatureFlagValue,
-    GeoDistrict,
     Region,
     RouteVersion,
-    RouteVersionStop,
     ServiceCorridor,
 )
 from app.modules.geo.routing.base import (
@@ -97,17 +81,7 @@ from app.modules.geo.routing.base import (
     RoutingUnavailable,
     assert_outside_transaction,
 )
-from app.modules.geo.types import (
-    BookingWindow,
-    DetourMeasurements,
-    DetourQuote,
-    LatLng,
-    MatchRequest,
-    OccurrenceTiming,
-    RouteMatchResult,
-    TimelineChange,
-    TripRouteContext,
-)
+from app.modules.geo.types import LatLng
 from app.modules.platform import service as platform_service
 
 logger = logging.getLogger(__name__)
@@ -117,7 +91,6 @@ __all__ = [
     "mark_flag_change_source",
     "readiness_notices",
     "find_q47_violations",
-    "price_band_warnings",
     "production_invariant_notices",
     "q48_gate_passed",
     "PRICE_BAND_BASIS",
@@ -126,41 +99,18 @@ __all__ = [
     "price_within_band",
     "resolve_price_band",
     "select_price_band",
-    "BookingWindow",
     "CorridorInfo",
-    "DetourQuote",
-    "MatchRequest",
-    "RouteCandidate",
-    "RouteMatchResult",
     "RouteVersionInfo",
-    "StopInfo",
-    "TimelineChange",
-    "TripRouteContext",
-    "apply_insertions",
-    "cumulative_detour_allowed",
-    "evaluate_route_match",
-    "find_candidates",
     "get_corridor",
     "get_corridor_by_api_id",
     "get_corridors",
     "get_route_version",
     "get_route_version_by_api_id",
-    "get_stop",
-    "get_stop_by_api_id",
-    "get_stop_points",
-    "get_stops",
-    "get_stops_by_api_ids",
     "is_flag_enabled",
-    "measure_detours_outside_transaction",
-    "nearby_stop_ids",
-    "planned_occurrences_from_route_version",
     "production_flag_violations",
     "resolve_flags",
     "set_active_booking_counter",
     "snapshot_flags",
-    "validate_detour_quote",
-    "validate_detour_quotes",
-    "verify_existing_windows",
     "project_point_on_route",
     "RouteProjection",
     "MAX_POINT_ROUTE_OFFSET_M",
@@ -172,9 +122,7 @@ __all__ = [
 ROUTE_DRAFT_TTL = timedelta(hours=24)
 OPERABLE_ROLLOUT_STATES = frozenset({CorridorRolloutState.INTERNAL, CorridorRolloutState.PILOT, CorridorRolloutState.ACTIVE})
 PUBLIC_ROLLOUT_STATES = frozenset({CorridorRolloutState.PILOT, CorridorRolloutState.ACTIVE})
-# Q47: pilot/active corridors keep at least two active stops, each with meeting evidence (Q27),
-# enforced continuously in the service and by a deferred DB trigger (0046).
-PILOT_MIN_ACTIVE_STOPS = 2
+# ADR-0028 (replaces Q27/Q47): a pilot/active corridor needs a confirmed road.
 
 # Read-only view of the contract machine (enforcement uses CORRIDOR_ROLLOUT.assert_transition).
 ROLLOUT_TRANSITIONS: dict[CorridorRolloutState, frozenset[CorridorRolloutState]] = {
@@ -193,10 +141,6 @@ def is_production(db: Session) -> bool:
 
 def corridor_api_id(value: uuid.UUID) -> str:
     return format_public_id(PublicIdPrefix.CORRIDOR, value)
-
-
-def stop_api_id(value: uuid.UUID) -> str:
-    return format_public_id(PublicIdPrefix.STOP, value)
 
 
 def route_version_api_id(value: uuid.UUID) -> str:
@@ -268,39 +212,6 @@ class CorridorInfo:
 
 
 @dataclass(frozen=True, slots=True)
-class StopInfo:
-    id: int
-    public_id: uuid.UUID
-    corridor_id: int
-    corridor_public_id: uuid.UUID
-    district_id: int
-    district_public_id: uuid.UUID
-    district_name_uz: str
-    name_uz: str
-    name_ru: str | None
-    point: LatLng
-    meeting_note: str | None
-    meeting_photo_file_id: str | None
-    sequence_hint: int
-    is_active: bool
-    version: int
-
-    @property
-    def api_id(self) -> str:
-        return stop_api_id(self.public_id)
-
-
-@dataclass(frozen=True, slots=True)
-class RouteVersionStopInfo:
-    seq: int
-    stop_id: int
-    stop_public_id: uuid.UUID
-    cumulative_distance_m: int
-    cumulative_duration_s: int
-    line_fraction: Decimal
-
-
-@dataclass(frozen=True, slots=True)
 class RouteVersionInfo:
     id: int
     public_id: uuid.UUID
@@ -314,7 +225,6 @@ class RouteVersionInfo:
     duration_s: int
     is_estimate: bool
     geometry: tuple[LatLng, ...]
-    stops: tuple[RouteVersionStopInfo, ...]
     confirmed_at: datetime | None
     created_at: datetime
 
@@ -328,29 +238,8 @@ class RouteVersionInfo:
 
 
 @dataclass(frozen=True, slots=True)
-class RouteCandidate:
-    """Spatial pre-filter hit (spec §6.3 step 2). Final decision: ``evaluate_route_match``."""
-
-    route_version_id: int
-    corridor_id: int
-    pickup_distance_m: int
-    dropoff_distance_m: int
-    pickup_line_fraction: Decimal
-    dropoff_line_fraction: Decimal
-    pickup_stop_seqs: tuple[int, ...]
-    dropoff_stop_seqs: tuple[int, ...]
-    confirmed_at: datetime | None = None
-
-    @property
-    def forward_by_line_fraction(self) -> bool:
-        """Hint only: loops/repeated stops are decided by occurrence order."""
-        return self.pickup_line_fraction < self.dropoff_line_fraction
-
-
-@dataclass(frozen=True, slots=True)
 class RoutePreviewPlan:
     corridor: CorridorInfo
-    stops: tuple[StopInfo, ...]
     waypoints: tuple[LatLng, ...]
     provider: str
     provider_version: str
@@ -509,134 +398,16 @@ def get_corridor_by_api_id(db: Session, api_id: str) -> CorridorInfo:
     return found[0]
 
 
-def _stop_query():  # noqa: ANN202
-    return (
-        select(
-            CorridorStop,
-            func.ST_Y(CorridorStop.point).label("lat"),
-            func.ST_X(CorridorStop.point).label("lng"),
-            GeoDistrict.public_id.label("district_public_id"),
-            GeoDistrict.name_uz.label("district_name_uz"),
-            ServiceCorridor.public_id.label("corridor_public_id"),
-        )
-        .join(GeoDistrict, GeoDistrict.id == CorridorStop.geo_district_id)
-        .join(ServiceCorridor, ServiceCorridor.id == CorridorStop.corridor_id)
-    )
-
-
-def _stop_info(row: Any) -> StopInfo:
-    stop: CorridorStop = row[0]
-    return StopInfo(
-        id=stop.id,
-        public_id=stop.public_id,
-        corridor_id=stop.corridor_id,
-        corridor_public_id=row.corridor_public_id,
-        district_id=stop.geo_district_id,
-        district_public_id=row.district_public_id,
-        district_name_uz=row.district_name_uz,
-        name_uz=stop.name_uz,
-        name_ru=stop.name_ru,
-        point=LatLng(float(row.lat), float(row.lng)),
-        meeting_note=stop.meeting_note,
-        meeting_photo_file_id=stop.meeting_photo_file_id,
-        sequence_hint=stop.sequence_hint,
-        is_active=stop.is_active,
-        version=stop.version,
-    )
-
-
-def get_stops(db: Session, stop_ids: Iterable[int]) -> dict[int, StopInfo]:
-    ids = sorted(set(stop_ids))
-    if not ids:
-        return {}
-    return {info.id: info for info in (_stop_info(row) for row in db.execute(_stop_query().where(CorridorStop.id.in_(ids))).all())}
-
-
-def get_stop(db: Session, stop_id: int) -> StopInfo:
-    found = get_stops(db, [stop_id])
-    if stop_id not in found:
-        raise DomainError(ErrorCode.NOT_FOUND)
-    return found[stop_id]
-
-
-def get_stops_by_api_ids(db: Session, api_ids: Iterable[str]) -> dict[str, StopInfo]:
-    """Batch lookup; malformed or unknown ids are simply absent from the result."""
-    public_ids: list[uuid.UUID] = []
-    for api_id in dict.fromkeys(api_ids):
-        try:
-            public_ids.append(parse_public_id(api_id, PublicIdPrefix.STOP))
-        except DomainError:
-            continue
-    if not public_ids:
-        return {}
-    rows = db.execute(_stop_query().where(CorridorStop.public_id.in_(public_ids))).all()
-    return {info.api_id: info for info in (_stop_info(row) for row in rows)}
-
-
-def get_stop_by_api_id(db: Session, api_id: str) -> StopInfo:
-    public_id = parse_public_id(api_id, PublicIdPrefix.STOP)
-    row = db.execute(_stop_query().where(CorridorStop.public_id == public_id)).first()
-    if row is None:
-        raise DomainError(ErrorCode.NOT_FOUND)
-    return _stop_info(row)
-
-
-def get_stop_points(db: Session, stop_ids: Iterable[int]) -> dict[int, LatLng]:
-    return {stop_id: info.point for stop_id, info in get_stops(db, stop_ids).items()}
-
-
-def list_corridor_stops(db: Session, corridor: CorridorInfo, *, active_only: bool = True) -> list[StopInfo]:
-    query = _stop_query().where(CorridorStop.corridor_id == corridor.id)
-    if active_only:
-        query = query.where(CorridorStop.is_active.is_(True))
-    query = query.order_by(CorridorStop.sequence_hint, CorridorStop.id)
-    return [_stop_info(row) for row in db.execute(query).all()]
-
-
 def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def search_stops(db: Session, q: str, *, region: RegionInfo | None = None, limit: int = 20) -> list[StopInfo]:
-    """Active stops of publicly visible corridors whose uz/ru name contains ``q``.
-
-    No rate limit yet (BR #9): owned by A13 before launch.
-    """
-    term = q.strip()
-    if len(term) < 2:
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "q", "min_length": 2})
-    pattern = f"%{_escape_like(term)}%"
-    query = (
-        _stop_query()
-        .where(CorridorStop.is_active.is_(True))
-        .where(ServiceCorridor.rollout_state.in_([s.value for s in PUBLIC_ROLLOUT_STATES]))
-        .where(CorridorStop.name_uz.ilike(pattern, escape="\\") | CorridorStop.name_ru.ilike(pattern, escape="\\"))
-        .order_by(CorridorStop.name_uz, CorridorStop.id)
-        .limit(max(1, min(limit, 50)))
-    )
-    if region is not None:
-        query = query.where(GeoDistrict.region_id == region.id)
-    return [_stop_info(row) for row in db.execute(query).all()]
-
-
-def count_active_stops(db: Session, corridor_ids: Sequence[int]) -> dict[int, int]:
-    if not corridor_ids:
-        return {}
-    rows = db.execute(
-        select(CorridorStop.corridor_id, func.count())
-        .where(CorridorStop.corridor_id.in_(list(corridor_ids)), CorridorStop.is_active.is_(True))
-        .group_by(CorridorStop.corridor_id)
-    ).all()
-    return {corridor_id: count for corridor_id, count in rows}
-
-
-def list_public_corridors(db: Session, *, service_type: ServiceType | None = None) -> list[tuple[CorridorInfo, list[ServiceType], int]]:
+def list_public_corridors(db: Session, *, service_type: ServiceType | None = None) -> list[tuple[CorridorInfo, list[ServiceType]]]:
     """Pilot/active corridors with the services whose flag is on for that corridor (G2)."""
     corridors = _corridor_infos(db, ServiceCorridor.rollout_state.in_([s.value for s in PUBLIC_ROLLOUT_STATES]))
     rows = _load_flag_rows(db)
     production = is_production(db)
-    counts = count_active_stops(db, [c.id for c in corridors])
-    result: list[tuple[CorridorInfo, list[ServiceType], int]] = []
+    result: list[tuple[CorridorInfo, list[ServiceType]]] = []
     for corridor in corridors:
         context = _corridor_context(corridor)
         services = [
@@ -646,7 +417,7 @@ def list_public_corridors(db: Session, *, service_type: ServiceType | None = Non
         ]
         if service_type is not None and service_type not in services:
             continue
-        result.append((corridor, services, counts.get(corridor.id, 0)))
+        result.append((corridor, services))
     return result
 
 
@@ -655,20 +426,6 @@ def list_admin_corridors(db: Session, *, after_id: int | None, limit: int) -> tu
     items = _corridor_infos(db, where, limit=limit + 1)
     next_after = items[limit - 1].id if len(items) > limit else None
     return items[:limit], next_after
-
-
-def nearby_stop_ids(db: Session, stop_id: int, *, radius_m: int, limit: int = 5) -> list[int]:
-    """Other active stops of the same corridor within ``radius_m`` metres (geography), nearest first."""
-    rows = db.execute(
-        text(
-            "SELECT o.id FROM corridor_stops s JOIN corridor_stops o "
-            "ON o.corridor_id = s.corridor_id AND o.id <> s.id AND o.is_active "
-            "WHERE s.id = :stop_id AND ST_DWithin(o.point::geography, s.point::geography, :radius) "
-            "ORDER BY ST_Distance(o.point::geography, s.point::geography), o.id LIMIT :limit"
-        ),
-        {"stop_id": stop_id, "radius": radius_m, "limit": limit},
-    ).all()
-    return [row[0] for row in rows]
 
 
 # --- catalogue writes (operator/admin) ----------------------------------------------------------
@@ -691,17 +448,6 @@ def _resolve_region_ref(db: Session, api_id: str, field: str) -> RegionInfo:
     except DomainError:
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": field, "reason": "unknown_region"}) from None
     return region
-
-
-def _resolve_district_ref(db: Session, api_id: str) -> GeoDistrict:
-    try:
-        public_id = parse_public_id(api_id, PublicIdPrefix.DISTRICT)
-    except DomainError:
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "district_id", "reason": "unknown_district"}) from None
-    row = db.scalar(select(GeoDistrict).where(GeoDistrict.public_id == public_id, GeoDistrict.is_active.is_(True)))
-    if row is None:
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "district_id", "reason": "unknown_district"})
-    return row
 
 
 def create_corridor(
@@ -767,12 +513,6 @@ def _lock_corridor(db: Session, api_id: str) -> ServiceCorridor:
     return row
 
 
-def _lock_corridor_by_id(db: Session, corridor_id: int) -> None:
-    """``FOR NO KEY UPDATE`` on the corridor row: serialises stop changes of one corridor (Q47)."""
-    if db.scalar(select(ServiceCorridor.id).where(ServiceCorridor.id == corridor_id).with_for_update(key_share=True)) is None:
-        raise DomainError(ErrorCode.NOT_FOUND)
-
-
 # A4 registers a counter of non-terminal bookings on a corridor (STATE_MACHINES §10 internal -> draft).
 ActiveBookingCounter = Callable[[Session, int], int]
 _active_booking_counter: ActiveBookingCounter | None = None
@@ -799,42 +539,18 @@ def _guard_failed(command: str, reason: str, **details: Any) -> DomainError:
     )
 
 
-def _stops_missing_meeting_evidence(db: Session, corridor_id: int) -> list[str]:
-    rows = db.scalars(
-        select(CorridorStop.public_id)
-        .where(
-            CorridorStop.corridor_id == corridor_id,
-            CorridorStop.is_active.is_(True),
-            (CorridorStop.meeting_note.is_(None) | (func.btrim(CorridorStop.meeting_note) == "")),
-            CorridorStop.meeting_photo_file_id.is_(None),
-        )
-        .order_by(CorridorStop.id)
-    )
-    return [stop_api_id(value) for value in rows]
+def _has_confirmed_road(db: Session, corridor_id: int) -> bool:
+    return db.scalar(
+        select(func.count(RouteVersion.id)).where(RouteVersion.corridor_id == corridor_id, RouteVersion.status == "confirmed")
+    ) > 0
 
 
 def _public_corridor_violation(db: Session, corridor_id: int) -> tuple[str, dict[str, Any]] | None:
-    active_stops = count_active_stops(db, [corridor_id]).get(corridor_id, 0)
-    if active_stops < PILOT_MIN_ACTIVE_STOPS:
-        return "needs_two_active_stops", {"active_stops": active_stops}
-    missing = _stops_missing_meeting_evidence(db, corridor_id)
-    if missing:
-        return "stops_missing_meeting_evidence", {"stop_ids": missing}
+    """ADR-0028 (Q159, replaces Q27/Q47): a pilot/active corridor needs a confirmed road - not stops, not stop
+    evidence. Intermediate points are not business objects; the road is."""
+    if not _has_confirmed_road(db, corridor_id):
+        return "needs_confirmed_road", {}
     return None
-
-
-def _assert_public_corridor_stops(db: Session, corridor_id: int) -> None:
-    """Q47: after any stop change, a pilot/active corridor still has >= 2 active stops with evidence."""
-    state = CorridorRolloutState(db.scalar(select(ServiceCorridor.rollout_state).where(ServiceCorridor.id == corridor_id)))
-    if state not in PUBLIC_ROLLOUT_STATES:
-        return
-    violation = _public_corridor_violation(db, corridor_id)
-    if violation is not None:
-        reason, details = violation
-        raise DomainError(
-            ErrorCode.INVALID_STATE_TRANSITION,
-            details={"machine": "corridor_stops", "rollout_state": state.value, "reason": reason, **details},
-        )
 
 
 def _check_rollout(db: Session, corridor: CorridorInfo, target: CorridorRolloutState) -> str:
@@ -842,14 +558,11 @@ def _check_rollout(db: Session, corridor: CorridorInfo, target: CorridorRolloutS
     command = next((t.command for t in CORRIDOR_ROLLOUT.transitions if t.source == source.value and t.target == target.value), None)
     CORRIDOR_ROLLOUT.assert_transition(source.value, target.value, command=command)
     assert command is not None
-    active_stops = count_active_stops(db, [corridor.id]).get(corridor.id, 0)
-    if command == "start_internal" and active_stops < 1:
-        raise _guard_failed(command, "needs_active_stop")
     if command == "return_to_draft":
         active = _active_bookings_on_corridor(db, corridor.id)
         if active:
             raise _guard_failed(command, "active_bookings", active_bookings=active)
-    if command in ("start_pilot", "activate"):  # Q27/Q47: public corridors
+    if command in ("start_pilot", "activate"):  # ADR-0028 (replaces Q27/Q47): public corridors need a confirmed road
         violation = _public_corridor_violation(db, corridor.id)
         if violation is not None:
             raise _guard_failed(command, violation[0], **violation[1])
@@ -913,177 +626,6 @@ def patch_corridor(db: Session, *, actor_user_id: int, corridor_api_id: str, exp
     return get_corridor(db, corridor.id)
 
 
-# Q27 photo evidence must be an uploaded image of this dedicated type: `stop_photo`, image-only,
-# uploadable only by staff holding ops.corridor_manage (v1 files route, wave 1.6 integration).
-STOP_PHOTO_UPLOAD_TYPE = "stop_photo"
-
-
-def _resolve_meeting_photo(value: str | None, *, actor_user_id: int, current_stored: str | None = None) -> str | None:
-    """Validate a meeting photo reference with H0's file access rules (read-only use).
-
-    F4 (accepted for the pilot): a photo is bound to its uploader. Only the staff member who uploaded it can
-    attach it; another staff member can keep an already stored reference but cannot attach someone else's
-    upload.
-    """
-    if value is None:
-        return None
-    from app.utils import file_access, file_validation
-
-    def invalid(reason: str) -> DomainError:
-        return DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "meeting_photo_file_id", "reason": reason})
-
-    if STOP_PHOTO_UPLOAD_TYPE not in file_validation.ALLOWED_UPLOAD_TYPES or STOP_PHOTO_UPLOAD_TYPE not in file_validation.IMAGE_ONLY_TYPES:
-        raise invalid("stop_photo_upload_type_unavailable")
-    try:
-        stored = file_access.resolve_attachment(
-            value, user_id=actor_user_id, expected_upload_type=STOP_PHOTO_UPLOAD_TYPE, current_stored=current_stored
-        )
-    except file_access.FileReferenceError:
-        raise invalid("invalid_file_reference") from None
-    if stored is None:
-        return None
-    key = file_access.normalize_storage_key(stored)
-    if key is None or file_access.key_extension(key) not in file_validation.ALLOWED_IMAGE_EXTENSIONS:
-        raise invalid("invalid_file_reference")
-    return stored
-
-
-def create_stop(
-    db: Session,
-    *,
-    actor_user_id: int,
-    corridor_api_id: str,
-    name_uz: str,
-    name_ru: str | None,
-    district_api_id: str,
-    point: LatLng,
-    meeting_note: str | None,
-    sequence_hint: int,
-    is_active: bool,
-    meeting_photo_file_id: str | None = None,
-) -> StopInfo:
-    """G10. An active stop is recorded as verified by the staff member who activates it."""
-    corridor = get_corridor_by_api_id(db, corridor_api_id)
-    _lock_corridor_by_id(db, corridor.id)  # Q47: serialise stop changes per corridor
-    district = _resolve_district_ref(db, district_api_id)
-    photo = _resolve_meeting_photo(meeting_photo_file_id, actor_user_id=actor_user_id)
-    now = utc_now()
-    stop = CorridorStop(
-        public_id=new_public_uuid(),
-        corridor_id=corridor.id,
-        geo_district_id=district.id,
-        name_uz=name_uz.strip(),
-        name_ru=name_ru.strip() if name_ru else None,
-        point=func.ST_GeomFromEWKT(point_ewkt(point)),
-        meeting_note=meeting_note,
-        meeting_photo_file_id=photo,
-        sequence_hint=sequence_hint,
-        is_active=is_active,
-        verified_by=actor_user_id if is_active else None,
-        verified_at=now if is_active else None,
-        version=1,
-    )
-    try:
-        with db.begin_nested():
-            db.add(stop)
-            db.flush()
-    except IntegrityError:
-        raise _duplicate("name_uz") from None
-    _assert_public_corridor_stops(db, corridor.id)
-    _audit(
-        db,
-        actor_user_id=actor_user_id,
-        entity_type="corridor_stop",
-        entity_id=stop.id,
-        action="corridor_stop_created",
-        old=None,
-        new={"corridor": corridor.api_id, "name_uz": stop.name_uz, "is_active": is_active},
-        reason=None,
-    )
-    return get_stop(db, stop.id)
-
-
-def _stop_used_by_confirmed_route(db: Session, stop_id: int) -> bool:
-    return bool(
-        db.scalar(
-            select(func.count())
-            .select_from(RouteVersionStop)
-            .join(RouteVersion, RouteVersion.id == RouteVersionStop.route_version_id)
-            .where(RouteVersionStop.stop_id == stop_id, RouteVersion.status == "confirmed")
-        )
-    )
-
-
-def patch_stop(db: Session, *, actor_user_id: int, stop_api_id: str, expected_version: int, changes: Mapping[str, Any]) -> StopInfo:
-    """G11. Location/district of a stop used by a confirmed route cannot move (create a new stop)."""
-    public_id = parse_public_id(stop_api_id, PublicIdPrefix.STOP)
-    corridor_id = db.scalar(select(CorridorStop.corridor_id).where(CorridorStop.public_id == public_id))
-    if corridor_id is None:
-        raise DomainError(ErrorCode.NOT_FOUND)
-    _lock_corridor_by_id(db, corridor_id)  # corridor row before the stop row (Q47)
-    stop = db.scalar(select(CorridorStop).where(CorridorStop.public_id == public_id).with_for_update(key_share=True))
-    if stop is None:
-        raise DomainError(ErrorCode.NOT_FOUND)
-    if "meeting_photo_file_id" in changes:
-        changes = {
-            **changes,
-            "meeting_photo_file_id": _resolve_meeting_photo(
-                changes["meeting_photo_file_id"], actor_user_id=actor_user_id, current_stored=stop.meeting_photo_file_id
-            ),
-        }
-    if stop.version != expected_version:
-        raise DomainError(ErrorCode.VERSION_CONFLICT, details={"current_version": stop.version})
-    before = get_stop(db, stop.id)
-    changed: dict[str, Any] = {}
-
-    moved = "point" in changes and changes["point"] != before.point
-    district: GeoDistrict | None = None
-    if "district_id" in changes:
-        district = _resolve_district_ref(db, changes["district_id"])
-        moved = moved or district.id != before.district_id
-    if moved and _stop_used_by_confirmed_route(db, stop.id):
-        raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"reason": "stop_used_by_confirmed_route"})
-
-    if "point" in changes and changes["point"] != before.point:
-        stop.point = func.ST_GeomFromEWKT(point_ewkt(changes["point"]))
-        changed["point"] = {"lat": changes["point"].lat, "lng": changes["point"].lng}
-    if district is not None and district.id != before.district_id:
-        stop.geo_district_id = district.id
-        changed["district_id"] = changes["district_id"]
-    for field in ("name_uz", "name_ru", "meeting_note", "meeting_photo_file_id", "sequence_hint", "is_active"):
-        if field in changes:
-            value = changes[field]
-            if isinstance(value, str) and field in ("name_uz", "name_ru"):
-                value = value.strip() or None
-            if value != getattr(before, field):
-                setattr(stop, field, value)
-                changed[field] = value
-    if not changed:
-        return before
-    if stop.is_active and (changed.get("is_active") is True or "point" in changed or "district_id" in changed):
-        stop.verified_by = actor_user_id
-        stop.verified_at = utc_now()
-    stop.version = stop.version + 1
-    stop.updated_at = utc_now()
-    try:
-        with db.begin_nested():
-            db.flush()
-    except IntegrityError:
-        raise _duplicate("name_uz") from None
-    _assert_public_corridor_stops(db, stop.corridor_id)
-    _audit(
-        db,
-        actor_user_id=actor_user_id,
-        entity_type="corridor_stop",
-        entity_id=stop.id,
-        action="corridor_stop_updated",
-        old={"version": before.version, "is_active": before.is_active},
-        new=changed,
-        reason=None,
-    )
-    return get_stop(db, stop.id)
-
-
 # --- route versions -----------------------------------------------------------------------------
 
 
@@ -1092,22 +634,17 @@ def routing_request_hash(provider: str, provider_version: str, waypoints: Sequen
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")).hexdigest()
 
 
-def prepare_route_preview(db: Session, provider: RoutingProvider, *, stop_api_ids: Sequence[str], departure_at: datetime) -> RoutePreviewPlan:
-    """Phase 1 (read-only): validate stops/corridor and look up the routing cache."""
+def prepare_road_preview(
+    db: Session, provider: RoutingProvider, *, corridor_api_id: str, origin: LatLng, destination: LatLng, departure_at: datetime
+) -> RoutePreviewPlan:
+    """ADR-0028 (read-only): a road between two places - A and B, nothing in between."""
     ensure_aware_utc(departure_at, field="departure_at")
-    if not 2 <= len(stop_api_ids) <= 25:
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "stop_ids", "reason": "between_2_and_25"})
-    if any(a == b for a, b in zip(stop_api_ids, stop_api_ids[1:])):
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "stop_ids", "reason": "consecutive_duplicate"})
-    stops = tuple(get_stop_by_api_id(db, api_id) for api_id in stop_api_ids)
-    corridor_ids = {stop.corridor_id for stop in stops}
-    if len(corridor_ids) != 1:
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "stop_ids", "reason": "stops_from_different_corridors"})
-    corridor = get_corridor(db, corridor_ids.pop())
-    inactive = [stop.api_id for stop in stops if not stop.is_active]
-    if not corridor.is_operable or inactive:
-        raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"corridor_id": corridor.api_id, "inactive_stop_ids": inactive})
-    waypoints = tuple(stop.point for stop in stops)
+    corridor = get_corridor_by_api_id(db, corridor_api_id)
+    if not corridor.is_operable:
+        raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"corridor_id": corridor.api_id})
+    if (origin.lat, origin.lng) == (destination.lat, destination.lng):
+        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "destination", "reason": "same_point"})
+    waypoints = (origin, destination)
     request_hash = routing_request_hash(provider.name, provider.version, waypoints)
     cached_json = db.scalar(
         text("SELECT response FROM routing_cache WHERE provider = :p AND request_hash = :h AND expires_at > now()"),
@@ -1119,7 +656,7 @@ def prepare_route_preview(db: Session, provider: RoutingProvider, *, stop_api_id
             cached = RouteResult.from_cache_json(cached_json)
         except (KeyError, TypeError, ValueError):
             cached = None
-    return RoutePreviewPlan(corridor, stops, waypoints, provider.name, provider.version, request_hash, cached)
+    return RoutePreviewPlan(corridor, waypoints, provider.name, provider.version, request_hash, cached)
 
 
 def _routing_unavailable(provider: str, reason: str) -> DomainError:
@@ -1198,21 +735,6 @@ def store_route_preview(
     )
     db.add(route)
     db.flush()
-    cumulative_m = cumulative_s = 0
-    for seq, stop in enumerate(plan.stops):
-        if seq > 0:
-            leg = result.legs[seq - 1]
-            cumulative_m += leg.distance_m
-            cumulative_s += leg.duration_s
-        db.execute(
-            text(
-                "INSERT INTO route_version_stops "
-                "(route_version_id, seq, stop_id, cumulative_distance_m, cumulative_duration_s, line_fraction) "
-                "SELECT rv.id, :seq, cs.id, :cm, :cs, round(ST_LineLocatePoint(rv.geometry, cs.point)::numeric, 7) "
-                "FROM route_versions rv JOIN corridor_stops cs ON cs.id = :stop WHERE rv.id = :rv"
-            ),
-            {"rv": route.id, "seq": seq, "stop": stop.id, "cm": cumulative_m, "cs": cumulative_s},
-        )
     return get_route_version(db, route.id)
 
 
@@ -1222,12 +744,6 @@ def _route_version_info(db: Session, where: Any) -> RouteVersionInfo | None:
         return None
     route: RouteVersion = row[0]
     coords = json.loads(row.geojson)["coordinates"]
-    stops = db.execute(
-        select(RouteVersionStop, CorridorStop.public_id)
-        .join(CorridorStop, CorridorStop.id == RouteVersionStop.stop_id)
-        .where(RouteVersionStop.route_version_id == route.id)
-        .order_by(RouteVersionStop.seq)
-    ).all()
     return RouteVersionInfo(
         id=route.id,
         public_id=route.public_id,
@@ -1241,10 +757,6 @@ def _route_version_info(db: Session, where: Any) -> RouteVersionInfo | None:
         duration_s=route.duration_s,
         is_estimate=route.is_estimate,
         geometry=tuple(LatLng(lat=c[1], lng=c[0]) for c in coords),
-        stops=tuple(
-            RouteVersionStopInfo(s.seq, s.stop_id, stop_public_id, s.cumulative_distance_m, s.cumulative_duration_s, s.line_fraction)
-            for s, stop_public_id in stops
-        ),
         confirmed_at=route.confirmed_at,
         created_at=route.created_at,
     )
@@ -1315,31 +827,23 @@ def corridor_point_offset_m(db: Session, corridor_id: int) -> int:
 
 @dataclass(frozen=True)
 class RouteProjection:
-    """Where a marked place falls on a confirmed road (Q88).
+    """Where a marked place falls on a confirmed road (Q88, ADR-0028).
 
-    ``fraction`` is the position along the line (0..1), ``offset_m`` how far the place is from the road, and
-    ``seq_before`` the route stop the projection falls *after* - that is the segment whose capacity the booking
-    consumes, so `booking_allocations` keeps working unchanged (AC12). The cumulative values are interpolated
-    between the two surrounding stops, which is what an ETA for a mid-segment pickup has to be built on
-    (spec §6.3 step 5).
+    ``fraction`` is the position along the line (0..1) and ``offset_m`` how far the place is from the road. Distance
+    and time from the road's start are the road's own, linear along it - there is nothing in between A and B.
     """
 
     route_version_id: int
     fraction: float
     offset_m: int
-    seq_before: int
-    seq_after: int
     cumulative_distance_m: int
     cumulative_duration_s: int
-    #: Where the place sits *within* its segment, 0..1. The trip's own arrival times are interpolated with
-    #: this, because a driver's plan - not the route's estimate - is what actually happens.
-    segment_ratio: float
 
 
 def project_point_on_route(
     db: Session, *, route_version_id: int, point: LatLng, max_offset_m: int = MAX_POINT_ROUTE_OFFSET_M
 ) -> RouteProjection | None:
-    """Project a marked place onto a confirmed route, or ``None`` if it is too far from it.
+    """Project a marked place onto a confirmed road, or ``None`` if it is too far from it.
 
     This is the check that keeps Q88 from becoming "anywhere on the map": the place has to sit on the road the
     driver actually agreed to drive. ``ST_LineLocatePoint`` is the mechanism the spec already names for this
@@ -1351,7 +855,8 @@ def project_point_on_route(
         text(
             """
             SELECT ST_LineLocatePoint(rv.geometry, p.geom) AS fraction,
-                   ST_Distance(rv.geometry::geography, p.geom::geography) AS offset_m
+                   ST_Distance(rv.geometry::geography, p.geom::geography) AS offset_m,
+                   rv.distance_m, rv.duration_s
               FROM route_versions rv,
                    (SELECT ST_SetSRID(ST_MakePoint(:lng, :lat), 4326) AS geom) p
              WHERE rv.id = :route_id
@@ -1364,50 +869,38 @@ def project_point_on_route(
     offset_m = int(round(float(row.offset_m)))
     if offset_m > max_offset_m:
         return None
-
     fraction = float(row.fraction)
-    stops = db.execute(
-        select(
-            RouteVersionStop.seq,
-            RouteVersionStop.line_fraction,
-            RouteVersionStop.cumulative_distance_m,
-            RouteVersionStop.cumulative_duration_s,
-        )
-        .where(RouteVersionStop.route_version_id == route_version_id)
-        .order_by(RouteVersionStop.seq)
-    ).all()
-    if len(stops) < 2:
-        return None
-
-    # The segment the projection falls in: the last stop at or before it, clamped so the final stop is never
-    # the "start" of a segment that has no end.
-    index = 0
-    for position, stop in enumerate(stops):
-        if float(stop.line_fraction) <= fraction:
-            index = position
-    index = min(index, len(stops) - 2)
-    before, after = stops[index], stops[index + 1]
-
-    span = float(after.line_fraction) - float(before.line_fraction)
-    ratio = 0.0 if span <= 0 else max(0.0, min(1.0, (fraction - float(before.line_fraction)) / span))
     return RouteProjection(
         route_version_id=route_version_id,
         fraction=fraction,
         offset_m=offset_m,
-        seq_before=int(before.seq),
-        seq_after=int(after.seq),
-        cumulative_distance_m=int(
-            round(before.cumulative_distance_m + ratio * (after.cumulative_distance_m - before.cumulative_distance_m))
-        ),
-        cumulative_duration_s=int(
-            round(before.cumulative_duration_s + ratio * (after.cumulative_duration_s - before.cumulative_duration_s))
-        ),
-        segment_ratio=ratio,
+        cumulative_distance_m=int(round(fraction * row.distance_m)),
+        cumulative_duration_s=int(round(fraction * row.duration_s)),
     )
 
 
+def route_distance_m(db: Session, route_version_id: int) -> int | None:
+    """The confirmed road's length in metres (ADR-0028: what turns a line fraction into a road position)."""
+    value = db.execute(select(RouteVersion.distance_m).where(RouteVersion.id == route_version_id)).scalar_one_or_none()
+    return None if value is None else int(value)
+
+
+def route_position_m(db: Session, *, route_version_id: int, point: LatLng) -> int | None:
+    """ADR-0028 (Q159): metres along the confirmed road from its start to where a place sits on it -
+    ``round(ST_LineLocatePoint(geometry, point) * distance_m)``. ``None`` when the road does not exist. No radius
+    check: that is matching's job."""
+    value = db.execute(
+        text(
+            "SELECT round(ST_LineLocatePoint(rv.geometry, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)) * rv.distance_m)::int "
+            "FROM route_versions rv WHERE rv.id = :route_id"
+        ),
+        {"route_id": route_version_id, "lat": float(point.lat), "lng": float(point.lng)},
+    ).scalar_one_or_none()
+    return None if value is None else int(value)
+
+
 def confirm_route_version(db: Session, *, actor_user_id: int, route_version_api_id: str, now: datetime | None = None) -> RouteVersionInfo:
-    """G6: the creator confirms a fresh draft whose corridor and stops are still active."""
+    """G6: the creator confirms a fresh draft whose corridor is still operable."""
     public_id = parse_public_id(route_version_api_id, PublicIdPrefix.ROUTE_VERSION)
     route = db.scalar(select(RouteVersion).where(RouteVersion.public_id == public_id).with_for_update())
     if route is None or route.created_by_user_id != actor_user_id:
@@ -1417,104 +910,13 @@ def confirm_route_version(db: Session, *, actor_user_id: int, route_version_api_
         raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "route_version", "from": route.status, "to": "confirmed"})
     if current - route.created_at > ROUTE_DRAFT_TTL:
         raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "route_version", "reason": "draft_expired"})
-    info = get_route_version(db, route.id)
     corridor = get_corridor(db, route.corridor_id)
-    stops = get_stops(db, [s.stop_id for s in info.stops])
-    inactive = [stops[s.stop_id].api_id for s in info.stops if not stops[s.stop_id].is_active]
-    if not corridor.is_operable or inactive:
-        raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"corridor_id": corridor.api_id, "inactive_stop_ids": inactive})
+    if not corridor.is_operable:
+        raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"corridor_id": corridor.api_id})
     route.status = "confirmed"
     route.confirmed_at = current
     db.flush()
     return get_route_version(db, route.id)
-
-
-def planned_occurrences_from_route_version(
-    route: RouteVersionInfo, *, planned_start_at: datetime, dwell_minutes: int = 0
-) -> tuple[OccurrenceTiming, ...]:
-    """Default schedule for a trip on this route (A1 may override per stop):
-    arrival = start + cumulative driving time + dwell at every earlier intermediate stop."""
-    start = ensure_aware_utc(planned_start_at, field="planned_start_at")
-    result: list[OccurrenceTiming] = []
-    for index, stop in enumerate(route.stops):
-        dwell_before = dwell_minutes * max(0, index - 1) if index > 0 else 0
-        arrival = start + timedelta(seconds=stop.cumulative_duration_s, minutes=dwell_before)
-        is_intermediate = 0 < index < len(route.stops) - 1
-        result.append(OccurrenceTiming(stop.seq, stop.stop_id, arrival, dwell_minutes if is_intermediate else 0))
-    return tuple(result)
-
-
-# --- matching ---------------------------------------------------------------------------------------
-
-# Confirmed route versions near BOTH stops, newest first (BR #15). Exposed for the GiST plan test (BR #17).
-FIND_CANDIDATES_SQL = """
-WITH p AS (SELECT point FROM corridor_stops WHERE id = :pickup),
-     d AS (SELECT point FROM corridor_stops WHERE id = :dropoff)
-SELECT rv.id, rv.corridor_id, rv.confirmed_at,
-       round(ST_Distance(rv.geometry::geography, p.point::geography))::int AS pickup_distance_m,
-       round(ST_Distance(rv.geometry::geography, d.point::geography))::int AS dropoff_distance_m,
-       round(ST_LineLocatePoint(rv.geometry, p.point)::numeric, 7) AS pickup_fraction,
-       round(ST_LineLocatePoint(rv.geometry, d.point)::numeric, 7) AS dropoff_fraction,
-       ARRAY(SELECT s.seq FROM route_version_stops s WHERE s.route_version_id = rv.id AND s.stop_id = :pickup ORDER BY s.seq) AS pickup_seqs,
-       ARRAY(SELECT s.seq FROM route_version_stops s WHERE s.route_version_id = rv.id AND s.stop_id = :dropoff ORDER BY s.seq) AS dropoff_seqs
-FROM route_versions rv, p, d
-WHERE rv.status = 'confirmed'
-  AND ST_DWithin(rv.geometry::geography, p.point::geography, :radius)
-  AND ST_DWithin(rv.geometry::geography, d.point::geography, :radius)
-  AND (CAST(:corridor_id AS bigint) IS NULL OR rv.corridor_id = CAST(:corridor_id AS bigint))
-ORDER BY rv.confirmed_at DESC, rv.id DESC
-LIMIT :limit
-"""
-
-
-def find_candidates(
-    db: Session,
-    *,
-    pickup_stop_id: int,
-    dropoff_stop_id: int,
-    search_radius_m: int | None = None,
-    corridor_id: int | None = None,
-    limit: int = 100,
-) -> list[RouteCandidate]:
-    """Confirmed route versions passing within ``search_radius_m`` metres of BOTH stops.
-
-    ``ST_DWithin(geometry::geography, point::geography, metres)`` on GiST expression indexes.
-    Default radius: the pickup stop's corridor config. Newest confirmed routes first; callers
-    filter by trip date/status in their own module.
-    """
-    if search_radius_m is None:
-        search_radius_m = get_corridor(db, get_stop(db, pickup_stop_id).corridor_id).config.search_radius_m
-    if search_radius_m <= 0:
-        raise ValueError("search_radius_m must be positive")
-    rows = db.execute(
-        text(FIND_CANDIDATES_SQL),
-        {"pickup": pickup_stop_id, "dropoff": dropoff_stop_id, "radius": search_radius_m, "corridor_id": corridor_id, "limit": limit},
-    ).all()
-    return [
-        RouteCandidate(
-            r.id, r.corridor_id, r.pickup_distance_m, r.dropoff_distance_m, r.pickup_fraction, r.dropoff_fraction,
-            tuple(r.pickup_seqs), tuple(r.dropoff_seqs), r.confirmed_at,
-        )
-        for r in rows
-    ]
-
-
-def measure_detours_outside_transaction(
-    db: Session | None,
-    provider: RoutingProvider,
-    trip: TripRouteContext,
-    request: MatchRequest,
-    stop_points: Mapping[int, LatLng],
-    *,
-    now: datetime | None = None,
-) -> DetourMeasurements:
-    """Router detour probes returning ``DetourQuote`` snapshots (spec §6.3 step 4, BR #3).
-
-    Load ``stop_points`` first, end the transaction, then call. A4 later validates the quotes under
-    lock with ``validate_detour_quote`` and ``verify_existing_windows`` (no router call).
-    """
-    assert_outside_transaction(db)
-    return measure_detours(provider, trip, request, stop_points, now=now)
 
 
 # --- feature flags ------------------------------------------------------------------------------------
@@ -1810,10 +1212,6 @@ class PriceBandInfo:
     corridor_id: int
     corridor_public_id: uuid.UUID
     service_type: ServiceType
-    origin_stop_id: int | None
-    origin_stop_public_id: uuid.UUID | None
-    destination_stop_id: int | None
-    destination_stop_public_id: uuid.UUID | None
     floor_minor: int
     ceiling_minor: int
     currency: str
@@ -1834,8 +1232,6 @@ class PriceBandInfo:
         return PriceBand(
             corridor_id=self.corridor_id,
             service_type=self.service_type,
-            origin_stop_id=self.origin_stop_id,
-            destination_stop_id=self.destination_stop_id,
             floor_minor=self.floor_minor,
             ceiling_minor=self.ceiling_minor,
             is_active=self.is_active,
@@ -1848,8 +1244,6 @@ class PriceBandInfo:
 class PriceBandChangeInfo:
     id: int
     service_type: ServiceType
-    origin_stop_public_id: uuid.UUID | None
-    destination_stop_public_id: uuid.UUID | None
     band_version: int
     old_floor_minor: int | None
     old_ceiling_minor: int | None
@@ -1862,19 +1256,16 @@ class PriceBandChangeInfo:
     changed_at: datetime
 
 
+# ADR-0028 / Q160: a band is corridor-wide. Legacy stop-pair rows (``origin_stop_id`` set) are history: switched off,
+# never read, never written again (0101 refuses a new stop reference).
+_CORRIDOR_WIDE = CorridorPriceBand.origin_stop_id.is_(None)
+
+
 def _band_query():  # noqa: ANN202
-    origin = CorridorStop.__table__.alias("band_origin")
-    destination = CorridorStop.__table__.alias("band_destination")
     return (
-        select(
-            CorridorPriceBand,
-            ServiceCorridor.public_id.label("corridor_public_id"),
-            origin.c.public_id.label("origin_public_id"),
-            destination.c.public_id.label("destination_public_id"),
-        )
+        select(CorridorPriceBand, ServiceCorridor.public_id.label("corridor_public_id"))
         .join(ServiceCorridor, ServiceCorridor.id == CorridorPriceBand.corridor_id)
-        .outerjoin(origin, origin.c.id == CorridorPriceBand.origin_stop_id)
-        .outerjoin(destination, destination.c.id == CorridorPriceBand.destination_stop_id)
+        .where(_CORRIDOR_WIDE)
     )
 
 
@@ -1882,7 +1273,6 @@ def _band_info(row: Any) -> PriceBandInfo:
     band: CorridorPriceBand = row[0]
     return PriceBandInfo(
         band.id, band.corridor_id, row.corridor_public_id, ServiceType(band.service_type),
-        band.origin_stop_id, row.origin_public_id, band.destination_stop_id, row.destination_public_id,
         band.floor_minor, band.ceiling_minor, band.currency, band.is_active, band.enforced, band.version,
         band.reason, band.updated_by, band.updated_at,
     )
@@ -1890,51 +1280,30 @@ def _band_info(row: Any) -> PriceBandInfo:
 
 def list_price_bands(db: Session, corridor: CorridorInfo) -> list[PriceBandInfo]:
     rows = db.execute(
-        _band_query()
-        .where(CorridorPriceBand.corridor_id == corridor.id)
-        .order_by(CorridorPriceBand.service_type, CorridorPriceBand.origin_stop_id.is_not(None), CorridorPriceBand.id)
+        _band_query().where(CorridorPriceBand.corridor_id == corridor.id).order_by(CorridorPriceBand.service_type, CorridorPriceBand.id)
     ).all()
     return [_band_info(row) for row in rows]
 
 
-def resolve_price_band(
-    db: Session,
-    *,
-    corridor_id: int,
-    service_type: ServiceType,
-    origin_stop_id: int | None,
-    destination_stop_id: int | None,
-) -> PriceBand | None:
-    """Q42 reference band for a proposal segment (read-only): the active segment band, else the active
-    corridor-wide band, else ``None``.
-
-    Q88: either end may be a map point instead of a stop, and then there is no segment to look up - the
-    corridor-wide band answers for the whole direction. A point-ended listing is therefore *never* without a
-    price reference merely because it was marked on the map, which is what kept it out of the ranking before.
+def resolve_price_band(db: Session, *, corridor_id: int, service_type: ServiceType) -> PriceBand | None:
+    """Q42 reference band for a direction (read-only): the corridor's active band, else ``None``.
 
     Q90: what comes back advises (ranking, warning) and only refuses when the band is ``enforced``.
     """
     svc = ServiceType(service_type)
-    segment_scoped = origin_stop_id is not None and destination_stop_id is not None
-    scope = (
-        CorridorPriceBand.origin_stop_id.is_(None)
-        | ((CorridorPriceBand.origin_stop_id == origin_stop_id) & (CorridorPriceBand.destination_stop_id == destination_stop_id))
-        if segment_scoped
-        else CorridorPriceBand.origin_stop_id.is_(None)
-    )
     rows = db.scalars(
         select(CorridorPriceBand).where(
             CorridorPriceBand.corridor_id == corridor_id,
             CorridorPriceBand.service_type == svc.value,
             CorridorPriceBand.is_active.is_(True),
-            scope,
+            _CORRIDOR_WIDE,
         )
     ).all()
     bands = [
-        PriceBand(r.corridor_id, ServiceType(r.service_type), r.origin_stop_id, r.destination_stop_id, r.floor_minor, r.ceiling_minor, r.is_active, r.version, r.currency, r.enforced)
+        PriceBand(r.corridor_id, ServiceType(r.service_type), r.floor_minor, r.ceiling_minor, r.is_active, r.version, r.currency, r.enforced)
         for r in rows
     ]
-    return select_price_band(bands, corridor_id=corridor_id, service_type=svc, origin_stop_id=origin_stop_id, destination_stop_id=destination_stop_id)
+    return select_price_band(bands, corridor_id=corridor_id, service_type=svc)
 
 
 def _band_invalid(field: str, reason: str) -> DomainError:
@@ -1947,8 +1316,6 @@ def set_price_band(
     actor_user_id: int,
     corridor_api_id: str,
     service_type: ServiceType,
-    origin_stop_api_id: str | None,
-    destination_stop_api_id: str | None,
     floor_minor: int,
     ceiling_minor: int,
     is_active: bool,
@@ -1959,18 +1326,6 @@ def set_price_band(
     """Versioned upsert of one band scope (G13). History row by DB trigger; staff action audited."""
     svc = ServiceType(service_type)
     corridor = get_corridor_by_api_id(db, corridor_api_id)
-    if (origin_stop_api_id is None) != (destination_stop_api_id is None):
-        raise _band_invalid("origin_stop_id", "segment_needs_both_stops")
-    origin_id = destination_id = None
-    if origin_stop_api_id is not None and destination_stop_api_id is not None:
-        if origin_stop_api_id == destination_stop_api_id:
-            raise _band_invalid("destination_stop_id", "same_stop")
-        stops = get_stops_by_api_ids(db, [origin_stop_api_id, destination_stop_api_id])
-        for field, api_id in (("origin_stop_id", origin_stop_api_id), ("destination_stop_id", destination_stop_api_id)):
-            info = stops.get(api_id)
-            if info is None or info.corridor_id != corridor.id:
-                raise _band_invalid(field, "stop_not_in_corridor")
-        origin_id, destination_id = stops[origin_stop_api_id].id, stops[destination_stop_api_id].id
     for field, value in (("floor_minor", floor_minor), ("ceiling_minor", ceiling_minor)):
         try:
             validate_minor_amount(value, allow_zero=False, name=field)
@@ -1987,8 +1342,7 @@ def set_price_band(
         .where(
             CorridorPriceBand.corridor_id == corridor.id,
             CorridorPriceBand.service_type == svc.value,
-            CorridorPriceBand.origin_stop_id.is_not_distinct_from(origin_id),
-            CorridorPriceBand.destination_stop_id.is_not_distinct_from(destination_id),
+            _CORRIDOR_WIDE,
         )
         .with_for_update(key_share=True)
     )
@@ -1998,11 +1352,11 @@ def set_price_band(
             raise DomainError(ErrorCode.VERSION_CONFLICT, details={"current_version": None})
         band_id = db.scalar(
             text(
-                "INSERT INTO corridor_price_bands (public_id, corridor_id, service_type, price_basis, origin_stop_id, destination_stop_id, "
+                "INSERT INTO corridor_price_bands (public_id, corridor_id, service_type, price_basis, "
                 "floor_minor, ceiling_minor, is_active, enforced, reason, version, updated_by) "
-                "VALUES (:p, :corridor, :s, :basis, :o, :d, :f, :c, :a, :e, :r, 1, :u) ON CONFLICT DO NOTHING RETURNING id"
+                "VALUES (:p, :corridor, :s, :basis, :f, :c, :a, :e, :r, 1, :u) ON CONFLICT DO NOTHING RETURNING id"
             ),
-            {**params, "p": new_public_uuid(), "corridor": corridor.id, "s": svc.value, "basis": PRICE_BAND_BASIS[svc].value, "o": origin_id, "d": destination_id},
+            {**params, "p": new_public_uuid(), "corridor": corridor.id, "s": svc.value, "basis": PRICE_BAND_BASIS[svc].value},
         )
         if band_id is None:  # a concurrent writer created this scope first
             raise DomainError(ErrorCode.VERSION_CONFLICT, details={"current_version": 1})
@@ -2033,8 +1387,7 @@ def set_price_band(
         action="corridor_price_band_set",
         old=old,
         new={
-            "corridor": corridor.api_id, "service_type": svc.value, "origin_stop_id": origin_stop_api_id,
-            "destination_stop_id": destination_stop_api_id, "floor_minor": floor_minor, "ceiling_minor": ceiling_minor,
+            "corridor": corridor.api_id, "service_type": svc.value, "floor_minor": floor_minor, "ceiling_minor": ceiling_minor,
             "is_active": is_active, "enforced": bool(enforced), "version": info.version,
         },
         reason=clean_reason,
@@ -2043,20 +1396,15 @@ def set_price_band(
 
 
 def list_price_band_history(db: Session, *, corridor: CorridorInfo, after_id: int | None, limit: int) -> tuple[list[PriceBandChangeInfo], int | None]:
-    origin = CorridorStop.__table__.alias("change_origin")
-    destination = CorridorStop.__table__.alias("change_destination")
-    query = (
-        select(CorridorPriceBandChange, origin.c.public_id.label("origin_public_id"), destination.c.public_id.label("destination_public_id"))
-        .outerjoin(origin, origin.c.id == CorridorPriceBandChange.origin_stop_id)
-        .outerjoin(destination, destination.c.id == CorridorPriceBandChange.destination_stop_id)
-        .where(CorridorPriceBandChange.corridor_id == corridor.id)
+    query = select(CorridorPriceBandChange).where(
+        CorridorPriceBandChange.corridor_id == corridor.id, CorridorPriceBandChange.origin_stop_id.is_(None)
     )
     if after_id is not None:
         query = query.where(CorridorPriceBandChange.id < after_id)
     rows = db.execute(query.order_by(CorridorPriceBandChange.id.desc()).limit(limit + 1)).all()
     items = [
         PriceBandChangeInfo(
-            c.id, ServiceType(c.service_type), row.origin_public_id, row.destination_public_id, c.band_version,
+            c.id, ServiceType(c.service_type), c.band_version,
             c.old_floor_minor, c.old_ceiling_minor, c.old_is_active, c.new_floor_minor, c.new_ceiling_minor,
             c.new_is_active, c.actor_user_id, c.reason, c.changed_at,
         )
@@ -2106,8 +1454,8 @@ class Q47Violation:
     corridor_public_id: uuid.UUID
     name: str
     rollout_state: CorridorRolloutState
-    active_stops: int
-    stops_missing_evidence: tuple[str, ...]
+    #: ADR-0028: the only public-corridor condition left - a confirmed road.
+    confirmed_roads: int = 0
 
     @property
     def api_id(self) -> str:
@@ -2115,46 +1463,32 @@ class Q47Violation:
 
     @property
     def reasons(self) -> tuple[str, ...]:
-        reasons: list[str] = []
-        if self.active_stops < PILOT_MIN_ACTIVE_STOPS:
-            reasons.append("needs_two_active_stops")
-        if self.stops_missing_evidence:
-            reasons.append("stops_missing_meeting_evidence")
-        return tuple(reasons)
+        return () if self.confirmed_roads else ("needs_confirmed_road",)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "corridor_id": self.api_id,
             "name": self.name,
             "rollout_state": self.rollout_state.value,
-            "active_stops": self.active_stops,
-            "stops_missing_evidence": list(self.stops_missing_evidence),
             "reasons": list(self.reasons),
         }
 
 
+# ADR-0028 (replaces Q47's stop conditions): a pilot/active corridor without a confirmed road.
 Q47_VIOLATIONS_SQL = """
 SELECT c.id, c.public_id, c.name, c.rollout_state,
-       count(s.id) FILTER (WHERE s.is_active) AS active_stops,
-       coalesce(array_agg(s.public_id ORDER BY s.id) FILTER (
-           WHERE s.is_active AND (s.meeting_note IS NULL OR btrim(s.meeting_note) = '') AND s.meeting_photo_file_id IS NULL
-       ), '{}') AS missing
+       (SELECT count(*) FROM route_versions rv WHERE rv.corridor_id = c.id AND rv.status = 'confirmed') AS roads
 FROM service_corridors c
-LEFT JOIN corridor_stops s ON s.corridor_id = c.id
 WHERE c.rollout_state IN ('pilot', 'active')
-GROUP BY c.id, c.public_id, c.name, c.rollout_state
-HAVING count(s.id) FILTER (WHERE s.is_active) < 2
-    OR count(s.id) FILTER (
-           WHERE s.is_active AND (s.meeting_note IS NULL OR btrim(s.meeting_note) = '') AND s.meeting_photo_file_id IS NULL
-       ) > 0
+  AND NOT EXISTS (SELECT 1 FROM route_versions rv WHERE rv.corridor_id = c.id AND rv.status = 'confirmed')
 ORDER BY c.id
 """
 
 
 def find_q47_violations(db: Session) -> list[Q47Violation]:
-    """Pilot/active corridors that already break Q47. Read-only; repair per ``app.modules.geo.checks`` runbook."""
+    """Pilot/active corridors without a confirmed road (ADR-0028). Read-only; repair per the geo checks runbook."""
     return [
-        Q47Violation(r.id, r.public_id, r.name, CorridorRolloutState(r.rollout_state), int(r.active_stops), tuple(stop_api_id(u) for u in r.missing))
+        Q47Violation(r.id, r.public_id, r.name, CorridorRolloutState(r.rollout_state), int(r.roads))
         for r in db.execute(text(Q47_VIOLATIONS_SQL)).all()
     ]
 
@@ -2178,7 +1512,7 @@ def readiness_notices(db: Session) -> list[str]:
 
     * ``q47_violations_present`` - a pilot/active corridor breaks Q47 (details: ``find_q47_violations``);
     * ``production_flag_violations_present`` - production flag rows contradict Q1/Q5 (``production_flag_violations``);
-    * ``routing_provider_disabled`` - no routing provider: detour matches are unavailable, stop matches work
+    * ``routing_provider_disabled`` - no routing provider: new roads come only from the confirmed catalogue
       (always in production, Q24/Q46);
     * ``geo_readiness_check_error`` - one of the checks could not run (logged); the others still report.
     Each check runs in its own savepoint so a failing query does not poison the caller's transaction.
@@ -2209,33 +1543,6 @@ def readiness_notices(db: Session) -> list[str]:
 # --- F3/Q53: operator warning on price band configuration ---------------------------------------------
 
 
-def price_band_warnings(db: Session, *, corridor_id: int, service_type: ServiceType) -> list[dict[str, Any]]:
-    """Warn when the active corridor-wide floor is above the lowest active segment floor: corridor-wide bands
-    are meant as loose safety limits, exact segment bands set real prices (Q53)."""
-    svc = ServiceType(service_type)
-    rows = db.execute(
-        select(CorridorPriceBand.origin_stop_id.is_(None).label("corridor_wide"), func.min(CorridorPriceBand.floor_minor))
-        .where(
-            CorridorPriceBand.corridor_id == corridor_id,
-            CorridorPriceBand.service_type == svc.value,
-            CorridorPriceBand.is_active.is_(True),
-        )
-        .group_by(CorridorPriceBand.origin_stop_id.is_(None))
-    ).all()
-    corridor_floor = next((floor for wide, floor in rows if wide), None)
-    segment_floor = next((floor for wide, floor in rows if not wide), None)
-    if corridor_floor is not None and segment_floor is not None and corridor_floor > segment_floor:
-        return [
-            {
-                "code": "CORRIDOR_FLOOR_ABOVE_SEGMENT_FLOOR",
-                "service_type": svc.value,
-                "corridor_floor_minor": int(corridor_floor),
-                "lowest_segment_floor_minor": int(segment_floor),
-            }
-        ]
-    return []
-
-
 # --- districts as a direction unit (wave 10) ---------------------------------------------
 
 
@@ -2256,9 +1563,6 @@ class DistrictInfo:
     #: placed yet; the client then falls back to the region.
     center_lat: float | None
     center_lng: float | None
-    #: Active stops of publicly visible corridors that sit in this district. Zero means the district can be
-    #: named in a search, but no verified stop serves it yet - the client says so instead of promising a ride.
-    stops_count: int
 
     @property
     def api_id(self) -> str:
@@ -2267,26 +1571,21 @@ class DistrictInfo:
 
 @dataclass(frozen=True, slots=True)
 class CorridorDistrictInfo:
-    """One district on a corridor, in travel order.
+    """One district a corridor's confirmed road passes, in travel order (ADR-0028).
 
-    ``on_confirmed_route`` is the whole honesty of this type. ``True`` means some confirmed route version of
-    the corridor really stops in that district, so a listing there can be served without leaving the road the
-    driver agreed to. ``False`` means the district merely owns a stop of the corridor while no confirmed route
-    passes it yet - the catalogue knows the place, the road does not (spec 6.1: not every Tashkent -> Qarshi
-    route goes through Chiroqchi).
+    A district is on the road when its centre lies within the corridor's radius of a confirmed road - the same
+    projection a client's map point gets (Q88). ``on_confirmed_route`` is therefore always true; a district the road
+    does not reach is simply not listed (spec 6.1: not every Tashkent -> Qarshi road goes through Chiroqchi).
     """
 
     district: DistrictInfo
     sequence: int
-    stops_count: int
-    on_confirmed_route: bool
+    on_confirmed_route: bool = True
 
 
 _DISTRICT_SELECT = (
     "SELECT d.id, d.public_id, d.region_id, r.public_id AS region_public_id, r.code AS region_code, "
-    "r.name_uz AS region_name_uz, d.name_uz, d.name_ru, d.is_active, d.center_lat, d.center_lng, "
-    "(SELECT count(*) FROM corridor_stops cs JOIN service_corridors sc ON sc.id = cs.corridor_id "
-    " WHERE cs.geo_district_id = d.id AND cs.is_active AND sc.rollout_state = ANY(:public_states)) AS stops_count "
+    "r.name_uz AS region_name_uz, d.name_uz, d.name_ru, d.is_active, d.center_lat, d.center_lng "
     "FROM geo_districts d JOIN regions r ON r.id = d.region_id"
 )
 
@@ -2304,12 +1603,7 @@ def _district_info(row: Any) -> DistrictInfo:  # noqa: ANN401 - Row
         is_active=row.is_active,
         center_lat=float(row.center_lat) if row.center_lat is not None else None,
         center_lng=float(row.center_lng) if row.center_lng is not None else None,
-        stops_count=int(row.stops_count or 0),
     )
-
-
-def _public_states() -> list[str]:
-    return [state.value for state in PUBLIC_ROLLOUT_STATES]
 
 
 def list_districts(
@@ -2326,7 +1620,7 @@ def list_districts(
     this never invents one, so an empty answer means "nobody has entered them yet", not "there are none".
     """
     clauses = []
-    params: dict[str, Any] = {"public_states": _public_states(), "limit": max(1, min(int(limit), 500))}
+    params: dict[str, Any] = {"limit": max(1, min(int(limit), 500))}
     if region is not None:
         clauses.append("d.region_id = :region_id")
         params["region_id"] = region.id
@@ -2349,8 +1643,7 @@ def districts_by_ids(db: Session, district_ids: Iterable[int]) -> dict[int, Dist
     if not ids:
         return {}
     rows = db.execute(
-        text(f"{_DISTRICT_SELECT} WHERE d.id = ANY(:ids)"),
-        {"ids": ids, "public_states": _public_states()},
+        text(f"{_DISTRICT_SELECT} WHERE d.id = ANY(:ids)"), {"ids": ids}
     ).all()
     return {row.id: _district_info(row) for row in rows}
 
@@ -2358,72 +1651,35 @@ def districts_by_ids(db: Session, district_ids: Iterable[int]) -> dict[int, Dist
 def get_district_by_api_id(db: Session, api_id: str) -> DistrictInfo:
     public_id = parse_public_id(api_id, PublicIdPrefix.DISTRICT)
     row = db.execute(
-        text(f"{_DISTRICT_SELECT} WHERE d.public_id = :u"),
-        {"u": public_id, "public_states": _public_states()},
+        text(f"{_DISTRICT_SELECT} WHERE d.public_id = :u"), {"u": public_id}
     ).first()
     if row is None:
         raise DomainError(ErrorCode.NOT_FOUND)
     return _district_info(row)
 
 
-_CORRIDOR_ROUTE_DISTRICTS_SQL = text(
-    "SELECT rvs.route_version_id, rvs.seq, cs.geo_district_id AS district_id "
-    "FROM route_version_stops rvs "
-    "JOIN route_versions rv ON rv.id = rvs.route_version_id "
-    "JOIN corridor_stops cs ON cs.id = rvs.stop_id "
-    "WHERE rv.corridor_id = :corridor AND rv.status = 'confirmed' "
-    "ORDER BY rvs.route_version_id, rvs.seq"
-)
-
-_CORRIDOR_STOP_DISTRICTS_SQL = text(
-    "SELECT cs.geo_district_id AS district_id, min(cs.sequence_hint) AS seq, count(*) AS stops_count "
-    "FROM corridor_stops cs WHERE cs.corridor_id = :corridor AND cs.is_active "
-    "GROUP BY cs.geo_district_id ORDER BY seq, district_id"
+_CORRIDOR_ROAD_DISTRICTS_SQL = text(
+    "SELECT d.id AS district_id, min(ST_LineLocatePoint(rv.geometry, c.geom)) AS fraction "
+    "FROM geo_districts d "
+    "CROSS JOIN LATERAL (SELECT ST_SetSRID(ST_MakePoint(d.center_lng::float8, d.center_lat::float8), 4326) AS geom) c "
+    "JOIN route_versions rv ON rv.corridor_id = :corridor AND rv.status = 'confirmed' "
+    "WHERE d.is_active AND d.center_lat IS NOT NULL AND d.center_lng IS NOT NULL "
+    "AND ST_DWithin(rv.geometry::geography, c.geom::geography, :radius) "
+    "GROUP BY d.id ORDER BY fraction, d.id"
 )
 
 
 def corridor_districts(db: Session, corridor: CorridorInfo) -> list[CorridorDistrictInfo]:
-    """G17: the districts a corridor passes, in travel order - what "Toshkent -> Qarshi" really covers.
-
-    Order comes from the **confirmed route versions** of the corridor: their stop sequence is the road the
-    drivers of this corridor actually agreed to. Districts that only own a stop, with no confirmed route
-    reaching them, are appended with ``on_confirmed_route=False`` rather than being dropped (the picker may
-    still offer them) or silently promoted (the spec forbids assuming they are on the way).
-
-    A district is placed at its earliest position across the confirmed routes, so two alternative roads give
-    one ordered list instead of two conflicting ones.
-    """
-    earliest: dict[int, int] = {}
-    for row in db.execute(_CORRIDOR_ROUTE_DISTRICTS_SQL, {"corridor": corridor.id}).all():
-        district_id = int(row.district_id)
-        position = int(row.seq)
-        if district_id not in earliest or position < earliest[district_id]:
-            earliest[district_id] = position
-
-    stop_rows = db.execute(_CORRIDOR_STOP_DISTRICTS_SQL, {"corridor": corridor.id}).all()
-    stop_counts = {int(row.district_id): int(row.stops_count) for row in stop_rows}
-    hint_order = {int(row.district_id): int(row.seq or 0) for row in stop_rows}
-
-    district_ids = list(dict.fromkeys([*earliest, *stop_counts]))
-    if not district_ids:
-        return []
+    """G17: the districts a corridor's confirmed roads pass, in travel order - what "Toshkent -> Qarshi" really
+    covers. A district is placed where its centre projects onto a road (earliest across the roads, so two
+    alternative roads give one ordered list); a district without a known centre is not placed (a data gap the
+    operator closes, never a guess)."""
     rows = db.execute(
-        text(f"{_DISTRICT_SELECT} WHERE d.id = ANY(:ids)"),
-        {"ids": district_ids, "public_states": _public_states()},
+        _CORRIDOR_ROAD_DISTRICTS_SQL, {"corridor": corridor.id, "radius": corridor_point_offset_m(db, corridor.id)}
     ).all()
-    infos = {row.id: _district_info(row) for row in rows}
-
-    ordered = sorted(
-        (did for did in district_ids if did in infos),
-        # On-route districts first, in route order; the rest keep the operator's stop order.
-        key=lambda did: (0, earliest[did]) if did in earliest else (1, hint_order.get(did, 0), did),
-    )
+    ordered = [int(row.district_id) for row in rows]
+    infos = districts_by_ids(db, ordered)
     return [
-        CorridorDistrictInfo(
-            district=infos[did],
-            sequence=index,
-            stops_count=stop_counts.get(did, 0),
-            on_confirmed_route=did in earliest,
-        )
-        for index, did in enumerate(ordered)
+        CorridorDistrictInfo(district=infos[did], sequence=index)
+        for index, did in enumerate(did for did in ordered if did in infos)
     ]

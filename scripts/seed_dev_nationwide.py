@@ -212,7 +212,7 @@ def drop(db) -> int:  # noqa: ANN001
 
 
 def seed_corridor(db, *, actor_user_id: int, label: str, region_names: list[str], regions: dict) -> bool:  # noqa: ANN001
-    """One axis: a corridor, its region-centre stops, and a confirmed route each way."""
+    """One axis: a corridor and a confirmed road each way through its region centres."""
     # The provider is part of the name on purpose: a corridor drawn by `fake` and one drawn by `osrm`
     # are different geography, and seeing which is which in the admin list is worth six characters.
     name = f"{CORRIDOR_PREFIX} {label} ({get_geo_settings().routing_provider})"
@@ -232,30 +232,12 @@ def seed_corridor(db, *, actor_user_id: int, label: str, region_names: list[str]
         default_max_detour_m=50_000,
     )
 
-    stop_api_ids: list[str] = []
-    for index, region_name in enumerate(region_names):
-        region = regions[region_name]
-        lat, lng = float(region.center_lat), float(region.center_lng)
-        district = nearest_district(db, region.id, lat, lng)
-        if district is None:
-            print(f"    {region_name}: no district to hang a stop on - skipped")
-            continue
-        stop = geo_service.create_stop(
-            db,
-            actor_user_id=actor_user_id,
-            corridor_api_id=corridor.api_id,
-            name_uz=f"{region_name} markazi ({label}, dev sinov)",
-            name_ru=None,
-            district_api_id=geo_service.district_api_id(district.public_id),
-            point=LatLng(lat, lng),
-            meeting_note="Dev fixture stop - a region centre, not a verified meeting point",
-            sequence_hint=index + 1,
-            is_active=True,
-        )
-        stop_api_ids.append(stop.api_id)
-
-    if len(stop_api_ids) < 2:
-        print(f"  {name}: fewer than two stops could be created - rolled back")
+    # ADR-0028 / Q160: a road is drawn through the region centres; nothing is stored for them (no stops).
+    through: list[LatLng] = [
+        LatLng(float(regions[name].center_lat), float(regions[name].center_lng)) for name in region_names
+    ]
+    if len(through) < 2:
+        print(f"  {name}: fewer than two region centres - rolled back")
         db.rollback()
         return False
 
@@ -266,26 +248,26 @@ def seed_corridor(db, *, actor_user_id: int, label: str, region_names: list[str]
     )
     db.commit()
 
-    state = corridor
-    for target in ("internal", "pilot"):
-        state = geo_service.patch_corridor(
-            db,
-            actor_user_id=actor_user_id,
-            corridor_api_id=corridor.api_id,
-            expected_version=state.version,
-            reason="dev nationwide fixture",
-            changes={"rollout_state": target},
-        )
+    state = geo_service.patch_corridor(
+        db, actor_user_id=actor_user_id, corridor_api_id=corridor.api_id, expected_version=corridor.version,
+        reason="dev nationwide fixture", changes={"rollout_state": "internal"},
+    )
     db.commit()
 
     from tests.fixtures.geo.loader import build_route  # noqa: PLC0415
 
-    # Whatever the environment is configured to use. With `osrm` these stops are joined by the real
-    # road; with `fake` they are joined by a straight line and the corridor name says so.
+    # Whatever the environment is configured to use. With `osrm` the centres are joined by the real road; with `fake`
+    # by a straight line and the corridor name says so. A public corridor needs its confirmed road first (0099).
     router = build_routing_provider(production=False)
-    build_route(db, router, actor_user_id=actor_user_id, stop_api_ids=stop_api_ids)
-    build_route(db, router, actor_user_id=actor_user_id, stop_api_ids=list(reversed(stop_api_ids)))
-    print(f"  {name}: {len(stop_api_ids)} stops, 2 confirmed routes")
+    build_route(db, router, actor_user_id=actor_user_id, corridor=state, through=through)
+    build_route(db, router, actor_user_id=actor_user_id, corridor=state, through=list(reversed(through)))
+    state = geo_service.get_corridor(db, corridor.id)
+    geo_service.patch_corridor(
+        db, actor_user_id=actor_user_id, corridor_api_id=corridor.api_id, expected_version=state.version,
+        reason="dev nationwide fixture", changes={"rollout_state": "pilot"},
+    )
+    db.commit()
+    print(f"  {name}: 2 confirmed roads through {len(through)} region centres")
     return True
 
 

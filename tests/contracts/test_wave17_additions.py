@@ -16,9 +16,12 @@ def test_price_out_of_band_documents_scope() -> None:
     assert "segment|corridor" in spec.description
 
 
-def test_geo_band_warning_code_matches_contract() -> None:
+def test_geo_band_warning_code_is_retired_but_catalogued() -> None:
+    """ADR-0028: stop-pair bands are never read, so geo no longer emits the segment-floor warning; the code stays in the
+    catalogue (Q156: clients that know it keep working)."""
     import inspect
 
     from app.modules.geo import service
 
-    assert WarningCode.CORRIDOR_FLOOR_ABOVE_SEGMENT_FLOOR.value in inspect.getsource(service)
+    assert WarningCode.CORRIDOR_FLOOR_ABOVE_SEGMENT_FLOOR in WARNING_CATALOGUE
+    assert WarningCode.CORRIDOR_FLOOR_ABOVE_SEGMENT_FLOOR.value not in inspect.getsource(service)

@@ -38,7 +38,6 @@ from tests.pg.bookings.conftest import (  # noqa: F401  (shared A4 fixtures)
     rows,
     scalar,
 )
-from tests.pg.conftest import PgDatabase
 from tests.pg.identity.a1_world import world  # noqa: F401  (shared A1 fixture)
 
 pytestmark = pytest.mark.pg
@@ -308,5 +307,5 @@ def _requests_criteria(bw: BW):  # noqa: ANN202, F811
     return FeedCriteria(
         service_type=ServiceType.PASSENGER, side=FeedSide.REQUESTS,
         date_from=bw.base - timedelta(days=1), date_to=bw.base + timedelta(days=5),
-        origin_stop_id=bw.w.stop_public_ids["A"], destination_stop_id=bw.w.stop_public_ids["D"],
+        origin_district_id=bw.w.district_public_ids["A"], destination_district_id=bw.w.district_public_ids["D"],
     )

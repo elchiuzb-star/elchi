@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[4]
         ({"M": 0.65, "T": 0.70, "R": 0.75, "P": 1.00, "E": 0.20}, 70.50),
     ],
 )
+
+
 def test_spec_8_3_example_scores(components: dict[str, float], expected: float) -> None:
     assert rules.client_score(**components) == pytest.approx(expected, abs=0.005)
 
@@ -94,16 +96,6 @@ def test_time_experience_fit_and_groups() -> None:
     assert primary < alternative
 
 
-def test_stop_segment_match_verified_order() -> None:
-    order = [{1: [0], 2: [1], 3: [2], 4: [3]}]  # A=1 -> B=2 -> C=3 -> D=4
-    assert rules.stop_segment_match(order, {1}, {4}, 1, 4) is MatchType.EXACT
-    assert rules.stop_segment_match(order, {1}, {4}, 2, 3) is MatchType.ON_ROUTE
-    assert rules.stop_segment_match(order, {1}, {4}, 3, 2) is None  # reverse (AC16)
-    assert rules.stop_segment_match(order, {4}, {1}, 2, 3) is None  # wanted direction reversed
-    assert rules.stop_segment_match(order, {2}, {3}, 1, 4) is None  # request longer than the wanted segment
-    assert rules.stop_segment_match([], {1}, {4}, 2, 3) is None  # no confirmed route -> no guess
-
-
 def test_migration_limit_literal_matches_contract() -> None:
     spec = importlib.util.spec_from_file_location(
         "migration_0061_unit", ROOT / "alembic" / "versions" / "20260916_0061_marketplace_saved_searches.py"
@@ -122,12 +114,14 @@ def test_saved_search_create_requires_exactly_one_reference_per_end() -> None:
         "time_window_start": "2026-09-20T05:00:00Z",
         "time_window_end": "2026-09-21T05:00:00+05:00",
     }
-    SavedSearchCreate.model_validate({**base, "origin_stop_id": "stp_x", "destination_region_id": "reg_y"})
+    SavedSearchCreate.model_validate({**base, "origin_district_id": "dst_x", "destination_region_id": "reg_y"})
     for bad in (
-        {"destination_stop_id": "stp_y"},
-        {"origin_stop_id": "stp_x", "origin_region_id": "reg_x", "destination_stop_id": "stp_y"},
-        {"origin_stop_id": "stp_x", "destination_stop_id": "stp_y", "time_window_end": "2026-09-20T04:00:00Z"},
-        {"origin_stop_id": "stp_x", "destination_stop_id": "stp_y", "time_window_start": "2026-09-20T05:00:00"},
+        {"destination_district_id": "dst_y"},
+        {"origin_district_id": "dst_x", "origin_region_id": "reg_x", "destination_district_id": "dst_y"},
+        {"origin_district_id": "dst_x", "destination_district_id": "dst_y", "time_window_end": "2026-09-20T04:00:00Z"},
+        {"origin_district_id": "dst_x", "destination_district_id": "dst_y", "time_window_start": "2026-09-20T05:00:00"},
+        # Q160: there are no stops - a stop id is an unknown field
+        {"origin_stop_id": "stp_x", "destination_district_id": "dst_y"},
     ):
         with pytest.raises(ValidationError):
             SavedSearchCreate.model_validate({**base, **bad})

@@ -37,6 +37,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.contracts.route_position import ROAD_POSITION_COMMENT
 from app.db.base import Base
 from app.modules.geo.models import Geometry
 import app.modules.geo.models  # noqa: E402,F401  (FK targets)
@@ -410,6 +411,9 @@ class ProposalVersion(Base):
     dropoff_route_offset_m: Mapped[int | None] = mapped_column(Integer)
     pickup_occurrence_seq: Mapped[int | None] = mapped_column(SmallInteger)
     dropoff_occurrence_seq: Mapped[int | None] = mapped_column(SmallInteger)
+    # ADR-0028 (0097, Q159): the agreed places as metres along the confirmed road (not the lateral *_route_offset_m).
+    pickup_position_m: Mapped[int | None] = mapped_column(Integer, comment=ROAD_POSITION_COMMENT)
+    dropoff_position_m: Mapped[int | None] = mapped_column(Integer, comment=ROAD_POSITION_COMMENT)
     pickup_window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     pickup_window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # ADR-0027 Q153 (0096): a driver's time proposal - the pickup window lies outside the client's request window,

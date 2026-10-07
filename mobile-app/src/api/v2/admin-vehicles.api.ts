@@ -39,10 +39,12 @@ export type AdminVehicleStatus = "pending" | "approved" | "rejected" | "blocked"
 
 export type AdminVehiclePage = { items: AdminVehicle[]; nextCursor: string | null };
 
-/** The verification queue, oldest first. `status` omitted: every status. */
-export async function adminVehicles(params: { status?: AdminVehicleStatus; cursor?: string | null; limit?: number } = {}): Promise<AdminVehiclePage> {
+/** The verification queue, oldest first. `status` omitted: every status; `owner_user_id` (`usr_`): one driver's cars. */
+export async function adminVehicles(
+  params: { status?: AdminVehicleStatus; owner_user_id?: string; cursor?: string | null; limit?: number } = {},
+): Promise<AdminVehiclePage> {
   const result = await v2AdminRequestFull<AdminVehicle[]>("/admin/vehicles", {
-    query: { status: params.status, cursor: params.cursor ?? undefined, limit: params.limit },
+    query: { status: params.status, owner_user_id: params.owner_user_id, cursor: params.cursor ?? undefined, limit: params.limit },
   });
   const meta = result.meta as { next_cursor?: string | null } | null | undefined;
   return { items: result.data, nextCursor: meta?.next_cursor ?? null };

@@ -28,9 +28,10 @@ def publish(world: World, session: Session, listing_public_id: str, owner_id: in
 
 
 def published_request(world: World, *, seats: int = 2, **kwargs: object) -> str:
+    start = kwargs.pop("start", world.base_time)
     with world.db.session() as s:
         listing = marketplace_service.create_listing(
-            s, owner_user_id=world.client_id, data=passenger_request(world, start=world.base_time, seats=seats, **kwargs)
+            s, owner_user_id=world.client_id, data=passenger_request(world, start=start, seats=seats, **kwargs)
         )
         public_id = marketplace_service.listing_public_id(listing)
         publish(world, s, public_id, world.client_id)
@@ -43,14 +44,16 @@ def driver_trip(world: World, plate: str = "01B200BB", seats: int = 4) -> tuple[
     return make_trip(world, world.driver_id, vehicle, start=world.base_time, seats=seats)
 
 
-def proposal(world: World, trip_public_id: str | None, *, quantity: int = 2, unit_price_minor: int = 19_000_000) -> ProposalCreate:
+def proposal(world: World, trip_public_id: str | None, *, quantity: int = 2, unit_price_minor: int = 19_000_000,
+             start_offset: timedelta = timedelta(0)) -> ProposalCreate:
+    """ADR-0028 / Q160: a request's places are the client's own, so a proposal names no place - it answers the
+    request where it is."""
+    start = world.base_time + start_offset
     return ProposalCreate.model_validate(
         {
             "trip_id": trip_public_id,
-            "pickup_stop_id": world.stop_public_ids["A"],
-            "dropoff_stop_id": world.stop_public_ids["D"],
-            "pickup_window_start": world.base_time.isoformat(),
-            "pickup_window_end": (world.base_time + timedelta(minutes=30)).isoformat(),
+            "pickup_window_start": start.isoformat(),
+            "pickup_window_end": (start + timedelta(minutes=30)).isoformat(),
             "quantity": quantity,
             "price_basis": "per_seat",
             "unit_price_minor": unit_price_minor,
@@ -111,8 +114,8 @@ def test_parcel_request_incomplete_cannot_publish(world: World) -> None:
         {
             "kind": "request",
             "service_type": "parcel",
-            "origin_stop_id": world.stop_public_ids["A"],
-            "destination_stop_id": world.stop_public_ids["C"],
+            "origin_point": world.point("A"),
+            "destination_point": world.point("C"),
             "departure_window_start": world.base_time.isoformat(),
             "departure_window_end": (world.base_time + timedelta(hours=2)).isoformat(),
             "price_basis": "total",
@@ -159,13 +162,15 @@ def test_proposal_checks_but_never_reserves_capacity(world: World) -> None:
         )
     assert info.value.code is ErrorCode.CAPACITY_UNAVAILABLE
 
-    listing_id2 = published_request(world, seats=2, origin="B", destination="D")
+    later = timedelta(hours=1)  # the car reaches B a little over an hour after A
+    listing_id2 = published_request(world, seats=2, origin="B", destination="D", start=world.base_time + later)
     with world.db.session() as s:
         marketplace_service.submit_proposal(
-            s, listing_public_id=listing_id2, actor_user_id=world.driver_id, data=proposal(world, trip_public_id, quantity=2)
+            s, listing_public_id=listing_id2, actor_user_id=world.driver_id,
+            data=proposal(world, trip_public_id, quantity=2, start_offset=later),
         )
         s.commit()
-        assert [load.seats_used for load in trips_service.get_segment_loads(s, trip_id)] == [0, 0, 0]  # §5.3
+        assert trips_service.active_claims(s, trip_id) == []  # §5.3: an offer reserves nothing
 
 
 def test_submit_snapshot_ttl_and_fee_quote(world: World) -> None:
@@ -177,7 +182,7 @@ def test_submit_snapshot_ttl_and_fee_quote(world: World) -> None:
         assert (version.total_minor, version.fee_bps, version.commission_minor) == (38_000_000, 1500, 5_700_000)
         assert version.fee_policy_id == world.policy_id
         assert version.expires_at - version.created_at == PROPOSAL_MAX_TTL  # departure is two days away
-        assert (version.pickup_occurrence_seq, version.dropoff_occurrence_seq) == (1, 4)
+        assert (version.pickup_position_m, version.dropoff_position_m) == (world.place_positions["A"], world.place_positions["D"])
         events = s.execute(text("SELECT event_type FROM outbox_events ORDER BY id")).scalars().all()
         assert events == ["listing.published", "proposal.created"]
 
@@ -328,10 +333,12 @@ def test_active_version_partial_unique_and_immutability(world: World) -> None:
         with pytest.raises(IntegrityError, match="uq_proposal_versions_active"):
             s.execute(
                 text(
-                    "INSERT INTO proposal_versions (public_id, thread_id, revision, author_side, author_user_id, pickup_stop_id, "
-                    "dropoff_stop_id, pickup_window_start, pickup_window_end, quantity, price_basis, unit_price_minor, total_minor, "
+                    "INSERT INTO proposal_versions (public_id, thread_id, revision, author_side, author_user_id, "
+                    "pickup_point, dropoff_point, pickup_district_id, dropoff_district_id, pickup_window_start, "
+                    "pickup_window_end, quantity, price_basis, unit_price_minor, total_minor, "
                     "expires_at, listing_version, fee_policy_id, fee_bps, commission_minor) "
-                    "SELECT gen_random_uuid(), thread_id, 2, 'client', :c, pickup_stop_id, dropoff_stop_id, pickup_window_start, "
+                    "SELECT gen_random_uuid(), thread_id, 2, 'client', :c, pickup_point, "
+                    "dropoff_point, pickup_district_id, dropoff_district_id, pickup_window_start, "
                     "pickup_window_end, quantity, price_basis, unit_price_minor, total_minor, expires_at, listing_version, "
                     "fee_policy_id, fee_bps, commission_minor FROM proposal_versions WHERE id = :v"
                 ),

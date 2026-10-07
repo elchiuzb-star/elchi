@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 
 import pytest
 from sqlalchemy import text
 
 from app.contracts.errors import DomainError, ErrorCode
 from app.modules.marketplace import service as marketplace_service
-from app.modules.marketplace.schemas import ListingCreate, ListingPatch, ProposalCounter, ProposalCreate
+from app.modules.marketplace.schemas import ListingPatch, ProposalCounter
 from tests.pg.identity.a1_world import World, passenger_request
 from tests.pg.marketplace.test_marketplace_pg import driver_trip, open_thread, proposal, published_request
 
@@ -99,8 +98,6 @@ def _band(
     *,
     floor: int,
     ceiling: int,
-    origin: str | None = None,
-    destination: str | None = None,
     enforced: bool = True,
 ) -> None:
     """Q90: ``enforced`` defaults to true *here* because these tests exist to prove the precedence and
@@ -109,14 +106,12 @@ def _band(
     with world.db.session() as s:
         s.execute(
             text(
-                "INSERT INTO corridor_price_bands (public_id, corridor_id, service_type, price_basis, origin_stop_id, "
-                "destination_stop_id, floor_minor, ceiling_minor, enforced, reason, updated_by) VALUES "
-                "(gen_random_uuid(), :c, 'passenger', 'per_seat', :o, :d, :f, :ce, :en, 'test band', :a)"
+                "INSERT INTO corridor_price_bands (public_id, corridor_id, service_type, price_basis, "
+                "floor_minor, ceiling_minor, enforced, reason, updated_by) VALUES "
+                "(gen_random_uuid(), :c, 'passenger', 'per_seat', :f, :ce, :en, 'test band', :a)"
             ),
             {
                 "c": world.corridor_id,
-                "o": world.stop_ids[origin] if origin else None,
-                "d": world.stop_ids[destination] if destination else None,
                 "f": floor,
                 "ce": ceiling,
                 "en": enforced,
@@ -149,7 +144,8 @@ def test_q42_price_band_on_submit_and_counter(world: World) -> None:
     assert info.value.code is ErrorCode.PRICE_OUT_OF_BAND
 
 
-def test_q42_segment_band_wins_and_missing_band_allows(world: World) -> None:
+def test_q42_the_corridor_band_decides(world: World) -> None:
+    """ADR-0028 / Q160: the corridor band is the only reference (there is no stop pair to price)."""
     listing_id = published_request(world)
     _, trip_public_id = driver_trip(world)
     with world.db.session() as s:  # no band configured -> any price allowed
@@ -158,9 +154,13 @@ def test_q42_segment_band_wins_and_missing_band_allows(world: World) -> None:
         )
         s.rollback()
     _band(world, floor=1_000_000, ceiling=50_000_000)
-    _band(world, floor=5_000_000, ceiling=8_000_000, origin="A", destination="D")
-    with world.db.session() as s, pytest.raises(DomainError) as info:
+    with world.db.session() as s:
         marketplace_service.submit_proposal(
             s, listing_public_id=listing_id, actor_user_id=world.driver_id, data=proposal(world, trip_public_id, unit_price_minor=20_000_000)
         )
-    assert info.value.code is ErrorCode.PRICE_OUT_OF_BAND and info.value.details["ceiling_minor"] == 8_000_000
+        s.rollback()
+    with world.db.session() as s, pytest.raises(DomainError) as info:
+        marketplace_service.submit_proposal(
+            s, listing_public_id=listing_id, actor_user_id=world.driver_id, data=proposal(world, trip_public_id, unit_price_minor=60_000_000)
+        )
+    assert info.value.code is ErrorCode.PRICE_OUT_OF_BAND and info.value.details["ceiling_minor"] == 50_000_000

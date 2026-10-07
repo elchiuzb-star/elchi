@@ -21,31 +21,13 @@ class GeoIntegrationNotReady(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
-class StopRef:
-    id: int
-    public_id: str  # stp_...
-    corridor_id: int
-    name_uz: str
-    name_ru: str | None
-    is_active: bool
-    #: Q158: the district the internal route node sits in - what a client/driver card shows instead of a stop name.
-    district_name_uz: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RouteStopRef:
-    seq: int
-    stop_id: int
-    cumulative_distance_m: int
-    cumulative_duration_s: int
-
-
-@dataclass(frozen=True, slots=True)
 class RouteVersionRef:
     id: int
     public_id: str  # rtv_...
     status: str
-    stops: tuple[RouteStopRef, ...]
+    #: ADR-0028: the road's own length and driving time (None from ports that do not know them).
+    distance_m: int | None = None
+    duration_s: int | None = None
 
     @property
     def is_confirmed(self) -> bool:
@@ -53,10 +35,6 @@ class RouteVersionRef:
 
 
 class TripsGeoPort(Protocol):
-    def stops_by_public_ids(self, session: Session, public_ids: Sequence[str]) -> dict[str, StopRef]: ...
-
-    def stops_by_ids(self, session: Session, ids: Sequence[int]) -> dict[int, StopRef]: ...
-
     def route_version_by_public_id(self, session: Session, public_id: str) -> RouteVersionRef | None: ...
 
     def route_versions_by_ids(self, session: Session, ids: Sequence[int]) -> dict[int, RouteVersionRef]: ...

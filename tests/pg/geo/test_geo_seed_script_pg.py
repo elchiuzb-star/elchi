@@ -46,7 +46,7 @@ def test_seed_refuses_production_settings_and_is_idempotent(pg_db: PgDatabase) -
     assert second.returncode == 0 and "already present" in second.stdout
     with pg_db.engine.connect() as conn:
         assert conn.scalar(text("SELECT count(*) FROM service_corridors")) == 1
-        assert conn.scalar(text("SELECT count(*) FROM corridor_stops WHERE is_active")) == 6
+        assert conn.scalar(text("SELECT count(*) FROM corridor_stops")) == 0  # Q160: no stops are seeded
         assert conn.scalar(text("SELECT count(*) FROM route_versions WHERE status = 'confirmed' AND source = 'fixture'")) == 2
 
 

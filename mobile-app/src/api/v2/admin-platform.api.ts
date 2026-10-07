@@ -1,9 +1,9 @@
 /**
- * Staff platform configuration (F1-F4 flags, G7-G11 corridors/stops, N8/N9 outbox, R5.2 parcel policy, O8/§10.8).
+ * Staff platform configuration (F1-F4 flags, G7-G11 corridors, N8/N9 outbox, R5.2 parcel policy, O8/§10.8).
  *
  * Every command takes the Idempotency-Key of one user action from the caller (`newIdempotencyKey()` once per
  * confirmed click), so a retry after a timeout replays the first answer instead of writing twice. The two versioned
- * PATCH endpoints (corridor, stop) are protected by `expected_version`; the key is sent there too and is simply not
+ * PATCH endpoints (corridor) are protected by `expected_version`; the key is sent there too and is simply not
  * read by the server. Paths are written out in full so the client-contract test can check them.
  */
 import { v2AdminRequest, v2AdminRequestFull, type Schemas } from "./http";
@@ -17,10 +17,6 @@ export type CorridorAdminDTO = Schemas["CorridorAdminDTO"];
 export type CorridorCreate = Schemas["CorridorCreate"];
 export type CorridorPatch = Schemas["CorridorPatch"];
 export type CorridorRolloutState = Schemas["CorridorRolloutState"];
-export type StopCreate = Schemas["StopCreate"];
-export type StopPatch = Schemas["StopPatch"];
-export type AdminStopDTO = Schemas["AdminStopDTO"];
-export type StopDTO = Schemas["StopDTO"];
 export type Q47ViolationDTO = Schemas["Q47ViolationDTO"];
 export type OutboxEventAdminDTO = Schemas["OutboxEventAdminDTO"];
 export type ParcelPolicyVersionDTO = Schemas["ParcelPolicyVersionDTO"];
@@ -71,7 +67,7 @@ export function adminSetFeatureFlag(
   );
 }
 
-// --- corridors and stops (G7-G11, F1 Q47 check) ---------------------------------------------------------------------
+// --- corridors (G7-G11, F1 Q47 check) ---------------------------------------------------------------------------
 
 export async function adminCorridors(params: { cursor?: string | null; limit?: number } = {}) {
   const result = await v2AdminRequestFull<CorridorAdminDTO[]>("/admin/corridors", { query: params });
@@ -86,27 +82,7 @@ export function adminPatchCorridor(corridorId: string, body: CorridorPatch, idem
   return v2AdminRequest<CorridorAdminDTO>(`/admin/corridors/${corridorId}`, { method: "PATCH", body, idempotencyKey });
 }
 
-export function adminCreateStop(corridorId: string, body: StopCreate, idempotencyKey: string) {
-  return v2AdminRequest<AdminStopDTO>(`/admin/corridors/${corridorId}/stops`, { method: "POST", body, idempotencyKey });
-}
-
-export function adminPatchStop(stopId: string, body: StopPatch, idempotencyKey: string) {
-  return v2AdminRequest<AdminStopDTO>(`/admin/stops/${stopId}`, { method: "PATCH", body, idempotencyKey });
-}
-
-/**
- * G3 (public read): the *active* stops of a pilot/active corridor; a draft/internal corridor answers 404 here.
- */
-export function corridorPublicStops(corridorId: string) {
-  return v2AdminRequest<StopDTO[]>(`/corridors/${corridorId}/stops`);
-}
-
-/** Staff list: every stop of the corridor (inactive ones and draft corridors too) with the version a PATCH needs. */
-export function adminCorridorStops(corridorId: string) {
-  return v2AdminRequest<AdminStopDTO[]>(`/admin/corridors/${corridorId}/stops`);
-}
-
-/** F1: pilot/active corridors that already break Q47 (>= 2 active stops, each with meeting evidence). */
+/** F1: pilot/active corridors that break the launch gate (ADR-0028: at least one confirmed road). */
 export function adminQ47Violations() {
   return v2AdminRequest<Q47ViolationDTO[]>("/admin/geo/checks/q47");
 }

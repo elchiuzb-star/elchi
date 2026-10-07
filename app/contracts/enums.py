@@ -377,18 +377,14 @@ class MatchType(StrEnum):
 class MatchReason(StrEnum):
     """Stable reason codes explaining a match decision (spec §6.4, §8; FeedItemDTO.match.reasons).
 
-    Promoted from ``app.modules.geo.types`` (A2) in integration pass 1; geo re-exports it.
+    Promoted from ``app.modules.geo.types`` (A2) in integration pass 1. Q160: no stop reasons - a place is on the road.
     """
 
     FULL_ROUTE = "full_route"
     INTERMEDIATE_SEGMENT = "intermediate_segment"
-    PICKUP_AT_STOP = "pickup_at_stop"
-    DROPOFF_AT_STOP = "dropoff_at_stop"
     PICKUP_DETOUR = "pickup_detour"
     DROPOFF_DETOUR = "dropoff_detour"
-    NEARBY_STOP = "nearby_stop"
     TIME_DIFFERS = "time_differs"
-    SAME_STOP = "same_stop"
     PICKUP_NOT_ON_ROUTE = "pickup_not_on_route"
     DROPOFF_NOT_ON_ROUTE = "dropoff_not_on_route"
     REVERSE_DIRECTION = "reverse_direction"

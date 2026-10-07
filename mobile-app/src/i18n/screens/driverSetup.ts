@@ -108,8 +108,6 @@ export const driverSetupMessages = {
   },
   "offerCreate.from": { uz: "Qayerdan", ru: "Откуда" },
   "offerCreate.to": { uz: "Qayerga", ru: "Куда" },
-  "offerCreate.stopPlaceholder": { uz: "Joyni tanlang", ru: "Выберите место"},
-  "offerCreate.sameStops": { uz: "Ikki joy bir xil bo'lishi mumkin emas.", ru: "Места не могут совпадать."},
   "offerCreate.departureWindow": { uz: "Chiqish vaqti", ru: "Время посадки" },
   "offerCreate.windowHint": {
     uz: "Safar shu joyga rejalashtirilgan vaqt atrofida. Mijoz shu oynada taklif yuboradi.", ru: "Окно вокруг запланированного времени прибытия в это место. Клиент отправляет предложение в рамках этого окна.",

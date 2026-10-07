@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable
-from typing import Any
 
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -40,7 +39,6 @@ from app.modules.geo.flags import CLIENT_VISIBLE_FLAGS
 from app.modules.geo.geometry import encode_polyline
 from app.modules.geo.routing.base import RoutingProvider
 from app.modules.geo.schemas import (
-    AdminStopDTO,
     CorridorDistrictDTO,
     DistrictDTO,
     PriceBandChangeDTO,
@@ -52,25 +50,18 @@ from app.modules.geo.schemas import (
     CorridorCreate,
     CorridorDTO,
     CorridorPatch,
-    DistrictRefDTO,
     EffectiveFlagsDTO,
     EffectiveFlagValuesDTO,
     FlagChangeDTO,
     FlagValueDTO,
     FlagValueUpsert,
-    PointDTO,
     RegionDTO,
     RegionRefDTO,
     RoutePreviewRequest,
     RouteVersionDTO,
-    RouteVersionStopDTO,
-    StopCreate,
-    StopDTO,
-    StopPatch,
 )
 from app.modules.geo.types import LatLng
 from app.modules.platform import service as platform_service
-from app.utils.file_access import signed_file_url
 
 router = APIRouter()
 
@@ -166,29 +157,6 @@ def _route_template(request: Request) -> str:
 # --- mappers ---------------------------------------------------------------------------------------
 
 
-def _stop_dto(stop: service.StopInfo) -> StopDTO:
-    return StopDTO(
-        id=stop.api_id,
-        name_uz=stop.name_uz,
-        name_ru=stop.name_ru,
-        district=DistrictRefDTO(id=service.district_api_id(stop.district_public_id), name_uz=stop.district_name_uz),
-        point=PointDTO(lat=stop.point.lat, lng=stop.point.lng),
-        meeting_note=stop.meeting_note,
-        is_active=stop.is_active,
-    )
-
-
-def _admin_stop_dto(stop: service.StopInfo) -> AdminStopDTO:
-    return AdminStopDTO(
-        **_stop_dto(stop).model_dump(),
-        corridor_id=service.corridor_api_id(stop.corridor_public_id),
-        meeting_photo_file_id=stop.meeting_photo_file_id,
-        meeting_photo_url=signed_file_url(stop.meeting_photo_file_id),
-        sequence_hint=stop.sequence_hint,
-        version=stop.version,
-    )
-
-
 def _region_ref(region: service.RegionInfo) -> RegionRefDTO:
     return RegionRefDTO(id=region.api_id, code=region.code, name_uz=region.name_uz)
 
@@ -206,18 +174,16 @@ def _district_dto(district: service.DistrictInfo) -> DistrictDTO:
         is_active=district.is_active,
         center_lat=district.center_lat,
         center_lng=district.center_lng,
-        stops_count=district.stops_count,
     )
 
 
-def _corridor_dto(corridor: service.CorridorInfo, services: list[ServiceType], stops_count: int) -> CorridorDTO:
+def _corridor_dto(corridor: service.CorridorInfo, services: list[ServiceType]) -> CorridorDTO:
     return CorridorDTO(
         id=corridor.api_id,
         name=corridor.name,
         origin_region=_region_ref(corridor.origin_region),
         destination_region=_region_ref(corridor.destination_region),
         enabled_services=services,
-        stops_count=stops_count,
     )
 
 
@@ -226,7 +192,7 @@ def _corridor_admin_dto(db: Session, corridor: service.CorridorInfo) -> Corridor
     services = [
         s for s, k in ((ServiceType.PASSENGER, FeatureFlagKey.PASSENGER_ENABLED), (ServiceType.PARCEL, FeatureFlagKey.PARCEL_ENABLED)) if resolutions[k].enabled
     ]
-    base = _corridor_dto(corridor, services, service.count_active_stops(db, [corridor.id]).get(corridor.id, 0))
+    base = _corridor_dto(corridor, services)
     return CorridorAdminDTO(
         **base.model_dump(),
         rollout_state=corridor.rollout_state,
@@ -246,15 +212,6 @@ def _route_dto(route: service.RouteVersionInfo) -> RouteVersionDTO:
     return RouteVersionDTO(
         id=route.api_id,
         status=route.status,  # type: ignore[arg-type]
-        stops=[
-            RouteVersionStopDTO(
-                stop_id=service.stop_api_id(s.stop_public_id),
-                seq=s.seq,
-                cumulative_distance_m=s.cumulative_distance_m,
-                cumulative_duration_s=s.cumulative_duration_s,
-            )
-            for s in route.stops
-        ],
         distance_m=route.distance_m,
         duration_s=route.duration_s,
         geometry_polyline=encode_polyline(route.geometry),
@@ -301,16 +258,8 @@ def list_regions(db: Session = Depends(get_db)) -> Envelope[list[RegionDTO]]:
 
 @router.get("/corridors", response_model=Envelope[list[CorridorDTO]], tags=[GEO_TAG])
 def list_corridors(service_type: ServiceType | None = Query(default=None), db: Session = Depends(get_db)) -> Envelope[list[CorridorDTO]]:
-    items = [_corridor_dto(c, services, count) for c, services, count in service.list_public_corridors(db, service_type=service_type)]
+    items = [_corridor_dto(c, services) for c, services in service.list_public_corridors(db, service_type=service_type)]
     return Envelope[list[CorridorDTO]](data=items)
-
-
-@router.get("/corridors/{corridor_id}/stops", response_model=Envelope[list[StopDTO]], responses=ERROR_RESPONSES, tags=[GEO_TAG])
-def list_corridor_stops(corridor_id: str = Path(max_length=64), db: Session = Depends(get_db)) -> Envelope[list[StopDTO]]:
-    corridor = service.get_corridor_by_api_id(db, corridor_id)
-    if corridor.rollout_state not in service.PUBLIC_ROLLOUT_STATES:
-        raise DomainError(ErrorCode.NOT_FOUND)
-    return Envelope[list[StopDTO]](data=[_stop_dto(s) for s in service.list_corridor_stops(db, corridor)])
 
 
 @router.get("/districts", response_model=Envelope[list[DistrictDTO]], responses=ERROR_RESPONSES, tags=[GEO_TAG])
@@ -340,14 +289,15 @@ def list_districts(
     responses=ERROR_RESPONSES,
     tags=[GEO_TAG],
 )
+
+
 def list_corridor_districts(
     corridor_id: str = Path(max_length=64), db: Session = Depends(get_db)
 ) -> Envelope[list[CorridorDistrictDTO]]:
     """G17: which districts this direction really passes, in travel order (wave 10).
 
-    This is what "Toshkent -> Qarshi" covers: the districts of the stops on the corridor's confirmed routes.
-    Districts whose stops no confirmed route reaches are still listed, with ``on_confirmed_route=false``, so
-    the client can offer them without claiming they are on the way (spec 6.1, 6.5).
+    This is what "Toshkent -> Qarshi" covers: the districts whose centre lies on a confirmed road of the corridor
+    (ADR-0028). A district the road does not reach is not listed (spec 6.1, 6.5).
     """
     corridor = service.get_corridor_by_api_id(db, corridor_id)
     if corridor.rollout_state not in service.PUBLIC_ROLLOUT_STATES:
@@ -356,7 +306,6 @@ def list_corridor_districts(
         CorridorDistrictDTO(
             district=_district_dto(entry.district),
             sequence=entry.sequence,
-            stops_count=entry.stops_count,
             on_confirmed_route=entry.on_confirmed_route,
         )
         for entry in service.corridor_districts(db, corridor)
@@ -370,6 +319,8 @@ def list_corridor_districts(
     responses=ERROR_RESPONSES,
     tags=[GEO_TAG],
 )
+
+
 def list_corridor_routes(
     corridor_id: str = Path(max_length=64),
     limit: int = Query(default=20, ge=1, le=50),
@@ -389,28 +340,14 @@ def list_corridor_routes(
     )
 
 
-@router.get("/stops/search", response_model=Envelope[list[StopDTO]], responses=ERROR_RESPONSES, tags=[GEO_TAG])
-def search_stops(
-    q: str = Query(min_length=2, max_length=80),
-    region_id: str | None = Query(default=None, max_length=64),
-    limit: int = Query(default=20, ge=1, le=50),
-    db: Session = Depends(get_db),
-) -> Envelope[list[StopDTO]]:
-    region = None
-    if region_id is not None:
-        try:
-            region = service.get_region_by_api_id(db, region_id)
-        except DomainError:
-            return Envelope[list[StopDTO]](data=[])
-    return Envelope[list[StopDTO]](data=[_stop_dto(s) for s in service.search_stops(db, q, region=region, limit=limit)])
-
-
 # --- G5-G6: route versions ---------------------------------------------------------------------------
 
 
 @router.post(
     "/routes/preview", response_model=Envelope[RouteVersionDTO], status_code=status.HTTP_201_CREATED, responses=ERROR_RESPONSES, tags=[GEO_TAG]
 )
+
+
 def preview_route(
     body: RoutePreviewRequest,
     request: Request,
@@ -445,7 +382,11 @@ def preview_route(
 
     # 2. Read-only phase; a domain 4xx is stored for replay like any other command.
     try:
-        plan = service.prepare_route_preview(db, provider, stop_api_ids=body.stop_ids, departure_at=body.departure_at)
+        plan = service.prepare_road_preview(
+            db, provider, corridor_api_id=body.corridor_id,
+            origin=LatLng(body.origin.lat, body.origin.lng), destination=LatLng(body.destination.lat, body.destination.lng),
+            departure_at=body.departure_at,
+        )
     except DomainError as exc:
         db.rollback()
         error = exc
@@ -483,7 +424,7 @@ def confirm_route(
     )
 
 
-# --- G7-G11: admin corridors and stops ------------------------------------------------------------------
+# --- G7-G9: admin corridors ------------------------------------------------------------------
 
 
 @router.get("/admin/corridors", response_model=Envelope[list[CorridorAdminDTO]], responses=ERROR_RESPONSES, tags=[GEO_TAG])
@@ -505,6 +446,8 @@ def admin_list_corridors(
 @router.post(
     "/admin/corridors", response_model=Envelope[CorridorAdminDTO], status_code=status.HTTP_201_CREATED, responses=ERROR_RESPONSES, tags=[GEO_TAG]
 )
+
+
 def admin_create_corridor(
     body: CorridorCreate,
     request: Request,
@@ -549,79 +492,6 @@ def admin_patch_corridor(
     return Envelope[CorridorAdminDTO](data=run_versioned(db, handler))
 
 
-@router.get(
-    "/admin/corridors/{corridor_id}/stops", response_model=Envelope[list[AdminStopDTO]], responses=ERROR_RESPONSES, tags=[GEO_TAG]
-)
-def admin_list_corridor_stops(
-    corridor_id: str = Path(max_length=64),
-    _actor: Actor = Depends(require_capability(Capability.OPS_VIEW)),
-    db: Session = Depends(get_db),
-) -> Envelope[list[AdminStopDTO]]:
-    """Every stop of a corridor for staff - inactive ones and draft corridors included, with the ``version`` a
-    ``PATCH /admin/stops/{id}`` needs and the Q27 evidence. The public list shows only active stops of open corridors."""
-    corridor = service.get_corridor_by_api_id(db, corridor_id)
-    return Envelope[list[AdminStopDTO]](
-        data=[_admin_stop_dto(stop) for stop in service.list_corridor_stops(db, corridor, active_only=False)]
-    )
-
-
-@router.post(
-    "/admin/corridors/{corridor_id}/stops",
-    response_model=Envelope[AdminStopDTO],
-    status_code=status.HTTP_201_CREATED,
-    responses=ERROR_RESPONSES,
-    tags=[GEO_TAG],
-)
-def admin_create_stop(
-    body: StopCreate,
-    request: Request,
-    corridor_id: str = Path(max_length=64),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    actor: Actor = Depends(require_capability(Capability.OPS_CORRIDOR_MANAGE)),
-    db: Session = Depends(get_db),
-) -> JSONResponse:
-    def handler() -> AdminStopDTO:
-        stop = service.create_stop(
-            db,
-            actor_user_id=actor.user_id,
-            corridor_api_id=corridor_id,
-            name_uz=body.name_uz,
-            name_ru=body.name_ru,
-            district_api_id=body.district_id,
-            point=LatLng(body.point.lat, body.point.lng),
-            meeting_note=body.meeting_note,
-            meeting_photo_file_id=body.meeting_photo_file_id,
-            sequence_hint=body.sequence_hint,
-            is_active=body.is_active,
-        )
-        return _admin_stop_dto(stop)
-
-    return _command(
-        request, db, actor=actor, idempotency_key=idempotency_key, body=body, handler=handler,
-        success_status=status.HTTP_201_CREATED, resource_type="corridor_stop",
-    )
-
-
-@router.patch("/admin/stops/{stop_id}", response_model=Envelope[AdminStopDTO], responses=ERROR_RESPONSES, tags=[GEO_TAG])
-def admin_patch_stop(
-    body: StopPatch,
-    stop_id: str = Path(max_length=64),
-    actor: Actor = Depends(require_capability(Capability.OPS_CORRIDOR_MANAGE)),
-    db: Session = Depends(get_db),
-) -> Envelope[AdminStopDTO]:
-    changes: dict[str, Any] = {}
-    for name in body.model_fields_set - {"expected_version"}:
-        value = getattr(body, name)
-        changes[name] = LatLng(value.lat, value.lng) if name == "point" else value
-
-    def handler() -> AdminStopDTO:
-        return _admin_stop_dto(
-            service.patch_stop(db, actor_user_id=actor.user_id, stop_api_id=stop_id, expected_version=body.expected_version, changes=changes)
-        )
-
-    return Envelope[AdminStopDTO](data=run_versioned(db, handler))
-
-
 # --- F1-F4: feature flags ---------------------------------------------------------------------------------
 
 
@@ -651,6 +521,8 @@ def admin_list_flags(
     responses=ERROR_RESPONSES,
     tags=[FLAGS_TAG],
 )
+
+
 def admin_set_flag(
     body: FlagValueUpsert,
     request: Request,
@@ -719,8 +591,6 @@ def _price_band_dto(info: service.PriceBandInfo, users: dict[int, str | None]) -
         corridor_id=service.corridor_api_id(info.corridor_public_id),
         service_type=info.service_type,
         price_basis=info.price_basis,
-        origin_stop_id=service.stop_api_id(info.origin_stop_public_id) if info.origin_stop_public_id else None,
-        destination_stop_id=service.stop_api_id(info.destination_stop_public_id) if info.destination_stop_public_id else None,
         floor_minor=info.floor_minor,
         ceiling_minor=info.ceiling_minor,
         currency=info.currency,
@@ -748,6 +618,8 @@ def admin_list_price_bands(
 @router.get(
     "/admin/corridors/{corridor_id}/price-bands/history", response_model=Envelope[list[PriceBandChangeDTO]], responses=ERROR_RESPONSES, tags=[GEO_TAG]
 )
+
+
 def admin_price_band_history(
     corridor_id: str = Path(max_length=64),
     cursor: str | None = Query(default=None, max_length=512),
@@ -762,8 +634,6 @@ def admin_price_band_history(
     data = [
         PriceBandChangeDTO(
             service_type=i.service_type,
-            origin_stop_id=service.stop_api_id(i.origin_stop_public_id) if i.origin_stop_public_id else None,
-            destination_stop_id=service.stop_api_id(i.destination_stop_public_id) if i.destination_stop_public_id else None,
             version=i.band_version,
             old_floor_minor=i.old_floor_minor,
             old_ceiling_minor=i.old_ceiling_minor,
@@ -784,6 +654,8 @@ def admin_price_band_history(
 @router.put(
     "/admin/corridors/{corridor_id}/price-bands/{service_type}", response_model=Envelope[PriceBandDTO], responses=ERROR_RESPONSES, tags=[GEO_TAG]
 )
+
+
 def admin_set_price_band(
     body: PriceBandUpsert,
     request: Request,
@@ -793,14 +665,12 @@ def admin_set_price_band(
     actor: Actor = Depends(require_capability(Capability.OPS_CORRIDOR_MANAGE)),
     db: Session = Depends(get_db),
 ) -> JSONResponse:
-    def handler() -> tuple[PriceBandDTO, list[dict[str, Any]]]:
+    def handler() -> PriceBandDTO:
         info = service.set_price_band(
             db,
             actor_user_id=actor.user_id,
             corridor_api_id=corridor_id,
             service_type=service_type,
-            origin_stop_api_id=body.origin_stop_id,
-            destination_stop_api_id=body.destination_stop_id,
             floor_minor=body.floor_minor,
             ceiling_minor=body.ceiling_minor,
             is_active=body.is_active,
@@ -808,21 +678,11 @@ def admin_set_price_band(
             reason=body.reason,
             expected_version=body.expected_version,
         )
-        warnings = [
-            {**warning, "message": PRICE_BAND_WARNING_MESSAGE}
-            for warning in service.price_band_warnings(db, corridor_id=info.corridor_id, service_type=info.service_type)
-        ]
-        return _price_band_dto(info, service.user_api_ids(db, [info.updated_by])), warnings
+        return _price_band_dto(info, service.user_api_ids(db, [info.updated_by]))
 
     return _command(
         request, db, actor=actor, idempotency_key=idempotency_key, body=body, handler=handler, resource_type="corridor_price_band"
     )
-
-
-PRICE_BAND_WARNING_MESSAGE = (
-    "The corridor-wide floor is above the lowest segment floor. Corridor-wide bands are loose safety limits; "
-    "exact segment bands set real prices (Q53)."
-)
 
 
 @router.get("/admin/geo/checks/q47", response_model=Envelope[list[Q47ViolationDTO]], responses=ERROR_RESPONSES, tags=[GEO_TAG])

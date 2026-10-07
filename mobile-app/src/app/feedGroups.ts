@@ -3,7 +3,7 @@
  *
  * The server can already answer a wider question than "my exact route at my exact hour": with
  * `include_alternatives=true` it also returns matches that sit within the corridor's search radius of the
- * stop, or within three hours of the window, and marks each one `group: "alternative"` (ADR/§6.4, §8.2). That
+ * asked place, or within three hours of the window, and marks each one `group: "alternative"` (ADR/§6.4, §8.2). That
  * group is deliberately ranked *below* every primary match and never scored against them - an alternative is
  * a suggestion, not a result.
  *
@@ -46,15 +46,14 @@ export function splitFeedGroups<T extends GroupedItem>(items: readonly T[]): Fee
 /**
  * Why this one is only a suggestion, in the driver's words.
  *
- * "Muqobil" on its own is not actionable: the driver has to know whether to look at the clock or at the map.
- * `time_differs` is checked first because it is the one that costs the driver a decision - a nearby stop is a
- * few minutes' driving, a different hour can mean the trip does not work at all.
+ * "Muqobil" on its own is not actionable: the driver has to know whether the clock is the difference. The only
+ * reason the server still names is `time_differs` (ADR-0028 removed the stop-based `nearby_stop`); a different
+ * hour can mean the trip does not work at all.
  *
  * Returns null when the server sent no reason we can explain, so the caller shows the bare label rather than
  * inventing one.
  */
-export function alternativeReason(reasons: readonly string[]): "time_differs" | "nearby_stop" | null {
+export function alternativeReason(reasons: readonly string[]): "time_differs" | null {
   if (reasons.includes("time_differs")) return "time_differs";
-  if (reasons.includes("nearby_stop")) return "nearby_stop";
   return null;
 }

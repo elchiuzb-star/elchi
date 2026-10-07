@@ -19,7 +19,6 @@ from app.modules.bookings.models import Booking, BookingAllocation
 from app.modules.identity import service as identity_service
 from app.modules.marketplace import service as marketplace_service
 from app.modules.platform.service import CommandResult, run_idempotent
-from app.modules.trips import service as trips_service
 from tests.pg.bookings.conftest import (
     BW,
     STAGGER_S,
@@ -28,6 +27,7 @@ from tests.pg.bookings.conftest import (
     booked,
     add_user,
     auth,
+    claims_of,
     counter,
     domain_error,
     driver_trip,
@@ -44,6 +44,7 @@ from tests.pg.bookings.conftest import (
     scalar,
     seats_used,
     set_flag,
+    place_position,
     wallet,
 )
 from tests.pg.harness import run_concurrently
@@ -61,10 +62,11 @@ def test_ac03_client_accepts_driver_proposal_on_request(bw: BW) -> None:
         b = s.get(Booking, booking.id)
         assert (b.service_status, b.cash_status, b.commission_status, b.version) == ("confirmed", "unpaid", "held", 1)
         assert (b.quantity, b.unit_price_minor, b.total_minor, b.fee_bps, b.commission_minor) == (2, 19_000_000, 38_000_000, 1500, 5_700_000)
-        assert (b.pickup_occurrence_seq, b.dropoff_occurrence_seq, b.seats) == (1, 4, 2)
+        assert (b.pickup_position_m, b.dropoff_position_m, b.seats) == (place_position(bw, "A"), place_position(bw, "D"), 2)
         assert b.terms_snapshot["flags"]["passenger_enabled"] is True and b.terms_snapshot["fee"]["fee_bps"] == 1500
-        allocations = s.query(BookingAllocation).filter_by(booking_id=b.id).order_by(BookingAllocation.segment_from_seq).all()
-        assert [(a.segment_from_seq, a.seats, a.active) for a in allocations] == [(1, 2, True), (2, 2, True), (3, 2, True)]
+        # ADR-0028: one road claim A -> D holds the seats; no legacy segment allocation is written (Q160: frozen)
+        assert s.query(BookingAllocation).filter_by(booking_id=b.id).count() == 0
+        assert claims_of(bw, b.id) == [(place_position(bw, "A"), place_position(bw, "D"), 2, True)]
         thread = marketplace_service.get_thread_by_public_id(s, ref.thread_id)
         assert thread.state == "accepted" and marketplace_service.current_version(s, thread).status == "accepted"
         assert marketplace_service.get_listing_by_public_id(s, listing).status == "fulfilled"
@@ -83,7 +85,9 @@ def test_ac02_segment_booking_from_a_request_and_a_driver_proposal(bw: BW) -> No
     booking = booked(bw, trip_public, bw.w.client_id, pickup="B", dropoff="D")
     with bw.db.session() as s:
         b = s.get(Booking, booking.id)
-        assert (b.request_listing_id is not None, b.supply_listing_id, b.pickup_occurrence_seq, b.dropoff_occurrence_seq) == (True, None, 2, 4)
+        assert (b.request_listing_id is not None, b.supply_listing_id, b.pickup_position_m, b.dropoff_position_m) == (
+            True, None, place_position(bw, "B"), place_position(bw, "D")
+        )
     assert seats_used(bw, trip_id) == [0, 1, 1]
 
 
@@ -128,14 +132,15 @@ def test_expired_version_cutoff_route_and_flags(bw: BW) -> None:
     set_flag(bw.db, "passenger_enabled", False)
     assert domain_error(lambda: accept(bw, ref, bw.w.client_id)).code is ErrorCode.FEATURE_DISABLED
     set_flag(bw.db, "passenger_enabled", True)
-    with bw.db.engine.begin() as conn:  # the pickup occurrence moved 3 h later: the agreed window no longer meets it
-        conn.execute(text("UPDATE trip_stop_occurrences SET planned_arrival_at = planned_arrival_at + interval '3 hours' "
-                          "WHERE trip_id = :t"), {"t": trip_id})
+    # ADR-0028: the trip's plan moved 3 h later, so its road-position ETA at the pickup no longer meets the window
+    shift = ("planned_start_at = planned_start_at + interval '{0}', planned_end_at = planned_end_at + interval '{0}', "
+             "blocked_period = tstzrange(lower(blocked_period) + interval '{0}', upper(blocked_period) + interval '{0}')")
+    with bw.db.engine.begin() as conn:
+        conn.execute(text(f"UPDATE trips SET {shift.format('3 hours')} WHERE id = :t"), {"t": trip_id})
     route = domain_error(lambda: accept(bw, ref, bw.w.client_id))
     assert route.code is ErrorCode.ROUTE_CHANGED and route.details["reason"] == "schedule_changed"
     with bw.db.engine.begin() as conn:
-        conn.execute(text("UPDATE trip_stop_occurrences SET planned_arrival_at = planned_arrival_at - interval '3 hours' WHERE trip_id = :t"),
-                     {"t": trip_id})
+        conn.execute(text(f"UPDATE trips SET {shift.format('-3 hours')} WHERE id = :t"), {"t": trip_id})
         conn.execute(text("UPDATE trips SET version = version + 1 WHERE id = :t"), {"t": trip_id})  # raw version alone never blocks
         conn.execute(text("UPDATE trips SET booking_cutoff_at = now() - interval '1 minute' WHERE id = :t"), {"t": trip_id})
     assert domain_error(lambda: accept(bw, ref, bw.w.client_id)).code is ErrorCode.BOOKING_CUTOFF_PASSED
@@ -184,7 +189,7 @@ def test_ac07_twenty_parallel_accepts_for_the_last_seat(bw: BW) -> None:
     assert len(report.successes) == 1, [r.error for r in report.failures][:3]
     assert {r.error.code for r in report.failures} == {ErrorCode.CAPACITY_UNAVAILABLE}
     assert seats_used(bw, trip_id) == [1, 1, 1]
-    assert scalar(bw.db, "SELECT count(*) FROM booking_allocations WHERE active") == 3
+    assert scalar(bw.db, "SELECT count(*) FROM trip_capacity_claims WHERE active") == 1
     assert wallet(bw, bw.w.driver_id)[1] == 2_850_000  # exactly one hold (19 000 000 x 15%)
 
 
@@ -241,7 +246,7 @@ def test_ac08_ac09_http_replay_and_key_reuse(bw: BW, client) -> None:  # noqa: A
 # --- AC10 / AC11 / AC12 capacity through accept ----------------------------------------------------------------------------
 
 
-def test_ac10_ac11_segment_capacity_through_accept(bw: BW) -> None:
+def test_ac10_ac11_road_capacity_through_accept(bw: BW) -> None:
     trip_id, trip_public = driver_trip(bw, bw.w.driver_id, "01A130AA", seats=4)
     with bw.db.session() as s:
         c3 = add_user(s, "+998901200003", "client", full_name="Uchinchi Mijoz")
@@ -255,7 +260,8 @@ def test_ac10_ac11_segment_capacity_through_accept(bw: BW) -> None:
     accept(bw, b_d, bw.w.client2_id)
     assert seats_used(bw, trip_id) == [2, 3, 1]  # A-B 2, B-C 3 (remaining 1), C-D 1
     error = domain_error(lambda: accept(bw, a_d, c3))
-    assert error.code is ErrorCode.CAPACITY_UNAVAILABLE and {seg["from_seq"] for seg in error.details["segments"]} == {2}  # AC10
+    # AC10: the trip is full on B-C - ADR-0028 names the road position where it is (B, where the second rider boards)
+    assert error.code is ErrorCode.CAPACITY_UNAVAILABLE and {p["at_m"] for p in error.details["positions"]} == {place_position(bw, "B")}
     accept(bw, c_d, c4)  # AC11: C-D for 3 fits
     assert seats_used(bw, trip_id) == [2, 3, 4]
 
@@ -269,7 +275,7 @@ def test_ac12_baggage_over_capacity_is_cargo_limit_exceeded(bw: BW) -> None:
     accept(bw, ref1, bw.w.client_id)
     error = domain_error(lambda: accept(bw, ref2, bw.w.client2_id))
     assert error.code is ErrorCode.CARGO_LIMIT_EXCEEDED
-    assert [load.baggage_used_ml for load in trips_service.get_segment_loads(bw.db.session(), trip_id)] == [150_000] * 3
+    assert scalar(bw.db, "SELECT sum(baggage_ml) FROM trip_capacity_claims WHERE trip_id = :t AND active", t=trip_id) == 150_000
 
 
 # --- AC19 balance / AC43 frozen quote / D3 exempt ------------------------------------------------------------------------
@@ -430,36 +436,28 @@ def test_db_invariants_snapshot_release_contract_and_capacity_consistency(bw: BW
         ("UPDATE bookings SET fee_bps = 1000 WHERE id = :b", "immutable"),
         ("UPDATE bookings SET driver_user_id = client_user_id WHERE id = :b", "immutable"),
         ("DELETE FROM bookings WHERE id = :b", "cannot be deleted"),
-        ("DELETE FROM booking_allocations WHERE booking_id = :b", "cannot be deleted"),
-        ("UPDATE booking_allocations SET seats = 9 WHERE booking_id = :b", "immutable"),
         ("UPDATE booking_status_history SET command = 'x' WHERE booking_id = :b", "append-only"),
     ):
         with pytest.raises(DBAPIError, match=match), bw.db.engine.begin() as conn:
             conn.execute(text(statement), {"b": booking.id})
-    # Counters and allocations disagree -> the deferred trigger refuses at COMMIT (release without counter update).
-    with pytest.raises(DBAPIError, match="does not equal its active booking allocations"), bw.db.engine.begin() as conn:
-        conn.execute(text("UPDATE booking_allocations SET active = false, released_at = now() WHERE booking_id = :b AND segment_from_seq = 1"), {"b": booking.id})
+    # Q160 (0101): the stop-era capacity tables are frozen history - nothing may be added to them.
+    with pytest.raises(DBAPIError, match="frozen history"), bw.db.engine.begin() as conn:
+        conn.execute(text("INSERT INTO booking_allocations (booking_id, trip_id, segment_from_seq, seats) VALUES (:b, :t, 1, 2)"),
+                     {"b": booking.id, "t": trip_id})
     assert seats_used(bw, trip_id) == [2, 2, 2]
-    # Release contract at the DB: a consistent release commits, but a released allocation never re-activates.
-    with bw.db.engine.connect() as conn:
-        tx = conn.begin()
-        conn.execute(text("UPDATE booking_allocations SET active = false, released_at = now() WHERE booking_id = :b"), {"b": booking.id})
-        conn.execute(text("UPDATE trip_segment_resources SET seats_used = seats_used - 2 WHERE trip_id = :t"), {"t": trip_id})
-        with pytest.raises(DBAPIError, match="cannot be re-activated"):
-            with conn.begin_nested():
-                conn.execute(text("UPDATE booking_allocations SET active = true, released_at = NULL WHERE booking_id = :b"), {"b": booking.id})
-        tx.rollback()
     with pytest.raises(IntegrityError, match="uq_bookings_accepted_proposal_version"), bw.db.engine.begin() as conn:
         conn.execute(
             text(
                 "INSERT INTO bookings (public_id, service_type, service_status, commission_status, client_user_id, driver_user_id, trip_id, "
                 "corridor_id, request_listing_id, supply_listing_id, proposal_thread_id, accepted_proposal_version_id, route_version_id, "
-                "trip_version, pickup_stop_id, dropoff_stop_id, pickup_occurrence_seq, dropoff_occurrence_seq, pickup_window_start, "
+                "trip_version, pickup_point, dropoff_point, pickup_district_id, dropoff_district_id, "
+                "pickup_position_m, dropoff_position_m, pickup_window_start, "
                 "pickup_window_end, quantity, seats, price_basis, unit_price_minor, total_minor, fee_policy_id, fee_bps, commission_minor, "
                 "listing_version, listing_terms_version, terms_snapshot) SELECT gen_random_uuid(), service_type, 'confirmed', "
                 "commission_status, client_user_id, driver_user_id, trip_id, corridor_id, NULL, request_listing_id, proposal_thread_id, "
-                "accepted_proposal_version_id, route_version_id, trip_version, pickup_stop_id, dropoff_stop_id, pickup_occurrence_seq, "
-                "dropoff_occurrence_seq, pickup_window_start, pickup_window_end, quantity, seats, price_basis, unit_price_minor, "
+                "accepted_proposal_version_id, route_version_id, trip_version, pickup_point, "
+                "dropoff_point, pickup_district_id, dropoff_district_id, pickup_position_m, dropoff_position_m, "
+                "pickup_window_start, pickup_window_end, quantity, seats, price_basis, unit_price_minor, "
                 "total_minor, fee_policy_id, fee_bps, commission_minor, listing_version, listing_terms_version, terms_snapshot "
                 "FROM bookings WHERE id = :b"
             ),
@@ -467,14 +465,19 @@ def test_db_invariants_snapshot_release_contract_and_capacity_consistency(bw: BW
         )
 
 
-def test_deferred_trigger_failure_at_commit_is_mapped_envelope_and_nothing_is_stored(bw: BW, client, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
+def test_db_guard_failure_inside_accept_is_mapped_envelope_and_nothing_is_stored(bw: BW, client, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
     listing, trip_id, _, ref = request_with_driver_proposal(bw)
-    monkeypatch.setattr(trips_service, "reserve", lambda *args, **kwargs: [])  # a bookkeeping bug: allocations without usage
+    def legacy_allocation_instead_of_a_claim(session, booking, trip_id, demand) -> None:  # noqa: ANN001
+        # a bookkeeping bug: a stop-era allocation instead of a road claim - the 0101 guard refuses it (Q160)
+        session.add(BookingAllocation(booking_id=booking.id, trip_id=trip_id, segment_from_seq=1, seats=demand.seats, active=True))
+        session.flush()
+
+    monkeypatch.setattr(bookings_service, "_claim_road", legacy_allocation_instead_of_a_claim)
     body = {"proposal_version_id": ref.version_id, "expected_listing_version": listing_version(bw, listing)}
     response = client.post(f"/api/v2/proposals/{ref.thread_id}/accept", json=body, headers=auth(bw.w.client_id, "client", "accept-500-0001"))
-    # Wave 2.1 (db_errors): the deferred check_violation is a 409 INTEGRITY_CONFLICT envelope, not a bare 500.
+    # Wave 2.1 (db_errors): a DB guard is a 409 INTEGRITY_CONFLICT envelope with its rule name, not a bare 500.
     assert response.status_code == 409 and response.json()["error"]["code"] == "INTEGRITY_CONFLICT", response.text
-    assert response.json()["error"]["details"] == {"reason": "check_violation"}
+    assert response.json()["error"]["details"] == {"reason": "stops_retired"}
     assert scalar(bw.db, "SELECT count(*) FROM bookings") == 0
     assert scalar(bw.db, "SELECT count(*) FROM idempotency_records WHERE idem_key = 'accept-500-0001'") == 0
     assert scalar(bw.db, "SELECT count(*) FROM wallet_holds") == 0 and seats_used(bw, trip_id) == [0, 0, 0]

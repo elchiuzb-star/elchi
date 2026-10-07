@@ -36,12 +36,9 @@ from app.modules.marketplace.feed.schemas import (
     FeedMatchDTO,
     FeedPageMeta,
     FeedReputationDTO,
-    MatchDTO,
     SavedSearchCreate,
     SavedSearchDTO,
-    TripAvailabilitySummaryDTO,
 )
-from app.modules.marketplace.ports import get_ports
 from app.modules.marketplace.views import listing_public_dto
 
 router = APIRouter(tags=["v2 Feed"])
@@ -107,30 +104,6 @@ def feed_item_dto(session: Session, item: feed_service.RankedItem) -> FeedItemDT
     )
 
 
-def match_dto(session: Session, item: feed_service.RankedItem, ranking_version: str) -> MatchDTO:
-    availability = item.availability
-    summary = None
-    if availability is not None:
-        passenger = item.listing.service_type == ServiceType.PASSENGER.value
-        summary = TripAvailabilitySummaryDTO(
-            seat_capacity=availability.seat_capacity if passenger else None,
-            min_remaining_seats=availability.min_remaining_seats if passenger else None,
-            min_remaining_cargo_weight_g=None if passenger else availability.min_remaining_cargo_weight_g,
-            min_remaining_cargo_volume_ml=None if passenger else availability.min_remaining_cargo_volume_ml,
-        )
-    return MatchDTO(
-        listing=listing_public_dto(session, item.listing),
-        trip_availability_summary=summary,
-        match=_match_dto(item),
-        ranking_version=ranking_version,
-        group=item.group,
-        ready_to_accept=item.ready_to_accept,
-        labels=_labels(item),
-        reputation=reputation_dto(item.reputation),
-        comparable_total_minor=item.comparable_total_minor,
-    )
-
-
 def _meta(page: feed_service.FeedPage, scope: str) -> FeedPageMeta:
     return FeedPageMeta(
         next_cursor=encode_page_cursor(list(page.next_key), scope) if page.next_key else None,
@@ -142,25 +115,18 @@ def _meta(page: feed_service.FeedPage, scope: str) -> FeedPageMeta:
 
 
 def saved_search_dtos(session: Session, rows: list[SavedSearch]) -> list[SavedSearchDTO]:
-    stop_ids = sorted({v for r in rows for v in (r.origin_stop_id, r.destination_stop_id) if v is not None})
     region_ids = {v for r in rows for v in (r.origin_region_id, r.destination_region_id) if v is not None}
     district_ids = {v for r in rows for v in (r.origin_district_id, r.destination_district_id) if v is not None}
-    stops = get_ports().geo.stops_by_ids(session, stop_ids) if stop_ids else {}
     regions = feed_service.region_public_ids(session, region_ids)
     districts = feed_service.district_public_ids(session, district_ids)
-
-    def stop_ref(stop_id: int | None) -> str | None:
-        return stops[stop_id].public_id if stop_id is not None and stop_id in stops else None
 
     return [
         SavedSearchDTO(
             id=feed_service.saved_search_public_id(row),
             service_type=ServiceType(row.service_type),
             side=FeedSide(row.side),
-            origin_stop_id=stop_ref(row.origin_stop_id),
             origin_region_id=regions.get(row.origin_region_id) if row.origin_region_id else None,
             origin_district_id=districts.get(row.origin_district_id) if row.origin_district_id else None,
-            destination_stop_id=stop_ref(row.destination_stop_id),
             destination_region_id=regions.get(row.destination_region_id) if row.destination_region_id else None,
             destination_district_id=districts.get(row.destination_district_id) if row.destination_district_id else None,
             time_window_start=ensure_aware_utc(row.time_window_start),
@@ -183,10 +149,10 @@ def get_feed(
     side: FeedSide = Query(...),
     date_from: str = Query(..., description="ISO-8601 with offset"),
     date_to: str = Query(..., description="ISO-8601 with offset"),
-    origin_stop_id: str | None = Query(default=None),
+    origin_stop_id: str | None = Query(default=None, include_in_schema=False),
     origin_region_id: str | None = Query(default=None),
     origin_district_id: str | None = Query(default=None, description="District end (wave 10); one end, one kind."),
-    destination_stop_id: str | None = Query(default=None),
+    destination_stop_id: str | None = Query(default=None, include_in_schema=False),
     destination_region_id: str | None = Query(default=None),
     destination_district_id: str | None = Query(default=None),
     seats: int | None = Query(default=None, ge=1, le=60),
@@ -199,15 +165,16 @@ def get_feed(
     user_id: int = Depends(current_user_id),
     session: Session = Depends(get_session),
 ) -> JSONResponse:
+    for name, value in (("origin_stop_id", origin_stop_id), ("destination_stop_id", destination_stop_id)):
+        if value is not None:  # Q160: ELCHI has no stops - an old client is told so instead of silently ignored
+            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": name, "reason": "stops_retired"})
     criteria = feed_service.FeedCriteria(
         service_type=service_type,
         side=side,
         date_from=_parse_dt(date_from, "date_from"),
         date_to=_parse_dt(date_to, "date_to"),
-        origin_stop_id=origin_stop_id,
         origin_region_id=origin_region_id,
         origin_district_id=origin_district_id,
-        destination_stop_id=destination_stop_id,
         destination_region_id=destination_region_id,
         destination_district_id=destination_district_id,
         seats=seats,
@@ -223,10 +190,8 @@ def get_feed(
         side=side.value,
         date_from=to_iso_utc(criteria.date_from),
         date_to=to_iso_utc(criteria.date_to),
-        origin_stop_id=origin_stop_id,
         origin_region_id=origin_region_id,
         origin_district_id=origin_district_id,
-        destination_stop_id=destination_stop_id,
         destination_region_id=destination_region_id,
         destination_district_id=destination_district_id,
         seats=seats,
@@ -239,7 +204,7 @@ def get_feed(
         session, viewer_user_id=user_id, criteria=criteria, after_key=_decode_key(cursor, scope), limit=limit
     )
     items = [feed_item_dto(session, item) for item in page.items]
-    # §20.4: one anonymous counter row per search (no user, no stops, no filters) so search_with_match_rate can
+    # §20.4: one anonymous counter row per search (no user, no places, no filters) so search_with_match_rate can
     # be measured at all. Only the first page counts: paging through results is the same search.
     if cursor is None:
         feed_service.record_search(session, criteria=criteria, page=page)
@@ -252,8 +217,6 @@ def get_feed(
 
 # Q138 (ADR-0026): GET /listings/{id}/matches is removed - it paired a client request with driver listings (and a
 # driver listing with requests); with driver listings retired the driver's request feed is the only match surface.
-
-
 @router.post("/saved-searches", response_model=Envelope[SavedSearchDTO], status_code=201, responses=ERROR_RESPONSES)
 def create_saved_search(
     body: SavedSearchCreate,

@@ -70,6 +70,11 @@ CONSTRAINT_RULES: dict[str, DbErrorRule] = {
     "promo_flag_enable_refused": _R(ErrorCode.PRODUCTION_INVARIANTS_FAILED, "gate_failed"),
     "promo_reinstate_invalid": _R(ErrorCode.INVALID_STATE_TRANSITION, "promo_reinstate_invalid"),  # 0086
     "promo_booking_terms_mismatch": _R(ErrorCode.INTEGRITY_CONFLICT, "promo_booking_terms_mismatch"),  # 0087
+    # ADR-0028 phase 1 (0097, Q159): interval capacity claims and set-once route positions.
+    "trip_capacity_claims_exceeded": _R(ErrorCode.CAPACITY_UNAVAILABLE, "trip_capacity_claims_exceeded"),
+    "booking_positions_set_once": _R(ErrorCode.INTEGRITY_CONFLICT, "booking_positions_set_once"),
+    # Q160 (0101): stop structures are frozen history; nothing may write or reference a stop.
+    "stops_retired": _R(ErrorCode.INTEGRITY_CONFLICT, "stops_retired"),
 }
 
 # Existing (wave 1-2) trigger messages without a constraint name; matched with ``str.startswith``.

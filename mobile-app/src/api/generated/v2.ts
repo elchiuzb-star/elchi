@@ -251,28 +251,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/admin/corridors/{corridor_id}/stops": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Admin List Corridor Stops
-         * @description Every stop of a corridor for staff - inactive ones and draft corridors included, with the ``version`` a
-         *     ``PATCH /admin/stops/{id}`` needs and the Q27 evidence. The public list shows only active stops of open corridors.
-         */
-        get: operations["admin_list_corridor_stops_api_v2_admin_corridors__corridor_id__stops_get"];
-        put?: never;
-        /** Admin Create Stop */
-        post: operations["admin_create_stop_api_v2_admin_corridors__corridor_id__stops_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/admin/disputes": {
         parameters: {
             query?: never;
@@ -1348,23 +1326,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/admin/stops/{stop_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Admin Patch Stop */
-        patch: operations["admin_patch_stop_api_v2_admin_stops__stop_id__patch"];
-        trace?: never;
-    };
     "/api/v2/admin/support-threads": {
         parameters: {
             query?: never;
@@ -2130,9 +2091,8 @@ export interface paths {
          * List Corridor Districts
          * @description G17: which districts this direction really passes, in travel order (wave 10).
          *
-         *     This is what "Toshkent -> Qarshi" covers: the districts of the stops on the corridor's confirmed routes.
-         *     Districts whose stops no confirmed route reaches are still listed, with ``on_confirmed_route=false``, so
-         *     the client can offer them without claiming they are on the way (spec 6.1, 6.5).
+         *     This is what "Toshkent -> Qarshi" covers: the districts whose centre lies on a confirmed road of the corridor
+         *     (ADR-0028). A district the road does not reach is not listed (spec 6.1, 6.5).
          */
         get: operations["list_corridor_districts_api_v2_corridors__corridor_id__districts_get"];
         put?: never;
@@ -2159,23 +2119,6 @@ export interface paths {
          *     earlier needs no provider, so the supply side keeps working in that configuration.
          */
         get: operations["list_corridor_routes_api_v2_corridors__corridor_id__routes_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/corridors/{corridor_id}/stops": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Corridor Stops */
-        get: operations["list_corridor_stops_api_v2_corridors__corridor_id__stops_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3476,23 +3419,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/stops/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Search Stops */
-        get: operations["search_stops_api_v2_stops_search_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/support-threads/{thread_id}": {
         parameters: {
             query?: never;
@@ -3964,31 +3890,6 @@ export interface components {
             /** Status */
             status: string;
         };
-        /** AdminStopDTO */
-        AdminStopDTO: {
-            /** Corridor Id */
-            corridor_id: string;
-            district: components["schemas"]["DistrictRefDTO"];
-            /** Id */
-            id: string;
-            /** Is Active */
-            is_active: boolean;
-            /** Meeting Note */
-            meeting_note?: string | null;
-            /** Meeting Photo File Id */
-            meeting_photo_file_id?: string | null;
-            /** Meeting Photo Url */
-            meeting_photo_url?: string | null;
-            /** Name Ru */
-            name_ru?: string | null;
-            /** Name Uz */
-            name_uz: string;
-            point: components["schemas"]["PointDTO"];
-            /** Sequence Hint */
-            sequence_hint: number;
-            /** Version */
-            version: number;
-        };
         /**
          * AdminTripSearchDTO
          * @description Staff trip lookup row (admin panel). The driver is named by first name only - no phone, no plate - so this
@@ -4218,10 +4119,6 @@ export interface components {
         };
         /** AmendmentChanges */
         AmendmentChanges: {
-            /** Dropoff Stop Id */
-            dropoff_stop_id?: string | null;
-            /** Pickup Stop Id */
-            pickup_stop_id?: string | null;
             /** Pickup Window End */
             pickup_window_end?: string | null;
             /** Pickup Window Start */
@@ -4513,7 +4410,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             custody_case?: components["schemas"]["CustodyCaseDTO"] | null;
             driver?: components["schemas"]["BookingDriverDTO"] | null;
-            dropoff: components["schemas"]["BookingStopDTO"];
+            dropoff: components["schemas"]["BookingEndDTO"];
             /** Id */
             id: string;
             listing_ids: components["schemas"]["BookingListingIdsDTO"];
@@ -4523,7 +4420,7 @@ export interface components {
             /** @description Q6: the cargo photo of the request this booking came from - a short-lived signed link for the sender, the assigned driver and staff. Absent for a passenger booking or when none was uploaded. */
             parcel_photo?: components["schemas"]["MediaRefDTO"] | null;
             payment_method: components["schemas"]["PaymentMethod"];
-            pickup: components["schemas"]["BookingStopDTO"];
+            pickup: components["schemas"]["BookingEndDTO"];
             policy_versions: components["schemas"]["BookingPolicyVersionsDTO"];
             price_basis: components["schemas"]["PriceBasis"];
             /** @description Referral stage 4: present only on a discounted booking. The client hands the driver cash_due_minor, not total_minor. */
@@ -4622,7 +4519,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             custody_case?: components["schemas"]["CustodyCaseDTO"] | null;
             driver?: components["schemas"]["BookingDriverDTO"] | null;
-            dropoff: components["schemas"]["BookingStopDTO"];
+            dropoff: components["schemas"]["BookingEndDTO"];
             fee: components["schemas"]["BookingFeeDTO"];
             /** Id */
             id: string;
@@ -4633,7 +4530,7 @@ export interface components {
             /** @description Q6: the cargo photo of the request this booking came from - a short-lived signed link for the sender, the assigned driver and staff. Absent for a passenger booking or when none was uploaded. */
             parcel_photo?: components["schemas"]["MediaRefDTO"] | null;
             payment_method: components["schemas"]["PaymentMethod"];
-            pickup: components["schemas"]["BookingStopDTO"];
+            pickup: components["schemas"]["BookingEndDTO"];
             policy_versions: components["schemas"]["BookingPolicyVersionsDTO"];
             price_basis: components["schemas"]["PriceBasis"];
             /** @description Referral stage 4: present only on a discounted booking. Collect cash_to_collect_minor; the real balance is charged commission_charged_minor. */
@@ -4674,6 +4571,16 @@ export interface components {
             /** Id */
             id: string;
             vehicle: components["schemas"]["BookingVehicleDTO"];
+        };
+        /** BookingEndDTO */
+        BookingEndDTO: {
+            /** Planned Arrival At */
+            planned_arrival_at?: string | null;
+            point?: components["schemas"]["PointEndDTO"] | null;
+            /** Window End */
+            window_end?: string | null;
+            /** Window Start */
+            window_start?: string | null;
         };
         /** BookingFeeDTO */
         BookingFeeDTO: {
@@ -4762,19 +4669,6 @@ export interface components {
              * @enum {string}
              */
             view: "driver";
-        };
-        /** BookingStopDTO */
-        BookingStopDTO: {
-            /** Occurrence Seq */
-            occurrence_seq: number;
-            /** Planned Arrival At */
-            planned_arrival_at?: string | null;
-            point?: components["schemas"]["PointEndDTO"] | null;
-            stop?: components["schemas"]["StopRefDTO"] | null;
-            /** Window End */
-            window_end?: string | null;
-            /** Window Start */
-            window_start?: string | null;
         };
         /**
          * BookingTrackingDTO
@@ -5502,8 +5396,6 @@ export interface components {
             name: string;
             origin_region: components["schemas"]["RegionRefDTO"];
             rollout_state: components["schemas"]["CorridorRolloutState"];
-            /** Stops Count */
-            stops_count: number;
             /**
              * Updated At
              * Format: date-time
@@ -5548,8 +5440,6 @@ export interface components {
             /** Name */
             name: string;
             origin_region: components["schemas"]["RegionRefDTO"];
-            /** Stops Count */
-            stops_count: number;
         };
         /**
          * CorridorDistrictDTO
@@ -5559,16 +5449,12 @@ export interface components {
             district: components["schemas"]["DistrictDTO"];
             /**
              * On Confirmed Route
-             * @description A confirmed route version of this corridor really stops in the district. False = the corridor owns a stop there, but no confirmed road reaches it yet (spec 6.1: proximity is not a route).
+             * @description Always true (ADR-0028): a district is listed only when its centre lies within the corridor's radius of a confirmed road. A district the road does not reach is not listed (spec 6.1: proximity is not a route).
+             * @default true
              */
             on_confirmed_route: boolean;
             /** Sequence */
             sequence: number;
-            /**
-             * Stops Count
-             * @description Active stops of this corridor inside the district.
-             */
-            stops_count: number;
         };
         /** CorridorPatch */
         CorridorPatch: {
@@ -5651,7 +5537,7 @@ export interface components {
         };
         /**
          * DirectionOfferCreate
-         * @description Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027).
+         * @description Q152: an offer from a direction. The trip, window and quantity are the system's (ADR-0027).
          */
         DirectionOfferCreate: {
             /** Listing Id */
@@ -5954,11 +5840,6 @@ export interface components {
             /** Name Uz */
             name_uz: string;
             region: components["schemas"]["RegionRefDTO"];
-            /**
-             * Stops Count
-             * @description Active stops of publicly visible corridors in this district. 0 means the place can be named but no verified stop serves it yet - the client says so instead of promising a ride.
-             */
-            stops_count: number;
         };
         /** DistrictRefDTO */
         DistrictRefDTO: {
@@ -6244,21 +6125,6 @@ export interface components {
         /** Envelope[AccountDeletionDTO] */
         Envelope_AccountDeletionDTO_: {
             data: components["schemas"]["AccountDeletionDTO"];
-            /** Message */
-            message?: string | null;
-            meta?: components["schemas"]["PageMeta"] | null;
-            /**
-             * Success
-             * @default true
-             * @constant
-             */
-            success: true;
-            /** Warnings */
-            warnings?: components["schemas"]["ApiWarning"][] | null;
-        };
-        /** Envelope[AdminStopDTO] */
-        Envelope_AdminStopDTO_: {
-            data: components["schemas"]["AdminStopDTO"];
             /** Message */
             message?: string | null;
             meta?: components["schemas"]["PageMeta"] | null;
@@ -7688,22 +7554,6 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
-        /** Envelope[list[AdminStopDTO]] */
-        Envelope_list_AdminStopDTO__: {
-            /** Data */
-            data: components["schemas"]["AdminStopDTO"][];
-            /** Message */
-            message?: string | null;
-            meta?: components["schemas"]["PageMeta"] | null;
-            /**
-             * Success
-             * @default true
-             * @constant
-             */
-            success: true;
-            /** Warnings */
-            warnings?: components["schemas"]["ApiWarning"][] | null;
-        };
         /** Envelope[list[AdminTripSearchDTO]] */
         Envelope_list_AdminTripSearchDTO__: {
             /** Data */
@@ -8440,22 +8290,6 @@ export interface components {
             /** Warnings */
             warnings?: components["schemas"]["ApiWarning"][] | null;
         };
-        /** Envelope[list[StopDTO]] */
-        Envelope_list_StopDTO__: {
-            /** Data */
-            data: components["schemas"]["StopDTO"][];
-            /** Message */
-            message?: string | null;
-            meta?: components["schemas"]["PageMeta"] | null;
-            /**
-             * Success
-             * @default true
-             * @constant
-             */
-            success: true;
-            /** Warnings */
-            warnings?: components["schemas"]["ApiWarning"][] | null;
-        };
         /** Envelope[list[SupportThreadAdminDTO]] */
         Envelope_list_SupportThreadAdminDTO__: {
             /** Data */
@@ -8771,7 +8605,7 @@ export interface components {
             limit: number;
             /**
              * Match Scope
-             * @default confirmed_stops
+             * @default confirmed_roads
              */
             match_scope: string;
             /** Next Cursor */
@@ -9343,15 +9177,11 @@ export interface components {
              * Format: date-time
              */
             departure_window_start: string;
-            destination_point?: components["schemas"]["PointEndInput"] | null;
-            /** Destination Stop Id */
-            destination_stop_id?: string | null;
+            destination_point: components["schemas"]["PointEndInput"];
             /** Expires At */
             expires_at?: string | null;
             kind: components["schemas"]["ListingKind"];
-            origin_point?: components["schemas"]["PointEndInput"] | null;
-            /** Origin Stop Id */
-            origin_stop_id?: string | null;
+            origin_point: components["schemas"]["PointEndInput"];
             parcel?: components["schemas"]["ParcelDetails"] | null;
             passenger?: components["schemas"]["PassengerDetails"] | null;
             /** @default cash */
@@ -9391,7 +9221,6 @@ export interface components {
              */
             departure_window_start: string;
             destination_point?: components["schemas"]["PointEndDTO"] | null;
-            destination_stop?: components["schemas"]["StopRefDTO"] | null;
             /**
              * Expires At
              * Format: date-time
@@ -9401,7 +9230,6 @@ export interface components {
             id: string;
             kind: components["schemas"]["ListingKind"];
             origin_point?: components["schemas"]["PointEndDTO"] | null;
-            origin_stop?: components["schemas"]["StopRefDTO"] | null;
             owner: components["schemas"]["ListingOwnerDTO"];
             parcel: components["schemas"]["ParcelDetails"] | null;
             passenger: components["schemas"]["PassengerDetails"] | null;
@@ -9457,7 +9285,6 @@ export interface components {
             completed_bookings?: number | null;
             currency: components["schemas"]["Currency"];
             dropoff_point?: components["schemas"]["PointEndDTO"] | null;
-            dropoff_stop?: components["schemas"]["StopRefDTO"] | null;
             /** Is Mine */
             is_mine: boolean;
             /**
@@ -9466,7 +9293,6 @@ export interface components {
              */
             label: string;
             pickup_point?: components["schemas"]["PointEndDTO"] | null;
-            pickup_stop?: components["schemas"]["StopRefDTO"] | null;
             /**
              * Pickup Window End
              * Format: date-time
@@ -9531,15 +9357,11 @@ export interface components {
              * Format: date-time
              */
             departure_window_start: string;
-            destination_point?: components["schemas"]["PointEndInput"] | null;
-            /** Destination Stop Id */
-            destination_stop_id?: string | null;
+            destination_point: components["schemas"]["PointEndInput"];
             /** Expires At */
             expires_at?: string | null;
             kind: components["schemas"]["ListingKind"];
-            origin_point?: components["schemas"]["PointEndInput"] | null;
-            /** Origin Stop Id */
-            origin_stop_id?: string | null;
+            origin_point: components["schemas"]["PointEndInput"];
             /** Owner User Id */
             owner_user_id: string;
             parcel?: components["schemas"]["ParcelDetails"] | null;
@@ -9573,14 +9395,10 @@ export interface components {
             departure_window_end?: string | null;
             /** Departure Window Start */
             departure_window_start?: string | null;
-            /** Destination Stop Id */
-            destination_stop_id?: string | null;
             /** Expected Version */
             expected_version: number;
             /** Expires At */
             expires_at?: string | null;
-            /** Origin Stop Id */
-            origin_stop_id?: string | null;
             parcel?: components["schemas"]["ParcelDetails"] | null;
             passenger?: components["schemas"]["PassengerDetails"] | null;
             price_basis?: components["schemas"]["PriceBasis"] | null;
@@ -9604,12 +9422,10 @@ export interface components {
              */
             departure_window_start: string;
             destination_point?: components["schemas"]["PointEndDTO"] | null;
-            destination_stop?: components["schemas"]["StopRefDTO"] | null;
             /** Id */
             id: string;
             kind: components["schemas"]["ListingKind"];
             origin_point?: components["schemas"]["PointEndDTO"] | null;
-            origin_stop?: components["schemas"]["StopRefDTO"] | null;
             parcel_category?: components["schemas"]["ParcelCategoryDTO"] | null;
             parcel_type?: components["schemas"]["ParcelType"] | null;
             price_basis: components["schemas"]["PriceBasis"];
@@ -9682,8 +9498,8 @@ export interface components {
             service_status: string;
             service_type: components["schemas"]["ServiceType"];
         };
-        /** ManifestStopDTO */
-        ManifestStopDTO: {
+        /** ManifestPlaceDTO */
+        ManifestPlaceDTO: {
             /** Dropoffs */
             dropoffs: components["schemas"]["ManifestItemDTO"][];
             /** Pickups */
@@ -9696,7 +9512,6 @@ export interface components {
             point?: components["schemas"]["PointEndDTO"] | null;
             /** Seq */
             seq: number;
-            stop?: components["schemas"]["StopRefDTO"] | null;
         };
         /**
          * MatchGroup
@@ -9707,10 +9522,10 @@ export interface components {
          * MatchReason
          * @description Stable reason codes explaining a match decision (spec §6.4, §8; FeedItemDTO.match.reasons).
          *
-         *     Promoted from ``app.modules.geo.types`` (A2) in integration pass 1; geo re-exports it.
+         *     Promoted from ``app.modules.geo.types`` (A2) in integration pass 1. Q160: no stop reasons - a place is on the road.
          * @enum {string}
          */
-        MatchReason: "full_route" | "intermediate_segment" | "pickup_at_stop" | "dropoff_at_stop" | "pickup_detour" | "dropoff_detour" | "nearby_stop" | "time_differs" | "same_stop" | "pickup_not_on_route" | "dropoff_not_on_route" | "reverse_direction" | "detour_order_unknown" | "time_window_mismatch" | "detour_limit_exceeded" | "routing_unavailable";
+        MatchReason: "full_route" | "intermediate_segment" | "pickup_detour" | "dropoff_detour" | "time_differs" | "pickup_not_on_route" | "dropoff_not_on_route" | "reverse_direction" | "detour_order_unknown" | "time_window_mismatch" | "detour_limit_exceeded" | "routing_unavailable";
         /**
          * MatchType
          * @enum {string}
@@ -10381,8 +10196,6 @@ export interface components {
              * Format: date-time
              */
             changed_at: string;
-            /** Destination Stop Id */
-            destination_stop_id?: string | null;
             /** New Ceiling Minor */
             new_ceiling_minor: number;
             /** New Floor Minor */
@@ -10395,8 +10208,6 @@ export interface components {
             old_floor_minor?: number | null;
             /** Old Is Active */
             old_is_active?: boolean | null;
-            /** Origin Stop Id */
-            origin_stop_id?: string | null;
             /** Reason */
             reason: string;
             service_type: components["schemas"]["ServiceType"];
@@ -10410,8 +10221,6 @@ export interface components {
             /** Corridor Id */
             corridor_id: string;
             currency: components["schemas"]["Currency"];
-            /** Destination Stop Id */
-            destination_stop_id?: string | null;
             /**
              * Enforced
              * @default false
@@ -10421,8 +10230,6 @@ export interface components {
             floor_minor: number;
             /** Is Active */
             is_active: boolean;
-            /** Origin Stop Id */
-            origin_stop_id?: string | null;
             price_basis: components["schemas"]["PriceBasis"];
             /** Reason */
             reason: string;
@@ -10439,13 +10246,11 @@ export interface components {
         };
         /**
          * PriceBandUpsert
-         * @description Q42. Omit both stop ids for the corridor-wide band; send both for a segment band.
+         * @description Q42: the corridor-wide band of one service (ADR-0028: there is no stop pair to price).
          */
         PriceBandUpsert: {
             /** Ceiling Minor */
             ceiling_minor: number;
-            /** Destination Stop Id */
-            destination_stop_id?: string | null;
             /**
              * Enforced
              * @default false
@@ -10460,8 +10265,6 @@ export interface components {
              * @default true
              */
             is_active: boolean;
-            /** Origin Stop Id */
-            origin_stop_id?: string | null;
             /** Reason */
             reason: string;
         };
@@ -10855,8 +10658,6 @@ export interface components {
         /** ProposalCounter */
         ProposalCounter: {
             baggage?: components["schemas"]["ProposalBaggage"] | null;
-            /** Dropoff Stop Id */
-            dropoff_stop_id?: string | null;
             /** Expected Revision */
             expected_revision: number;
             /** Message */
@@ -10867,8 +10668,6 @@ export interface components {
              */
             outside_request_window?: boolean | null;
             parcel?: components["schemas"]["ProposalParcel"] | null;
-            /** Pickup Stop Id */
-            pickup_stop_id?: string | null;
             /** Pickup Window End */
             pickup_window_end?: string | null;
             /** Pickup Window Start */
@@ -10882,8 +10681,6 @@ export interface components {
         /** ProposalCreate */
         ProposalCreate: {
             baggage?: components["schemas"]["ProposalBaggage"] | null;
-            /** Dropoff Stop Id */
-            dropoff_stop_id?: string | null;
             /** Message */
             message?: string | null;
             /**
@@ -10892,8 +10689,6 @@ export interface components {
              */
             outside_request_window?: boolean | null;
             parcel?: components["schemas"]["ProposalParcel"] | null;
-            /** Pickup Stop Id */
-            pickup_stop_id?: string | null;
             /**
              * Pickup Window End
              * Format: date-time
@@ -11125,7 +10920,6 @@ export interface components {
             currency: components["schemas"]["Currency"];
             demand: components["schemas"]["ProposalDemandDTO"];
             dropoff_point?: components["schemas"]["PointEndDTO"] | null;
-            dropoff_stop?: components["schemas"]["StopRefDTO"] | null;
             /**
              * Expires At
              * Format: date-time
@@ -11149,7 +10943,6 @@ export interface components {
              */
             outside_request_window: boolean;
             pickup_point?: components["schemas"]["PointEndDTO"] | null;
-            pickup_stop?: components["schemas"]["StopRefDTO"] | null;
             /**
              * Pickup Window End
              * Format: date-time
@@ -11251,16 +11044,16 @@ export interface components {
              * Format: date-time
              */
             departure_window_start: string;
-            /** Destination Stop Name */
-            destination_stop_name: string;
+            /** Destination Name */
+            destination_name: string;
             kind: components["schemas"]["ListingKind"];
             /**
              * Listing Id
              * @description Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). A public id is not a secret (ADR-0002); no owner data is added.
              */
             listing_id?: string | null;
-            /** Origin Stop Name */
-            origin_stop_name: string;
+            /** Origin Name */
+            origin_name: string;
             price_basis: components["schemas"]["PriceBasis"];
             /** Quantity */
             quantity: number;
@@ -11302,11 +11095,9 @@ export interface components {
         };
         /**
          * Q47ViolationDTO
-         * @description F1: a pilot/active corridor that already violates Q47 (repair runbook: app.modules.geo.checks).
+         * @description F1: a pilot/active corridor without a confirmed road (ADR-0028; repair runbook: app.modules.geo.checks).
          */
         Q47ViolationDTO: {
-            /** Active Stops */
-            active_stops: number;
             /** Corridor Id */
             corridor_id: string;
             /** Name */
@@ -11314,8 +11105,6 @@ export interface components {
             /** Reasons */
             reasons: string[];
             rollout_state: components["schemas"]["CorridorRolloutState"];
-            /** Stops Missing Evidence */
-            stops_missing_evidence: string[];
         };
         /**
          * QuickReplyCode
@@ -11650,15 +11439,20 @@ export interface components {
              */
             role: "client" | "driver";
         };
-        /** RoutePreviewRequest */
+        /**
+         * RoutePreviewRequest
+         * @description A road to propose for confirmation (ADR-0028): from A to B on a corridor - no intermediate point.
+         */
         RoutePreviewRequest: {
+            /** Corridor Id */
+            corridor_id: string;
             /**
              * Departure At
              * Format: date-time
              */
             departure_at: string;
-            /** Stop Ids */
-            stop_ids: string[];
+            destination: components["schemas"]["PointDTO"];
+            origin: components["schemas"]["PointDTO"];
         };
         /** RouteTariffCreate */
         RouteTariffCreate: {
@@ -11707,19 +11501,6 @@ export interface components {
              * @enum {string}
              */
             status: "draft" | "confirmed";
-            /** Stops */
-            stops: components["schemas"]["RouteVersionStopDTO"][];
-        };
-        /** RouteVersionStopDTO */
-        RouteVersionStopDTO: {
-            /** Cumulative Distance M */
-            cumulative_distance_m: number;
-            /** Cumulative Duration S */
-            cumulative_duration_s: number;
-            /** Seq */
-            seq: number;
-            /** Stop Id */
-            stop_id: string;
         };
         /** SavedSearchCreate */
         SavedSearchCreate: {
@@ -11727,8 +11508,6 @@ export interface components {
             destination_district_id?: string | null;
             /** Destination Region Id */
             destination_region_id?: string | null;
-            /** Destination Stop Id */
-            destination_stop_id?: string | null;
             /**
              * Notify
              * @default true
@@ -11738,8 +11517,6 @@ export interface components {
             origin_district_id?: string | null;
             /** Origin Region Id */
             origin_region_id?: string | null;
-            /** Origin Stop Id */
-            origin_stop_id?: string | null;
             /**
              * Quantity
              * @default 1
@@ -11769,8 +11546,6 @@ export interface components {
             destination_district_id?: string | null;
             /** Destination Region Id */
             destination_region_id?: string | null;
-            /** Destination Stop Id */
-            destination_stop_id?: string | null;
             /** Id */
             id: string;
             /** Last Notified At */
@@ -11781,8 +11556,6 @@ export interface components {
             origin_district_id?: string | null;
             /** Origin Region Id */
             origin_region_id?: string | null;
-            /** Origin Stop Id */
-            origin_stop_id?: string | null;
             /** Quantity */
             quantity: number;
             service_type: components["schemas"]["ServiceType"];
@@ -11797,25 +11570,6 @@ export interface components {
              * Format: date-time
              */
             time_window_start: string;
-        };
-        /** SegmentAvailabilityDTO */
-        SegmentAvailabilityDTO: {
-            /** Baggage Remaining Ml */
-            baggage_remaining_ml: number;
-            /** Cargo Remaining Volume Ml */
-            cargo_remaining_volume_ml: number;
-            /** Cargo Remaining Weight G */
-            cargo_remaining_weight_g: number;
-            /** From Seq */
-            from_seq: number;
-            /** From Stop Id */
-            from_stop_id: string;
-            /** Seats Remaining */
-            seats_remaining: number;
-            /** To Seq */
-            to_seq: number;
-            /** To Stop Id */
-            to_stop_id: string;
         };
         /** SelectDriverRequest */
         SelectDriverRequest: {
@@ -12092,81 +11846,24 @@ export interface components {
              */
             stepped_up_at: string;
         };
-        /** StopCreate */
-        StopCreate: {
-            /** District Id */
-            district_id: string;
-            /**
-             * Is Active
-             * @default false
-             */
-            is_active: boolean;
-            /** Meeting Note */
-            meeting_note?: string | null;
-            /** Meeting Photo File Id */
-            meeting_photo_file_id?: string | null;
-            /** Name Ru */
-            name_ru?: string | null;
-            /** Name Uz */
-            name_uz: string;
-            point: components["schemas"]["PointDTO"];
-            /**
-             * Sequence Hint
-             * @default 0
-             */
-            sequence_hint: number;
-        };
-        /** StopDTO */
-        StopDTO: {
-            district: components["schemas"]["DistrictRefDTO"];
-            /** Id */
-            id: string;
-            /** Is Active */
-            is_active: boolean;
-            /** Meeting Note */
-            meeting_note?: string | null;
-            /** Name Ru */
-            name_ru?: string | null;
-            /** Name Uz */
-            name_uz: string;
-            point: components["schemas"]["PointDTO"];
-        };
-        /** StopPatch */
-        StopPatch: {
-            /** District Id */
-            district_id?: string | null;
-            /** Expected Version */
-            expected_version: number;
-            /** Is Active */
-            is_active?: boolean | null;
-            /** Meeting Note */
-            meeting_note?: string | null;
-            /** Meeting Photo File Id */
-            meeting_photo_file_id?: string | null;
-            /** Name Ru */
-            name_ru?: string | null;
-            /** Name Uz */
-            name_uz?: string | null;
-            point?: components["schemas"]["PointDTO"] | null;
-            /** Sequence Hint */
-            sequence_hint?: number | null;
-        };
-        /** StopRefDTO */
-        StopRefDTO: {
-            /**
-             * District Name Uz
-             * @description Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, never by a stop name (ELCHI works point A -> point B).
-             */
-            district_name_uz?: string | null;
-            /**
-             * Id
-             * @description Opaque stop id (stp_...).
-             */
-            id: string;
-            /** Name Ru */
-            name_ru?: string | null;
-            /** Name Uz */
-            name_uz: string;
+        /**
+         * StretchAvailabilityDTO
+         * @description ADR-0028: what is still free on ``[from_m, to_m)`` of the trip's road - one row per piece between bookings'
+         *     places (the use is constant inside a piece).
+         */
+        StretchAvailabilityDTO: {
+            /** Baggage Remaining Ml */
+            baggage_remaining_ml: number;
+            /** Cargo Remaining Volume Ml */
+            cargo_remaining_volume_ml: number;
+            /** Cargo Remaining Weight G */
+            cargo_remaining_weight_g: number;
+            /** From M */
+            from_m: number;
+            /** Seats Remaining */
+            seats_remaining: number;
+            /** To M */
+            to_m: number;
         };
         /** StrikeDTO */
         StrikeDTO: {
@@ -12745,10 +12442,10 @@ export interface components {
              */
             computed_at: string;
             /**
-             * Segments
+             * Stretches
              * @description Computed remaining capacity; not a reservation.
              */
-            segments: components["schemas"]["SegmentAvailabilityDTO"][];
+            stretches: components["schemas"]["StretchAvailabilityDTO"][];
             /** Trip Id */
             trip_id: string;
             /** Trip Version */
@@ -12783,12 +12480,20 @@ export interface components {
              * Format: date-time
              */
             planned_start_at: string;
+            /**
+             * Route End M
+             * @description ADR-0028: where on the road the trip ends.
+             */
+            route_end_m?: number | null;
+            /**
+             * Route Start M
+             * @description ADR-0028: where on the confirmed road the trip starts, metres from its start.
+             */
+            route_start_m?: number | null;
             /** Route Version Id */
             route_version_id: string;
             /** Seat Capacity */
             seat_capacity: number;
-            /** Stops */
-            stops: components["schemas"]["TripStopInput"][];
             /** Vehicle Id */
             vehicle_id: string;
         };
@@ -12841,13 +12546,21 @@ export interface components {
              * Format: date-time
              */
             planned_start_at: string;
+            /**
+             * Route End M
+             * @description ADR-0028: where on the road the trip ends (metres).
+             */
+            route_end_m?: number | null;
+            /**
+             * Route Start M
+             * @description ADR-0028: where on the road the trip starts (metres).
+             */
+            route_start_m?: number | null;
             /** Route Version Id */
             route_version_id: string;
             /** Seat Capacity */
             seat_capacity: number;
             status: components["schemas"]["TripStatus"];
-            /** Stops */
-            stops: components["schemas"]["TripStopDTO"][];
             /** Timezone */
             timezone: string;
             vehicle: components["schemas"]["TripVehicleDTO"];
@@ -12939,23 +12652,20 @@ export interface components {
             lat?: number | null;
             /** Lng */
             lng?: number | null;
-            stop?: components["schemas"]["StopRefDTO"] | null;
         };
         /**
          * TripIntentEndInput
-         * @description One end: a verified stop, or a district with an optional marked place (Q88) - what the search used.
+         * @description One end: a district with an optional marked place (Q88). Retired with ADR-0025 (Q138): kept for the shape.
          */
         TripIntentEndInput: {
             /** Address */
             address?: string | null;
             /** District Id */
-            district_id?: string | null;
+            district_id: string;
             /** Lat */
             lat?: number | null;
             /** Lng */
             lng?: number | null;
-            /** Stop Id */
-            stop_id?: string | null;
         };
         /** TripIntentFitCapacityDTO */
         TripIntentFitCapacityDTO: {
@@ -13003,7 +12713,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "same_stop" | "same_district" | "different";
+            status: "same_district" | "different";
         };
         /** TripIntentFitPriceDTO */
         TripIntentFitPriceDTO: {
@@ -13191,8 +12901,8 @@ export interface components {
         };
         /** TripManifestDTO */
         TripManifestDTO: {
-            /** Stops */
-            stops: components["schemas"]["ManifestStopDTO"][];
+            /** Places */
+            places: components["schemas"]["ManifestPlaceDTO"][];
             /** Trip Id */
             trip_id: string;
             /** Trip Version */
@@ -13210,8 +12920,13 @@ export interface components {
             planned_end_at?: string | null;
             /** Planned Start At */
             planned_start_at?: string | null;
-            /** Stops */
-            stops?: components["schemas"]["TripStopInput"][] | null;
+            /** Route End M */
+            route_end_m?: number | null;
+            /**
+             * Route Start M
+             * @description ADR-0028: a new road stretch (no claim yet).
+             */
+            route_start_m?: number | null;
         };
         /** TripPublicDTO */
         TripPublicDTO: {
@@ -13228,22 +12943,9 @@ export interface components {
              */
             planned_start_at: string;
             status: components["schemas"]["TripStatus"];
-            /** Stops */
-            stops: components["schemas"]["TripPublicStopDTO"][];
             /** Timezone */
             timezone: string;
             vehicle: components["schemas"]["TripPublicVehicleDTO"];
-        };
-        /** TripPublicStopDTO */
-        TripPublicStopDTO: {
-            /**
-             * Planned Arrival At
-             * Format: date-time
-             */
-            planned_arrival_at: string;
-            /** Seq */
-            seq: number;
-            stop: components["schemas"]["StopRefDTO"];
         };
         /**
          * TripPublicVehicleDTO
@@ -13260,38 +12962,6 @@ export interface components {
          * @enum {string}
          */
         TripStatus: "planned" | "boarding" | "in_progress" | "completed" | "cancelled" | "interrupted";
-        /** TripStopDTO */
-        TripStopDTO: {
-            /** Dwell Minutes */
-            dwell_minutes: number;
-            /** Eta Arrival At */
-            eta_arrival_at?: string | null;
-            /**
-             * Planned Arrival At
-             * Format: date-time
-             */
-            planned_arrival_at: string;
-            /** Seq */
-            seq: number;
-            stop: components["schemas"]["StopRefDTO"];
-        };
-        /** TripStopInput */
-        TripStopInput: {
-            /**
-             * Dwell Minutes
-             * @default 0
-             */
-            dwell_minutes: number;
-            /**
-             * Planned Arrival At
-             * Format: date-time
-             */
-            planned_arrival_at: string;
-            /** Seq */
-            seq: number;
-            /** Stop Id */
-            stop_id: string;
-        };
         /**
          * TripTrackingAdminDTO
          * @description K9 operator view (``ops.view``, audited). No "GPS active" flag - only the freshness of the last trusted point.
@@ -14624,182 +14294,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_PriceBandDTO_"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    admin_list_corridor_stops_api_v2_admin_corridors__corridor_id__stops_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                corridor_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_list_AdminStopDTO__"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    admin_create_stop_api_v2_admin_corridors__corridor_id__stops_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                corridor_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StopCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_AdminStopDTO_"];
                 };
             };
             /** @description Bad Request */
@@ -19834,95 +19328,6 @@ export interface operations {
             };
         };
     };
-    admin_patch_stop_api_v2_admin_stops__stop_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                stop_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StopPatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_AdminStopDTO_"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
     admin_list_support_threads_api_v2_admin_support_threads_get: {
         parameters: {
             query?: {
@@ -21089,6 +20494,8 @@ export interface operations {
             query?: {
                 /** @description Omit for every status. */
                 status?: ("pending" | "approved" | "rejected" | "blocked") | null;
+                /** @description Only this driver's vehicles (usr_ public id); omit for everyone. */
+                owner_user_id?: string | null;
                 cursor?: string | null;
                 limit?: number;
             };
@@ -23836,91 +23243,6 @@ export interface operations {
             };
         };
     };
-    list_corridor_stops_api_v2_corridors__corridor_id__stops_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                corridor_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_list_StopDTO__"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
     register_push_token_api_v2_devices_push_token_post: {
         parameters: {
             query?: never;
@@ -24897,11 +24219,9 @@ export interface operations {
                 date_from: string;
                 /** @description ISO-8601 with offset */
                 date_to: string;
-                origin_stop_id?: string | null;
                 origin_region_id?: string | null;
                 /** @description District end (wave 10); one end, one kind. */
                 origin_district_id?: string | null;
-                destination_stop_id?: string | null;
                 destination_region_id?: string | null;
                 destination_district_id?: string | null;
                 seats?: number | null;
@@ -30469,93 +29789,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_EmptyDTO_"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    search_stops_api_v2_stops_search_get: {
-        parameters: {
-            query: {
-                q: string;
-                region_id?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope_list_StopDTO__"];
                 };
             };
             /** @description Bad Request */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bookingCounterparty, canShareListing, canShareTracking, routesThroughStop } from "./safetyMounts";
+import { bookingCounterparty, canShareListing, canShareTracking } from "./safetyMounts";
 
 describe("bookingCounterparty", () => {
   const booking = {
@@ -39,22 +39,5 @@ describe("canShareListing", () => {
     expect(canShareListing("published")).toBe(true);
     expect(canShareListing("paused")).toBe(true);
     for (const status of ["draft", "fulfilled", "expired", "cancelled"]) expect(canShareListing(status)).toBe(false);
-  });
-});
-
-describe("routesThroughStop", () => {
-  const routes = [
-    { id: "r1", stops: [{ stop_id: "a" }, { stop_id: "b" }] },
-    { id: "r2", stops: [{ stop_id: "a" }, { stop_id: "c" }] },
-  ];
-
-  it("keeps every route when no stop is chosen", () => {
-    expect(routesThroughStop(routes, null).map((r) => r.id)).toEqual(["r1", "r2"]);
-  });
-
-  it("keeps only the routes through the stop", () => {
-    expect(routesThroughStop(routes, "c").map((r) => r.id)).toEqual(["r2"]);
-    expect(routesThroughStop(routes, "a").map((r) => r.id)).toEqual(["r1", "r2"]);
-    expect(routesThroughStop(routes, "z")).toEqual([]);
   });
 });

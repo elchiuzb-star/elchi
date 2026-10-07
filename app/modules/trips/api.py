@@ -85,17 +85,21 @@ def list_my_vehicles(
 @router.get("/admin/vehicles", response_model=Envelope[list[AdminVehicleDTO]], responses=ERROR_RESPONSES)
 def list_vehicles_for_review(
     status: AdminVehicleStatus | None = Query(default=None, description="Omit for every status."),
+    owner_user_id: str | None = Query(
+        default=None, max_length=64, description="Only this driver's vehicles (usr_ public id); omit for everyone."
+    ),
     cursor: str | None = Query(default=None, max_length=512),
     limit: int = Query(default=20, ge=1, le=MAX_PAGE_LIMIT),
     user_id: int = Depends(current_user_id),
     session: Session = Depends(get_session),
 ) -> Envelope[list[AdminVehicleDTO]]:
     """T3a: vehicles awaiting (or past) a staff decision, oldest first. Same capability as T3 verify."""
-    scope = page_scope("GET /admin/vehicles", status=status)
+    scope = page_scope("GET /admin/vehicles", status=status, owner=owner_user_id)
     rows = trips_service.list_vehicles_for_review(
         session,
         actor_user_id=user_id,
         statuses=[status] if status else None,
+        owner_user_public_id=owner_user_id,
         after=decode_time_id_cursor(cursor, scope),
         limit=limit + 1,
     )

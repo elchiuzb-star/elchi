@@ -58,7 +58,6 @@ export const orderFlowMessages = {
 
   // --- client-order-review ---
   "orderForm.review.title": { uz: "Buyurtmani tekshiring", ru: "Проверьте заказ" },
-  "orderForm.review.verifiedStop": { uz: "Belgilangan joy · {where}", ru: "Отмеченное место · {where}"},
   "orderForm.review.pickupPlace": { uz: "Olib ketish joyi", ru: "Место отправления" },
   "orderForm.review.dropoffPlace": { uz: "Yetkazish joyi", ru: "Место назначения" },
   "orderForm.review.districtsDetail": {

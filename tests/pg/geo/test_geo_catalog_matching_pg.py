@@ -1,5 +1,5 @@
-"""PostGIS tests for the geo catalogue, route versions, matching, rollout guards and 0043 DB guards
-(AC14, AC16, AC35; spec §6.3; STATE_MACHINES §10; wave 1.5 BR #5, #6, #8, #17; decision 27).
+"""PostGIS tests for the geo catalogue, confirmed roads, rollout guards and 0043 DB guards
+(AC35; spec §6.3; STATE_MACHINES §10; wave 1.5 BR #5, #6, #8, #17; ADR-0028 / Q160: no stops - a road is its geometry).
 
 Fixture geography is synthetic (tests/fixtures/geo/corridor_fixture.json).
 """
@@ -12,20 +12,17 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from app.contracts.enums import MatchType
 from app.contracts.errors import DomainError, ErrorCode
 from app.contracts.ids import new_public_uuid
 from app.modules.geo import service
 from app.modules.geo.routing import FakeRoutingProvider
-from app.modules.geo.types import LatLng, MatchReason, MatchRequest, TripRouteContext
+from app.modules.geo.types import LatLng
 from app.modules.platform import service as platform_service
 from tests.fixtures.geo.loader import build_route, load_geo_fixture
 from tests.pg.conftest import PgDatabase, run_alembic, script_heads
 from tests.pg.geo.geo_pg_helpers import create_user, set_q48_gate
 
 pytestmark = pytest.mark.pg
-
-START = datetime(2026, 9, 20, 1, 0, tzinfo=timezone.utc)  # 06:00 Tashkent
 
 
 @pytest.fixture
@@ -36,201 +33,107 @@ def geo(pg_db: PgDatabase):  # noqa: ANN201
     return pg_db, fixture, admin
 
 
-def trip_context(route: service.RouteVersionInfo, **kw) -> TripRouteContext:  # noqa: ANN003
-    params = dict(trip_version=1, max_detour_minutes=15, max_detour_m=5000)
-    params.update(kw)
-    return TripRouteContext(
-        route_version_id=route.id,
-        route_version_public_id=route.api_id,
-        occurrences=service.planned_occurrences_from_route_version(route, planned_start_at=START, dwell_minutes=5),
-        **params,
-    )
-
-
-def eta_request(route: service.RouteVersionInfo, pickup: int, dropoff: int) -> MatchRequest:
-    occurrences = {o.stop_id: o for o in service.planned_occurrences_from_route_version(route, planned_start_at=START, dwell_minutes=5)}
-    arrival = occurrences[pickup].planned_arrival_at if pickup in occurrences else START + timedelta(hours=4)
-    return MatchRequest(pickup, dropoff, arrival - timedelta(minutes=30), arrival + timedelta(minutes=30))
-
-
 def mark_production(pg_db: PgDatabase) -> None:
     with pg_db.engine.begin() as conn:
         conn.execute(text("UPDATE platform_environment SET environment = 'production', set_by = 'test' WHERE id = 1"))
 
 
+def _point_sql(place: LatLng) -> str:
+    return f"ST_SetSRID(ST_MakePoint({place.lng}, {place.lat}), 4326)"
+
+
 def test_geography_distance_is_metres_and_geometry_distance_is_not(geo) -> None:  # noqa: ANN001
     pg_db, fx, _ = geo
+    chiroqchi = _point_sql(fx.places["chiroqchi"])
     with pg_db.engine.connect() as conn:
         row = conn.execute(
             text(
-                "SELECT ST_Distance(rv.geometry::geography, cs.point::geography) AS metres, "
-                "ST_Distance(rv.geometry, cs.point) AS degrees, "
-                "ST_DWithin(rv.geometry, cs.point, 3000) AS geometry_dwithin_3000, "
-                "ST_DWithin(rv.geometry::geography, cs.point::geography, 3000) AS geography_dwithin_3000 "
-                "FROM route_versions rv, corridor_stops cs WHERE rv.id = :rv AND cs.id = :stop"
+                f"SELECT ST_Distance(rv.geometry::geography, {chiroqchi}::geography) AS metres, "
+                f"ST_Distance(rv.geometry, {chiroqchi}) AS degrees, "
+                f"ST_DWithin(rv.geometry, {chiroqchi}, 3000) AS geometry_dwithin_3000, "
+                f"ST_DWithin(rv.geometry::geography, {chiroqchi}::geography, 3000) AS geography_dwithin_3000 "
+                "FROM route_versions rv WHERE rv.id = :rv"
             ),
-            {"rv": fx.routes["via_kattaqorgon"].id, "stop": fx.stop_id("chiroqchi")},
+            {"rv": fx.routes["via_kattaqorgon"].id},
         ).one()
         on_route = conn.scalar(
-            text("SELECT ST_Distance(rv.geometry::geography, cs.point::geography) FROM route_versions rv, corridor_stops cs WHERE rv.id = :rv AND cs.id = :stop"),
-            {"rv": fx.routes["via_chiroqchi"].id, "stop": fx.stop_id("chiroqchi")},
+            text(f"SELECT ST_Distance(rv.geometry::geography, {chiroqchi}::geography) FROM route_versions rv WHERE rv.id = :rv"),
+            {"rv": fx.routes["via_chiroqchi"].id},
         )
     assert row.metres > 50_000 and row.degrees < 1.0
     assert row.geometry_dwithin_3000 is True and row.geography_dwithin_3000 is False
     assert on_route < 1.0
 
 
-def test_ac14_chiroqchi_not_on_fixture_route_gives_no_on_route(geo) -> None:  # noqa: ANN001
+def test_a_place_off_the_road_does_not_project_and_order_is_along_the_road(geo) -> None:  # noqa: ANN001
+    """AC14 / AC16 on the road model: Chiroqchi is on one fixture road and not the other; along a road the places come
+    in their travel order (pickup before dropoff is a position comparison)."""
     pg_db, fx, _ = geo
-    chiroqchi, qarshi = fx.stop_id("chiroqchi"), fx.stop_id("qarshi")
-    without, with_chiroqchi = fx.routes["via_kattaqorgon"], fx.routes["via_chiroqchi"]
     with pg_db.session() as db:
-        candidates = service.find_candidates(db, pickup_stop_id=chiroqchi, dropoff_stop_id=qarshi)
-        points = service.get_stop_points(db, [s.stop_id for s in without.stops] + [chiroqchi])
-    assert [c.route_version_id for c in candidates] == [with_chiroqchi.id]
-
-    request = eta_request(with_chiroqchi, chiroqchi, qarshi)
-    ctx = trip_context(without)
-    plain = service.evaluate_route_match(ctx, request)
-    assert not plain.matched and plain.error_code is ErrorCode.ROUTE_MISMATCH
-    assert MatchReason.PICKUP_NOT_ON_ROUTE in plain.reasons
-
-    db = pg_db.session()
-    try:
-        measured = service.measure_detours_outside_transaction(db, FakeRoutingProvider(), ctx, request, points)
-    finally:
-        db.close()
-    assert measured.quotes and not measured.unavailable_stop_ids
-    assert all(q.route_version_id == without.api_id and q.trip_version == 1 for q in measured.quotes)
-    with_detour = service.evaluate_route_match(ctx, request, detours=measured, include_alternatives=True)
-    assert with_detour.match_type not in (MatchType.EXACT, MatchType.ON_ROUTE, MatchType.DETOUR)
-    assert with_detour.error_code in (ErrorCode.DETOUR_LIMIT_EXCEEDED, ErrorCode.TIME_WINDOW_CONFLICT)
-
-    ok = service.evaluate_route_match(trip_context(with_chiroqchi), request)
-    assert ok.matched and ok.match_type is MatchType.ON_ROUTE and ok.pickup.occurrence_seq == 2
+        off = service.project_point_on_route(db, route_version_id=fx.routes["via_kattaqorgon"].id, point=fx.places["chiroqchi"],
+                                             max_offset_m=3000)
+        road = fx.routes["via_chiroqchi"].id
+        chiroqchi = service.route_position_m(db, route_version_id=road, point=fx.places["chiroqchi"])
+        qarshi = service.route_position_m(db, route_version_id=road, point=fx.places["qarshi"])
+    assert off is None
+    assert 0 < chiroqchi < qarshi
 
 
-def test_ac16_reverse_direction_rejected_even_though_spatially_near(geo) -> None:  # noqa: ANN001
+def test_gist_index_serves_the_road_proximity_query(geo) -> None:  # noqa: ANN001
     pg_db, fx, _ = geo
-    route = fx.routes["via_chiroqchi"]
-    qarshi, chiroqchi = fx.stop_id("qarshi"), fx.stop_id("chiroqchi")
-    with pg_db.session() as db:
-        candidates = service.find_candidates(db, pickup_stop_id=qarshi, dropoff_stop_id=chiroqchi)
-    assert [c.route_version_id for c in candidates] == [route.id]
-    assert candidates[0].forward_by_line_fraction is False
-    assert candidates[0].pickup_stop_seqs == (3,) and candidates[0].dropoff_stop_seqs == (2,)
-    wide = MatchRequest(qarshi, chiroqchi, START, START + timedelta(hours=20))
-    result = service.evaluate_route_match(trip_context(route), wide, include_alternatives=True)
-    assert result.error_code is ErrorCode.ROUTE_MISMATCH and result.reasons == (MatchReason.REVERSE_DIRECTION,)
-
-
-def test_find_candidates_orders_newest_confirmed_first(geo) -> None:  # noqa: ANN001
-    pg_db, fx, admin = geo
-    keys = ["toshkent", "samarqand", "qarshi"]
-    with pg_db.session() as db:
-        newer = build_route(db, FakeRoutingProvider(), actor_user_id=admin, stop_api_ids=[fx.stops[k].api_id for k in keys])
-        candidates = service.find_candidates(db, pickup_stop_id=fx.stop_id("toshkent"), dropoff_stop_id=fx.stop_id("qarshi"))
-    ids = [c.route_version_id for c in candidates]
-    assert ids[0] == newer.id and set(ids) == {newer.id, fx.routes["via_kattaqorgon"].id, fx.routes["via_chiroqchi"].id}
-    assert [c.confirmed_at for c in candidates] == sorted((c.confirmed_at for c in candidates), reverse=True)
-
-
-def test_gist_indexes_serve_the_real_find_candidates_query(geo) -> None:  # noqa: ANN001
-    pg_db, fx, _ = geo
-    statement = text(service.FIND_CANDIDATES_SQL).bindparams(
-        pickup=fx.stop_id("chiroqchi"), dropoff=fx.stop_id("qarshi"), radius=3000, corridor_id=None, limit=100
-    )
-    compiled = str(statement.compile(pg_db.engine, compile_kwargs={"literal_binds": True}))
     with pg_db.engine.begin() as conn:
         conn.execute(text("ANALYZE route_versions"))
-        conn.execute(text("ANALYZE corridor_stops"))
         conn.execute(text("SET LOCAL enable_seqscan = off"))
-        route_plan = "\n".join(r[0] for r in conn.execute(text("EXPLAIN " + compiled)))
-        stop_plan = "\n".join(
+        plan = "\n".join(
             r[0]
             for r in conn.execute(
                 text(
-                    "EXPLAIN SELECT id FROM corridor_stops "
-                    "WHERE ST_DWithin(point::geography, ST_SetSRID(ST_MakePoint(66.57, 39.03), 4326)::geography, 3000)"
+                    "EXPLAIN SELECT id FROM route_versions WHERE status = 'confirmed' AND "
+                    f"ST_DWithin(geometry::geography, {_point_sql(fx.places['chiroqchi'])}::geography, 3000)"
                 )
             )
         )
-    assert "ix_route_versions_geography_gist" in route_plan, route_plan
-    assert "ix_corridor_stops_geography_gist" in stop_plan, stop_plan
+    assert "ix_route_versions_geography_gist" in plan, plan
 
 
-def test_nearby_stop_ids_uses_metres(geo) -> None:  # noqa: ANN001
-    pg_db, fx, _ = geo
-    with pg_db.session() as db:
-        assert service.nearby_stop_ids(db, fx.stop_id("chiroqchi"), radius_m=35_000) == [fx.stop_id("kitob")]
-        assert service.nearby_stop_ids(db, fx.stop_id("chiroqchi"), radius_m=1_000) == []
-
-
-def test_confirmed_route_version_and_its_stops_are_immutable(geo) -> None:  # noqa: ANN001
+def test_confirmed_route_version_is_immutable(geo) -> None:  # noqa: ANN001
     pg_db, fx, _ = geo
     route_id = fx.routes["via_chiroqchi"].id
-    statements = [
+    for statement in (
         "UPDATE route_versions SET distance_m = distance_m + 1 WHERE id = :id",
         "UPDATE route_versions SET status = 'draft', confirmed_at = NULL WHERE id = :id",
         "DELETE FROM route_versions WHERE id = :id",
-        "UPDATE route_version_stops SET cumulative_distance_m = 1 WHERE route_version_id = :id",
-        "DELETE FROM route_version_stops WHERE route_version_id = :id",
-        "INSERT INTO route_version_stops (route_version_id, seq, stop_id, cumulative_distance_m, cumulative_duration_s, line_fraction) "
-        "SELECT :id, 99, stop_id, 1, 1, 0.5 FROM route_version_stops WHERE route_version_id = :id LIMIT 1",
-    ]
-    for statement in statements:
+    ):
         with pytest.raises(DBAPIError, match="immutable"):
             with pg_db.engine.begin() as conn:
                 conn.execute(text(statement), {"id": route_id})
 
 
-def test_draft_route_confirmation_checks_stops_and_content(geo) -> None:  # noqa: ANN001
+def test_a_draft_road_has_its_attribution_and_immutable_content(geo) -> None:  # noqa: ANN001
     pg_db, fx, admin = geo
     with pg_db.session() as db:
-        draft = build_route(db, FakeRoutingProvider(), actor_user_id=admin, stop_api_ids=[fx.stops["toshkent"].api_id, fx.stops["qarshi"].api_id], confirm=False)
+        draft = build_route(db, FakeRoutingProvider(), actor_user_id=admin, corridor=fx.corridor,
+                            through=[fx.places["toshkent"], fx.places["qarshi"]], confirm=False)
     assert draft.attribution == "Synthetic route from the Elchi test router (not a real road)"
     with pytest.raises(DBAPIError, match="content is immutable"):
         with pg_db.engine.begin() as conn:
             conn.execute(text("UPDATE route_versions SET duration_s = duration_s + 1 WHERE id = :id"), {"id": draft.id})
-    with pg_db.engine.begin() as conn:
-        conn.execute(text("DELETE FROM route_version_stops WHERE route_version_id = :id AND seq = 1"), {"id": draft.id})
-    with pytest.raises(DBAPIError, match="before confirmation"):
-        with pg_db.engine.begin() as conn:
-            conn.execute(text("UPDATE route_versions SET status = 'confirmed', confirmed_at = now() WHERE id = :id"), {"id": draft.id})
 
 
 def test_catalogue_constraints(geo) -> None:  # noqa: ANN001
     pg_db, fx, _ = geo
-    stop_id = fx.stop_id("qarshi")
-    failing = [
-        ("UPDATE corridor_stops SET verified_by = NULL WHERE id = :id", "ck_corridor_stops_active_verified"),
-        ("UPDATE corridor_stops SET point = ST_SetSRID(ST_MakePoint(65.0, 95.0), 4326) WHERE id = :id", "ck_corridor_stops_point_valid"),
-        ("UPDATE corridor_stops SET meeting_photo_file_id = '  ' WHERE id = :id", "ck_corridor_stops_meeting_photo_file_id"),
-        ("UPDATE corridor_config_versions SET search_radius_m = 1 WHERE corridor_id = (SELECT corridor_id FROM corridor_stops WHERE id = :id)", "immutable"),
-        ("UPDATE service_corridors SET rollout_state = 'launched' WHERE id = (SELECT corridor_id FROM corridor_stops WHERE id = :id)", "ck_service_corridors_rollout_state"),
-    ]
-    for statement, message in failing:
+    for statement, message in (
+        ("UPDATE corridor_config_versions SET search_radius_m = 1 WHERE corridor_id = :id", "immutable"),
+        ("UPDATE service_corridors SET rollout_state = 'launched' WHERE id = :id", "ck_service_corridors_rollout_state"),
+    ):
         with pytest.raises(DBAPIError, match=message):
             with pg_db.engine.begin() as conn:
-                conn.execute(text(statement), {"id": stop_id})
-
-
-def test_stop_used_by_confirmed_route_cannot_move(geo) -> None:  # noqa: ANN001
-    pg_db, fx, admin = geo
-    stop = fx.stops["chiroqchi"]
-    with pg_db.session() as db:
-        with pytest.raises(DomainError) as info:
-            service.patch_stop(db, actor_user_id=admin, stop_api_id=stop.api_id, expected_version=stop.version, changes={"point": LatLng(39.5, 66.0)})
-        assert info.value.code is ErrorCode.INVALID_STATE_TRANSITION
-        db.rollback()
-        renamed = service.patch_stop(db, actor_user_id=admin, stop_api_id=stop.api_id, expected_version=stop.version, changes={"meeting_note": "Bozor oldida"})
-        db.commit()
-    assert renamed.version == stop.version + 1 and renamed.point == stop.point and renamed.meeting_note == "Bozor oldida"
+                conn.execute(text(statement), {"id": fx.corridor.id})
 
 
 def test_ac35_router_outage_writes_nothing_generic_error_and_cache_is_reused(geo) -> None:  # noqa: ANN001
     pg_db, fx, admin = geo
-    stop_ids = [fx.stops["toshkent"].api_id, fx.stops["kitob"].api_id, fx.stops["qarshi"].api_id]
+    origin, destination = fx.places["toshkent"], fx.places["qarshi"]
     departure = datetime.now(timezone.utc) + timedelta(days=1)
     with pg_db.engine.connect() as conn:
         before = conn.scalar(text("SELECT count(*) FROM route_versions"))
@@ -238,7 +141,8 @@ def test_ac35_router_outage_writes_nothing_generic_error_and_cache_is_reused(geo
     down = FakeRoutingProvider(outage=True)
     db = pg_db.session()
     try:
-        plan = service.prepare_route_preview(db, down, stop_api_ids=stop_ids, departure_at=departure)
+        plan = service.prepare_road_preview(db, down, corridor_api_id=fx.corridor.api_id, origin=origin, destination=destination,
+                                            departure_at=departure)
         with pytest.raises(RuntimeError, match="transaction"):
             service.fetch_route_outside_transaction(db, down, plan)
         db.rollback()
@@ -253,22 +157,11 @@ def test_ac35_router_outage_writes_nothing_generic_error_and_cache_is_reused(geo
 
     up = FakeRoutingProvider()
     with pg_db.session() as db:
-        first = build_route(db, up, actor_user_id=admin, stop_api_ids=stop_ids, confirm=False)
+        first = build_route(db, up, actor_user_id=admin, corridor=fx.corridor, through=[origin, destination], confirm=False)
         calls = len(up.calls)
-        second = build_route(db, up, actor_user_id=admin, stop_api_ids=stop_ids, confirm=False)
+        second = build_route(db, up, actor_user_id=admin, corridor=fx.corridor, through=[origin, destination], confirm=False)
     assert len(up.calls) == calls == 1
     assert first.id != second.id and first.distance_m == second.distance_m
-
-
-def test_inactive_stop_blocks_route_preview(geo) -> None:  # noqa: ANN001
-    pg_db, fx, admin = geo
-    kitob = fx.stops["kitob"]
-    with pg_db.session() as db:
-        service.patch_stop(db, actor_user_id=admin, stop_api_id=kitob.api_id, expected_version=kitob.version, changes={"is_active": False})
-        db.commit()
-        with pytest.raises(DomainError) as info:
-            service.prepare_route_preview(db, FakeRoutingProvider(), stop_api_ids=[fx.stops["toshkent"].api_id, kitob.api_id], departure_at=datetime.now(timezone.utc))
-    assert info.value.code is ErrorCode.CORRIDOR_NOT_ACTIVE
 
 
 def test_legacy_cities_are_mapped_unverified_never_guessed(pg_db: PgDatabase) -> None:
@@ -305,7 +198,6 @@ def _guard_reason(fn) -> str | None:  # noqa: ANN001
 
 def test_corridor_rollout_guards(geo) -> None:  # noqa: ANN001
     pg_db, fx, admin = geo
-    district = fx.district_api_ids["samarqand"]
     region_tk, region_sa = fx.regions["toshkent"].api_id, fx.regions["samarqand"].api_id
     with pg_db.session() as db:
         corridor = service.create_corridor(
@@ -315,30 +207,14 @@ def test_corridor_rollout_guards(geo) -> None:  # noqa: ANN001
         db.commit()
         assert _guard_reason(lambda: _rollout(db, admin, corridor, "active")) == "not_allowed"  # not in CORRIDOR_ROLLOUT
         db.rollback()
-        assert _guard_reason(lambda: _rollout(db, admin, corridor, "internal")) == "needs_active_stop"
-        db.rollback()
 
-        def add_stop(name: str, **kw) -> service.StopInfo:  # noqa: ANN003
-            params = dict(name_ru=None, district_api_id=district, point=LatLng(39.65, 66.96), meeting_note=None, sequence_hint=0, is_active=True)
-            params.update(kw)
-            stop = service.create_stop(db, actor_user_id=admin, corridor_api_id=corridor.api_id, name_uz=name, **params)
-            db.commit()
-            return stop
-
-        first = add_stop("Bekat A")
         corridor = _rollout(db, admin, corridor, "internal")
         db.commit()
-        assert _guard_reason(lambda: _rollout(db, admin, corridor, "pilot")) == "needs_two_active_stops"
+        assert _guard_reason(lambda: _rollout(db, admin, corridor, "pilot")) == "needs_confirmed_road"
         db.rollback()
-        second = add_stop("Bekat B", point=LatLng(39.66, 66.97))
-        with pytest.raises(DomainError) as missing:
-            _rollout(db, admin, corridor, "pilot")
-        assert missing.value.details["reason"] == "stops_missing_meeting_evidence"
-        assert missing.value.details["stop_ids"] == [first.api_id, second.api_id]
-        db.rollback()
-        service.patch_stop(db, actor_user_id=admin, stop_api_id=first.api_id, expected_version=1, changes={"meeting_note": "Yoqilg'i shoxobchasi oldida"})
-        service.patch_stop(db, actor_user_id=admin, stop_api_id=second.api_id, expected_version=1, changes={"meeting_note": "Avtobus bekati yonida"})
-        db.commit()
+        # ADR-0028: only the confirmed road from A to B makes a corridor public
+        build_route(db, FakeRoutingProvider(), actor_user_id=admin, corridor=corridor,
+                    through=[LatLng(39.65, 66.96), LatLng(39.66, 66.97)])
         corridor = _rollout(db, admin, service.get_corridor(db, corridor.id), "pilot")
         db.commit()
         assert corridor.rollout_state.value == "pilot"

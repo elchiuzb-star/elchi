@@ -117,8 +117,6 @@ def test_proposal_http_errors_and_fee_visibility(client: TestClient, world: Worl
     _, trip_public_id = make_trip(world, world.driver_id, vehicle, start=world.base_time)
     proposal = {
         "trip_id": trip_public_id,
-        "pickup_stop_id": world.stop_public_ids["A"],
-        "dropoff_stop_id": world.stop_public_ids["D"],
         "pickup_window_start": world.base_time.isoformat(),
         "pickup_window_end": (world.base_time + timedelta(minutes=30)).isoformat(),
         "quantity": 2,

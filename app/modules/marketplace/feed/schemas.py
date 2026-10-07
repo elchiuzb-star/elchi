@@ -22,14 +22,13 @@ from app.contracts.dto import (
     UtcDateTime,
 )
 from app.contracts.enums import FeedSide, MatchGroup, MatchReason, MatchType, ReputationLabel, ServiceType
-from app.contracts.feed import MATCH_SCOPE_CONFIRMED_STOPS
+from app.contracts.feed import MATCH_SCOPE_CONFIRMED_ROADS  # noqa: F401 - re-exported
 from app.modules.marketplace.schemas import ListingPublicDTO
+
 
 # Wave 3.1: FeedMatchDTO, FeedReputationDTO, TripAvailabilitySummaryDTO and FeedPageMeta are the contract's
 # (app/contracts/dto.py) and are re-exported here; FeedItemDTO / MatchDTO stay module-owned because they embed
 # A1's ListingPublicDTO. A change to a re-exported DTO belongs in the contract (AGENTS §1).
-
-
 class FeedItemDTO(ContractModel):
     listing: ListingPublicDTO
     match: FeedMatchDTO
@@ -42,18 +41,6 @@ class FeedItemDTO(ContractModel):
     )
 
 
-class MatchDTO(ContractModel):
-    listing: ListingPublicDTO
-    trip_availability_summary: TripAvailabilitySummaryDTO | None = None
-    match: FeedMatchDTO
-    ranking_version: str
-    group: MatchGroup
-    ready_to_accept: bool
-    labels: list[str]
-    reputation: FeedReputationDTO
-    comparable_total_minor: int | None = None
-
-
 class FeedEnvelope(ContractModel):
     success: Literal[True] = True
     data: list[FeedItemDTO]
@@ -62,22 +49,12 @@ class FeedEnvelope(ContractModel):
     warnings: list[ApiWarning] | None = None
 
 
-class MatchEnvelope(ContractModel):
-    success: Literal[True] = True
-    data: list[MatchDTO]
-    message: str | None = None
-    meta: FeedPageMeta
-    warnings: list[ApiWarning] | None = None
-
-
 class SavedSearchCreate(ContractModel):
     service_type: ServiceType
     side: FeedSide
-    origin_stop_id: str | None = None
     origin_region_id: str | None = None
     #: Wave 10: the district is the direction unit everywhere except Tashkent city.
     origin_district_id: str | None = None
-    destination_stop_id: str | None = None
     destination_region_id: str | None = None
     destination_district_id: str | None = None
     time_window_start: UtcDateTime
@@ -89,11 +66,11 @@ class SavedSearchCreate(ContractModel):
     def _ends_and_window(self) -> SavedSearchCreate:
         for end in ("origin", "destination"):
             given = [
-                getattr(self, f"{end}_{kind}_id") for kind in ("stop", "region", "district")
+                getattr(self, f"{end}_{kind}_id") for kind in ("region", "district")
                 if getattr(self, f"{end}_{kind}_id") is not None
             ]
             if len(given) != 1:
-                raise ValueError(f"exactly one of {end}_stop_id / {end}_district_id / {end}_region_id is required")
+                raise ValueError(f"exactly one of {end}_district_id / {end}_region_id is required")
         if self.time_window_end <= self.time_window_start:
             raise ValueError("time_window_end must be after time_window_start")
         return self
@@ -103,10 +80,8 @@ class SavedSearchDTO(ContractModel):
     id: str
     service_type: ServiceType
     side: FeedSide
-    origin_stop_id: str | None = None
     origin_region_id: str | None = None
     origin_district_id: str | None = None
-    destination_stop_id: str | None = None
     destination_region_id: str | None = None
     destination_district_id: str | None = None
     time_window_start: UtcDateTime
@@ -115,5 +90,4 @@ class SavedSearchDTO(ContractModel):
     notify: bool
     last_notified_at: UtcDateTime | None = None
     created_at: UtcDateTime
-
 

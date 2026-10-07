@@ -1694,8 +1694,8 @@ class ServiceEvidence:
     handover_recorded: bool = True  # parcel: this booking's own pickup/handover proof
     delivery_recorded: bool = True  # parcel: this booking's own delivery proof
     commission_captured: bool = True
-    pickup_stop_id: int | None = None
-    dropoff_stop_id: int | None = None
+    pickup_position_m: int | None = None  # ADR-0028: the booking's places on its trip's road
+    dropoff_position_m: int | None = None
     receiver_key: str | None = None  # protected receiver identifier; never the phone itself
 
 
@@ -1742,8 +1742,8 @@ def _looks_split(items: list[ServiceEvidence], window: timedelta) -> bool:
             same_shipment_shape = (
                 first.trip_id == second.trip_id
                 and first.client_user_id == second.client_user_id
-                and first.pickup_stop_id == second.pickup_stop_id
-                and first.dropoff_stop_id == second.dropoff_stop_id
+                and first.pickup_position_m == second.pickup_position_m
+                and first.dropoff_position_m == second.dropoff_position_m
                 and first.receiver_key is not None
                 and first.receiver_key == second.receiver_key
             )

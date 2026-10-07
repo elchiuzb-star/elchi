@@ -18,7 +18,7 @@ Formulas (contract weights in ``app.contracts.feed``):
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 
 from app.contracts.enums import FeedSort, MatchGroup, MatchType, PriceBasis, ServiceType
@@ -36,7 +36,8 @@ from app.contracts.trust import ON_TIME_PRIOR, RATING_PRIOR_WEIGHT, ReputationSu
 
 # Module configuration (not contract): bounded work per feed request.
 FEED_CANDIDATE_LIMIT = 500  # listings evaluated per request (pilot scale)
-REGION_STOP_LIMIT = 20  # active stops taken from a region end
+#: A request this close in time to the searched window is offered in the separate ``alternative`` group (opt-in).
+ALTERNATIVE_TIME_TOLERANCE = timedelta(hours=3)
 ON_TIME_PRIOR_WEIGHT = 10  # same prior weight as ReputationSummary.completion_ratio (§8.2)
 _MISSING_SORT_VALUE = 2**62
 
@@ -145,38 +146,6 @@ def band_reference_total(service_type: ServiceType | str, floor_minor: int, ceil
     return (low + high) // 2
 
 
-def stop_segment_match(
-    route_orders: Iterable[Mapping[int, Sequence[int]]],
-    origin_ids: Iterable[int],
-    destination_ids: Iterable[int],
-    pickup_stop_id: int,
-    dropoff_stop_id: int,
-) -> MatchType | None:
-    """Verified-stop match of a request segment against a wanted direction (no trip, no router; Q46).
-
-    ``route_orders``: per confirmed route version, ``{stop_id: [positions]}``. ``exact`` when both stops are the
-    wanted ends; ``on_route`` when some confirmed route has ``origin <= pickup < dropoff <= destination`` in its stop
-    order; otherwise ``None`` (reverse direction or off route, AC16).
-    """
-    origins, destinations = set(origin_ids), set(destination_ids)
-    if pickup_stop_id == dropoff_stop_id:
-        return None
-    if pickup_stop_id in origins and dropoff_stop_id in destinations:
-        return MatchType.EXACT
-    for order in route_orders:
-        pickups = order.get(pickup_stop_id, ())
-        dropoffs = order.get(dropoff_stop_id, ())
-        starts = [p for o in origins for p in order.get(o, ())]
-        ends = [p for d in destinations for p in order.get(d, ())]
-        for p in pickups:
-            for d in dropoffs:
-                if p >= d:
-                    continue
-                if any(s <= p for s in starts) and any(e >= d for e in ends):
-                    return MatchType.ON_ROUTE
-    return None
-
-
 def window_gap(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> timedelta:
     """Zero when the half-open windows intersect, else the distance between them."""
     a0, a1, b0, b1 = (ensure_aware_utc(v) for v in (a_start, a_end, b_start, b_end))
@@ -215,7 +184,6 @@ __all__ = [
     "FEED_CANDIDATE_LIMIT",
     "ON_TIME_PRIOR_WEIGHT",
     "RATING_PRIOR_WEIGHT",
-    "REGION_STOP_LIMIT",
     "band_reference_total",
     "band_totals",
     "client_score",
@@ -231,7 +199,6 @@ __all__ = [
     "price_score",
     "reliability",
     "sort_key",
-    "stop_segment_match",
     "time_score",
     "window_gap",
     "window_midpoint",

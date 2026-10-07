@@ -65,12 +65,12 @@ vi.mock("../api/v2/admin-platform.api", async (importOriginal) => {
     adminDistricts: vi.fn(async (regionId: string) =>
       regionId === "reg_tk"
         ? [
-            { id: "dis_far", name_uz: "Bektemir", region: { id: "reg_tk", code: "UZ-TK", name_uz: "Toshkent shahri" }, center_lat: 41.2, center_lng: 69.33, is_active: true, stops_count: 0 },
-            { id: "dis_near", name_uz: "Shayxontohur", region: { id: "reg_tk", code: "UZ-TK", name_uz: "Toshkent shahri" }, center_lat: 41.32, center_lng: 69.27, is_active: true, stops_count: 0 },
+            { id: "dis_far", name_uz: "Bektemir", region: { id: "reg_tk", code: "UZ-TK", name_uz: "Toshkent shahri" }, center_lat: 41.2, center_lng: 69.33, is_active: true },
+            { id: "dis_near", name_uz: "Shayxontohur", region: { id: "reg_tk", code: "UZ-TK", name_uz: "Toshkent shahri" }, center_lat: 41.32, center_lng: 69.27, is_active: true },
           ]
         : [
-            { id: "dis_sam", name_uz: "Samarqand sh.", region: { id: "reg_sa", code: "UZ-SA", name_uz: "Samarqand viloyati" }, center_lat: 39.65, center_lng: 66.97, is_active: true, stops_count: 0 },
-            { id: "dis_nocentre", name_uz: "Nurobod", region: { id: "reg_sa", code: "UZ-SA", name_uz: "Samarqand viloyati" }, center_lat: null, center_lng: null, is_active: true, stops_count: 0 },
+            { id: "dis_sam", name_uz: "Samarqand sh.", region: { id: "reg_sa", code: "UZ-SA", name_uz: "Samarqand viloyati" }, center_lat: 39.65, center_lng: 66.97, is_active: true },
+            { id: "dis_nocentre", name_uz: "Nurobod", region: { id: "reg_sa", code: "UZ-SA", name_uz: "Samarqand viloyati" }, center_lat: null, center_lng: null, is_active: true },
           ],
     ),
   };
@@ -115,8 +115,8 @@ const booking = {
   total_minor: 10_000_000,
   currency: "UZS",
   payment_method: "cash",
-  pickup: { occurrence_seq: 0, stop: { id: "stp_1", name_uz: "Toshkent", name_ru: "Ташкент" } },
-  dropoff: { occurrence_seq: 1, stop: { id: "stp_2", name_uz: "Samarqand", name_ru: "Самарканд" } },
+  pickup: { point: { lat: 41.31, lng: 69.28, address: null, district: { id: "dis_tk", name_uz: "Toshkent" } } },
+  dropoff: { point: { lat: 39.65, lng: 66.96, address: null, district: { id: "dis_sa", name_uz: "Samarqand" } } },
   contact: { phones_visible: false },
   policy_versions: {},
   cancellation_policy_summary: "",
@@ -344,7 +344,7 @@ describe("listing on behalf (O7)", () => {
     const create = await screen.findByRole("button", { name: "E'lon yaratish" });
     expect(create).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Egasi"), { target: { value: "usr_c" } });
-    // 06.10.2026: each end is a place - region, district, optional address - never a stop
+    // 06.10.2026: each end is a place - region, district, optional address
     fireEvent.change(await screen.findByLabelText("Olib ketish joyi: hudud"), { target: { value: "reg_tk" } });
     fireEvent.change(screen.getByLabelText("Olib ketish joyi: manzil"), { target: { value: "Chorsu bozori" } });
     fireEvent.change(screen.getByLabelText("Tushirish joyi: hudud"), { target: { value: "reg_sa" } });

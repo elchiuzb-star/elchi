@@ -1,6 +1,6 @@
 /**
  * Safety, sharing and trust calls for the self-contained v2 panels (blocks, reports, tracking grants, share links,
- * the public tracking page, reputation, parcel policy, driver trip detail, stop search, referral code check).
+ * the public tracking page, reputation, parcel policy, driver trip detail, referral code check).
  *
  * Wrappers that already exist elsewhere are re-exported here so every panel imports from one module; nothing is
  * re-declared by hand - every type comes from the generated schema (ADR-0010).
@@ -9,7 +9,6 @@ import { newIdempotencyKey, v2Request, v2RequestFull, type Schemas } from "./htt
 
 export { createShareLink } from "./bookings.api";
 export { getTrip, tripAvailability, tripManifest } from "./driver.api";
-export { searchStops } from "./marketplace.api";
 export { checkReferralCode } from "./promo.api";
 
 export type BlockDTO = Schemas["BlockDTO"];
@@ -28,7 +27,6 @@ export type ParcelPolicyDTO = Schemas["ParcelPolicyDTO"];
 export type ParcelPolicyItemDTO = Schemas["ParcelPolicyItemDTO"];
 export type ServiceType = Schemas["ServiceType"];
 export type ReferralCodeCheckDTO = Schemas["ReferralCodeCheckDTO"];
-export type StopDTO = Schemas["StopDTO"];
 export type TripDTO = Schemas["TripDTO"];
 export type TripAvailabilityDTO = Schemas["TripAvailabilityDTO"];
 export type TripManifestDTO = Schemas["TripManifestDTO"];

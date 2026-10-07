@@ -77,8 +77,8 @@ def requests(world: World, **overrides: object) -> feed_service.FeedCriteria:
     values = {
         "service_type": ServiceType.PASSENGER,
         "side": FeedSide.REQUESTS,
-        "origin_stop_id": world.stop_public_ids["A"],
-        "destination_stop_id": world.stop_public_ids["D"],
+        "origin_district_id": world.district_public_ids["A"],
+        "destination_district_id": world.district_public_ids["D"],
         "date_from": world.base_time - timedelta(hours=1),
         "date_to": world.base_time + timedelta(hours=3),
     }
@@ -96,8 +96,8 @@ def search_body(world: World, **overrides: object) -> SavedSearchCreate:
     values = {
         "service_type": "passenger",
         "side": "requests",  # ADR-0026 (Q138): drivers save searches of client requests; the offers side is retired
-        "origin_stop_id": world.stop_public_ids["A"],
-        "destination_stop_id": world.stop_public_ids["D"],
+        "origin_district_id": world.district_public_ids["A"],
+        "destination_district_id": world.district_public_ids["D"],
         "time_window_start": world.base_time.isoformat(),
         "time_window_end": (world.base_time + timedelta(hours=5)).isoformat(),
         "quantity": 1,
@@ -154,7 +154,7 @@ def fake_reputation(monkeypatch: pytest.MonkeyPatch, table: dict[int, dict[str, 
 
 def test_ac16_reverse_direction_is_not_in_the_feed(world: World) -> None:
     publish_request(world, world.client_id, passenger_request(world, start=world.base_time, origin="B", destination="C"))
-    _, reverse_requests = run_feed(world, world.driver_id, requests(world, origin_stop_id=world.stop_public_ids["D"], destination_stop_id=world.stop_public_ids["A"]))
+    _, reverse_requests = run_feed(world, world.driver_id, requests(world, origin_district_id=world.district_public_ids["D"], destination_district_id=world.district_public_ids["A"]))
     _, forward_requests = run_feed(world, world.driver_id, requests(world))
     assert reverse_requests == []
     assert len(forward_requests) == 1
@@ -199,8 +199,8 @@ def test_cursor_is_stable_and_bound_to_its_query(world: World) -> None:
 
     client = http_client(world, world.driver_id)
     params = {
-        "service_type": "passenger", "side": "requests", "origin_stop_id": world.stop_public_ids["A"],
-        "destination_stop_id": world.stop_public_ids["D"], "date_from": (world.base_time - timedelta(hours=1)).isoformat(),
+        "service_type": "passenger", "side": "requests", "origin_district_id": world.district_public_ids["A"],
+        "destination_district_id": world.district_public_ids["D"], "date_from": (world.base_time - timedelta(hours=1)).isoformat(),
         "date_to": (world.base_time + timedelta(hours=3)).isoformat(), "sort": "cheapest", "limit": 2,
     }
     response = client.get("/api/v2/feed", params=params)
@@ -216,7 +216,7 @@ def test_cursor_is_stable_and_bound_to_its_query(world: World) -> None:
 
 def test_the_offers_side_is_retired_for_feeds_and_saved_searches(world: World) -> None:
     """ADR-0026 (Q138): drivers publish no listings, so there is no "driver offers" side to browse or to save."""
-    criteria = requests(world, side=FeedSide.OFFERS, origin_stop_id=world.stop_public_ids["B"])
+    criteria = requests(world, side=FeedSide.OFFERS, origin_district_id=world.district_public_ids["B"])
     with world.db.session() as s, pytest.raises(DomainError) as info:
         feed_service.feed(s, viewer_user_id=world.client_id, criteria=criteria)
     assert info.value.code is ErrorCode.DRIVER_LISTING_RETIRED
@@ -224,8 +224,8 @@ def test_the_offers_side_is_retired_for_feeds_and_saved_searches(world: World) -
         feed_service.create_saved_search(s, user_id=world.client_id, data=search_body(world, side="offers"))
     assert info.value.code is ErrorCode.DRIVER_LISTING_RETIRED
     response = http_client(world, world.client_id).get("/api/v2/feed", params={
-        "service_type": "passenger", "side": "offers", "origin_stop_id": world.stop_public_ids["B"],
-        "destination_stop_id": world.stop_public_ids["D"], "date_from": world.base_time.isoformat(),
+        "service_type": "passenger", "side": "offers", "origin_point": world.point("B"),
+        "destination_point": world.point("D"), "date_from": world.base_time.isoformat(),
         "date_to": (world.base_time + timedelta(hours=4)).isoformat()})
     assert response.status_code == 409 and response.json()["error"]["code"] == "DRIVER_LISTING_RETIRED"
     own_request = publish_request(world, world.client_id, passenger_request(world, start=world.base_time, seats=1))
@@ -290,11 +290,11 @@ def test_parallel_saved_search_creation_never_exceeds_the_limit(world: World) ->
         with pytest.raises(DBAPIError) as info:
             s.execute(
                 text(
-                    "INSERT INTO saved_searches (public_id, user_id, service_type, side, origin_stop_id, destination_stop_id, "
+                    "INSERT INTO saved_searches (public_id, user_id, service_type, side, origin_district_id, destination_district_id, "
                     "time_window_start, time_window_end, quantity) VALUES (gen_random_uuid(), :u, 'passenger', 'requests', :o, :d, "
                     "now(), now() + interval '1 day', 1)"
                 ),
-                {"u": world.driver_id, "o": world.stop_ids["A"], "d": world.stop_ids["D"]},
+                {"u": world.driver_id, "o": world.district_ids["A"], "d": world.district_ids["D"]},
             )
         assert constraint_name_of(info.value) == "saved_search_limit"
 
@@ -322,10 +322,10 @@ def test_saved_search_http_limit_soft_delete_and_foreign_404(world: World) -> No
 
 
 def test_duplicate_listing_published_gives_one_saved_search_matched(world: World) -> None:
-    qa = region_public_id(world, "UZ-QA")
-    driver_stop_search = create_search(world, world.driver_id)
-    create_search(world, world.driver_id, origin_stop_id=None, origin_region_id=qa)  # same user, second match
-    driver2_region_search = create_search(world, world.driver2_id, origin_stop_id=None, origin_region_id=qa)
+    tk = region_public_id(world, "UZ-TK")  # A lies in Toshkent: a region end covers it (placed at the region centre)
+    driver_district_search = create_search(world, world.driver_id)
+    create_search(world, world.driver_id, origin_district_id=None, origin_region_id=tk)  # same user, second match
+    driver2_region_search = create_search(world, world.driver2_id, origin_district_id=None, origin_region_id=tk)
     listing_id = publish_request(world, world.client_id, passenger_request(world, start=world.base_time, seats=1))
     event = dispatched(world, EventType.LISTING_PUBLISHED, listing_id)[-1]
     for _ in range(2):  # redelivery
@@ -333,7 +333,7 @@ def test_duplicate_listing_published_gives_one_saved_search_matched(world: World
             consumers.saved_search_matcher(s, event)
             s.commit()
     matched = dispatched(world, EventType.SAVED_SEARCH_MATCHED)
-    assert sorted(e.payload["saved_search_id"] for e in matched) == sorted([driver_stop_search, driver2_region_search])
+    assert sorted(e.payload["saved_search_id"] for e in matched) == sorted([driver_district_search, driver2_region_search])
     assert all(e.payload["listing_id"] == listing_id and e.payload["side"] == "requests" for e in matched)
     with world.db.session() as s:
         assert s.execute(select(func.count(SavedSearchNotification.id))).scalar_one() == 2
@@ -348,10 +348,10 @@ def test_duplicate_listing_published_gives_one_saved_search_matched(world: World
 
 def test_l2_requests_saved_search_needs_driver_capability_at_create_and_notify(world: World) -> None:
     with world.db.session() as s, pytest.raises(DomainError) as info:
-        feed_service.create_saved_search(s, user_id=world.client_id, data=search_body(world, side="requests", origin_stop_id=world.stop_public_ids["A"]))
+        feed_service.create_saved_search(s, user_id=world.client_id, data=search_body(world, side="requests", origin_district_id=world.district_public_ids["A"]))
     assert info.value.code in (ErrorCode.CAPABILITY_REQUIRED, ErrorCode.DRIVER_NOT_ELIGIBLE)
-    eligible = create_search(world, world.driver_id, side="requests", origin_stop_id=world.stop_public_ids["A"])
-    blocked = create_search(world, world.driver2_id, side="requests", origin_stop_id=world.stop_public_ids["A"])
+    eligible = create_search(world, world.driver_id, side="requests", origin_district_id=world.district_public_ids["A"])
+    blocked = create_search(world, world.driver2_id, side="requests", origin_district_id=world.district_public_ids["A"])
     with world.db.session() as s:
         version = identity_service.eligibility_version(s, world.driver2_id)
         identity_service.block_driver_eligibility(

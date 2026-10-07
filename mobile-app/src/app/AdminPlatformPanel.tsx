@@ -1,16 +1,16 @@
 /**
- * Staff platform configuration (design "Elchi Admin" → Platforma sozlamalari): feature flags (F2-F4), corridors and
- * stops (G7-G11, Q27/Q47), the parcel prohibited-items policy (R5.2), parcel size categories (Q140), the outbox
+ * Staff platform configuration (design "Elchi Admin" → Platforma sozlamalari): feature flags (F2-F4), corridors
+ * (G7-G11, ADR-0028 launch gate), the parcel prohibited-items policy (R5.2), parcel size categories (Q140), the outbox
  * queue (N8/N9) and system state (§10.8 provider quota, O8 legacy orders).
  *
  * The server decides: capabilities only hide buttons it would refuse anyway, and every production refusal (Q48 gate,
- * Q5 approval reference, Q1 locked flag, Q87 support phone, Q47 stops) is shown in plain words, never swallowed.
+ * Q5 approval reference, Q1 locked flag, Q87 support phone, no confirmed road) is shown in plain words, never swallowed.
  * Flags change only through this admin API (Q72). Turning on `passenger_enabled` or `card_payments_enabled` is
  * offered to super_admin only (Q5); `driver_listing_enabled` is archived (Q138) and offers no change. Every change
  * goes through a confirmation; the Idempotency-Key is created when that confirmation opens and is reused when the
  * server asks for an MFA step-up (`useStepUp`) and the command is replayed.
  */
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
   activeParcelPolicy,
@@ -18,8 +18,6 @@ import {
   adminCorridors,
   adminCreateCorridor,
   adminCreateParcelPolicy,
-  adminCreateStop,
-  adminDistricts,
   adminFeatureFlagHistory,
   adminFeatureFlags,
   adminLegacyOrder,
@@ -29,18 +27,14 @@ import {
   adminCreateParcelCategoryVersion,
   adminConfirmParcelCategoryVersion,
   adminPatchCorridor,
-  adminPatchStop,
   adminProviderQuota,
   adminQ47Violations,
   adminRegions,
   adminRetryOutbox,
   adminSetFeatureFlag,
-  adminCorridorStops,
-  type AdminStopDTO,
   type CorridorAdminDTO,
   type CorridorPatch,
   type CorridorRolloutState,
-  type DistrictDTO,
   type FeatureFlagKey,
   type FlagChangeDTO,
   type FlagScopeType,
@@ -55,9 +49,7 @@ import {
   type ProviderQuotaDTO,
   type Q47ViolationDTO,
   type RegionDTO,
-  type StopPatch,
 } from "../api/v2/admin-platform.api";
-import { uploadStopPhoto } from "../api/v2/admin-stop-photo.api";
 import { capabilities } from "../api/v2/ops.api";
 import { translate } from "../i18n";
 import { useT } from "../i18n/react";
@@ -90,12 +82,8 @@ import {
   rolloutTone,
   scopeLabel,
   scopeRefProblem,
-  stopHasEvidence,
 } from "./adminPlatform";
 import { Badge, Btn, Card, Chips, Empty, Field, Loading, Note, Section, Select, Tabs, useConfirmedCommand } from "./adminMoneyUi";
-
-// The map is heavy (Yandex loader) and only needed when a stop is being placed.
-const MapPointPicker = lazy(() => import("../components/location/MapPointPicker").then((m) => ({ default: m.MapPointPicker })));
 
 export type AdminPlatformTab = "flags" | "corridors" | "policy" | "categories" | "outbox" | "system";
 type Tab = AdminPlatformTab;
@@ -373,7 +361,7 @@ function FlagsTab({ caps }: { caps: Caps }) {
   );
 }
 
-// --- corridors and stops --------------------------------------------------------------------------------------------
+// --- corridors -----------------------------------------------------------------------------------------------------
 
 function Q47Banner({ rows, error }: { rows: Q47ViolationDTO[] | null; error: string | null }) {
   const t = useT();
@@ -388,112 +376,13 @@ function Q47Banner({ rows, error }: { rows: Q47ViolationDTO[] | null; error: str
           {t("admin.platform.q47Row", {
             name: row.name,
             state: rolloutLabel(row.rollout_state),
-            count: row.active_stops,
             reasons: row.reasons.map(corridorReasonLabel).join("; "),
           })}
-          {row.stops_missing_evidence.length > 0 && ` · ${t("admin.platform.noEvidenceStops", { stops: row.stops_missing_evidence.join(", ") })}`}
         </p>
       ))}
     </div>
   );
 }
-
-/** Q27 photo evidence: pick an image, upload it as `stop_photo`, keep the signed reference for the stop command. */
-function PhotoUpload({ value, onChange }: { value: string; onChange: (fileRef: string) => void }) {
-  const t = useT();
-  const [state, setState] = useState<{ name: string; busy: boolean; error: string | null } | null>(null);
-  return (
-    <label className="flex min-w-0 flex-col gap-1 text-sm">
-      <span className="font-medium text-secondary-foreground">{t("admin.platform.photo")}</span>
-      <input
-        type="file"
-        accept="image/*"
-        aria-label={t("admin.platform.photo")}
-        className="block w-full text-xs file:mr-2 file:h-9 file:rounded-[10px] file:border file:border-border file:bg-card file:px-3"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (!file) return;
-          setState({ name: file.name, busy: true, error: null });
-          uploadStopPhoto(file)
-            .then((uploaded) => {
-              onChange(uploaded.file_url);
-              setState({ name: file.name, busy: false, error: null });
-            })
-            .catch((cause) => setState({ name: file.name, busy: false, error: v2ErrorMessage(cause) }));
-        }}
-      />
-      <span className={`text-xs ${state?.error ? "text-destructive" : "text-muted-foreground"}`}>
-        {state?.busy
-          ? t("admin.platform.uploading", { file: state.name })
-          : state?.error
-            ? state.error
-            : value
-              ? t("admin.platform.photoReady", { file: state?.name ?? t("admin.platform.photoStored") })
-              : t("admin.platform.photoHint")}
-      </span>
-    </label>
-  );
-}
-
-function StopEditor({
-  stop,
-  onSaved,
-}: {
-  stop: { id: string; version: number; meeting_note?: string | null; meeting_photo_file_id?: string | null; is_active: boolean; sequence_hint: number };
-  onSaved: (s: AdminStopDTO) => void;
-}) {
-  const t = useT();
-  const [note, setNote] = useState(stop.meeting_note ?? "");
-  const [photo, setPhoto] = useState(stop.meeting_photo_file_id ?? "");
-  const [active, setActive] = useState(stop.is_active);
-  const [seq, setSeq] = useState(String(stop.sequence_hint));
-  const action = useConfirmedCommand({ explain: corridorRefusalMessage, confirmLabel: t("admin.money.iConfirm") });
-
-  function save() {
-    const body: StopPatch = { expected_version: stop.version };
-    const lines: string[] = [];
-    if (note.trim() !== (stop.meeting_note ?? "").trim()) {
-      body.meeting_note = note.trim() || null;
-      lines.push(t("admin.platform.noteLine", { note: note.trim() || "-" }));
-    }
-    if (photo.trim() !== (stop.meeting_photo_file_id ?? "")) {
-      body.meeting_photo_file_id = photo.trim() || null;
-      lines.push(t("admin.platform.photoChanged"));
-    }
-    if (active !== stop.is_active) {
-      body.is_active = active;
-      lines.push(active ? t("admin.platform.stopOn") : t("admin.platform.stopOff"));
-    }
-    const seqValue = toInt(seq);
-    if (seqValue !== null && seqValue !== stop.sequence_hint) {
-      body.sequence_hint = seqValue;
-      lines.push(t("admin.platform.orderLine", { order: seqValue }));
-    }
-    if (lines.length === 0) return;
-    if (active && !stopHasEvidence({ meeting_note: body.meeting_note ?? note, meeting_photo_file_id: body.meeting_photo_file_id ?? (photo || null) })) {
-      lines.push(t("admin.platform.noEvidenceWarn"));
-    }
-    action.ask({ title: t("admin.platform.confirmStop", { id: stop.id }), lines, work: async (key) => onSaved(await adminPatchStop(stop.id, body, key)) });
-  }
-
-  return (
-    <div className="grid gap-2 md:grid-cols-4">
-      <Field label={t("admin.platform.meetingNoteShort")} value={note} onChange={setNote} />
-      <PhotoUpload value={photo} onChange={setPhoto} />
-      <Select label={t("admin.money.status")} value={active ? "on" : "off"} onChange={(v) => setActive(v === "on")} options={[["on", t("admin.platform.activeCap")], ["off", t("admin.platform.inactiveCap")]]} />
-      <Field label={t("admin.platform.order")} value={seq} onChange={setSeq} />
-      <div className="md:col-span-4">
-        <Btn tone="primary" disabled={action.busy} onClick={save}>
-          {t("admin.platform.saveStop")}
-        </Btn>
-        {action.view}
-      </div>
-    </div>
-  );
-}
-
-type StopForm = { name_uz: string; name_ru: string; district_id: string; lat: string; lng: string; seq: string; note: string; photo: string; active: boolean };
-const EMPTY_STOP: StopForm = { name_uz: "", name_ru: "", district_id: "", lat: "", lng: "", seq: "0", note: "", photo: "", active: false };
 
 function CorridorDetail({ corridor, caps, onChanged }: { corridor: CorridorAdminDTO; caps: Caps; onChanged: (c: CorridorAdminDTO) => void }) {
   const t = useT();
@@ -503,20 +392,8 @@ function CorridorDetail({ corridor, caps, onChanged }: { corridor: CorridorAdmin
   const [detourM, setDetourM] = useState(String(corridor.config.default_max_detour_m));
   const [target, setTarget] = useState<"" | CorridorRolloutState>("");
   const [reason, setReason] = useState("");
-  const [stopForm, setStopForm] = useState<StopForm>(EMPTY_STOP);
-  const [photoKey, setPhotoKey] = useState(0);
-  const [mapOpen, setMapOpen] = useState(false);
-  const [districts, setDistricts] = useState<DistrictDTO[]>([]);
-  const allStops = useLoad<AdminStopDTO[]>(() => adminCorridorStops(corridor.id), [corridor.id]);
   const patch = useConfirmedCommand({ explain: corridorRefusalMessage, confirmLabel: t("admin.money.iConfirm") });
-  const create = useConfirmedCommand({ explain: corridorRefusalMessage, confirmLabel: t("admin.money.iConfirm") });
   const canManage = caps.has(PLATFORM_CAPABILITIES.corridors);
-
-  useEffect(() => {
-    Promise.all([adminDistricts(corridor.origin_region.id), adminDistricts(corridor.destination_region.id)])
-      .then(([a, b]) => setDistricts([...a, ...b.filter((d) => !a.some((x) => x.id === d.id))]))
-      .catch(() => setDistricts([]));
-  }, [corridor.origin_region.id, corridor.destination_region.id]);
 
   function savePatch() {
     const body: CorridorPatch = { expected_version: corridor.version, reason: reason.trim() };
@@ -559,53 +436,6 @@ function CorridorDetail({ corridor, caps, onChanged }: { corridor: CorridorAdmin
     });
   }
 
-  function addStop() {
-    const lat = Number(stopForm.lat);
-    const lng = Number(stopForm.lng);
-    const lines = [
-      `${stopForm.name_uz.trim()} (${districts.find((d) => d.id === stopForm.district_id)?.name_uz ?? stopForm.district_id})`,
-      t("admin.platform.pointLine", { lat, lng }),
-      stopForm.active ? t("admin.platform.activeNow") : t("admin.platform.createdInactive"),
-      stopHasEvidence({ meeting_note: stopForm.note, meeting_photo_file_id: stopForm.photo || null }) ? t("admin.platform.hasEvidence") : t("admin.platform.noEvidenceCreate"),
-    ];
-    create.ask({
-      title: t("admin.platform.confirmAddStop", { name: corridor.name }),
-      lines,
-      work: async (key) => {
-        await adminCreateStop(
-          corridor.id,
-          {
-            name_uz: stopForm.name_uz.trim(),
-            name_ru: stopForm.name_ru.trim() || null,
-            district_id: stopForm.district_id,
-            point: { lat, lng },
-            sequence_hint: toInt(stopForm.seq) ?? 0,
-            is_active: stopForm.active,
-            meeting_note: stopForm.note.trim() || null,
-            meeting_photo_file_id: stopForm.photo.trim() || null,
-          },
-          key,
-        );
-        allStops.reload();
-        setStopForm(EMPTY_STOP);
-        setPhotoKey((n) => n + 1);
-      },
-    });
-  }
-
-  const pointOk =
-    Number.isFinite(Number(stopForm.lat)) &&
-    Number.isFinite(Number(stopForm.lng)) &&
-    stopForm.lat.trim() !== "" &&
-    stopForm.lng.trim() !== "" &&
-    Math.abs(Number(stopForm.lat)) <= 90 &&
-    Math.abs(Number(stopForm.lng)) <= 180;
-  const pickedDistrict = districts.find((d) => d.id === stopForm.district_id);
-  const center =
-    pickedDistrict?.center_lat != null && pickedDistrict?.center_lng != null
-      ? { lat: pickedDistrict.center_lat, lng: pickedDistrict.center_lng, scope: "district" as const }
-      : null;
-
   return (
     <div className="space-y-4 rounded-[14px] border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -613,7 +443,7 @@ function CorridorDetail({ corridor, caps, onChanged }: { corridor: CorridorAdmin
           <h3 className="text-lg font-bold text-foreground">{corridor.name}</h3>
           <p className="text-sm text-muted-foreground">
             {corridor.origin_region.name_uz} → {corridor.destination_region.name_uz} ·{" "}
-            {t("admin.platform.corridorRow", { state: rolloutLabel(corridor.rollout_state), count: corridor.stops_count, version: corridor.version })}
+            {t("admin.platform.corridorRow", { state: rolloutLabel(corridor.rollout_state), version: corridor.version })}
           </p>
         </div>
         <Badge tone={rolloutTone(corridor.rollout_state)}>{rolloutLabel(corridor.rollout_state)}</Badge>
@@ -649,88 +479,11 @@ function CorridorDetail({ corridor, caps, onChanged }: { corridor: CorridorAdmin
         </Section>
       )}
 
-      <Section title={t("admin.platform.stopsAll")}>
-        {/* 06.10.2026: staff work point A -> point B; these nodes stay only for segment capacity, ETA and Q47 */}
-        <p className="text-xs text-muted-foreground">{t("admin.platform.anchorNote")}</p>
-        {allStops.error && <Empty>{t("admin.platform.stopsError", { error: allStops.error })}</Empty>}
-        {!allStops.data && !allStops.error && <Loading />}
-        {allStops.data && allStops.data.length === 0 && <Empty>{t("admin.platform.noStops")}</Empty>}
-        {(allStops.data ?? []).map((stop) => (
-          <div key={stop.id} className="space-y-2 rounded-[12px] border border-border p-3 text-sm">
-            <p className="font-semibold">
-              {stop.name_uz} · {stop.district.name_uz} · {stop.is_active ? t("admin.platform.active") : t("admin.platform.inactive")} · v{stop.version} ·{" "}
-              {stopHasEvidence(stop) ? t("admin.platform.evidenceYes") : t("admin.platform.evidenceNo")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {stop.point.lat.toFixed(5)}, {stop.point.lng.toFixed(5)} · {t("admin.platform.orderLine", { order: stop.sequence_hint })} · {stop.id}
-            </p>
-            {canManage && <StopEditor key={`${stop.id}-${stop.version}`} stop={stop} onSaved={() => allStops.reload()} />}
-          </div>
-        ))}
-      </Section>
-
-      {canManage && (
-        <Section title={t("admin.platform.newStop")}>
-          <div className="space-y-2 rounded-[12px] border border-dashed border-border p-3">
-            <div className="grid gap-2 md:grid-cols-3">
-              <Field label={t("admin.platform.nameUz")} value={stopForm.name_uz} onChange={(v) => setStopForm({ ...stopForm, name_uz: v })} />
-              <Field label={t("admin.platform.nameRu")} value={stopForm.name_ru} onChange={(v) => setStopForm({ ...stopForm, name_ru: v })} />
-              <Select
-                label={t("admin.platform.district")}
-                value={stopForm.district_id}
-                onChange={(v) => setStopForm({ ...stopForm, district_id: v })}
-                options={[["", t("admin.money.choose")], ...districts.map((d): [string, string] => [d.id, `${d.region.name_uz}: ${d.name_uz}`])]}
-              />
-            </div>
-            <div className="flex flex-wrap items-end gap-2 rounded-[10px] bg-muted/40 p-2">
-              <Btn onClick={() => setMapOpen(true)}>{t("admin.platform.pickOnMap")}</Btn>
-              <span className="text-xs text-muted-foreground">{t("admin.platform.mapPick")}</span>
-              <div className="w-36">
-                <Field label={t("admin.platform.lat")} value={stopForm.lat} onChange={(v) => setStopForm({ ...stopForm, lat: v })} />
-              </div>
-              <div className="w-36">
-                <Field label={t("admin.platform.lng")} value={stopForm.lng} onChange={(v) => setStopForm({ ...stopForm, lng: v })} />
-              </div>
-            </div>
-            <div className="grid gap-2 md:grid-cols-3">
-              <Field label={t("admin.platform.meetingNote")} value={stopForm.note} onChange={(v) => setStopForm({ ...stopForm, note: v })} />
-              <PhotoUpload key={photoKey} value={stopForm.photo} onChange={(photo) => setStopForm((f) => ({ ...f, photo }))} />
-              <Select
-                label={t("admin.money.status")}
-                value={stopForm.active ? "on" : "off"}
-                onChange={(v) => setStopForm({ ...stopForm, active: v === "on" })}
-                options={[["off", t("admin.platform.inactiveCap")], ["on", t("admin.platform.activeCap")]]}
-              />
-              <Field label={t("admin.platform.order")} value={stopForm.seq} onChange={(v) => setStopForm({ ...stopForm, seq: v })} />
-            </div>
-            <Btn tone="primary" disabled={create.busy || !stopForm.name_uz.trim() || !stopForm.district_id || !pointOk} onClick={addStop}>
-              {t("admin.platform.addStop")}
-            </Btn>
-            {create.view}
-          </div>
-          {mapOpen && (
-            <div className="fixed inset-0 z-[80] flex justify-center bg-foreground/40" role="presentation">
-              <div className="relative h-full w-full max-w-md bg-background">
-                <Suspense fallback={<Loading />}>
-                  <MapPointPicker
-                    title={t("admin.platform.mapTitle")}
-                    initial={pointOk ? { lat: Number(stopForm.lat), lng: Number(stopForm.lng), address: null } : null}
-                    districtCenter={center}
-                    districtName={pickedDistrict?.name_uz}
-                    searchDistrict={pickedDistrict?.name_uz ?? null}
-                    onBack={() => setMapOpen(false)}
-                    onConfirm={(point) => {
-                      setStopForm((f) => ({ ...f, lat: point.lat.toFixed(6), lng: point.lng.toFixed(6) }));
-                      setMapOpen(false);
-                    }}
-                  />
-                </Suspense>
-              </div>
-            </div>
-          )}
-        </Section>
-      )}
     </div>
+  );
+}
+
+/** CORRIDOR_ROLLOUT    </div>
   );
 }
 
@@ -822,7 +575,7 @@ function CorridorsTab({ caps }: { caps: Caps }) {
                 <span className="min-w-0">
                   <span className="block font-semibold text-foreground">{c.name}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {t("admin.platform.corridorRow", { state: rolloutLabel(c.rollout_state), count: c.stops_count, version: c.version })}
+                    {t("admin.platform.corridorRow", { state: rolloutLabel(c.rollout_state), version: c.version })}
                     {broken && <span className="text-destructive"> · {t("admin.platform.q47Broken")}</span>}
                   </span>
                 </span>

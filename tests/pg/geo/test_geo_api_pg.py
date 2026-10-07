@@ -114,8 +114,8 @@ def test_openapi_every_geo_route_has_a_response_model(h: Harness) -> None:
             assert "$ref" in schema and "Envelope" in schema["$ref"], (method, path)
             count += 1
     # wave 10: G16 /districts, G17 /corridors/{id}/districts; wave 11: G18 /corridors/{id}/routes;
-    # 24.09.2026: G12 GET /admin/corridors/{id}/stops (staff list of every stop)
-    assert count == 23
+    # Q160: the five stop endpoints are gone (public list, search, staff list, create, patch)
+    assert count == 18
     assert "attribution" in spec["components"]["schemas"]["RouteVersionDTO"]["properties"]
 
 
@@ -124,20 +124,20 @@ def test_public_catalogue_g1_to_g4(h: Harness) -> None:
     assert {r["code"] for r in regions} == {"UZ-TK", "UZ-SA", "UZ-QA"} and all(r["id"].startswith("reg_") for r in regions)
     corridors = ok(h.call("GET", "/corridors"))
     assert [c["id"] for c in corridors] == [h.fixture.corridor.api_id]
-    assert corridors[0]["enabled_services"] == [] and corridors[0]["stops_count"] == 6
+    assert corridors[0]["enabled_services"] == [] and "stops_count" not in corridors[0]
     assert ok(h.call("GET", "/corridors", params={"service_type": "parcel"})) == []
-    stops = ok(h.call("GET", f"/corridors/{h.fixture.corridor.api_id}/stops"))
-    assert len(stops) == 6 and stops[0]["id"].startswith("stp_") and stops[0]["district"]["id"].startswith("dst_")
-    err(h.call("GET", "/corridors/cor_notreal/stops"), 404, "NOT_FOUND")
-    assert [s["name_uz"] for s in ok(h.call("GET", "/stops/search", params={"q": "chiroq"}))] == ["Chiroqchi bekati (fixture)"]
-    region_qa = next(r["id"] for r in regions if r["code"] == "UZ-QA")
-    assert len(ok(h.call("GET", "/stops/search", params={"q": "bekati", "region_id": region_qa}))) == 3
-    err(h.call("GET", "/stops/search", params={"q": "c"}), 400, "VALIDATION_ERROR")
+    for gone in (f"/corridors/{h.fixture.corridor.api_id}/stops", "/stops/search"):  # Q160: no stop catalogue
+        assert h.call("GET", gone, params={"q": "chiroq"}).status_code in (404, 405)
 
 
 def test_route_preview_idempotency_and_confirm_g5_g6(h: Harness) -> None:
-    stop_ids = [h.fixture.stops[k].api_id for k in ("toshkent", "samarqand", "chiroqchi", "qarshi")]
-    body = {"stop_ids": stop_ids, "departure_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}
+    def place(key: str) -> dict:
+        return {"lat": h.fixture.places[key].lat, "lng": h.fixture.places[key].lng}
+
+    body = {"corridor_id": h.fixture.corridor.api_id, "origin": place("toshkent"), "destination": place("qarshi"),
+            "departure_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}
+    legacy = {"stop_ids": ["stp_a", "stp_b"], "departure_at": body["departure_at"]}
+    err(h.call("POST", "/routes/preview", as_="driver", key=True, json=legacy), 400, "VALIDATION_ERROR")  # Q160
 
     err(h.call("POST", "/routes/preview", as_="driver", json=body), 400, "IDEMPOTENCY_KEY_REQUIRED")
     err(h.call("POST", "/routes/preview", as_="client", key=True, json=body), 403, "CAPABILITY_REQUIRED")
@@ -158,7 +158,7 @@ def test_route_preview_idempotency_and_confirm_g5_g6(h: Harness) -> None:
     draft = ok(created, 201)
     assert draft["status"] == "draft" and draft["id"].startswith("rtv_") and draft["is_estimate"] is True
     assert draft["attribution"] == "Synthetic route from the Elchi test router (not a real road)"
-    assert [s["seq"] for s in draft["stops"]] == [0, 1, 2, 3] and draft["stops"][0]["cumulative_distance_m"] == 0
+    assert "stops" not in draft and draft["distance_m"] > 0
     calls = len(h.provider.calls)
 
     replay = h.call("POST", "/routes/preview", as_="driver", key=key, json=body)
@@ -166,17 +166,14 @@ def test_route_preview_idempotency_and_confirm_g5_g6(h: Harness) -> None:
     assert replay.headers.get("Idempotent-Replayed") == "true"
     assert len(h.provider.calls) == calls  # a replay never calls the router
     assert h.count("SELECT count(*) FROM route_versions") == before_routes + 1
-    err(h.call("POST", "/routes/preview", as_="driver", key=key, json=dict(body, stop_ids=stop_ids[:2])), 409, "IDEMPOTENCY_KEY_REUSED")
+    err(h.call("POST", "/routes/preview", as_="driver", key=key, json=dict(body, destination=place("samarqand"))), 409, "IDEMPOTENCY_KEY_REUSED")
     assert len(h.provider.calls) == calls
 
-    # A domain 4xx from the read phase is stored and replayed, even after the cause is gone.
-    kitob = h.fixture.stops["kitob"]
-    ok(h.call("PATCH", f"/admin/stops/{kitob.api_id}", as_="admin", json={"expected_version": kitob.version, "is_active": False}))
-    bad_key = "preview-inactive-" + uuid.uuid4().hex
-    inactive_body = dict(body, stop_ids=[stop_ids[0], kitob.api_id])
-    err(h.call("POST", "/routes/preview", as_="driver", key=bad_key, json=inactive_body), 409, "CORRIDOR_NOT_ACTIVE")
-    ok(h.call("PATCH", f"/admin/stops/{kitob.api_id}", as_="admin", json={"expected_version": kitob.version + 1, "is_active": True}))
-    err(h.call("POST", "/routes/preview", as_="driver", key=bad_key, json=inactive_body), 409, "CORRIDOR_NOT_ACTIVE")
+    # A domain 4xx from the read phase is stored and replayed (A and B the same place).
+    bad_key = "preview-same-" + uuid.uuid4().hex
+    same_body = dict(body, destination=place("toshkent"))
+    err(h.call("POST", "/routes/preview", as_="driver", key=bad_key, json=same_body), 400, "VALIDATION_ERROR")
+    err(h.call("POST", "/routes/preview", as_="driver", key=bad_key, json=same_body), 400, "VALIDATION_ERROR")
     assert len(h.provider.calls) == calls
 
     confirm_key = "confirm-" + uuid.uuid4().hex
@@ -196,7 +193,7 @@ def test_decision_24_production_gets_no_router(h: Harness) -> None:
     assert isinstance(provider, DisabledRoutingProvider) and provider.reason == PRODUCTION_PROVIDER_REFUSAL
 
 
-def test_admin_corridors_and_stops_g7_to_g11(h: Harness) -> None:
+def test_admin_corridors_g7_to_g9(h: Harness) -> None:
     regions = {r["code"]: r["id"] for r in ok(h.call("GET", "/regions"))}
     create = {
         "name": "Toshkent - Samarqand (test)",
@@ -215,7 +212,6 @@ def test_admin_corridors_and_stops_g7_to_g11(h: Harness) -> None:
     assert again.status_code == 201 and again.json() == first.json() and again.headers.get("Idempotent-Replayed") == "true"
     assert h.count("SELECT count(*) FROM service_corridors") == 2
     err(h.call("POST", "/admin/corridors", as_="admin", key=True, json=create), 400, "VALIDATION_ERROR")
-    err(h.call("GET", f"/corridors/{corridor['id']}/stops"), 404, "NOT_FOUND")
 
     page1 = h.call("GET", "/admin/corridors", as_="operator", params={"limit": 1})
     cursor = page1.json()["meta"]["next_cursor"]
@@ -227,31 +223,12 @@ def test_admin_corridors_and_stops_g7_to_g11(h: Harness) -> None:
 
     path = f"/admin/corridors/{corridor['id']}"
     err(h.call("PATCH", path, as_="admin", json={"expected_version": 1, "reason": "go", "rollout_state": "active"}), 409, "INVALID_STATE_TRANSITION")
-    no_stop = err(h.call("PATCH", path, as_="admin", json={"expected_version": 1, "reason": "go", "rollout_state": "internal"}), 409, "INVALID_STATE_TRANSITION")
-    assert no_stop["details"]["reason"] == "needs_active_stop"
-
-    stop_key = "stop-" + uuid.uuid4().hex
-    stop_body = {"name_uz": "Yangi bekat", "district_id": h.fixture.district_api_ids["samarqand"], "point": {"lat": 39.65, "lng": 66.96}, "is_active": True, "meeting_note": "Darvoza"}
-    stop = ok(h.call("POST", f"/admin/corridors/{corridor['id']}/stops", as_="admin", key=stop_key, json=stop_body), 201)
-    assert stop["is_active"] and stop["version"] == 1 and stop["corridor_id"] == corridor["id"] and stop["meeting_photo_file_id"] is None and stop["meeting_photo_url"] is None
-    assert ok(h.call("POST", f"/admin/corridors/{corridor['id']}/stops", as_="admin", key=stop_key, json=stop_body), 201)["id"] == stop["id"]
-    err(h.call("POST", f"/admin/corridors/{corridor['id']}/stops", as_="admin", key=True, json=dict(stop_body, point={"lat": 91, "lng": 0})), 400, "VALIDATION_ERROR")
+    # ADR-0028: internal testing needs nothing; pilot needs a confirmed road (test_stops_frozen_pg)
 
     internal = ok(h.call("PATCH", path, as_="admin", json={"expected_version": 1, "reason": "internal test", "rollout_state": "internal", "search_radius_m": 2500}))
     assert internal["version"] == 2 and internal["config_version"] == 2 and internal["config"]["search_radius_m"] == 2500
     err(h.call("PATCH", path, as_="admin", json={"expected_version": 1, "reason": "stale", "name": "x"}), 409, "VERSION_CONFLICT")
 
-    patched = ok(h.call("PATCH", f"/admin/stops/{stop['id']}", as_="admin", json={"expected_version": 1, "meeting_note": "Darvoza oldida", "point": {"lat": 39.66, "lng": 66.97}}))
-    assert patched["version"] == 2 and patched["meeting_note"] == "Darvoza oldida" and patched["point"] == {"lat": 39.66, "lng": 66.97}
-    err(h.call("PATCH", f"/admin/stops/{stop['id']}", as_="admin", json={"expected_version": 1, "name_uz": "x"}), 409, "VERSION_CONFLICT")
-    err(h.call("PATCH", f"/admin/stops/{stop['id']}", as_="admin", json={"expected_version": 2, "point": None}), 400, "VALIDATION_ERROR")
-
-    # Staff see every stop of a non-public corridor with the version a PATCH needs; the public list still hides it.
-    ok(h.call("PATCH", f"/admin/stops/{stop['id']}", as_="admin", json={"expected_version": 2, "is_active": False}))
-    listed = ok(h.call("GET", f"/admin/corridors/{corridor['id']}/stops", as_="operator"))
-    assert [(s["id"], s["version"], s["is_active"]) for s in listed] == [(stop["id"], 3, False)]
-    err(h.call("GET", f"/admin/corridors/{corridor['id']}/stops", as_="client"), 403, "FORBIDDEN")
-    err(h.call("GET", "/admin/corridors/crd_unknown/stops", as_="operator"), 404, "NOT_FOUND")
 
 
 def test_feature_flags_f1_to_f4(h: Harness, monkeypatch: pytest.MonkeyPatch) -> None:

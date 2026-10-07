@@ -8,11 +8,8 @@ import type { DistrictDTO, RegionDTO } from "../../api/v2/marketplace.api";
 /**
  * "Tumanni tanlang" on the stage-2 catalogue - the same screen as `DistrictSelector`, one list further.
  *
- * Every row is just a district. It used to carry a count of verified stops underneath, and "Bekat yo'q" under
- * most of them, which was both discouraging and - since Q88 - untrue: the next screen is a map, the place is
- * marked on it, and a district without a catalogued stop serves a booking exactly as well as one with. Only
- * six of the country's districts have a stop at all, so that line told almost everybody their district was
- * unusable.
+ * Every row is just a district: the next screen is a map and the place is marked on it (Q88, ADR-0028), so
+ * every district serves a booking the same way and nothing under a row suggests otherwise.
  */
 type GeoDistrictSelectorProps = {
   region: Pick<RegionDTO, "id" | "name_uz">;

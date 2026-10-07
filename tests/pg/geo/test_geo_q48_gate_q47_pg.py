@@ -164,7 +164,17 @@ def run_check(pg_db: PgDatabase) -> subprocess.CompletedProcess[str]:
     return subprocess.run([sys.executable, "-m", "app.modules.geo.checks", "q47"], cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=120)
 
 
+def unconfirm_roads(pg_db: PgDatabase, corridor_id: int) -> None:
+    """Legacy/bypassed data: the corridor's roads back to draft, guards off for this transaction only."""
+    with pg_db.engine.begin() as conn:
+        conn.execute(text("SET LOCAL session_replication_role = replica"))
+        conn.execute(text("UPDATE route_versions SET status = 'draft', confirmed_at = NULL WHERE corridor_id = :c"), {"c": corridor_id})
+
+
 def test_q47_detector_cli_and_repair_path(geo) -> None:  # noqa: ANN001
+    """ADR-0028: the detector reports a public corridor without a confirmed road (stops no longer count)."""
+    from tests.fixtures.geo.loader import FakeRoutingProvider, build_route
+
     pg_db, fx, admin, _ = geo
     with pg_db.session() as db:
         assert service.find_q47_violations(db) == []
@@ -173,38 +183,28 @@ def test_q47_detector_cli_and_repair_path(geo) -> None:  # noqa: ANN001
     clean = run_check(pg_db)
     assert clean.returncode == 0 and clean.stdout == "", clean.stderr
 
-    # Legacy/bypassed data: guards off for this transaction only.
-    keep = fx.stop_id("qarshi")
-    with pg_db.engine.begin() as conn:
-        conn.execute(text("SET LOCAL session_replication_role = replica"))
-        conn.execute(text("UPDATE corridor_stops SET is_active = false WHERE corridor_id = :c AND id <> :keep"), {"c": fx.corridor.id, "keep": keep})
-        conn.execute(text("UPDATE corridor_stops SET meeting_note = NULL WHERE id = :keep"), {"keep": keep})
-
+    unconfirm_roads(pg_db, fx.corridor.id)
     with pg_db.session() as db:
         violations = service.find_q47_violations(db)
         assert len(violations) == 1
         found = violations[0]
-        assert (found.api_id, found.rollout_state.value, found.active_stops) == (fx.corridor.api_id, "active", 1)
-        assert found.stops_missing_evidence == (fx.stops["qarshi"].api_id,)
-        assert found.reasons == ("needs_two_active_stops", "stops_missing_meeting_evidence")
+        assert (found.api_id, found.rollout_state.value, found.confirmed_roads) == (fx.corridor.api_id, "active", 0)
+        assert found.reasons == ("needs_confirmed_road",)
         assert [n["check"] for n in service.production_invariant_notices(db)] == ["geo.q47"]
     dirty = run_check(pg_db)
-    assert dirty.returncode == 1 and fx.corridor.api_id in dirty.stdout and '"needs_two_active_stops"' in dirty.stdout
+    assert dirty.returncode == 1 and fx.corridor.api_id in dirty.stdout and '"needs_confirmed_road"' in dirty.stdout
 
-    # Runbook: active -> pilot -> internal (allowed although violating), fix stops, pilot -> active again.
+    # Runbook: active -> pilot -> internal (allowed although violating), confirm a road, pilot -> active again.
     with pg_db.session() as db:
-        corridor = service.patch_corridor(db, actor_user_id=admin, corridor_api_id=corridor.api_id, expected_version=corridor.version, reason="Q47 repair", changes={"rollout_state": "pilot"})
+        corridor = service.patch_corridor(db, actor_user_id=admin, corridor_api_id=corridor.api_id, expected_version=corridor.version, reason="repair", changes={"rollout_state": "pilot"})
         db.commit()
-        corridor = service.patch_corridor(db, actor_user_id=admin, corridor_api_id=corridor.api_id, expected_version=corridor.version, reason="Q47 repair", changes={"rollout_state": "internal"})
+        corridor = service.patch_corridor(db, actor_user_id=admin, corridor_api_id=corridor.api_id, expected_version=corridor.version, reason="repair", changes={"rollout_state": "internal"})
         db.commit()
-        qarshi = service.get_stop(db, keep)
-        service.patch_stop(db, actor_user_id=admin, stop_api_id=qarshi.api_id, expected_version=qarshi.version, changes={"meeting_note": "Avtovokzal kirishi"})
-        samarqand = fx.stops["samarqand"]
-        service.patch_stop(db, actor_user_id=admin, stop_api_id=samarqand.api_id, expected_version=samarqand.version, changes={"is_active": True})
-        db.commit()
-        with pytest.raises(DomainError):  # activate is still checked (pilot -> active)
-            service.patch_corridor(db, actor_user_id=admin, corridor_api_id=corridor.api_id, expected_version=corridor.version, reason="x", changes={"rollout_state": "active"})
+        with pytest.raises(DomainError) as info:  # entering pilot again is checked
+            service.patch_corridor(db, actor_user_id=admin, corridor_api_id=corridor.api_id, expected_version=corridor.version, reason="x", changes={"rollout_state": "pilot"})
+        assert info.value.details["reason"] == "needs_confirmed_road"
         db.rollback()
+        build_route(db, FakeRoutingProvider(), actor_user_id=admin, corridor=corridor, through=[fx.places["toshkent"], fx.places["qarshi"]])
         corridor = service.patch_corridor(db, actor_user_id=admin, corridor_api_id=corridor.api_id, expected_version=corridor.version, reason="repaired", changes={"rollout_state": "pilot"})
         db.commit()
         corridor = service.patch_corridor(db, actor_user_id=admin, corridor_api_id=corridor.api_id, expected_version=corridor.version, reason="repaired", changes={"rollout_state": "active"})
@@ -227,10 +227,7 @@ def break_q47(pg_db: PgDatabase, fx, admin: int) -> None:  # noqa: ANN001
     with pg_db.session() as db:
         service.patch_corridor(db, actor_user_id=admin, corridor_api_id=fx.corridor.api_id, expected_version=fx.corridor.version, reason="go", changes={"rollout_state": "active"})
         db.commit()
-    keep = fx.stop_id("qarshi")
-    with pg_db.engine.begin() as conn:  # legacy/bypassed data, guards off for this transaction only
-        conn.execute(text("SET LOCAL session_replication_role = replica"))
-        conn.execute(text("UPDATE corridor_stops SET is_active = false WHERE corridor_id = :c AND id <> :keep"), {"c": fx.corridor.id, "keep": keep})
+    unconfirm_roads(pg_db, fx.corridor.id)  # ADR-0028: a public corridor without a confirmed road
 
 
 def test_readiness_notices_are_names_only(geo, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001
@@ -286,8 +283,7 @@ def test_db_still_blocks_entering_pilot_while_violating(geo) -> None:  # noqa: A
     with pg_db.session() as db:
         corridor = service.patch_corridor(db, actor_user_id=admin, corridor_api_id=fx.corridor.api_id, expected_version=fx.corridor.version, reason="x", changes={"rollout_state": "internal"})
         db.commit()
-    with pg_db.engine.begin() as conn:
-        conn.execute(text("UPDATE corridor_stops SET meeting_note = NULL WHERE id = :id"), {"id": fx.stop_id("qarshi")})  # internal: allowed
-    with pytest.raises(DBAPIError, match="meeting note or photo"):
+    unconfirm_roads(pg_db, fx.corridor.id)  # internal: allowed
+    with pytest.raises(DBAPIError, match="need a confirmed road"):
         with pg_db.engine.begin() as conn:
             conn.execute(text("UPDATE service_corridors SET rollout_state = 'pilot', version = version + 1 WHERE id = :id"), {"id": corridor.id})

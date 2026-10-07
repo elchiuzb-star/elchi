@@ -13,8 +13,8 @@
  *
  * **One key in the browser.** Only the map tiles need a key on the client (`VITE_YANDEX_MAPS_API_KEY`, which
  * should be domain-restricted). Geocoding goes through our own backend, which already holds the Geocoder key -
- * see `src/api/geo.api.ts`. Without the tile key every map here degrades to the text it was drawn over (a stop
- * list, an address, coordinates) rather than to a grey box.
+ * see `src/api/geo.api.ts`. Without the tile key every map here degrades to the text it was drawn over (a place
+ * name, an address, coordinates) rather than to a grey box.
  *
  * **Coordinates.** The two versions disagree: v2.1 speaks `[latitude, longitude]`, v3 speaks the reverse. The
  * rest of this app - and the whole backend - speaks `{lat, lng}`, and only the adapters below ever convert, so

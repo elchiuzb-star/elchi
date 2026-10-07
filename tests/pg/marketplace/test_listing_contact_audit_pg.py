@@ -29,8 +29,8 @@ def test_staff_listing_phone_view_is_audited_without_values(client, world: World
         {
             "kind": "request",
             "service_type": "parcel",
-            "origin_stop_id": world.stop_public_ids["A"],
-            "destination_stop_id": world.stop_public_ids["C"],
+            "origin_point": world.point("A"),
+            "destination_point": world.point("C"),
             "departure_window_start": world.base_time.isoformat(),
             "departure_window_end": (world.base_time + timedelta(hours=2)).isoformat(),
             "price_basis": "total",

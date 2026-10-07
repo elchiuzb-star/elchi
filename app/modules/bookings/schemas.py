@@ -26,7 +26,6 @@ from app.contracts.enums import (
     ProofKind,
     ServiceType,
 )
-from app.modules.trips.schemas import StopRefDTO
 
 # --- requests ---------------------------------------------------------------------------------------------------
 
@@ -133,8 +132,6 @@ class CashReceiptDecision(ContractModel):
 class AmendmentChanges(ContractModel):
     quantity: StrictInt | None = Field(default=None, ge=1)
     unit_price_minor: StrictInt | None = Field(default=None, gt=0)
-    pickup_stop_id: str | None = None
-    dropoff_stop_id: str | None = None
     pickup_window_start: UtcDateTime | None = None
     pickup_window_end: UtcDateTime | None = None
 
@@ -178,11 +175,9 @@ class TripActionRequest(VersionedCommand):
 # --- booking views ------------------------------------------------------------------------------------------------
 
 
-class BookingStopDTO(ContractModel):
-    # Q88: a booking end is a verified stop or the agreed map point, never both.
-    stop: StopRefDTO | None = None
+class BookingEndDTO(ContractModel):
+    # Q88 / Q160: a booking end is the agreed place; the arrival is its road position's ETA (ADR-0028).
     point: PointEndDTO | None = None
-    occurrence_seq: int
     planned_arrival_at: UtcDateTime | None = None
     window_start: UtcDateTime | None = None
     window_end: UtcDateTime | None = None
@@ -311,8 +306,8 @@ class BookingClientDTO(ContractModel):
     total_minor: int
     currency: Currency
     payment_method: PaymentMethod
-    pickup: BookingStopDTO
-    dropoff: BookingStopDTO
+    pickup: BookingEndDTO
+    dropoff: BookingEndDTO
     driver: BookingDriverDTO | None = None
     client: BookingClientPartyDTO | None = None
     parcel_contacts: ParcelContactsDTO | None = None
@@ -407,10 +402,9 @@ class ManifestItemDTO(ContractModel):
     contact_phone: str | None = None
 
 
-class ManifestStopDTO(ContractModel):
+class ManifestPlaceDTO(ContractModel):
     seq: int
-    # Q88: a booking end is a verified stop or the agreed map point, never both.
-    stop: StopRefDTO | None = None
+    # Q88 / Q160: the agreed place (bookings in road order).
     point: PointEndDTO | None = None
     planned_arrival_at: UtcDateTime
     pickups: list[ManifestItemDTO]
@@ -420,4 +414,4 @@ class ManifestStopDTO(ContractModel):
 class TripManifestDTO(ContractModel):
     trip_id: str
     trip_version: int
-    stops: list[ManifestStopDTO]
+    places: list[ManifestPlaceDTO]

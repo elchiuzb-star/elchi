@@ -99,7 +99,7 @@ def parcel_body(bw: BW, *, receiver_phone: str, unit: int, destination: str = "C
     start = bw.base
     return ListingCreate.model_validate({
         "kind": "request", "service_type": "parcel",
-        "origin_stop_id": bw.w.stop_public_ids["A"], "destination_stop_id": bw.w.stop_public_ids[destination],
+        "origin_point": bw.w.point("A"), "destination_point": bw.w.point(destination),
         "departure_window_start": start.isoformat(), "departure_window_end": (start + timedelta(hours=2)).isoformat(),
         "price_basis": "total", "unit_price_minor": unit,
         "parcel": {"parcel_type": "documents", "category_id": synthetic_category(bw.db),

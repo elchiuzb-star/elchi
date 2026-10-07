@@ -52,13 +52,13 @@ describe("splitFeedGroups", () => {
 });
 
 describe("alternativeReason", () => {
-  it("names the clock before the map", () => {
-    // A trip at another hour may not work at all; a nearby stop is a few minutes' driving.
-    expect(alternativeReason(["nearby_stop", "time_differs"])).toBe("time_differs");
+  it("names a different time", () => {
+    // A trip at another hour may not work at all, so it is the reason the driver is told.
+    expect(alternativeReason(["intermediate_segment", "time_differs"])).toBe("time_differs");
   });
 
-  it("reports a nearby stop when the time does fit", () => {
-    expect(alternativeReason(["intermediate_segment", "nearby_stop"])).toBe("nearby_stop");
+  it("does not explain a stop-based reason any more (ADR-0028)", () => {
+    expect(alternativeReason(["intermediate_segment", "nearby_stop"])).toBeNull();
   });
 
   it("returns null rather than inventing a reason", () => {

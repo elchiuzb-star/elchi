@@ -39,7 +39,7 @@ export function PublicSharePage({ token, onOpenApp }: { token: string; onOpenApp
       <Card>
         <div className="flex items-center justify-between gap-2">
           <strong>
-            {item.origin_stop_name} → {item.destination_stop_name}
+            {item.origin_name} → {item.destination_name}
           </strong>
           <Badge text={item.status_open ? translate("publicShare.open") : translate("publicShare.closed")} tone={item.status_open ? "ok" : "neutral"} />
         </div>

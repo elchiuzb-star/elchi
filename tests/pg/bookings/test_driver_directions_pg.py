@@ -1,6 +1,6 @@
 """ADR-0027 (Q150-Q155): a driver names only a direction; the system plans trips, times offers and books on the way.
 
-The A1 fixture corridor (stops A -> B -> C -> D on one confirmed road) gets one district per stop here, so a direction
+The A1 fixture road runs through places A -> B -> C -> D, each in its own district (centre = the place), so a direction
 "district of A -> district of D" means exactly what a driver would type in the app.
 """
 from __future__ import annotations
@@ -25,7 +25,6 @@ from tests.pg.bookings.conftest import (
     accept,
     domain_error,
     driver_trip,
-    propose,
     publish_listing,
     run_trip_action,
     scalar,
@@ -35,45 +34,23 @@ from tests.pg.marketplace.catalog_world import synthetic_category
 
 pytestmark = pytest.mark.pg
 
-STOP_DISTRICTS = {"A": ("UZ-TK", "Yunusobod"), "B": ("UZ-QA", "Jizzax yo'li"), "C": ("UZ-QA", "Chiroqchi"), "D": ("UZ-QA", "Qarshi")}
-
 
 @dataclass(frozen=True)
 class DW:
     bw: BW
     regions: dict[str, str]  # code -> api id
-    districts: dict[str, str]  # stop name -> district api id
+    districts: dict[str, str]  # place -> district api id
 
 
 @pytest.fixture
 def dw(bw: BW) -> DW:
-    """One district per stop, an approved car for the driver."""
-    regions: dict[str, str] = {}
-    districts: dict[str, str] = {}
-    with bw.db.engine.begin() as conn:
-        for code, public_id in conn.execute(text("SELECT code, public_id FROM regions")).all():
-            regions[code] = format_public_id(PublicIdPrefix.REGION, public_id)
-        for stop, (code, name) in STOP_DISTRICTS.items():
-            row = conn.execute(
-                text("SELECT d.id, d.public_id FROM geo_districts d JOIN regions r ON r.id = d.region_id "
-                     "WHERE r.code = :c AND d.name_uz = :n"),
-                {"c": code, "n": name},
-            ).first()
-            if row is None:
-                row = conn.execute(
-                    text("INSERT INTO geo_districts (public_id, region_id, name_uz) "
-                         "SELECT gen_random_uuid(), id, :n FROM regions WHERE code = :c RETURNING id, public_id"),
-                    {"c": code, "n": name},
-                ).one()
-            conn.execute(text("UPDATE corridor_stops SET geo_district_id = :d WHERE id = :s"), {"d": row.id, "s": bw.w.stop_ids[stop]})
-            districts[stop] = format_public_id(PublicIdPrefix.DISTRICT, row.public_id)
+    """The world's districts (one per place), an approved car for the driver."""
     make_vehicle(bw.w, bw.w.driver_id, "01D777AA", seats=4)
-    return DW(bw=bw, regions=regions, districts=districts)
+    return DW(bw=bw, regions=dict(bw.w.region_public_ids), districts=dict(bw.w.district_public_ids))
 
 
-def _end(dw: DW, stop: str) -> DirectionEndInput:
-    code = STOP_DISTRICTS[stop][0]
-    return DirectionEndInput(region_id=dw.regions[code], district_id=dw.districts[stop])
+def _end(dw: DW, place: str) -> DirectionEndInput:
+    return DirectionEndInput(**dw.bw.w.end(place))
 
 
 def add_direction(dw: DW, origin: str = "A", destination: str = "D") -> str:
@@ -90,7 +67,7 @@ def request(dw: DW, owner_id: int, *, origin: str, destination: str, start: date
             service: str = "passenger", seats: int = 1) -> str:
     body: dict = {
         "kind": "request", "service_type": service,
-        "origin_stop_id": dw.bw.w.stop_public_ids[origin], "destination_stop_id": dw.bw.w.stop_public_ids[destination],
+        "origin_point": dw.bw.w.point(origin), "destination_point": dw.bw.w.point(destination),
         "departure_window_start": start.isoformat(), "departure_window_end": (start + timedelta(hours=hours)).isoformat(),
         "price_basis": "per_seat" if service == "passenger" else "total", "unit_price_minor": 10_000_000,
     }
@@ -178,6 +155,8 @@ def test_first_offer_plans_the_trip_and_the_next_one_reuses_it(dw: DW) -> None:
     first = offer(dw, direction_id, full, now=now)
     assert first.created and not first.retimed
     assert scalar(dw.bw.db, "SELECT direction_id IS NOT NULL FROM trips WHERE id = :t", t=first.trip_id)
+    # ADR-0028: the planned trip is a stretch of road, a span in metres
+    assert scalar(dw.bw.db, "SELECT route_start_m < route_end_m FROM trips WHERE id = :t", t=first.trip_id)
     start = scalar(dw.bw.db, "SELECT planned_start_at FROM trips WHERE id = :t", t=first.trip_id)
     assert start == w.base_time  # leaves when the client at A wants to be picked up
 
@@ -253,10 +232,10 @@ def _counter(dw: DW, ref: ThreadRef, actor_id: int, *, now: datetime, unit: int 
         return made
 
 
-# --- Q155 point pickup just before a stop ------------------------------------------------------------------------------
+# --- Q155 point pickup just before a place on the road ------------------------------------------------------------------------------
 
 
-def test_a_place_just_before_a_stop_is_bookable(dw: DW) -> None:
+def test_a_place_just_before_b_is_bookable(dw: DW) -> None:
     """The 06.10.2026 live finding: submit took the interpolated ETA, accept the ETA of the stop opening the segment."""
     w = dw.bw.w
     trip_id, trip_public = driver_trip(dw.bw, w.driver2_id, "01P155AA")  # A at base, B at base+1h (A1 fixture trip)
@@ -282,7 +261,7 @@ def test_a_place_just_before_a_stop_is_bookable(dw: DW) -> None:
             pickup_window_end=w.base_time + timedelta(minutes=80), quantity=1, price_basis="per_seat", unit_price_minor=9_000_000,
         ))
         version = marketplace_service.current_version(s, thread)
-        assert version.pickup_occurrence_seq == 1  # the segment opened by A, an hour before the place
+        assert version.pickup_position_m is not None  # the place itself, as metres along the road
         ref = ThreadRef(listing, marketplace_service.thread_public_id(thread), marketplace_service.version_public_id(version), version.revision)
         s.commit()
     booking = accept(dw.bw, ref, w.client_id)

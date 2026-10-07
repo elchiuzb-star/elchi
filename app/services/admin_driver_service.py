@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.contracts.ids import PublicIdPrefix, format_public_id
 from app.models import AuditLog, City, DriverDocument, DriverProfile, DriverRoute, Order, RefreshSession, User
 from app.schemas.admin_driver import (
     AdminDriverApprove,
@@ -63,10 +64,17 @@ def city_summary(city: City | None) -> dict[str, Any] | None:
     return {"id": city.id, "name_uz": city.name_uz}
 
 
+def user_public_id(driver: DriverProfile) -> str | None:
+    """Additive v1 field: the admin driver section matches this driver to its v2 vehicles
+    (``GET /api/v2/admin/vehicles?owner_user_id=``) - the vehicle verification lives on the driver card."""
+    return format_public_id(PublicIdPrefix.USER, driver.user.public_id) if driver.user else None
+
+
 def driver_list_item_to_dict(driver: DriverProfile) -> dict[str, Any]:
     return {
         "id": driver.id,
         "user": user_list_to_dict(driver.user),
+        "user_public_id": user_public_id(driver),
         "car_model": driver.car_model,
         "plate_number": driver.plate_number,
         "plate_number_normalized": driver.plate_number_normalized,
@@ -113,6 +121,7 @@ def driver_detail_to_dict(driver: DriverProfile, db: Session) -> dict[str, Any]:
     return {
         "id": driver.id,
         "user": user_detail_to_dict(driver.user),
+        "user_public_id": user_public_id(driver),
         "car_model": driver.car_model,
         "plate_number": driver.plate_number,
         "plate_number_normalized": driver.plate_number_normalized,

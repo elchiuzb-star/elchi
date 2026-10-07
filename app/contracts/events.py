@@ -22,8 +22,7 @@ E = EventType
 
 EVENT_PAYLOAD_ALLOWLIST: dict[EventType, frozenset[str]] = {
     E.LISTING_PUBLISHED: frozenset(
-        {"kind", "service_type", "corridor_id", "origin_stop_id", "destination_stop_id",
-         "departure_window_start", "departure_window_end", "listing_version"}
+        {"kind", "service_type", "corridor_id", "departure_window_start", "departure_window_end", "listing_version"}
     ),
     E.LISTING_EXPIRED: frozenset({"kind", "service_type", "reason_code"}),
     E.LISTING_CANCELLED: frozenset({"kind", "service_type", "reason_code"}),

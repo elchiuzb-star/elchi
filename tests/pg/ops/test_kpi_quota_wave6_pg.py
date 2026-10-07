@@ -42,7 +42,7 @@ def _criteria(bw: BW, *, destination: str = "D"):  # noqa: ANN202, F811
     return FeedCriteria(
         service_type=ServiceType.PASSENGER, side=FeedSide.REQUESTS,
         date_from=bw.base - timedelta(days=1), date_to=bw.base + timedelta(days=5),
-        origin_stop_id=bw.w.stop_public_ids["A"], destination_stop_id=bw.w.stop_public_ids[destination],
+        origin_district_id=bw.w.district_public_ids["A"], destination_district_id=bw.w.district_public_ids[destination],
     )
 
 

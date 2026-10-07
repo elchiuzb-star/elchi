@@ -98,8 +98,8 @@ def public_listing_page(
         data=PublicListingPageDTO(
             kind=page.kind,
             service_type=page.service_type,
-            origin_stop_name=page.origin_stop_name,
-            destination_stop_name=page.destination_stop_name,
+            origin_name=page.origin_name,
+            destination_name=page.destination_name,
             departure_date=page.departure_date,
             departure_window_start=page.departure_window_start,
             departure_window_end=page.departure_window_end,

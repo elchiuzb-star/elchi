@@ -33,7 +33,7 @@ from tests.pg.bookings.conftest import (  # noqa: F401  (bw/world are fixtures)
     bw,
     domain_error,
     driver_trip,
-    occurrence_window,
+    place_window,
     passenger_request_body,
     propose,
     publish_listing,
@@ -70,7 +70,7 @@ def open_request(bw: BW) -> tuple[str, str]:
 
 
 def offer(bw: BW, listing: str, trip_public: str, unit: int, warnings: list | None = None):  # noqa: ANN201
-    window = occurrence_window(bw, "A")
+    window = place_window(bw, "A")
     with bw.db.session() as s:
         thread = marketplace_service.submit_proposal(
             s,
@@ -79,8 +79,6 @@ def offer(bw: BW, listing: str, trip_public: str, unit: int, warnings: list | No
             data=ProposalCreate.model_validate(
                 {
                     "trip_id": trip_public,
-                    "pickup_stop_id": bw.w.stop_public_ids["A"],
-                    "dropoff_stop_id": bw.w.stop_public_ids["D"],
                     "pickup_window_start": window[0].isoformat(),
                     "pickup_window_end": window[1].isoformat(),
                     "quantity": 1,

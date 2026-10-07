@@ -196,11 +196,13 @@ def test_blocked_driver_cannot_submit_or_counter(world: World) -> None:
 def test_route_mismatch_time_window_and_cutoff_at_submit(world: World) -> None:
     listing_id = published_request(world)
     _, trip_public_id = driver_trip(world)
-    reverse = proposal(world, trip_public_id).model_copy(
-        update={"pickup_stop_id": world.stop_public_ids["D"], "dropoff_stop_id": world.stop_public_ids["A"]}
-    )
-    with world.db.session() as s, pytest.raises(DomainError) as info:
-        marketplace_service.submit_proposal(s, listing_public_id=listing_id, actor_user_id=world.driver_id, data=reverse)
+    with pytest.raises(ValueError, match="dropoff_stop_id"):  # ADR-0028 / Q160: the places are the client's
+        ProposalCreate.model_validate({**proposal(world, trip_public_id).model_dump(mode="json"), "dropoff_stop_id": "stp_x"})
+    assert listing_id
+    with world.db.session() as s, pytest.raises(DomainError) as info:  # AC16: against the road it is not a request
+        marketplace_service.create_listing(
+            s, owner_user_id=world.client2_id, data=passenger_request(world, start=world.base_time, origin="D", destination="A")
+        )
     assert info.value.code is ErrorCode.ROUTE_MISMATCH
 
     late = published_request_at(world, hours_after_base=5)
@@ -255,8 +257,8 @@ def test_parcel_request_proposal_takes_demand_from_the_request(world: World) -> 
         {
             "kind": "request",
             "service_type": "parcel",
-            "origin_stop_id": world.stop_public_ids["A"],
-            "destination_stop_id": world.stop_public_ids["C"],
+            "origin_point": world.point("A"),
+            "destination_point": world.point("C"),
             "departure_window_start": world.base_time.isoformat(),
             "departure_window_end": (world.base_time + timedelta(hours=2)).isoformat(),
             "price_basis": "total",
@@ -274,7 +276,7 @@ def test_parcel_request_proposal_takes_demand_from_the_request(world: World) -> 
         s.commit()
     _, trip_public_id = driver_trip(world)
     offer = proposal(world, trip_public_id, quantity=1).model_copy(
-        update={"dropoff_stop_id": world.stop_public_ids["C"], "price_basis": "total", "unit_price_minor": 6_500_000}
+        update={"price_basis": "total", "unit_price_minor": 6_500_000}  # the places are the request's (A -> C)
     )
     with world.db.session() as s:
         version = marketplace_service.current_version(
@@ -421,13 +423,11 @@ def test_trip_change_expires_open_proposal_threads(world: World) -> None:
     from app.modules.trips.schemas import TripPatch
 
     trip_public_id = format_public_id(PublicIdPrefix.TRIP, trip.public_id)
-    stops = [
-        {"stop_id": world.stop_public_ids[name], "seq": index + 1, "planned_arrival_at": (world.base_time + timedelta(hours=hour)).isoformat()}
-        for index, (name, hour) in enumerate((("A", 0), ("B", 1), ("D", 3)))
-    ]
     with world.db.session() as s:
         patched = trips_service.patch_trip(
-            s, trip_public_id_value=trip_public_id, actor_user_id=world.driver_id, data=TripPatch.model_validate({"expected_version": trip.version, "stops": stops})
+            s, trip_public_id_value=trip_public_id, actor_user_id=world.driver_id,
+            data=TripPatch.model_validate({"expected_version": trip.version,
+                                           "planned_end_at": (world.base_time + timedelta(hours=4)).isoformat()}),
         )
         thread = marketplace_service.get_thread_by_public_id(s, thread_public_id)
         assert (patched.version, thread.state, marketplace_service.current_version(s, thread).status_reason) == (

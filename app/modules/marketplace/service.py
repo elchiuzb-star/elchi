@@ -29,6 +29,7 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy import and_, exists, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
@@ -62,7 +63,6 @@ from app.contracts.money import commission_minor
 from app.contracts.state_machines import LISTING, PROPOSAL_VERSION
 from app.contracts.timeutil import ensure_aware_utc, to_iso_utc, utc_now
 from app.models import AuditLog
-from app.modules.geo.types import MatchRequest, OccurrenceTiming, TripRouteContext
 from app.modules.identity import service as identity_service
 from app.modules.marketplace.models import (
     Listing,
@@ -102,8 +102,7 @@ from app.modules.marketplace.schemas import (
 from app.modules.platform.service import constraint_name_of, enqueue_event
 from app.modules.trips import service as trips_service
 from app.modules.trips.models import Trip
-from app.modules.trips.ports import StopRef
-from app.modules.trips.rules import ResourceDemand, shortfall_error
+from app.modules.trips.rules import ResourceDemand
 
 __all__ = [
     "THREAD_ACCEPTED",
@@ -115,7 +114,6 @@ __all__ = [
     "close_open_threads",
     "fulfil_listing",
     "reopen_listing",
-    "assert_trip_offers_on_trip",
     "cancel_listing",
     "counter_proposal",
     "create_listing",
@@ -158,9 +156,9 @@ __all__ = [
     "thread_public_id",
     "thread_versions",
     "version_demand",
+    "version_positions",
     "version_public_id",
     "withdraw_proposal",
-    "point_segment_for_trip",
     "preview_point_direction",
 ]
 
@@ -260,6 +258,7 @@ def _emit(
 
 
 # --- free-text contact filter (R2, ADR-0020, Q43-Q44) -------------------------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class ContactFilterHit:
@@ -507,43 +506,8 @@ def list_owner_listings(
 # --- listings: validation helpers ------------------------------------------------------------------
 
 
-def _stop_refs_by_public_ids(session: Session, public_ids: Sequence[str], field: str) -> list[StopRef]:
-    for public_id in public_ids:
-        parse_public_id(public_id, PublicIdPrefix.STOP)
-    refs = get_ports().geo.stops_by_public_ids(session, list(public_ids))
-    resolved = []
-    for public_id in public_ids:
-        ref = refs.get(public_id)
-        if ref is None:
-            raise DomainError(ErrorCode.NOT_FOUND, details={"field": field})
-        resolved.append(ref)
-    return resolved
-
-
-def _open_corridor(session: Session, origin: StopRef, destination: StopRef) -> CorridorRef:
-    if origin.corridor_id != destination.corridor_id:
-        raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"reason": "stops_in_different_corridors"})
-    if not (origin.is_active and destination.is_active):
-        raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"reason": "stop_not_active"})
-    corridor = get_ports().geo.corridors_by_ids(session, [origin.corridor_id]).get(origin.corridor_id)
-    if corridor is None or not corridor.is_open:
-        raise DomainError(
-            ErrorCode.CORRIDOR_NOT_ACTIVE,
-            details={"reason": "corridor_not_open", "rollout_state": corridor.rollout_state if corridor else None},
-        )
-    return corridor
-
-
 def _assert_listing_corridor_open(session: Session, listing: Listing) -> CorridorRef:
-    """The listing's corridor must still be open, whichever kind of ends it has (Q88).
-
-    For a stop-ended listing this is the same question :func:`_open_corridor` asks, plus the stops being
-    active. For a point-ended one there are no stops to consult and the corridor recorded on the listing is
-    the answer.
-    """
-    if listing.origin_stop_id is not None and listing.destination_stop_id is not None:
-        stops = get_ports().geo.stops_by_ids(session, [listing.origin_stop_id, listing.destination_stop_id])
-        return _open_corridor(session, stops[listing.origin_stop_id], stops[listing.destination_stop_id])
+    """The listing's corridor must still be open (Q88: the corridor recorded on the listing is the answer)."""
     corridor = get_ports().geo.corridors_by_ids(session, [listing.corridor_id]).get(listing.corridor_id)
     if corridor is None or not corridor.is_open:
         raise DomainError(
@@ -555,30 +519,18 @@ def _assert_listing_corridor_open(session: Session, listing: Listing) -> Corrido
 
 @dataclass(frozen=True, slots=True)
 class EndPlacement:
-    """Where one end of a direction sits on a corridor's confirmed road (Q88).
+    """Where one end of a direction sits on a corridor's confirmed road (Q88, ADR-0028).
 
-    A stop end takes its position from ``route_version_stops.line_fraction``; a point end is projected onto the
-    line. Either way the placement answers the two questions the rest of the engine needs: *how far along the
-    road* (so pickup can be proved to come before dropoff) and *which segment* (so capacity is still counted
-    per segment, AC12).
+    A marked place projected onto the line: *how far along the road* (so pickup can be proved to come before dropoff,
+    and the trip's ETA and capacity claim are built on it) and how far off the road it is.
     """
 
-    stop: StopRef | None
-    point: PointEndInput | None
+    point: PointEndInput
     district_id: int | None
     fraction: float
     offset_m: int | None
-    seq_before: int
-    seq_after: int
-    #: Interpolated from the projection - what an ETA for a place between two stops has to be built on.
     cumulative_distance_m: int = 0
     cumulative_duration_s: int = 0
-    #: Position inside the segment (0..1), used to interpolate the trip's own arrival times.
-    segment_ratio: float = 0.0
-
-    @property
-    def is_point(self) -> bool:
-        return self.point is not None
 
 
 def _district_pk(session: Session, public_id: str) -> int:
@@ -592,42 +544,58 @@ def _district_pk(session: Session, public_id: str) -> int:
 
 
 def _place_on_route(
-    session: Session, route, end, *, max_offset_m: int, district_id: int | None = None
-):  # noqa: ANN001, ANN202 - RouteVersionInfo / point-or-stop
-    """Place one end on one confirmed route, or ``None`` when it does not belong to it.
+    session: Session, route, point: PointEndInput, *, max_offset_m: int, district_id: int | None = None  # noqa: ANN001
+) -> EndPlacement | None:
+    """Place one marked end on one confirmed road, or ``None`` when it is too far from it.
 
     ``district_id`` is already resolved by the caller: this function is also used to *re-*validate stored rows,
     where the district is a pk we wrote earlier rather than a public id a client just sent.
     """
-    from app.modules.geo.service import project_point_on_route
     from app.modules.geo.geometry import LatLng
+    from app.modules.geo.service import project_point_on_route
 
-    stop, point = end
-    if stop is not None:
-        for index, route_stop in enumerate(route.stops):
-            if route_stop.stop_id == stop.id:
-                after = route.stops[min(index + 1, len(route.stops) - 1)]
-                return EndPlacement(
-                    stop=stop, point=None, district_id=None,
-                    fraction=float(route_stop.line_fraction), offset_m=0,
-                    seq_before=route_stop.seq, seq_after=after.seq,
-                    cumulative_distance_m=route_stop.cumulative_distance_m,
-                    cumulative_duration_s=route_stop.cumulative_duration_s,
-                )
-        return None
     projection = project_point_on_route(
         session, route_version_id=route.id, point=LatLng(lat=point.lat, lng=point.lng), max_offset_m=max_offset_m
     )
     if projection is None:
         return None
     return EndPlacement(
-        stop=None, point=point, district_id=district_id,
-        fraction=projection.fraction, offset_m=projection.offset_m,
-        seq_before=projection.seq_before, seq_after=projection.seq_after,
+        point=point, district_id=district_id, fraction=projection.fraction, offset_m=projection.offset_m,
         cumulative_distance_m=projection.cumulative_distance_m,
         cumulative_duration_s=projection.cumulative_duration_s,
-        segment_ratio=projection.segment_ratio,
     )
+
+
+def _end_position(session: Session, trip: Trip, place: EndPlacement | None) -> int | None:
+    """A placed end as metres along the trip's road (ADR-0028, Q159)."""
+    if place is None:
+        return None
+    return _point_position(session, trip, (place.point.lat, place.point.lng))
+
+
+def _point_position(session: Session, trip: Trip, lat_lng: tuple[float, float] | None) -> int | None:
+    from app.modules.geo.geometry import LatLng
+    from app.modules.geo.service import route_position_m
+
+    if lat_lng is None:
+        return None
+    return route_position_m(session, route_version_id=trip.route_version_id, point=LatLng(lat=lat_lng[0], lng=lat_lng[1]))
+
+
+def version_positions(session: Session, version: ProposalVersion, trip: Trip) -> tuple[int | None, int | None]:
+    """ADR-0028: a version's road positions - stored, or (for a version written before 0097) computed now from its own
+    places on the trip it was made for. The places are the agreement, so this is the same answer either way."""
+    if version.pickup_position_m is not None and version.dropoff_position_m is not None:
+        return version.pickup_position_m, version.dropoff_position_m
+    coords = session.execute(
+        select(
+            func.ST_Y(ProposalVersion.pickup_point), func.ST_X(ProposalVersion.pickup_point),
+            func.ST_Y(ProposalVersion.dropoff_point), func.ST_X(ProposalVersion.dropoff_point),
+        ).where(ProposalVersion.id == version.id)
+    ).one()
+    pickup = (coords[0], coords[1]) if coords[0] is not None else None
+    dropoff = (coords[2], coords[3]) if coords[2] is not None else None
+    return _point_position(session, trip, pickup), _point_position(session, trip, dropoff)
 
 
 def _apply_point_ends(row, origin_place, destination_place) -> None:  # noqa: ANN001
@@ -640,9 +608,9 @@ def _apply_point_ends(row, origin_place, destination_place) -> None:  # noqa: AN
 
     from app.modules.geo.geometry import LatLng, point_ewkt
 
-    prefixes = ("origin", "destination") if hasattr(row, "origin_stop_id") else ("pickup", "dropoff")
+    prefixes = ("origin", "destination") if hasattr(row, "origin_point") else ("pickup", "dropoff")
     for prefix, place in zip(prefixes, (origin_place, destination_place)):
-        if place is None or not place.is_point:
+        if place is None:
             continue
         setattr(row, f"{prefix}_point", func.ST_GeomFromEWKT(point_ewkt(LatLng(lat=place.point.lat, lng=place.point.lng))))
         setattr(row, f"{prefix}_district_id", place.district_id)
@@ -651,32 +619,21 @@ def _apply_point_ends(row, origin_place, destination_place) -> None:  # noqa: AN
 
 
 def _resolve_point_direction(session: Session, data: ListingCreate):  # noqa: ANN202
-    """Q88: find the corridor whose confirmed road actually serves both ends, in the right order.
+    """Q88: find the corridor whose confirmed road actually serves both places, in the right order.
 
     The client is not the source of truth here. It sends two places; the server decides which corridor - if any
-    - can carry them, by projecting both onto each candidate's confirmed route. A corridor qualifies only when
+    - can carry them, by projecting both onto each candidate's confirmed road. A corridor qualifies only when
     both ends land within *its* configured radius (migration 0077) and the origin lies before the destination
     along the line. When several qualify, the one the places sit closest to wins, and ties break on corridor id
     so the same request always resolves the same way.
     """
     from app.modules.geo.service import corridor_point_offset_m, get_route_version, list_corridor_routes
 
-    ends = ((data.origin_stop_id, data.origin_point), (data.destination_stop_id, data.destination_point))
-    stops_by_field = {}
-    for field, (stop_public_id, _point) in zip(("origin_stop_id", "destination_stop_id"), ends):
-        if stop_public_id is not None:
-            stops_by_field[field] = _stop_refs_by_public_ids(session, [stop_public_id], field)[0]
-
+    ends = (data.origin_point, data.destination_point)
+    district_ids = [_district_pk(session, point.district_id) for point in ends]
     geo = get_ports().geo
-    if stops_by_field:
-        candidate_ids = {ref.corridor_id for ref in stops_by_field.values()}
-        if len(candidate_ids) > 1:
-            raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"reason": "stops_in_different_corridors"})
-    else:
-        candidate_ids = set(_open_corridor_ids(session))
-
     best = None
-    for corridor_id in sorted(candidate_ids):
+    for corridor_id in sorted(set(_open_corridor_ids(session))):
         corridor = geo.corridors_by_ids(session, [corridor_id]).get(corridor_id)
         if corridor is None or not corridor.is_open:
             continue
@@ -684,14 +641,8 @@ def _resolve_point_direction(session: Session, data: ListingCreate):  # noqa: AN
         for route_ref in list_corridor_routes(session, _corridor_info(session, corridor_id), limit=5):
             route = get_route_version(session, route_ref.id)
             placements = [
-                _place_on_route(
-                    session,
-                    route,
-                    (stops_by_field.get(field), point),
-                    max_offset_m=radius,
-                    district_id=_district_pk(session, point.district_id) if point is not None else None,
-                )
-                for field, (_stop, point) in zip(("origin_stop_id", "destination_stop_id"), ends)
+                _place_on_route(session, route, point, max_offset_m=radius, district_id=district_id)
+                for point, district_id in zip(ends, district_ids)
             ]
             if any(placement is None for placement in placements):
                 continue
@@ -703,10 +654,7 @@ def _resolve_point_direction(session: Session, data: ListingCreate):  # noqa: AN
             if best is None or cost < best[0]:
                 best = (cost, corridor, route, origin, destination)
     if best is None:
-        raise DomainError(
-            ErrorCode.ROUTE_MISMATCH,
-            details={"reason": "no_confirmed_route_serves_both_points"},
-        )
+        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "no_confirmed_route_serves_both_points"})
     _cost, corridor, route, origin, destination = best
     return corridor, route, origin, destination
 
@@ -715,7 +663,7 @@ def _open_corridor_ids(session: Session) -> list[int]:
     """Every corridor a listing may open on today (G2's public list: operable and service-enabled)."""
     from app.modules.geo.service import list_public_corridors
 
-    return [corridor.id for corridor, _services, _stops in list_public_corridors(session)]
+    return [corridor.id for corridor, _services in list_public_corridors(session)]
 
 
 def _corridor_info(session: Session, corridor_id: int):  # noqa: ANN202
@@ -863,13 +811,7 @@ def preview_point_direction(session: Session, *, origin: PointEndInput, destinat
     """
     from app.modules.geo.service import corridor_districts, corridor_point_offset_m
 
-    data = ListingCreate.model_construct(
-        kind=ListingKind.REQUEST,
-        origin_stop_id=None,
-        destination_stop_id=None,
-        origin_point=origin,
-        destination_point=destination,
-    )
+    data = ListingCreate.model_construct(kind=ListingKind.REQUEST, origin_point=origin, destination_point=destination)
     corridor, route, origin_place, destination_place = _resolve_point_direction(session, data)
     districts = [
         item.district.name_uz
@@ -910,34 +852,11 @@ def create_listing(
         identity_service.get_capabilities(session, owner_user_id, now=now), LISTING_CREATE_CAPABILITY[kind]
     )
     ensure_price_basis_allowed(kind, service, data.price_basis)
-    # Q88: two shapes. The stop-only path is untouched - legacy listings keep resolving exactly as before -
-    # and a direction with any map point goes through the projection instead.
-    origin = destination = None
-    origin_place = destination_place = None
-    if data.origin_point is None and data.destination_point is None:
-        origin, destination = _stop_refs_by_public_ids(
-            session, [data.origin_stop_id, data.destination_stop_id], "origin_stop_id/destination_stop_id"
-        )
-        corridor = _open_corridor(session, origin, destination)
-    else:
-        corridor, _route, origin_place, destination_place = _resolve_point_direction(session, data)
-        origin, destination = origin_place.stop, destination_place.stop
-
-    trip: Trip | None = None
-    if kind is ListingKind.TRIP_OFFER:
-        trip = _trip_for_offer(session, data.trip_id or "", owner_user_id)
-        if origin is None or destination is None:
-            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "trip_id", "reason": "offer_needs_stops"})
-        if trips_service.occurrence_seqs_for_stops(session, trip.id, origin.id, destination.id) is None:
-            raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "stops_not_on_trip"})
-        if service is ServiceType.PARCEL and not (trip.cargo_capacity_weight_g or trip.cargo_capacity_volume_ml):
-            raise DomainError(ErrorCode.VALIDATION_ERROR, "trip has no cargo capacity", details={"field": "trip_id"})
+    # Q88 / Q160: two marked places - the server finds the corridor and confirmed road that serve them.
+    corridor, _route, origin_place, destination_place = _resolve_point_direction(session, data)
 
     quantity = listing_quantity(
-        kind,
-        service,
-        seat_count=data.passenger.seat_count if data.passenger else None,
-        trip_seat_capacity=trip.seat_capacity if trip else None,
+        kind, service, seat_count=data.passenger.seat_count if data.passenger else None, trip_seat_capacity=None
     )
     total = compute_total_minor(data.price_basis, data.unit_price_minor, quantity)
     window_start = ensure_aware_utc(data.departure_window_start)
@@ -954,10 +873,7 @@ def create_listing(
         kind=kind.value,
         service_type=service.value,
         status=ListingStatus.DRAFT.value,
-        trip_id=trip.id if trip else None,
         corridor_id=corridor.id,
-        origin_stop_id=origin.id if origin else None,
-        destination_stop_id=destination.id if destination else None,
         departure_window_start=window_start,
         departure_window_end=window_end,
         timezone=LISTING_TIMEZONE,
@@ -1039,31 +955,20 @@ def _assert_publish_rate(session: Session, listing: Listing, now: datetime) -> N
 
 
 def _place_listing_ends_on_corridor(session: Session, listing: Listing):  # noqa: ANN202
-    """Do the listing's own ends still sit on a confirmed route of its corridor? (Q88)"""
+    """Do the listing's own places still sit on a confirmed road of its corridor? (Q88)"""
     from app.modules.geo.service import corridor_point_offset_m, get_route_version, list_corridor_routes
 
     row = _listing_point_ends(session, listing)
-    if row is None:
+    if row is None or row.o_lat is None or row.d_lat is None:
         return None
     radius = corridor_point_offset_m(session, listing.corridor_id)
+    ends = [
+        PointEndInput(lat=row.o_lat, lng=row.o_lng, district_id="dst_ignored", address=None),
+        PointEndInput(lat=row.d_lat, lng=row.d_lng, district_id="dst_ignored", address=None),
+    ]
     for route_ref in list_corridor_routes(session, _corridor_info(session, listing.corridor_id), limit=5):
         route = get_route_version(session, route_ref.id)
-        ends = (
-            (listing.origin_stop_id, row.o_lat, row.o_lng),
-            (listing.destination_stop_id, row.d_lat, row.d_lng),
-        )
-        placements = []
-        for stop_id, lat, lng in ends:
-            if lat is None:
-                stop_ref = get_ports().geo.stops_by_ids(session, [stop_id]).get(stop_id)
-                placements.append(None if stop_ref is None else _place_on_route(session, route, (stop_ref, None), max_offset_m=radius))
-            else:
-                placements.append(
-                    _place_on_route(
-                        session, route, (None, PointEndInput(lat=lat, lng=lng, district_id="dst_ignored", address=None)),
-                        max_offset_m=radius,
-                    )
-                )
+        placements = [_place_on_route(session, route, point, max_offset_m=radius) for point in ends]
         if any(place is None for place in placements):
             continue
         if placements[0].fraction < placements[1].fraction:
@@ -1074,60 +979,31 @@ def _place_listing_ends_on_corridor(session: Session, listing: Listing):  # noqa
 def _assert_publishable(session: Session, listing: Listing, now: datetime) -> None:
     """STATE_MACHINES §1 publish/resume guards, in contract order (also re-run on material edits)."""
     kind = ListingKind(listing.kind)
+    if kind is ListingKind.TRIP_OFFER:
+        raise DomainError(ErrorCode.DRIVER_LISTING_RETIRED, details={"kind": ListingKind.TRIP_OFFER.value})  # Q138
     identity_service.require_capability(
         identity_service.get_capabilities(session, listing.owner_user_id, now=now), LISTING_CREATE_CAPABILITY[kind]
     )
     _require_service_flags(session, listing, include_driver_listing=True)
-    geo = get_ports().geo
-    if listing.origin_point is not None or listing.destination_point is not None:
-        # Q88: a point end has no stop to re-check, so publish re-asks the question that made the listing
-        # possible in the first place - does a confirmed route of an open corridor still serve both places?
-        # A superseded route or a closed corridor must stop the listing here, not at accept time.
-        corridor = geo.corridors_by_ids(session, [listing.corridor_id]).get(listing.corridor_id)
-        if corridor is None or not corridor.is_open:
-            raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"reason": "corridor_not_open"})
-        if _place_listing_ends_on_corridor(session, listing) is None:
-            raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "no_confirmed_route_serves_both_points"})
-    else:
-        stops = geo.stops_by_ids(session, [listing.origin_stop_id, listing.destination_stop_id])
-        origin, destination = stops.get(listing.origin_stop_id), stops.get(listing.destination_stop_id)
-        if origin is None or destination is None:
-            raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"reason": "stop_missing"})
-        _open_corridor(session, origin, destination)
+    # Q88: publish re-asks the question that made the listing possible in the first place - does a confirmed road of
+    # an open corridor still serve both places? A superseded road or a closed corridor stops the listing here.
+    corridor = get_ports().geo.corridors_by_ids(session, [listing.corridor_id]).get(listing.corridor_id)
+    if corridor is None or not corridor.is_open:
+        raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"reason": "corridor_not_open"})
+    if _place_listing_ends_on_corridor(session, listing) is None:
+        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "no_confirmed_route_serves_both_points"})
     missing = _missing_fields(session, listing)
     if missing:
         raise DomainError(ErrorCode.LISTING_INCOMPLETE, details={"missing": missing})
     if ensure_aware_utc(listing.departure_window_end) <= now or ensure_aware_utc(listing.expires_at) <= now:
         raise DomainError(ErrorCode.LISTING_EXPIRED)
-    if kind is ListingKind.TRIP_OFFER:
-        trip = trips_service.get_trip(session, listing.trip_id)
-        if trip.driver_user_id != listing.owner_user_id or trip.status != TripStatus.PLANNED.value:
-            raise DomainError(ErrorCode.INVALID_STATE_TRANSITION, details={"machine": "trip", "from": trip.status})
-        if ensure_aware_utc(trip.booking_cutoff_at) <= now:
-            raise DomainError(ErrorCode.LISTING_EXPIRED, details={"reason": "booking_cutoff_passed"})
-        loads = trips_service.get_segment_loads(session, trip.id)
-        if listing.service_type == ServiceType.PASSENGER.value:
-            has_resource = any(load.seat_capacity - load.seats_used > 0 for load in loads)
-        else:
-            has_resource = any(
-                load.cargo_capacity_weight_g - load.cargo_used_weight_g > 0
-                or load.cargo_capacity_volume_ml - load.cargo_used_volume_ml > 0
-                for load in loads
-            )
-        if not has_resource:
-            raise DomainError(ErrorCode.CAPACITY_UNAVAILABLE, details={"reason": "trip_has_no_remaining_capacity"})
-    # The same end means the same stop, or - for a place marked on the map (Q88) - the same point. Comparing the stop
-    # ids alone made every two point-ended listings "equal" (both NULL), so any open listing of the person whose
-    # window overlapped blocked a request to a different place.
+    # The same end means the same marked place (Q88).
     this = aliased(Listing)
 
     def same_end(prefix: str):
-        stop, point = f"{prefix}_stop_id", f"{prefix}_point"
-        return or_(
-            and_(getattr(this, stop).is_not(None), getattr(Listing, stop) == getattr(this, stop)),
-            and_(getattr(this, point).is_not(None), getattr(Listing, point).is_not(None),
-                 func.ST_Equals(getattr(Listing, point), getattr(this, point))),
-        )
+        point = f"{prefix}_point"
+        return and_(getattr(this, point).is_not(None), getattr(Listing, point).is_not(None),
+                    func.ST_Equals(getattr(Listing, point), getattr(this, point)))
 
     duplicate = session.execute(
         select(Listing.public_id)
@@ -1192,7 +1068,6 @@ def record_listing_view(session: Session, listing: Listing, *, viewer_user_id: i
 
 def _emit_listing_published(session: Session, listing: Listing, now: datetime) -> None:
     geo = get_ports().geo
-    stops = geo.stops_by_ids(session, [listing.origin_stop_id, listing.destination_stop_id])
     corridor = geo.corridors_by_ids(session, [listing.corridor_id]).get(listing.corridor_id)
     _emit(
         session,
@@ -1205,10 +1080,6 @@ def _emit_listing_published(session: Session, listing: Listing, now: datetime) -
             "kind": listing.kind,
             "service_type": listing.service_type,
             "corridor_id": corridor.public_id if corridor else None,
-            "origin_stop_id": stops[listing.origin_stop_id].public_id if listing.origin_stop_id in stops else None,
-            "destination_stop_id": (
-                stops[listing.destination_stop_id].public_id if listing.destination_stop_id in stops else None
-            ),
             "departure_window_start": to_iso_utc(listing.departure_window_start),
             "departure_window_end": to_iso_utc(listing.departure_window_end),
             "listing_version": listing.version,
@@ -1376,8 +1247,8 @@ def patch_listing(
 ) -> Listing:
     """L3: versioned edit.
 
-    Decision 20: only route, departure window, quantity/seat_count or price-basis changes are
-    material. On a published/paused listing a material edit re-runs the publish guards (BR #8)
+    Decision 20: only departure window, quantity/seat_count or price-basis changes are material (the two places are
+    the request itself: a different A or B is a new request). On a published/paused listing a material edit re-runs the publish guards (BR #8)
     and expires open negotiations; unit price, comment, expiry, amenities or assistance edits don't.
     A published/paused listing may only be edited while the owner keeps the new-business capability.
     """
@@ -1400,23 +1271,6 @@ def patch_listing(
         )
     fields_set = data.model_fields_set
     material = False
-
-    origin_id, destination_id = listing.origin_stop_id, listing.destination_stop_id
-    if data.origin_stop_id is not None or data.destination_stop_id is not None:
-        if data.origin_stop_id is not None:
-            origin_id = _stop_refs_by_public_ids(session, [data.origin_stop_id], "origin_stop_id")[0].id
-        if data.destination_stop_id is not None:
-            destination_id = _stop_refs_by_public_ids(session, [data.destination_stop_id], "destination_stop_id")[0].id
-        if origin_id == destination_id:
-            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "destination_stop_id"})
-        refs = get_ports().geo.stops_by_ids(session, [origin_id, destination_id])
-        corridor = _open_corridor(session, refs[origin_id], refs[destination_id])
-        if kind is ListingKind.TRIP_OFFER and (
-            trips_service.occurrence_seqs_for_stops(session, listing.trip_id, origin_id, destination_id) is None
-        ):
-            raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "stops_not_on_trip"})
-        material |= (origin_id, destination_id) != (listing.origin_stop_id, listing.destination_stop_id)
-        listing.origin_stop_id, listing.destination_stop_id, listing.corridor_id = origin_id, destination_id, corridor.id
 
     window_start = ensure_aware_utc(data.departure_window_start or listing.departure_window_start)
     window_end = ensure_aware_utc(data.departure_window_end or listing.departure_window_end)
@@ -1452,8 +1306,7 @@ def patch_listing(
     if service is ServiceType.PASSENGER and kind is ListingKind.REQUEST:
         details = get_passenger_details(session, listing.id)
         seat_count = details.seat_count if details else None
-    trip_seats = trips_service.get_trip(session, listing.trip_id).seat_capacity if listing.trip_id else None
-    quantity = listing_quantity(kind, service, seat_count=seat_count, trip_seat_capacity=trip_seats)
+    quantity = listing_quantity(kind, service, seat_count=seat_count, trip_seat_capacity=None)
     material |= quantity != listing.quantity
 
     if "expires_at" in fields_set and data.expires_at is not None:
@@ -1560,7 +1413,7 @@ def thread_versions(session: Session, thread_id: int) -> list[ProposalVersion]:
 
 
 def version_demand(version: ProposalVersion, *, service_type: ServiceType | str) -> ResourceDemand:
-    """Capacity a version needs on segments ``[pickup_occurrence_seq, dropoff_occurrence_seq)``."""
+    """Capacity a version needs on its road interval ``[pickup_position_m, dropoff_position_m)``."""
     seats = version.quantity if ServiceType(service_type) is ServiceType.PASSENGER else 0
     return ResourceDemand(
         seats=seats,
@@ -1666,8 +1519,7 @@ def _demand_for(
         if request_parcel is None:
             return _Demand()
         if request_parcel.parcel_category_item_id is not None:
-            # Q140: a category demands its worst case - max weight and max volume - from the segment capacity, so the
-            # capacity engine (versions -> allocations -> segment counters) is unchanged.
+            # Q140: a category demands its worst case - max weight and max volume - from the trip's capacity.
             from app.modules.marketplace import parcel_catalog
 
             item = parcel_catalog.get_item(session, request_parcel.parcel_category_item_id)
@@ -1759,15 +1611,13 @@ def parcel_receiver(version: ProposalVersion) -> tuple[str, str] | None:
 
 
 def _listing_point_ends(session: Session, listing: Listing):  # noqa: ANN202
-    """The listing's own map-point ends, as placements on a given trip's route (Q88).
+    """The listing's own marked places (Q88).
 
     A proposal never re-decides where the client wants to be met: it inherits the listing's places. What it
-    *does* decide is where those places fall on **this driver's** route, which is what turns them into segments
-    and an ETA.
+    *does* decide is where those places fall on **this driver's** road, which is what gives the ETA and the road
+    interval the booking occupies.
     """
-    if listing.origin_point is None and listing.destination_point is None:
-        return None
-    row = session.execute(
+    return session.execute(
         text(
             "SELECT ST_Y(origin_point::geometry) AS o_lat, ST_X(origin_point::geometry) AS o_lng,"
             "       ST_Y(destination_point::geometry) AS d_lat, ST_X(destination_point::geometry) AS d_lng,"
@@ -1776,149 +1626,78 @@ def _listing_point_ends(session: Session, listing: Listing):  # noqa: ANN202
         ),
         {"id": listing.id},
     ).one()
-    return row
 
 
 def _place_listing_ends_on_trip(session: Session, listing: Listing, trip: Trip):  # noqa: ANN202
-    """Project the listing's ends onto the trip's confirmed route; ``None`` when this trip cannot serve them.
-
-    Only for a listing with at least one map-point end (Q88): ``None`` for a stop-ended listing tells the caller to
-    take the stop path."""
+    """Project the listing's places onto the trip's confirmed road; ``None`` when this trip cannot serve them."""
     from app.modules.geo.service import get_route_version
 
-    if _listing_point_ends(session, listing) is None:
-        return None
     return place_listing_on_route(session, listing, get_route_version(session, trip.route_version_id))
 
 
 def place_listing_on_route(session: Session, listing: Listing, route):  # noqa: ANN001, ANN202 - RouteVersionInfo
-    """Public (ADR-0027): both ends of a request placed on one confirmed road, pickup before dropoff, else ``None``.
+    """Public (ADR-0027): both places of a request on one confirmed road, pickup before dropoff, else ``None``.
 
-    A stop end takes the stop's own position on the line; a map-point end is projected within the corridor's radius
-    (Q88). Used by the trip path above and by the driver-direction feed, which asks the same question of a road
-    before any trip exists.
+    Each marked place is projected within the corridor's radius (Q88). Used by the trip path above and by the
+    driver-direction feed, which asks the same question of a road before any trip exists.
     """
-    from app.modules.geo.geometry import LatLng
-    from app.modules.geo.service import corridor_point_offset_m, project_point_on_route
-
     row = _listing_point_ends(session, listing)
-    radius = corridor_point_offset_m(session, listing.corridor_id)
-
-    def place(lat, lng, stop_id, district_id, address):  # noqa: ANN001, ANN202
-        if lat is None:
-            for index, route_stop in enumerate(route.stops):
-                if route_stop.stop_id == stop_id:
-                    after = route.stops[min(index + 1, len(route.stops) - 1)]
-                    return EndPlacement(
-                        stop=None, point=None, district_id=None, fraction=float(route_stop.line_fraction),
-                        offset_m=0, seq_before=route_stop.seq, seq_after=after.seq,
-                        cumulative_distance_m=route_stop.cumulative_distance_m,
-                        cumulative_duration_s=route_stop.cumulative_duration_s,
-                    )
-            return None
-        projection = project_point_on_route(
-            session, route_version_id=route.id, point=LatLng(lat=lat, lng=lng), max_offset_m=radius
-        )
-        if projection is None:
-            return None
-        return EndPlacement(
-            stop=None, point=PointEndInput(lat=lat, lng=lng, district_id="dst_inherited", address=address),
-            district_id=district_id, fraction=projection.fraction, offset_m=projection.offset_m,
-            seq_before=projection.seq_before, seq_after=projection.seq_after,
-            cumulative_distance_m=projection.cumulative_distance_m,
-            cumulative_duration_s=projection.cumulative_duration_s,
-            segment_ratio=projection.segment_ratio,
-        )
-
-    if row is None:
-        pickup = place(None, None, listing.origin_stop_id, None, None)
-        dropoff = place(None, None, listing.destination_stop_id, None, None)
-    else:
-        pickup = place(row.o_lat, row.o_lng, listing.origin_stop_id, row.origin_district_id, row.origin_address)
-        dropoff = place(row.d_lat, row.d_lng, listing.destination_stop_id, row.destination_district_id, row.destination_address)
+    if row.o_lat is None or row.d_lat is None:
+        return None
+    radius = corridor_point_offset_m_for(session, listing.corridor_id)
+    pickup = _place_on_route(
+        session, route, PointEndInput(lat=row.o_lat, lng=row.o_lng, district_id="dst_inherited", address=row.origin_address),
+        max_offset_m=radius, district_id=row.origin_district_id,
+    )
+    dropoff = _place_on_route(
+        session, route,
+        PointEndInput(lat=row.d_lat, lng=row.d_lng, district_id="dst_inherited", address=row.destination_address),
+        max_offset_m=radius, district_id=row.destination_district_id,
+    )
     if pickup is None or dropoff is None or pickup.fraction >= dropoff.fraction:
         return None
     return pickup, dropoff
 
 
-def _occurrence_seqs_for_placements(session: Session, trip: Trip, pickup, dropoff):  # noqa: ANN001, ANN202
-    """Segments a point-ended booking consumes: board in the pickup's segment, ride through the dropoff's.
+def corridor_point_offset_m_for(session: Session, corridor_id: int) -> int:
+    from app.modules.geo.service import corridor_point_offset_m
 
-    The projection lands between two route stops. The passenger is aboard from the stop *before* the pickup
-    projection until the stop *after* the dropoff projection, so the allocation covers every segment in
-    between - conservative by one partial segment at each end, which is the safe direction for capacity.
-    """
-    from app.modules.geo.service import get_route_version
-
-    route = get_route_version(session, trip.route_version_id)
-    by_seq = {stop.seq: stop.stop_id for stop in route.stops}
-    start_stop, end_stop = by_seq.get(pickup.seq_before), by_seq.get(dropoff.seq_after)
-    if start_stop is None or end_stop is None:
-        return None
-    return trips_service.occurrence_seqs_for_stops(session, trip.id, start_stop, end_stop)
+    return corridor_point_offset_m(session, corridor_id)
 
 
-def point_segment_for_trip(session: Session, listing: Listing, trip: Trip) -> tuple[int, int] | None:
-    """Public (A4): the segments a point-ended listing's places occupy on this trip *right now* (Q88).
-
-    Accept re-asks this instead of comparing stop ids, because a point end has no stop id to compare. If the
-    driver re-planned the route since the proposal, the places either still project to the same segments or
-    they do not - and "do not" is exactly the ``ROUTE_CHANGED`` the stop path raises.
-    """
-    places = _place_listing_ends_on_trip(session, listing, trip)
-    if places is None:
-        return None
-    return _occurrence_seqs_for_placements(session, trip, places[0], places[1])
+def _places_inside_stretch(session: Session, trip: Trip, pickup, dropoff) -> bool:  # noqa: ANN001
+    """ADR-0028: both places lie on the stretch of road the trip drives, pickup first."""
+    pickup_m = _end_position(session, trip, pickup)
+    dropoff_m = _end_position(session, trip, dropoff)
+    if pickup_m is None or dropoff_m is None:
+        return False
+    start_m, end_m = trips_service.trip_stretch(session, trip)
+    return start_m <= pickup_m < dropoff_m <= end_m
 
 
-def _point_eta(session: Session, trip: Trip, place) -> datetime:  # noqa: ANN001 - EndPlacement
-    """When this trip reaches a place that sits between two of its stops (Q88).
-
-    The trip's own occurrence times are the anchor, not the route's estimate: a driver may plan a slower or
-    faster run than the road's default, and the person is waiting for *that* driver. Between the two
-    surrounding stops the arrival is interpolated by how far along the segment the place sits.
-    """
-    occurrences = {o.seq: o for o in trips_service.list_occurrences(session, trip.id)}
-    route_stop_ids = _route_stop_ids(session, trip)
-    before = occurrences.get(_occurrence_seq_of(occurrences, route_stop_ids.get(place.seq_before)))
-    after = occurrences.get(_occurrence_seq_of(occurrences, route_stop_ids.get(place.seq_after)))
-    if before is None:
-        return ensure_aware_utc(trip.planned_start_at) + timedelta(seconds=place.cumulative_duration_s)
-    start = ensure_aware_utc(before.planned_arrival_at)
-    if after is None:
-        return start
-    span = (ensure_aware_utc(after.planned_arrival_at) - start).total_seconds()
-    return start + timedelta(seconds=span * place.segment_ratio)
+def _point_eta(session: Session, trip: Trip, place) -> datetime | None:  # noqa: ANN001 - EndPlacement
+    """When this trip reaches a marked place (Q88; ADR-0028: from the place's road position, linear between the trip's
+    own planned start and end - the driver's plan)."""
+    position = _end_position(session, trip, place)
+    return None if position is None else trips_service.trip_eta_at(trip, position)
 
 
-def pickup_eta_on_trip(session: Session, listing: Listing, trip: Trip, pickup_seq: int):  # noqa: ANN201
+def _pickup_position(session: Session, trip: Trip, listing: Listing, pickup_place) -> int | None:  # noqa: ANN001
+    """Where the pickup sits on the trip's road, in metres: the given placement, or the listing's own place."""
+    if pickup_place is None:
+        places = _place_listing_ends_on_trip(session, listing, trip)
+        pickup_place = None if places is None else places[0]
+    return _end_position(session, trip, pickup_place)
+
+
+def pickup_eta_on_trip(session: Session, listing: Listing, trip: Trip):  # noqa: ANN201
     """Public (A4, ADR-0027 Q155): when this trip reaches the pickup - the same answer submit and accept give.
 
-    A map-point pickup is interpolated inside its segment (``_point_eta``); a stop pickup is its occurrence's
-    planned arrival. ``None`` when the places no longer project onto the trip.
+    ADR-0028: the pickup's road position on the trip's linear plan. ``None`` when the places no longer project onto
+    the trip.
     """
-    if _listing_point_ends(session, listing) is not None:
-        places = _place_listing_ends_on_trip(session, listing, trip)
-        return None if places is None else _point_eta(session, trip, places[0])
-    occurrence = next((o for o in trips_service.list_occurrences(session, trip.id) if o.seq == pickup_seq), None)
-    return None if occurrence is None else ensure_aware_utc(occurrence.planned_arrival_at)
-
-
-def _pickup_fraction(session: Session, trip: Trip, listing: Listing, pickup_seq: int, pickup_place) -> float | None:  # noqa: ANN001
-    """Where the pickup sits on the trip's road (0..1): the projection, or the pickup stop's own position."""
-    from app.modules.geo.service import get_route_version
-
-    if pickup_place is not None:
-        return pickup_place.fraction
-    if _listing_point_ends(session, listing) is not None:
-        places = _place_listing_ends_on_trip(session, listing, trip)
-        return None if places is None else places[0].fraction
-    occurrence = next((o for o in trips_service.list_occurrences(session, trip.id) if o.seq == pickup_seq), None)
-    if occurrence is None:
-        return None
-    route = get_route_version(session, trip.route_version_id)
-    stop = next((s for s in route.stops if s.seq == occurrence.route_version_stop_seq), None)
-    return None if stop is None else float(stop.line_fraction)
+    position = _pickup_position(session, trip, listing, None)
+    return None if position is None else trips_service.trip_eta_at(trip, position)
 
 
 def trip_is_moving(trip: Trip) -> bool:
@@ -1927,7 +1706,8 @@ def trip_is_moving(trip: Trip) -> bool:
 
 
 def assert_pickup_ahead(
-    session: Session, *, listing: Listing, trip: Trip, pickup_seq: int, pickup_place, now: datetime  # noqa: ANN001
+    session: Session, *, listing: Listing, trip: Trip, pickup_place, now: datetime,  # noqa: ANN001
+    pickup_position_m: int | None = None,
 ) -> datetime:
     """Q154: new business on a boarding / moving trip only while the car has not reached the pickup yet.
 
@@ -1935,6 +1715,7 @@ def assert_pickup_ahead(
     driver's phone sent a fresh fix, the road (the fix projects at least MID_TRIP_MIN_AHEAD_M before the pickup).
     A stale or off-road fix is not evidence either way. Returns the pickup ETA.
     """
+    from app.contracts.route_position import position_m
     from app.modules.geo.geometry import LatLng
     from app.modules.geo.service import get_route_version, project_point_on_route
     from app.modules.marketplace.rules import (
@@ -1944,7 +1725,10 @@ def assert_pickup_ahead(
         MID_TRIP_MIN_LEAD,
     )
 
-    eta = pickup_eta_on_trip(session, listing, trip, pickup_seq) if pickup_place is None else _point_eta(session, trip, pickup_place)
+    pickup_m = (
+        pickup_position_m if pickup_position_m is not None else _pickup_position(session, trip, listing, pickup_place)
+    )
+    eta = None if pickup_m is None else trips_service.trip_eta_at(trip, pickup_m)
     if eta is None:
         raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "points_not_on_trip_route"})
     if eta < now + MID_TRIP_MIN_LEAD:
@@ -1960,13 +1744,12 @@ def assert_pickup_ahead(
         car = project_point_on_route(
             session, route_version_id=route.id, point=LatLng(lat=live.lat, lng=live.lng), max_offset_m=MID_TRIP_GPS_MAX_OFFSET_M
         )
-        pickup_fraction = _pickup_fraction(session, trip, listing, pickup_seq, pickup_place)
-        if car is not None and pickup_fraction is not None:
-            ahead_m = (pickup_fraction - car.fraction) * route.distance_m
+        if car is not None and pickup_m is not None:
+            ahead_m = pickup_m - position_m(car.fraction, route.distance_m)
             if ahead_m < MID_TRIP_MIN_AHEAD_M:
                 raise DomainError(
                     ErrorCode.BOOKING_CUTOFF_PASSED,
-                    details={"trip_status": trip.status, "reason": "pickup_passed", "ahead_m": int(round(ahead_m))},
+                    details={"trip_status": trip.status, "reason": "pickup_passed", "ahead_m": ahead_m},
                 )
     return eta
 
@@ -1984,41 +1767,21 @@ def _version_expires_at(*, listing: Listing, trip: Trip, pickup_eta: datetime | 
     return moving_trip_proposal_expires_at(now=now, pickup_eta=pickup_eta, listing_expires_at=listing.expires_at)
 
 
-def _route_stop_ids(session: Session, trip: Trip) -> dict[int, int]:
-    from app.modules.geo.service import get_route_version
-
-    return {stop.seq: stop.stop_id for stop in get_route_version(session, trip.route_version_id).stops}
-
-
-def _occurrence_seq_of(occurrences: dict, stop_id: int | None) -> int | None:
-    if stop_id is None:
-        return None
-    for seq, occurrence in sorted(occurrences.items()):
-        if occurrence.stop_id == stop_id:
-            return seq
-    return None
-
-
-def _validate_point_segment(
+def _validate_places(
     session: Session,
     *,
     listing: Listing,
     trip: Trip,
-    pickup,  # noqa: ANN001 - EndPlacement
-    dropoff,  # noqa: ANN001 - EndPlacement
+    pickup: EndPlacement,
+    dropoff: EndPlacement,
     window_start: datetime,
     window_end: datetime,
     now: datetime,
     allow_outside: bool = False,
-) -> tuple[tuple[int, int], bool]:
-    """The point-ended twin of :func:`_validate_segment` (Q88). Returns the segments and whether the window is a
-    time proposal outside the request window (ADR-0027 Q153, only when ``allow_outside``).
-
-    Same three questions, answered from the projection instead of from the stop catalogue: are the windows
-    sane, does the trip reach the pickup place inside the window both sides asked for, and which segments does
-    the ride consume. The ETA is interpolated from the projection's cumulative duration, which is the honest
-    anchor for a place that sits between two stops (spec §6.3 step 5).
-    """
+) -> bool:
+    """Are the windows sane, does the trip reach the pickup place inside the window both sides asked for, and do both
+    places lie on the trip's stretch of road (Q88, ADR-0028)? Returns whether the window is a time proposal outside
+    the request window (ADR-0027 Q153, only when ``allow_outside``)."""
     if ensure_aware_utc(window_end) <= ensure_aware_utc(window_start):
         raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "pickup_window_end"})
     if ensure_aware_utc(window_end) <= now:
@@ -2026,18 +1789,23 @@ def _validate_point_segment(
 
     match_start, match_end, outside = _match_window(listing, window_start, window_end, allow_outside=allow_outside)
 
-    eta = _point_eta(session, trip, pickup)
+    _assert_reaches_pickup_in_window(trip, _point_eta(session, trip, pickup), match_start, match_end)
+
+    if not _places_inside_stretch(session, trip, pickup, dropoff):
+        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "points_not_on_trip_route"})
+    return outside
+
+
+def _assert_reaches_pickup_in_window(trip: Trip, eta: datetime | None, match_start: datetime, match_end: datetime) -> None:
+    """ADR-0028 phase 2: the pickup's road-position ETA, give or take the trip's pickup wait, inside the window."""
+    if eta is None:
+        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "points_not_on_trip_route"})
     wait = timedelta(minutes=trip.pickup_wait_minutes or 0)
-    if not (match_start - wait <= eta <= match_end + wait):
+    if not (ensure_aware_utc(match_start) - wait <= eta <= ensure_aware_utc(match_end) + wait):
         raise DomainError(
             ErrorCode.TIME_WINDOW_CONFLICT,
             details={"reason": "trip_reaches_the_pickup_outside_the_window", "eta": eta.isoformat()},
         )
-
-    seqs = _occurrence_seqs_for_placements(session, trip, pickup, dropoff)
-    if seqs is None:
-        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "points_not_on_trip_route"})
-    return seqs, outside
 
 
 def _match_window(
@@ -2089,108 +1857,16 @@ def assert_time_proposal_in_range(listing: Listing, pickup_at: datetime) -> None
         )
 
 
-def _validate_segment(
-    session: Session,
-    *,
-    listing: Listing,
-    trip: Trip,
-    pickup: StopRef,
-    dropoff: StopRef,
-    window_start: datetime,
-    window_end: datetime,
-    now: datetime,
-    allow_outside: bool = False,
-) -> tuple[tuple[int, int], bool]:
-    """Segment and time checks (BR #4) through A2's pure ``evaluate_route_match`` on the trip occurrences.
-
-    Returns the segments and whether the window is a driver's time proposal (ADR-0027 Q153).
-
-    * request: stops in the request's corridor; the pickup ETA window must meet the request's
-      departure window;
-    * trip offer: pickup/dropoff inside the offer's origin->destination occurrences; the pickup ETA
-      window must meet the proposal's pickup window.
-    Only existing trip stops are accepted (no detour insertion without a trip change).
-    """
-    if ensure_aware_utc(window_end) <= ensure_aware_utc(window_start):
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "pickup_window_end"})
-    if ensure_aware_utc(window_end) <= now:
-        raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "pickup_window_end", "reason": "in_the_past"})
-    offer_span: tuple[int, int] | None = None
-    outside = False
-    if listing.kind == ListingKind.REQUEST.value:
-        if pickup.corridor_id != listing.corridor_id or dropoff.corridor_id != listing.corridor_id:
-            raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "stop_outside_request_corridor"})
-        # N3: the pickup must meet both the request's window and the proposal's own pickup window - or, for a
-        # driver's explicit time proposal (Q153), the proposal's own window.
-        match_start, match_end, outside = _match_window(listing, window_start, window_end, allow_outside=allow_outside)
-    else:
-        offer_span = trips_service.occurrence_seqs_for_stops(
-            session, trip.id, listing.origin_stop_id, listing.destination_stop_id
-        )
-        if offer_span is None:
-            raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "offer_stops_not_on_trip"})
-        match_start, match_end = window_start, window_end
-
-    from app.modules.geo.service import evaluate_route_match  # A2 public API; lazy to keep imports acyclic
-
-    occurrences = trips_service.list_occurrences(session, trip.id)
-    context = TripRouteContext(
-        route_version_id=trip.route_version_id,
-        trip_version=trip.version,
-        occurrences=tuple(
-            OccurrenceTiming(o.seq, o.stop_id, ensure_aware_utc(o.planned_arrival_at), o.dwell_minutes) for o in occurrences
-        ),
-        max_detour_minutes=trip.max_detour_minutes,
-        max_detour_m=trip.max_detour_m,
-        detour_used_s=trip.detour_used_s,
-        detour_used_m=trip.detour_used_m,
-        pickup_wait_minutes=trip.pickup_wait_minutes,
-        route_version_public_id=_route_version_public_id(session, trip.route_version_id),
-    )
-    result = evaluate_route_match(
-        context,
-        MatchRequest(
-            pickup_stop_id=pickup.id,
-            dropoff_stop_id=dropoff.id,
-            pickup_window_start=ensure_aware_utc(match_start),
-            pickup_window_end=ensure_aware_utc(match_end),
-        ),
-        now=now,
-    )
-    if not result.matched:
-        raise DomainError(
-            result.error_code or ErrorCode.ROUTE_MISMATCH,
-            details={"reasons": [str(getattr(reason, "value", reason)) for reason in result.reasons]},
-        )
-    if (
-        result.pickup is None
-        or result.dropoff is None
-        or result.pickup.occurrence_seq is None
-        or result.dropoff.occurrence_seq is None
-    ):
-        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "detour_stops_need_trip_change"})
-    seqs = (result.pickup.occurrence_seq, result.dropoff.occurrence_seq)
-    if offer_span is not None and (seqs[0] < offer_span[0] or seqs[1] > offer_span[1]):
-        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "outside_offer_segment"})
-    return seqs, outside
-
-
 def _check_price_band(
     session: Session,
     *,
     listing: Listing,
-    pickup_stop_id: int | None,
-    dropoff_stop_id: int | None,
     price_basis: PriceBasis,
     unit_price_minor: int,
     quantity: int,
     warnings: list[dict] | None = None,
 ) -> None:
-    """Q90: the band *advises* the auction - it does not decide it.
-
-    Q88: a map-point end carries no stop id. That is not a reason to skip the reference - A2 then answers with
-    the corridor-wide band, so a point-ended negotiation gets the same advice and the same ranking input a
-    stop-ended one does.
+    """Q90: the band *advises* the auction - it does not decide it. The reference is the corridor's band (ADR-0028).
 
     ELCHI's price is the one the two sides agree on (`300k → 350k → 320k → 330k → accept` must end at 330 000).
     A band outside which an offer simply cannot be made would turn that into a fixed fare, so an ordinary band
@@ -2200,13 +1876,7 @@ def _check_price_band(
     from app.modules.geo.pricing import assert_price_within_band, evaluate_price_band
     from app.modules.geo.service import resolve_price_band
 
-    band = resolve_price_band(
-        session,
-        corridor_id=listing.corridor_id,
-        service_type=ServiceType(listing.service_type),
-        origin_stop_id=pickup_stop_id,
-        destination_stop_id=dropoff_stop_id,
-    )
+    band = resolve_price_band(session, corridor_id=listing.corridor_id, service_type=ServiceType(listing.service_type))
     # A2 owns the PRICE_OUT_OF_BAND details shape; no band -> no check.
     details = evaluate_price_band(
         band, price_basis=price_basis, unit_price_minor=unit_price_minor, quantity=quantity
@@ -2215,6 +1885,7 @@ def _check_price_band(
         warnings.append({"code": WarningCode.PRICE_OUTSIDE_REFERENCE.value, "field": "unit_price_minor", "details": details})
     # Only an admin-imposed abuse/safety limit refuses; everything else is the two sides' business (Q90).
     assert_price_within_band(band, price_basis=price_basis, unit_price_minor=unit_price_minor, quantity=quantity)
+
 
 def _route_version_public_id(session: Session, route_version_id: int) -> str | None:
     route = get_ports().geo.route_versions_by_ids(session, [route_version_id]).get(route_version_id)
@@ -2254,10 +1925,11 @@ def _check_terms_and_capacity(
     *,
     listing: Listing,
     trip: Trip,
-    seqs: tuple[int, int],
     quantity: int,
     price_basis: PriceBasis,
     demand: _Demand,
+    pickup_place: EndPlacement,
+    dropoff_place: EndPlacement,
 ) -> None:
     ensure_price_basis_allowed(ListingKind(listing.kind), ServiceType(listing.service_type), price_basis)
     check_proposal_quantity(
@@ -2269,17 +1941,12 @@ def _check_terms_and_capacity(
     seats = quantity if listing.service_type == ServiceType.PASSENGER.value else 0
     resources = demand.resources(seats=seats)
     if not resources.is_empty:
-        shortfalls = trips_service.check_capacity(session, trip.id, seqs[0], seqs[1], resources)
-        if shortfalls:
-            raise shortfall_error(shortfalls)
-
-
-def _active_stops(session: Session, public_ids: Sequence[str]) -> list[StopRef]:
-    refs = _stop_refs_by_public_ids(session, public_ids, "stops")
-    for ref in refs:
-        if not ref.is_active:
-            raise DomainError(ErrorCode.CORRIDOR_NOT_ACTIVE, details={"reason": "stop_not_active"})
-    return refs
+        # ADR-0028: capacity is checked on the exact road interval the places occupy.
+        pickup_m = _end_position(session, trip, pickup_place)
+        dropoff_m = _end_position(session, trip, dropoff_place)
+        if pickup_m is None or dropoff_m is None:
+            raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "positions_unknown"})
+        trips_service.require_claim_capacity(session, trip.id, pickup_m, max(dropoff_m, pickup_m + 1), resources)
 
 
 def _quote(session: Session, listing: Listing, total: int, now: datetime) -> FeeQuote:
@@ -2304,11 +1971,8 @@ def _insert_version(
     author_user_id: int,
     listing: Listing,
     trip: Trip,
-    pickup_stop_id: int | None,
-    dropoff_stop_id: int | None,
-    seqs: tuple[int, int],
-    pickup_place=None,  # noqa: ANN001 - EndPlacement, Q88
-    dropoff_place=None,  # noqa: ANN001 - EndPlacement, Q88
+    pickup_place: EndPlacement,
+    dropoff_place: EndPlacement,
     window_start: datetime,
     window_end: datetime,
     quantity: int,
@@ -2323,6 +1987,10 @@ def _insert_version(
     receiver: tuple[str, str] | None = None,
     outside_request_window: bool = False,
 ) -> ProposalVersion:
+    # ADR-0028 (Q159): the agreed places also as metres along the trip's road; versions are immutable, so they are
+    # written here or never.
+    pickup_position = _end_position(session, trip, pickup_place)
+    dropoff_position = _end_position(session, trip, dropoff_place)
     version = ProposalVersion(
         public_id=new_public_uuid(),
         thread_id=thread.id,
@@ -2330,10 +1998,8 @@ def _insert_version(
         author_side=author_side.value,
         author_user_id=author_user_id,
         status=ProposalStatus.ACTIVE.value,
-        pickup_stop_id=pickup_stop_id,
-        dropoff_stop_id=dropoff_stop_id,
-        pickup_occurrence_seq=seqs[0],
-        dropoff_occurrence_seq=seqs[1],
+        pickup_position_m=pickup_position,
+        dropoff_position_m=dropoff_position,
         pickup_window_start=ensure_aware_utc(window_start),
         pickup_window_end=ensure_aware_utc(window_end),
         outside_request_window=outside_request_window,
@@ -2452,65 +2118,36 @@ def submit_proposal(
     # ADR-0027 Q153: only the driver proposes a different pickup time, and only when they say so explicitly.
     allow_outside = bool(data.outside_request_window) and side is ActorSide.DRIVER
 
-    # Q88: a point-ended listing hands its own places down to the proposal; only a stop-ended one asks the
-    # driver which stops they mean.
+    # Q88: the listing hands its own places down to the proposal - a driver cannot move where the client is met.
     places = _place_listing_ends_on_trip(session, listing, trip)
-    if places is not None:
-        if data.pickup_stop_id is not None or data.dropoff_stop_id is not None:
-            raise DomainError(
-                ErrorCode.VALIDATION_ERROR,
-                details={"field": "pickup_stop_id", "reason": "listing_ends_are_points"},
-            )
-        pickup_place, dropoff_place = places
-        pickup = dropoff = None
-        seqs, outside = _validate_point_segment(
-            session,
-            listing=listing,
-            trip=trip,
-            pickup=pickup_place,
-            dropoff=dropoff_place,
-            window_start=data.pickup_window_start,
-            window_end=data.pickup_window_end,
-            now=now,
-            allow_outside=allow_outside,
-        )
-    else:
-        if data.pickup_stop_id is None or data.dropoff_stop_id is None:
-            raise DomainError(
-                ErrorCode.VALIDATION_ERROR, details={"field": "pickup_stop_id", "reason": "listing_ends_are_stops"}
-            )
-        pickup_place = dropoff_place = None
-        pickup, dropoff = _active_stops(session, [data.pickup_stop_id, data.dropoff_stop_id])
-        seqs, outside = _validate_segment(
-            session,
-            listing=listing,
-            trip=trip,
-            pickup=pickup,
-            dropoff=dropoff,
-            window_start=data.pickup_window_start,
-            window_end=data.pickup_window_end,
-            now=now,
-            allow_outside=allow_outside,
-        )
+    if places is None:
+        raise DomainError(ErrorCode.ROUTE_MISMATCH, details={"reason": "points_not_on_trip_route"})
+    pickup_place, dropoff_place = places
+    outside = _validate_places(
+        session,
+        listing=listing,
+        trip=trip,
+        pickup=pickup_place,
+        dropoff=dropoff_place,
+        window_start=data.pickup_window_start,
+        window_end=data.pickup_window_end,
+        now=now,
+        allow_outside=allow_outside,
+    )
     pickup_eta = (
-        assert_pickup_ahead(session, listing=listing, trip=trip, pickup_seq=seqs[0], pickup_place=pickup_place, now=now)
-        if moving else None
+        assert_pickup_ahead(session, listing=listing, trip=trip, pickup_place=pickup_place, now=now) if moving else None
     )
     price_basis = PriceBasis(data.price_basis)
     demand = _demand_for(session, listing, baggage=data.baggage, parcel=data.parcel, current=None)
     receiver = _proposal_receiver(listing, data.parcel, current=None, side=side)
     _check_terms_and_capacity(
-        session, listing=listing, trip=trip, seqs=seqs, quantity=data.quantity, price_basis=price_basis, demand=demand
+        session, listing=listing, trip=trip, quantity=data.quantity, price_basis=price_basis, demand=demand,
+        pickup_place=pickup_place, dropoff_place=dropoff_place,
     )
-    # Q42 + Q88: a point-ended direction has no stop pair, so no *segment* band applies - but the corridor-wide
-    # band describes the whole direction and is the right reference for it. Skipping the lookup entirely (what
-    # wave 14 did) left every point listing without a price reference: no advisory warning, and a neutral price
-    # score in the ranking forever. A2 picks the right scope; this just has to ask.
+    # Q42: the corridor's band describes the whole direction and is the price reference for it (Q90: advice).
     _check_price_band(
         session,
         listing=listing,
-        pickup_stop_id=pickup.id if pickup is not None else None,
-        dropoff_stop_id=dropoff.id if dropoff is not None else None,
         price_basis=price_basis,
         unit_price_minor=data.unit_price_minor,
         quantity=data.quantity,
@@ -2570,9 +2207,6 @@ def submit_proposal(
         author_user_id=actor_user_id,
         listing=listing,
         trip=trip,
-        pickup_stop_id=pickup.id if pickup else None,
-        dropoff_stop_id=dropoff.id if dropoff else None,
-        seqs=seqs,
         pickup_place=pickup_place,
         dropoff_place=dropoff_place,
         window_start=data.pickup_window_start,
@@ -2655,73 +2289,36 @@ def counter_proposal(
     unit_price = data.unit_price_minor if data.unit_price_minor is not None else current.unit_price_minor
     price_basis = PriceBasis(current.price_basis)
 
-    # Q88: a counteroffer inherits the listing's places exactly as the first proposal did. Without this branch
-    # the stop lookup below was asked for `None` and raised - which meant the *counteroffer*, the half of the
-    # two-sided auction that makes it an auction at all, was impossible on every map-point listing.
+    # Q88: a counteroffer inherits the listing's places exactly as the first proposal did.
     places = _place_listing_ends_on_trip(session, listing, trip)
-    if places is not None:
-        if data.pickup_stop_id is not None or data.dropoff_stop_id is not None:
-            raise DomainError(
-                ErrorCode.VALIDATION_ERROR,
-                details={"field": "pickup_stop_id", "reason": "listing_ends_are_points"},
-            )
-        pickup_place, dropoff_place = places
-        pickup = dropoff = None
-        seqs, outside = _validate_point_segment(
-            session,
-            listing=listing,
-            trip=trip,
-            pickup=pickup_place,
-            dropoff=dropoff_place,
-            window_start=window_start,
-            window_end=window_end,
-            now=now,
-            allow_outside=allow_outside,
-        )
-    else:
-        pickup_place = dropoff_place = None
-        stops = get_ports().geo.stops_by_ids(session, [current.pickup_stop_id, current.dropoff_stop_id])
-        pickup, dropoff = stops[current.pickup_stop_id], stops[current.dropoff_stop_id]
-        if data.pickup_stop_id is not None:
-            pickup = _active_stops(session, [data.pickup_stop_id])[0]
-        if data.dropoff_stop_id is not None:
-            dropoff = _active_stops(session, [data.dropoff_stop_id])[0]
-        if pickup.id == dropoff.id:
-            raise DomainError(ErrorCode.VALIDATION_ERROR, details={"field": "dropoff_stop_id"})
-        seqs, outside = _validate_segment(
-            session,
-            listing=listing,
-            trip=trip,
-            pickup=pickup,
-            dropoff=dropoff,
-            window_start=window_start,
-            window_end=window_end,
-            now=now,
-            allow_outside=allow_outside,
-        )
+    if places is None:
+        raise DomainError(ErrorCode.ROUTE_CHANGED, details={"reason": "points_not_on_trip_route"})
+    pickup_place, dropoff_place = places
+    outside = _validate_places(
+        session,
+        listing=listing,
+        trip=trip,
+        pickup=pickup_place,
+        dropoff=dropoff_place,
+        window_start=window_start,
+        window_end=window_end,
+        now=now,
+        allow_outside=allow_outside,
+    )
     pickup_eta = (
-        assert_pickup_ahead(session, listing=listing, trip=trip, pickup_seq=seqs[0], pickup_place=pickup_place, now=now)
-        if moving else None
+        assert_pickup_ahead(session, listing=listing, trip=trip, pickup_place=pickup_place, now=now) if moving else None
     )
     demand = _demand_for(session, listing, baggage=data.baggage, parcel=data.parcel, current=current)
     receiver = _proposal_receiver(listing, data.parcel, current=current, side=side)
     _check_terms_and_capacity(
-        session, listing=listing, trip=trip, seqs=seqs, quantity=quantity, price_basis=price_basis, demand=demand
+        session, listing=listing, trip=trip, quantity=quantity, price_basis=price_basis, demand=demand,
+        pickup_place=pickup_place, dropoff_place=dropoff_place,
     )
-    # Q53/Q67: the band is re-read when the price OR the pickup/dropoff stop changes (the segment band may
-    # differ). A point-ended thread cannot change its ends at all, so only a price change re-reads it there.
-    pickup_stop_id = pickup.id if pickup is not None else None
-    dropoff_stop_id = dropoff.id if dropoff is not None else None
-    if (
-        unit_price != current.unit_price_minor
-        or pickup_stop_id != current.pickup_stop_id
-        or dropoff_stop_id != current.dropoff_stop_id
-    ):
+    # Q53/Q67: the band is re-read when the price changes (the places of a thread never change).
+    if unit_price != current.unit_price_minor:
         _check_price_band(
             session,
             listing=listing,
-            pickup_stop_id=pickup_stop_id,
-            dropoff_stop_id=dropoff_stop_id,
             price_basis=price_basis,
             unit_price_minor=unit_price,
             quantity=quantity,
@@ -2748,9 +2345,6 @@ def counter_proposal(
         author_user_id=actor_user_id,
         listing=listing,
         trip=trip,
-        pickup_stop_id=pickup_stop_id,
-        dropoff_stop_id=dropoff_stop_id,
-        seqs=seqs,
         pickup_place=pickup_place,
         dropoff_place=dropoff_place,
         window_start=window_start,
@@ -2896,8 +2490,6 @@ def _close_open_threads(session: Session, listing: Listing, *, reason: str, now:
 # --- booking orchestrator commands (Q59; replace A4's temporary bridges) ----------------------------------
 # The caller (A4 accept/cancel orchestrator) holds the ADR-0017 locks: trip -> listing -> proposal_threads.
 # None of these commit; every status write goes through the contract state machine and bumps ``version``.
-
-
 def accept_version(
     session: Session, *, listing: Listing, thread: ProposalThread, version: ProposalVersion, now: datetime
 ) -> None:
@@ -2982,7 +2574,7 @@ def cancel_listing_for_booking(
 
 
 def expire_threads_for_trip(session: Session, trip_id: int, *, reason: str, now: datetime | None = None) -> int:
-    """Expire open negotiations on a trip whose stops/schedule changed (BR #5). Caller holds the trip lock."""
+    """Expire open negotiations on a trip whose stretch/schedule changed (BR #5). Caller holds the trip lock."""
     now = _now(now)
     listing_ids = session.execute(
         select(ProposalThread.listing_id)
@@ -3009,26 +2601,6 @@ def expire_threads_for_trip(session: Session, trip_id: int, *, reason: str, now:
             now=now,
         )
     return len(threads)
-
-
-def assert_trip_offers_on_trip(session: Session, trip_id: int) -> None:
-    """Every open trip-offer listing of the trip must still start and end on its stops, in order (BR #5)."""
-    offers = session.execute(
-        select(Listing).where(
-            Listing.trip_id == trip_id,
-            Listing.kind == ListingKind.TRIP_OFFER.value,
-            Listing.status.not_in(CLOSED_OFFER_STATUSES),
-        )
-    ).scalars()
-    for offer in offers:
-        if trips_service.occurrence_seqs_for_stops(session, trip_id, offer.origin_stop_id, offer.destination_stop_id) is None:
-            raise DomainError(
-                ErrorCode.ROUTE_MISMATCH,
-                details={
-                    "reason": "trip_offer_stops_not_on_trip",
-                    "listing_id": format_public_id(PublicIdPrefix.LISTING, offer.public_id),
-                },
-            )
 
 
 def expire_due_proposals(session: Session, *, now: datetime | None = None, limit: int = 200) -> int:
@@ -3172,11 +2744,7 @@ def list_listing_offers(
         raise DomainError(ErrorCode.NOT_FOUND)
     try:
         _require_service_flags(session, listing, include_driver_listing=False)
-        # Q88: a map-point end has no stop to read the corridor off, so the listing's own corridor is the
-        # question - the same corridor publish already proved serves both places. Reading it through the stop
-        # catalogue turned every point-ended request's competing-offer list into a 404, i.e. Q40 was closed on
-        # exactly the listings the client app creates today.
-        _assert_listing_corridor_open(session, listing)
+        _assert_listing_corridor_open(session, listing)  # the corridor publish proved serves both places
     except (DomainError, KeyError):
         raise DomainError(ErrorCode.NOT_FOUND) from None
     # BR blocker 7: every visibility condition is in the keyset SQL, so expired/closed threads never eat the

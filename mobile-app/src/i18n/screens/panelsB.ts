@@ -1,4 +1,4 @@
-/** Public share/tracking pages, reputation card, route map, stop search, share links and the saved trip request. Merged into `messages` by `../messages.ts`. */
+/** Public share/tracking pages, reputation card, route map, the referral code check, share links and the saved trip request. Merged into `messages` by `../messages.ts`. */
 import type { Message } from "../messages";
 
 export const panelsBMessages = {
@@ -111,20 +111,12 @@ export const panelsBMessages = {
   },
   "routeMap.failed": { uz: "Xarita yuklanmadi.", ru: "Карта не загрузилась." },
 
-  // --- stop search and referral code check ---
-  "stopSearch.label": { uz: "Joy qidirish", ru: "Поиск места"},
-  "stopSearch.placeholder": { uz: "Masalan: Qarshi avtovokzal", ru: "Например: Карши автовокзал" },
-  "stopSearch.minChars": { uz: "Kamida 2 ta harf kiriting.", ru: "Введите не менее 2 букв." },
-  "stopSearch.searching": { uz: "Qidirilmoqda...", ru: "Идёт поиск..." },
-  "stopSearch.empty": {
-    uz: "Joy topilmadi. Boshqa nom bilan qidiring.", ru: "Место не найдено. Попробуйте другое название.",
-  },
-  "stopSearch.inactive": { uz: "faol emas", ru: "неактивна" },
-  "stopSearch.referralLabel": { uz: "Taklif kodi", ru: "Код приглашения" },
-  "stopSearch.referralPlaceholder": { uz: "Kodni kiriting", ru: "Введите код" },
-  "stopSearch.referralCheck": { uz: "Tekshirish", ru: "Проверить" },
-  "stopSearch.referralValid": { uz: "Kod amal qiladi.", ru: "Код действителен." },
-  "stopSearch.referralInvalid": { uz: "Bu kod amal qilmaydi.", ru: "Этот код недействителен." },
+  // --- referral code check ---
+  "referralCheck.Label": { uz: "Taklif kodi", ru: "Код приглашения" },
+  "referralCheck.Placeholder": { uz: "Kodni kiriting", ru: "Введите код" },
+  "referralCheck.Check": { uz: "Tekshirish", ru: "Проверить" },
+  "referralCheck.Valid": { uz: "Kod amal qiladi.", ru: "Код действителен." },
+  "referralCheck.Invalid": { uz: "Bu kod amal qilmaydi.", ru: "Этот код недействителен." },
 
   // --- tracking and listing share links ---
   "trackingShare.ttlMinutes": { uz: "{count} daqiqa", ru: "{count} мин." },

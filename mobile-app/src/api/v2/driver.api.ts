@@ -27,12 +27,12 @@ export function getTrip(tripId: string) {
   return v2Request<TripDTO>(`/trips/${tripId}`);
 }
 
-/** T10: who is on board at which stop - the driver's working list. */
+/** T10: who is picked up and dropped off at which place - the driver's working list. */
 export function tripManifest(tripId: string) {
   return v2Request<TripManifestDTO>(`/trips/${tripId}/manifest`);
 }
 
-/** Remaining seats and cargo per segment (AC07/AC10); the server recomputes it, the screen only shows it. */
+/** Remaining seats and cargo per stretch of road (AC07/AC10); the server recomputes it, the screen only shows it. */
 export function tripAvailability(tripId: string) {
   return v2Request<TripAvailabilityDTO>(`/trips/${tripId}/availability`);
 }
@@ -87,14 +87,12 @@ export function listMyProposals(params: { state?: string; limit?: number } = {})
 /**
  * M1 driver side: open client requests this driver may answer (Q21 hides what they cannot).
  *
- * Each end is one of a stop or a district (wave 10). A district end widens the question from "this exact
- * stop" to "anywhere in this district", which is how a driver who picked Toshkent -> Qarshi also sees the
- * requests of the districts along the way: the server still answers on verified stops and the confirmed route
- * order, so nothing is recommended merely because it is administratively nearby (spec §6.1).
+ * Each end is a region or a district (wave 10, ADR-0028 - no stops). A district end asks for "anywhere in this
+ * district", which is how a driver who picked Toshkent -> Qarshi also sees the requests of the districts along
+ * the way: the server still answers on confirmed roads and the route order, so nothing is recommended merely
+ * because it is administratively nearby (spec §6.1).
  */
 export function requestsFeed(params: {
-  origin_stop_id?: string;
-  destination_stop_id?: string;
   origin_district_id?: string;
   destination_district_id?: string;
   service_type?: string;
@@ -114,8 +112,6 @@ export function requestsFeed(params: {
       service_type: params.service_type ?? "passenger",
       date_from: from,
       date_to: to,
-      origin_stop_id: params.origin_stop_id,
-      destination_stop_id: params.destination_stop_id,
       origin_district_id: params.origin_district_id,
       destination_district_id: params.destination_district_id,
       limit: params.limit,

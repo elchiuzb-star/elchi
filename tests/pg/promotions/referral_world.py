@@ -139,8 +139,8 @@ def open_booking_for(bookings: BookingFactory, session: Session, client_id: int)
     trip_public_id = bookings._trip()
     start = w.base_time
     listing = marketplace_service.create_listing(session, owner_user_id=client_id, data=ListingCreate.model_validate({
-        "kind": "request", "service_type": "passenger", "origin_stop_id": w.stop_public_ids["A"],
-        "destination_stop_id": w.stop_public_ids["D"], "departure_window_start": start.isoformat(),
+        "kind": "request", "service_type": "passenger", "origin_point": w.point("A"),
+        "destination_point": w.point("D"), "departure_window_start": start.isoformat(),
         "departure_window_end": (start + timedelta(hours=1)).isoformat(), "price_basis": "per_seat",
         "unit_price_minor": 20_000_000,
         "passenger": {"seat_count": 1, "adults": 1, "baggage": {"pieces": 1, "total_weight_g": 10_000, "total_volume_ml": 40_000}},
@@ -150,9 +150,7 @@ def open_booking_for(bookings: BookingFactory, session: Session, client_id: int)
                                         expected_version=listing.version)
     thread = marketplace_service.submit_proposal(session, listing_public_id=public_id, actor_user_id=w.driver_id,
                                                  data=ProposalCreate.model_validate({
-                                                     "trip_id": trip_public_id, "pickup_stop_id": w.stop_public_ids["A"],
-                                                     "dropoff_stop_id": w.stop_public_ids["D"],
-                                                     "pickup_window_start": start.isoformat(),
+                                                     "trip_id": trip_public_id,"pickup_window_start": start.isoformat(),
                                                      "pickup_window_end": (start + timedelta(minutes=30)).isoformat(),
                                                      "quantity": 1, "price_basis": "per_seat",
                                                      "unit_price_minor": 20_000_000}))

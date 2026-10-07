@@ -11,7 +11,7 @@
  *
  * Every map in this app renders **something** without a key: the caller passes `fallback`, because a grey box
  * is not a state a person can act on, and the screens here always have the underlying facts (an address, a
- * stop list) to show instead.
+ * place name) to show instead.
  */
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
