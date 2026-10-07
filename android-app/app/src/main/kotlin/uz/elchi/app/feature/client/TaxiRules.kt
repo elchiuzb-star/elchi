@@ -143,10 +143,8 @@ object TaxiRules {
         return ListingCreate(
             kind = ListingKind.REQUEST,
             serviceType = ServiceType.PASSENGER,
-            originStopId = origin.stopId,
-            originPoint = if (origin.stopId == null) point(origin) else null,
-            destinationStopId = destination.stopId,
-            destinationPoint = if (destination.stopId == null) point(destination) else null,
+            originPoint = point(origin),
+            destinationPoint = point(destination),
             departureWindowStart = ParcelRules.toOffsetIso(start),
             departureWindowEnd = ParcelRules.toOffsetIso(end),
             timezone = ParcelRules.TIMEZONE,

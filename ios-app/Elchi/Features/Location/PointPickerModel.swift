@@ -24,9 +24,6 @@ final class PointPickerModel {
     /// Where the camera should go; changes only on a search pick or "district centre", never on a drag.
     private(set) var focus: GeoPoint
     private(set) var address: Address = .resolving
-    /// Verified stops in this district (optional chips); the chosen one, until the map is moved off it.
-    private(set) var stops: [StopDTO] = []
-    private(set) var chosenStop: StopDTO?
 
     var query = "" { didSet { if query != oldValue { scheduleSuggest() } } }
     private(set) var suggestions: [PlaceSuggestion] = []
@@ -63,27 +60,16 @@ final class PointPickerModel {
 
     var districtCentre: GeoPoint { Self.centre(of: district, region: region) }
 
-    /// The camera stopped: that centre is the point. Settling on a chosen stop (a few metres of rounding) keeps the stop.
+    /// The camera stopped: that centre is the point (ADR-0028: a place is always a marked point, never a stop).
     func cameraIdle(_ point: GeoPoint) {
         guard abs(point.lat - centre.lat) > 1e-6 || abs(point.lng - centre.lng) > 1e-6 else { return }
-        if chosenStop != nil, point.distance(to: centre) < 15 { return }
-        chosenStop = nil
         centre = point
         address = .resolving
         scheduleReverseGeocode(delay: 400)
     }
 
     func useDistrictCentre() {
-        chosenStop = nil
         move(to: districtCentre, address: nil)
-    }
-
-    func setStops(_ stops: [StopDTO]) { self.stops = stops }
-
-    /// A verified stop chip: the pin jumps to it and the request names the stop (Android's `pickStop`).
-    func pickStop(_ stop: StopDTO) {
-        chosenStop = stop
-        move(to: GeoPoint(lat: stop.point.lat, lng: stop.point.lng), address: locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz)
     }
 
     /// A picked suggestion carries no coordinates: resolve it, then move there.
@@ -97,7 +83,6 @@ final class PointPickerModel {
             suggestions = []
             query = ""
             searchMiss = false
-            chosenStop = nil
             move(to: GeoPoint(lat: lat, lng: lng), address: (place.formattedAddress ?? suggestion.title).map(Self.withoutCountry))
         } catch {
             searchError = error
@@ -172,7 +157,6 @@ final class PointPickerModel {
     /// preview needs a district id at both ends); nil when the catalogue has none with a centre.
     func makeEnd(regionDistricts: [DistrictDTO]) -> PlaceEnd? {
         guard let chosen = district ?? nearestDistrict(regionDistricts, to: centre) ?? regionDistricts.first else { return nil }
-        let stop = chosenStop.map { PlaceStop(id: $0.id, nameUz: $0.nameUz, nameRu: $0.nameRu) }
-        return PlaceEnd(region: region, district: chosen, point: centre, address: chosenStop?.nameUz ?? addressText, stop: stop)
+        return PlaceEnd(region: region, district: chosen, point: centre, address: addressText)
     }
 }

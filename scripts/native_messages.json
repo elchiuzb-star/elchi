@@ -2314,5 +2314,15 @@
     "uz": "{title} yo'nalishini o'chirasizmi?",
     "ru": "Удалить направление {title}?",
     "_why": "ADR-0027 native: confirm before archiving a direction (the web archives without a dialog)."
+  },
+  "tripDetail.alongTheRoad": {
+    "uz": "Yo'l bo'yi va taxminiy vaqt",
+    "ru": "По пути и примерное время",
+    "_why": "ADR-0028 native: heading of the trip-detail place rows (the web dropped its key)."
+  },
+  "clientProfile.nameMinChars": {
+    "uz": "Kamida 2 ta harf kiriting.",
+    "ru": "Введите не менее 2 букв.",
+    "_why": "Profile name check; replaces the retired stopSearch.minChars."
   }
 }

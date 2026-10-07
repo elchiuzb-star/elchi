@@ -2,27 +2,26 @@ import Foundation
 
 /// How the orders and offers screens say places, dates, drivers and statuses in the active language.
 extension LocaleStore {
-    /// One end of a listing, offer or booking: the stop's district (Q158), else the marked place's district, else its address.
-    func endName(stop: StopRefDTO?, point: PointEndDTO?) -> String {
-        // Q158: a legacy stop end is named by its district - ELCHI works point A -> point B, no stops on screen.
-        if let stop { return stop.districtNameUz ?? (locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz) }
+    /// One end of a listing, offer or booking (ADR-0028: a booking end is the agreed place): the marked place's
+    /// district, else its address.
+    func endName(_ point: PointEndDTO?) -> String {
         if let point { return point.district?.nameUz ?? point.address ?? GeoPoint(lat: point.lat, lng: point.lng).text }
         return "?"
     }
 
     /// The detail row's value: the full street address when the place has one.
-    func endAddress(stop: StopRefDTO?, point: PointEndDTO?) -> String {
-        if stop == nil, let address = point?.address, !address.isEmpty { return address }
-        return endName(stop: stop, point: point)
+    func endAddress(_ point: PointEndDTO?) -> String {
+        if let address = point?.address, !address.isEmpty { return address }
+        return endName(point)
     }
 
     /// `Toshkent → Buxoro`.
     func route(_ listing: ListingDTO) -> String {
-        "\(endName(stop: listing.originStop, point: listing.originPoint)) → \(endName(stop: listing.destinationStop, point: listing.destinationPoint))"
+        "\(endName(listing.originPoint)) → \(endName(listing.destinationPoint))"
     }
 
     func route(_ booking: ClientBookingDTO) -> String {
-        "\(endName(stop: booking.pickup.stop, point: booking.pickup.point)) → \(endName(stop: booking.dropoff.stop, point: booking.dropoff.point))"
+        "\(endName(booking.pickup.point)) → \(endName(booking.dropoff.point))"
     }
 
     func route(_ order: LegacyOrder) -> String {
@@ -172,10 +171,10 @@ extension LocaleStore {
 
     /// The offer's route only where it differs from the listing's (`Chilonzor → Buxoro avtovokzali`).
     func offerRouteIfDifferent(_ version: ProposalVersionDTO, listing: ListingDTO?) -> String? {
-        let from = endName(stop: version.pickupStop, point: version.pickupPoint)
-        let to = endName(stop: version.dropoffStop, point: version.dropoffPoint)
-        if let listing, from == endName(stop: listing.originStop, point: listing.originPoint),
-           to == endName(stop: listing.destinationStop, point: listing.destinationPoint) { return nil }
+        let from = endName(version.pickupPoint)
+        let to = endName(version.dropoffPoint)
+        if let listing, from == endName(listing.originPoint),
+           to == endName(listing.destinationPoint) { return nil }
         return "\(from) → \(to)"
     }
 

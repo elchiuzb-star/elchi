@@ -226,7 +226,7 @@ internal fun BookingSheet(booking: BookingClientDTO, s: BookingViewModel.State, 
                     style = Elchi.type.caption,
                     color = c.muted,
                 )
-                Text(OrderRules.shortEnd(booking.pickup.stop, booking.pickup.point, ru), style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp), color = c.text)
+                Text(OrderRules.shortEnd(booking.pickup.point, ru), style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp), color = c.text)
             }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 // Only the planned arrival the trip carries - never an ETA (the pilot has none).
@@ -236,7 +236,7 @@ internal fun BookingSheet(booking: BookingClientDTO, s: BookingViewModel.State, 
                     color = c.muted,
                     textAlign = TextAlign.End,
                 )
-                Text(OrderRules.shortEnd(booking.dropoff.stop, booking.dropoff.point, ru), style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp), color = c.text, textAlign = TextAlign.End)
+                Text(OrderRules.shortEnd(booking.dropoff.point, ru), style = Elchi.type.secondary.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp), color = c.text, textAlign = TextAlign.End)
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(if (c.isDark) c.line else Color(0xFFEEF1F5)))
@@ -300,8 +300,8 @@ private fun BookingFacts(booking: BookingClientDTO, s: BookingViewModel.State, r
     val cash = soum(booking.promo?.cashDueMinor ?: booking.totalMinor)
     val window = pickupWindow(booking.pickup.windowStart, booking.pickup.windowEnd, languageTag) ?: "—"
     val facts = buildList {
-        add(Triple(t(R.string.ui_from), OrderRules.fullEnd(booking.pickup.stop, booking.pickup.point, ru), null))
-        add(Triple(t(R.string.ui_to), OrderRules.fullEnd(booking.dropoff.stop, booking.dropoff.point, ru), null))
+        add(Triple(t(R.string.ui_from), OrderRules.fullEnd(booking.pickup.point, ru), null))
+        add(Triple(t(R.string.ui_to), OrderRules.fullEnd(booking.dropoff.point, ru), null))
         if (taxi) {
             add(Triple(t(R.string.client_booking_finalPrice), cash, null))
             add(Triple(t(R.string.client_taxi_seats), t(R.string.orderForm_review_peopleCount, "count" to booking.quantity), t(R.string.orderForm_review_seatNegotiated)))

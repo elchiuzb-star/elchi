@@ -202,31 +202,21 @@ public enum TripPlan {
         return out
     }
 
-    /// The `POST /trips` body (web ConnectedApp.tsx:6362): the route's own stops with `seq` = index + 1 and the planned
-    /// arrival = start + cumulative duration; end = start + the route's duration; dwell 5, detour 15 min / 5 km, pickup
+    /// The `POST /trips` body (ADR-0028, Q160): the confirmed road by `route_version_id` - the whole road, so no
+    /// `route_start_m`/`route_end_m` and never `stops`; end = start + the route's duration; detour 15 min / 5 km, pickup
     /// wait 10, cutoff omitted (= start), kg and litres as grams and millilitres. nil while anything is missing.
     public static func body(_ form: TripPlanForm, route: RouteVersionDTO) -> TripCreate? {
         guard let vehicleId = form.vehicleId, let start = form.start, route.id == form.routeId,
               let seats = count(form.seats), let kg = count(form.cargoKg), let litres = count(form.cargoLitres) else { return nil }
-        let stops = route.stops.sorted { $0.seq < $1.seq }.enumerated().map { index, stop in
-            TripStopInput(dwellMinutes: 5, plannedArrivalAt: DepartureWindow.iso(start.addingTimeInterval(TimeInterval(stop.cumulativeDurationS))),
-                          seq: index + 1, stopId: stop.stopId)
-        }
         return TripCreate(cargoCapacityVolumeMl: litres * 1000, cargoCapacityWeightG: kg * 1000, maxDetourM: 5000, maxDetourMinutes: 15,
                           pickupWaitMinutes: 10, plannedEndAt: DepartureWindow.iso(start.addingTimeInterval(TimeInterval(route.durationS))),
-                          plannedStartAt: DepartureWindow.iso(start), routeVersionId: route.id, seatCapacity: seats, stops: stops,
+                          plannedStartAt: DepartureWindow.iso(start), routeVersionId: route.id, seatCapacity: seats,
                           vehicleId: vehicleId)
     }
 
-    /// The corridor's routes that pass a stop (the stop-name filter when a corridor has more than one route).
-    public static func routesThrough(_ routes: [RouteVersionDTO], stopId: String?) -> [RouteVersionDTO] {
-        guard let stopId else { return routes }
-        return routes.filter { $0.stops.contains { $0.stopId == stopId } }
-    }
-
-    /// `{stops} bekat · {km} km · {hours} soat` (rounded like the web).
-    public static func figures(_ route: RouteVersionDTO) -> (stops: Int, km: Int, hours: Int) {
-        (route.stops.count, Int((Double(route.distanceM) / 1000).rounded()), Int((Double(route.durationS) / 3600).rounded()))
+    /// `{km} km · {hours} soat` (rounded like the web).
+    public static func figures(_ route: RouteVersionDTO) -> (km: Int, hours: Int) {
+        (Int((Double(route.distanceM) / 1000).rounded()), Int((Double(route.durationS) / 3600).rounded()))
     }
 
     /// `VEHICLE_NOT_ELIGIBLE {field, requested, vehicle_limit}` -> the form field to mark and its limit in the form's
@@ -346,12 +336,10 @@ public enum FeedGroups {
         (items.filter { $0.group != .alternative }, items.filter { $0.group == .alternative })
     }
 
-    /// Why an alternative is one: `time_differs` wins (it decides whether the trip works at all), then
-    /// `nearby_stop`; nil when the server gave nothing we can say.
+    /// Why an alternative is one: `time_differs` (ADR-0028 removed the stop-based `nearby_stop`); nil when the
+    /// server gave nothing we can say.
     public static func alternativeReason(_ reasons: [MatchReason]) -> MatchReason? {
-        if reasons.contains(.timeDiffers) { return .timeDiffers }
-        if reasons.contains(.nearbyStop) { return .nearbyStop }
-        return nil
+        reasons.contains(.timeDiffers) ? .timeDiffers : nil
     }
 
     /// Appends a further page, dropping listings already shown (a cursor page can overlap after a refresh).
@@ -379,29 +367,23 @@ public enum SavedRoute {
 // MARK: - The offer
 
 public enum PickupWindow {
-    /// When this trip can be at the request's pickup (web `proposalPickupWindow`): the trip's arrival at the origin stop
-    /// (ETA when known) +-30 min, clipped to the request's window; nil when the trip does not pass that stop or the two
-    /// do not meet. A point-ended request has no stop to anchor on: the client's own window (the server checks it).
+    /// The pickup window the offer carries (web `proposalPickupWindow`, ADR-0028): a request is two marked places, so
+    /// there is nothing on the trip to anchor a narrower window on - the client's own window; the server derives the
+    /// real pickup ETA from the place's projection onto the trip's road and refuses a window the trip cannot keep.
     public static func of(trip: TripDTO, listing: ListingPublicDTO) -> (start: Date, end: Date)? {
         guard let askedFrom = ServerTime.parse(listing.departureWindowStart), let askedTo = ServerTime.parse(listing.departureWindowEnd) else {
             return nil
         }
-        guard let originStop = listing.originStop else { return (askedFrom, askedTo) }
-        guard let at = trip.stops.first(where: { $0.stop.id == originStop.id }),
-              let arrival = ServerTime.parse(at.etaArrivalAt ?? at.plannedArrivalAt) else { return nil }
-        let start = max(askedFrom, arrival.addingTimeInterval(-30 * 60))
-        let end = min(askedTo, arrival.addingTimeInterval(30 * 60))
-        return end > start ? (start, end) : nil
+        return (askedFrom, askedTo)
     }
 
-    /// The trip to preselect: the first offerable trip whose window meets the request (a stop-ended request: its pickup
-    /// window exists; a point-ended one: the trip's run overlaps the request's window); else nil (the driver chooses).
+    /// The trip to preselect: the first offerable trip whose run overlaps the request's window; else nil (the driver
+    /// chooses).
     public static func preselect(_ trips: [TripDTO], listing: ListingPublicDTO) -> TripDTO? {
         guard let askedFrom = ServerTime.parse(listing.departureWindowStart), let askedTo = ServerTime.parse(listing.departureWindowEnd) else {
             return nil
         }
         return trips.first { trip in
-            if listing.originStop != nil { return of(trip: trip, listing: listing) != nil }
             guard let start = ServerTime.parse(trip.plannedStartAt), let end = ServerTime.parse(trip.plannedEndAt) else { return false }
             return start <= askedTo && end >= askedFrom
         }
@@ -410,12 +392,11 @@ public enum PickupWindow {
 
 public enum OfferBody {
     /// `POST /listings/{id}/proposals`: the trip, the pickup window, the listing's own quantity and price basis, the
-    /// price; pickup/dropoff stops only for a stop-ended request (both or neither); a message only when typed.
+    /// price; never a stop id (ADR-0028: the places come from the listing); a message only when typed.
     public static func make(listing: ListingPublicDTO, tripId: String, window: (start: Date, end: Date), unitPriceMinor: Int,
                             message: String? = nil) -> ProposalCreate {
-        let stops = listing.originStop.flatMap { origin in listing.destinationStop.map { (origin.id, $0.id) } }
         let text = message?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return ProposalCreate(dropoffStopId: stops?.1, message: text?.isEmpty == false ? text : nil, pickupStopId: stops?.0,
+        return ProposalCreate(message: text?.isEmpty == false ? text : nil,
                               pickupWindowEnd: DepartureWindow.iso(window.end), pickupWindowStart: DepartureWindow.iso(window.start),
                               priceBasis: listing.priceBasis, quantity: listing.serviceType == .parcel ? 1 : max(listing.quantity, 1),
                               tripId: tripId, unitPriceMinor: unitPriceMinor)
@@ -582,7 +563,12 @@ public enum LiveTrip {
     }
 }
 
-/// The stops' dots from the trip status (DESIGN07 4.2; real per-stop passage is not on the DTO): completed -> all
+/// ADR-0028: a road position as whole kilometres from the start of the trip's stretch (web `kmAlong`).
+public enum TripStretch {
+    public static func km(_ positionM: Int, startM: Int) -> Int { max(0, Int((Double(positionM - startM) / 1000).rounded())) }
+}
+
+/// The places' dots from the trip status (DESIGN07 4.2; real per-stop passage is not on the DTO): completed -> all
 /// done; on the road -> first done, second current; boarding -> first current; otherwise all ahead.
 public enum TripStopDot: Equatable, Sendable {
     case done, current, ahead

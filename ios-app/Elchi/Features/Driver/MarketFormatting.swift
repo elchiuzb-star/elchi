@@ -2,34 +2,36 @@ import Foundation
 
 /// How the driver's trip, feed and offer screens say places, times, capacity and refusals in the active language.
 extension LocaleStore {
-    func stopName(_ stop: StopRefDTO) -> String { locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz }
-
-    /// Q158 (ADR-0027): no "stop" on screen - an internal route node is named by its district (the server sends
-    /// `district_name_uz`); an older answer without it keeps the node's own name.
-    func placeName(_ stop: StopRefDTO) -> String { stop.districtNameUz ?? stopName(stop) }
-
-    /// `Chilonzor → Qarshi`: a trip's first and last places, by district (Q158).
-    func route(_ trip: TripDTO) -> String {
-        let stops = trip.stops.sorted { $0.seq < $1.seq }
-        guard let first = stops.first, let last = stops.last else { return "?" }
-        return "\(placeName(first.stop)) → \(placeName(last.stop))"
+    /// ADR-0028 (Q158/Q160): a trip is a stretch of road, named by the areas of the direction it was planned for
+    /// (`Chilonzor → Qarshi`); a trip no direction points at (an older or manually planned one) is named by its times.
+    func route(_ trip: TripDTO, directions: [DriverDirectionDTO] = []) -> String {
+        if let direction = directions.first(where: { $0.activeTrip?.id == trip.id }) {
+            return DirectionEndName.route(direction, ru: locale == .ru)
+        }
+        guard let start = ServerTime.parse(trip.plannedStartAt), let end = ServerTime.parse(trip.plannedEndAt) else { return "?" }
+        return "\(DepartureWindow.shortText(start)) → \(DepartureWindow.shortText(end))"
     }
 
-    /// One end of a request as the feed says it: the district of the stop or of the marked place - never a street
-    /// address (the exact place is agreed in the booking chat, Q100) and never a stop's name (Q158).
-    func feedEnd(stop: StopRefDTO?, point: PointEndDTO?) -> String {
-        if let stop { return placeName(stop) }
+    /// One end of a request as the feed says it: the district of the marked place - never a street address (the exact
+    /// place is agreed in the booking chat, Q100) and never a stop (ADR-0028).
+    func feedEnd(_ point: PointEndDTO?) -> String {
         if let district = point?.district { return district.nameUz }
         return t("app.endLabel.mapPlace")
     }
 
+    /// A manifest place / booking end in the driver's lists: the agreed address, else its district (ADR-0028).
+    func placeText(_ point: PointEndDTO?) -> String {
+        if let address = point?.address, !address.isEmpty { return address }
+        return point.map { feedEnd($0) } ?? t("tripDetail.agreedPoint")
+    }
+
     func route(_ listing: ListingPublicDTO) -> String {
-        "\(feedEnd(stop: listing.originStop, point: listing.originPoint)) → \(feedEnd(stop: listing.destinationStop, point: listing.destinationPoint))"
+        "\(feedEnd(listing.originPoint)) → \(feedEnd(listing.destinationPoint))"
     }
 
     /// A version's pickup → dropoff (the driver's offers list).
     func route(_ version: ProposalVersionDTO) -> String {
-        "\(feedEnd(stop: version.pickupStop, point: version.pickupPoint)) → \(feedEnd(stop: version.dropoffStop, point: version.dropoffPoint))"
+        "\(feedEnd(version.pickupPoint)) → \(feedEnd(version.dropoffPoint))"
     }
 
     /// `27 sen, 09:00–18:00` on one day, `27.09, 22:00 - 28.09, 06:00` across days.
@@ -44,10 +46,10 @@ extension LocaleStore {
         return span(from, to)
     }
 
-    /// `27 sen · 5 bekat · 3 o'rin`.
+    /// `27 sen · 3 o'rin`.
     func tripMeta(_ trip: TripDTO) -> String {
         let date = ServerTime.parse(trip.plannedStartAt).map { "\(dayMonth($0)), \(clock($0))" } ?? "?"
-        return t("driverRoutes.tripMeta", ("date", date), ("stops", trip.stops.count), ("seats", trip.seatCapacity))
+        return t("driverRoutes.tripMeta", ("date", date), ("seats", trip.seatCapacity))
     }
 
     /// `Status: Rejalashtirilgan`.
@@ -60,8 +62,8 @@ extension LocaleStore {
         return listing.parcelType.map(parcelTypeName)
     }
 
-    /// `2 o'rin · yuk 15 kg / 80 l · bagaj 40 l` - a segment's remaining capacity.
-    func segmentLine(_ segment: SegmentAvailabilityDTO) -> String {
+    /// `2 o'rin · yuk 15 kg / 80 l · bagaj 40 l` - a stretch's remaining capacity.
+    func segmentLine(_ segment: StretchAvailabilityDTO) -> String {
         t("tripDetail.segmentLine", ("seats", segment.seatsRemaining),
           ("weight", t("tripDetail.kg", ("value", VehicleLock.thousandths(segment.cargoRemainingWeightG)))),
           ("volume", t("tripDetail.litres", ("value", VehicleLock.thousandths(segment.cargoRemainingVolumeMl)))),

@@ -33,7 +33,7 @@ enum DirectionFixture {
     }
 
     static func district(_ id: String, region: String) -> DistrictDTO {
-        DistrictDTO(id: id, nameUz: id, region: RegionRefDTO(code: region, id: region, nameUz: region), stopsCount: 0)
+        DistrictDTO(id: id, nameUz: id, region: RegionRefDTO(code: region, id: region, nameUz: region))
     }
 
     static func trip(created: Bool, retimed: Bool, start: String = "2026-10-06T17:04:13Z") -> DirectionOfferDTO {
@@ -235,15 +235,33 @@ struct DirectionClientTests {
         strings.set(.uz)
     }
 
-    @Test func q158PlacesAreDistrictsNotStops() {
+    @MainActor @Test func placesAreMarkedPointsNeverStops() {
         let strings = LocaleStore()
         strings.set(.uz)
-        let node = StopRefDTO(districtNameUz: "Chilonzor", id: "stp_1", nameRu: nil, nameUz: "Chilonzor bekati")
-        #expect(strings.placeName(node) == "Chilonzor")
-        #expect(strings.feedEnd(stop: node, point: nil) == "Chilonzor")
-        #expect(strings.endName(stop: node, point: nil) == "Chilonzor")
-        // An older answer without the district keeps the node's own name.
-        #expect(strings.placeName(StopRefDTO(id: "stp_2", nameUz: "Qarshi")) == "Qarshi")
+        let point = PointEndDTO(address: "Bunyodkor ko'chasi 1", district: DistrictRefDTO(id: "dst_ch", nameUz: "Chilonzor"), lat: 41.28, lng: 69.2)
+        // The feed and the lists: the district, never the street (Q100) - and no stop at all (ADR-0028).
+        #expect(strings.feedEnd(point) == "Chilonzor")
+        #expect(strings.endName(point) == "Chilonzor")
+        // The booking detail / manifest: the agreed address, else the district.
+        #expect(strings.endAddress(point) == "Bunyodkor ko'chasi 1")
+        #expect(strings.placeText(point) == "Bunyodkor ko'chasi 1")
+        let bare = PointEndDTO(district: DistrictRefDTO(id: "dst_q", nameUz: "Qarshi"), lat: 38.86, lng: 65.79)
+        #expect(strings.placeText(bare) == "Qarshi" && strings.endAddress(bare) == "Qarshi")
+        #expect(strings.placeText(nil) == strings.t("tripDetail.agreedPoint"))
+    }
+
+    @MainActor @Test func aTripIsNamedByItsDirectionElseItsTimes() {
+        let strings = LocaleStore()
+        strings.set(.uz)
+        let trip = MarketFixture.trip(id: "trp_9", start: MarketFixture.at(2026, 10, 2, 8))
+        #expect(strings.route(trip) == "02.10, 08:00 → 02.10, 16:00")
+        let direction = DriverDirectionDTO(activeTrip: DirectionTripRefDTO(id: "trp_9", plannedEndAt: trip.plannedEndAt, plannedStartAt: trip.plannedStartAt,
+                                                                           seatsBooked: 0, status: .planned),
+                                           cargoCapacityVolumeMl: 0, cargoCapacityWeightG: 0, createdAt: trip.createdAt,
+                                           destination: DirectionEndDTO(districtId: "dst_q", districtNameUz: "Qarshi", regionId: "reg_q", regionNameUz: "Qashqadaryo"),
+                                           id: "drd_1", origin: DirectionEndDTO(regionId: "reg_t", regionNameUz: "Toshkent shahri"), seatCapacity: 4,
+                                           status: "active", updatedAt: trip.createdAt, vehicleId: "veh_1", version: 1)
+        #expect(strings.route(trip, directions: [direction]) == "Toshkent shahri → Qarshi")
     }
 
     @Test func theTripReadsAsDistrictsAlongTheRoad() {
@@ -262,7 +280,7 @@ struct DirectionClientTests {
                     "dir.group.new", "dir.group.newNote", "dir.group.time", "dir.group.timeNote", "dir.noDirections", "dir.noDirectionsHint",
                     "dir.noRoad", "dir.noTrip", "dir.openRequests", "dir.passed", "dir.pause", "dir.paused", "dir.region", "dir.regionPlaceholder",
                     "dir.resume", "dir.save", "dir.statusActive", "dir.statusPaused", "dir.trip", "dir.tripsHint", "dir.tripsTitle", "dir.updated",
-                    "dir.via", "dir.wholeCity", "offer.timeProposal", "tripDetail.alongTheRoad", "error.ROUTE_CHANGED", "match.confirmedStopsNote"]
+                    "dir.via", "dir.wholeCity", "offer.timeProposal", "tripDetail.stretchKm", "error.ROUTE_CHANGED", "match.confirmedRoadsNote"]
         for language in [AppLocale.uz, .ru] {
             strings.set(language)
             for key in keys { #expect(strings.tOrNil(key) != nil, "missing \(key)") }

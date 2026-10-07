@@ -143,21 +143,11 @@ struct PointPickerView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task {
             if district == nil { await model.loadDistricts(region: region) }
-            await loadStops()
         }
     }
 
     private var area: String {
         district.map { "\(strings.name($0)), \(strings.name(region))" } ?? strings.name(region)
-    }
-
-    /// Verified stops of this district (or of the region's districts where it has none to choose), as chips. Only
-    /// districts whose `stops_count` says there is something are looked up.
-    private func loadStops() async {
-        let candidates = district.map { [$0] } ?? model.districtList(region)
-        let ids = Set(candidates.filter { $0.stopsCount > 0 }.map(\.id))
-        guard !ids.isEmpty else { return }
-        picker.setStops(await model.stops(inDistricts: ids))
     }
 
     private var search: some View {
@@ -203,18 +193,7 @@ struct PointPickerView: View {
     private var sheet: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(area).font(ElchiFont.poppins(14, .semibold)).foregroundStyle(c.text)
-            if !picker.stops.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(picker.stops, id: \.id) { stop in
-                            Chip(strings.locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz, selected: picker.chosenStop?.id == stop.id,
-                                 icon: .pin, filled: true) { picker.pickStop(stop) }
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-                .accessibilityIdentifier("elchi.point.stops")
-            }
+            // ADR-0028 (Q160): the stop chips are gone - a place is the point marked on the map.
             ElchiCard {
                 CardRow(strings.t("location.chosenPlace"), placeValue, first: true, detail: picker.centre.text, placeholder: picker.address == .resolving)
             }

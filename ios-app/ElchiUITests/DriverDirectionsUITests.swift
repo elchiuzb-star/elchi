@@ -287,3 +287,224 @@ final class DriverDirectionsUITests: ClientUITestCase {
         snap("\(prefix)-33-feed-offered")
     }
 }
+
+// MARK: - ADR-0028 (no stops): the device run of `elchi-dev/ADR0028-NATIVE-SPEC.md`
+
+/// ADR-0028 phases (driven by `elchi-dev/ios-adr0028/run.sh`). The client's Pochta / Taksi orders come from
+/// `ClientOrderUITests` (in-app, `origin_point` / `destination_point` only); these phases take their listing ids:
+/// `A_TAXI`, `A_PARCEL`, `A_BOARD` (a Taksi request for soon, for boarding), `A_BOOKING`, `A_TRIP`, `A_DRIVER_BOOKING`.
+extension DriverDirectionsUITests {
+    private func a28(_ name: String) -> String { ProcessInfo.processInfo.environment[name] ?? "" }
+
+    private func a28Service(_ taxi: Bool) {
+        let segment = app.buttons[taxi ? t("Taksi", "Такси") : t("Pochta", "Почта")].firstMatch
+        if segment.waitForExistence(timeout: 10) { segment.tap() }
+        settle(1)
+    }
+
+    /// The district search's ends: Toshkent shahri -> Samarqand viloyati / Samarqand (only when not remembered yet).
+    private func a28FeedRoute() {
+        let from = app.buttons["Qayerdan?"].firstMatch
+        if from.waitForExistence(timeout: 5) {
+            scrollTo(from)
+            from.tap()
+            tap("Toshkent shahri")
+            waitFor("Qayerga?")
+        }
+        let to = app.buttons["Qayerga?"].firstMatch
+        if to.waitForExistence(timeout: 3) {
+            scrollTo(to)
+            to.tap()
+            tap("Samarqand viloyati")
+            waitFor("Tumanni tanlang")
+            app.buttons.matching(NSPredicate(format: "label == %@", "Samarqand")).firstMatch.tap()
+        }
+    }
+
+    /// Driver signs in; the direction feed (Moslar) shows the client's in-app Taksi request; an offer from it (the
+    /// system plans the trip), then the soon request for boarding.
+    @objc func testA28_1_DirectionFeedOffer() {
+        startDriver(reset: true)
+        tab("matches")
+        a28Service(true)
+        tapId("elchi.dirFeed.day.week", timeout: 20)
+        let offer = byId("elchi.dirFeed.offer.\(a28("A_TAXI"))", timeout: 30)
+        scrollTo(offer)
+        settle(2)
+        snap("uz-20-driver-direction-feed")
+        offer.tap()
+        byId("elchi.dirOffer.send", timeout: 20)
+        settle(2)
+        snap("uz-21-driver-direction-offer")
+        byId("elchi.dirOffer.send").tap()
+        settle(4)
+        snap("uz-22-driver-direction-offer-sent")
+        back()
+        let board = a28("A_BOARD")
+        if !board.isEmpty {
+            let soon = byId("elchi.dirFeed.offer.\(board)", timeout: 30)
+            scrollTo(soon)
+            soon.tap()
+            byId("elchi.dirOffer.send", timeout: 20)
+            byId("elchi.dirOffer.send").tap()
+            settle(4)
+            snap("uz-23-driver-board-offer-sent")
+            back()
+        }
+    }
+
+    /// Driver (still signed in): the district search (`GET /feed`, region / district ids only) shows the Pochta
+    /// request; the old offer screen offers on it at the client's price (no stop ids).
+    @objc func testA28_2_CorridorSearchOffer() {
+        startDriver(reset: false)
+        tab("matches")
+        a28Service(false)
+        let search = byId("elchi.feed.districtSearch", timeout: 20)
+        scrollTo(search)
+        a28FeedRoute()
+        tap("14 kun")
+        let offer = byId("elchi.feed.offer.\(a28("A_PARCEL"))", timeout: 30)
+        scrollTo(offer)
+        settle(2)
+        snap("uz-30-driver-corridor-search")
+        offer.tap()
+        byId("elchi.offer.acceptClientPrice", timeout: 20)
+        settle(3)
+        snap("uz-31-driver-corridor-offer")
+        tapId("elchi.offer.acceptClientPrice")
+        settle(5)
+        snap("uz-32-driver-corridor-offer-sent")
+    }
+
+    /// The manual trip form from the offer screen ("Safar rejalashtirish": corridor + route, no stop filter -
+    /// `route_version_id` only), back on the offer, then "Mijoz narxiga roziman".
+    @objc func testA28_2b_ManualTripThenOffer() {
+        startDriver(reset: false)
+        if a28("SKIP_PLAN").isEmpty { a28PlanTrip() }
+        a28OfferWithTrip()
+    }
+
+    private func a28PlanTrip() {
+        tab("home")
+        tapId("elchi.driver.home.planTrip", timeout: 20)
+        waitFor("Qayerdan - qayerga", timeout: 20)
+        app.buttons["Qayerdan - qayerga"].firstMatch.tap()
+        let item = app.buttons.containing(NSPredicate(format: "label BEGINSWITH %@", "Dev sinov: M39")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 10), "no corridor option")
+        item.tap()
+        settle(3)
+        let route = app.buttons["Marshrut"].firstMatch
+        if route.waitForExistence(timeout: 10) {
+            route.tap()
+            let option = app.buttons.containing(NSPredicate(format: "label CONTAINS %@", " km · ")).firstMatch
+            if option.waitForExistence(timeout: 8) { option.tap() }
+        }
+        settle(2)
+        snap("uz-33-driver-manual-trip-form")
+        tap("Saqlash")
+        byId("elchi.trip.header", timeout: 30)
+        settle(3)
+        snap("uz-33b-driver-manual-trip-detail")
+        back()
+    }
+
+    private func a28OfferWithTrip() {
+        tab("matches")
+        a28Service(false)
+        let search = byId("elchi.feed.districtSearch", timeout: 20)
+        scrollTo(search)
+        a28FeedRoute()
+        tap("14 kun")
+        let offer = byId("elchi.feed.offer.\(a28("A_PARCEL"))", timeout: 30)
+        scrollTo(offer)
+        offer.tap()
+        let send = byId("elchi.offer.acceptClientPrice", timeout: 30)
+        let select = app.buttons["Safar"].firstMatch
+        if select.waitForExistence(timeout: 10) {
+            select.tap()
+            let option = app.buttons.containing(NSPredicate(format: "label BEGINSWITH %@", "08.10, 09:00")).firstMatch
+            if option.waitForExistence(timeout: 8) { option.tap() }
+        }
+        settle(3)
+        snap("uz-34-driver-corridor-offer-with-trip")
+        scrollTo(send)
+        waitEnabled(send, "acceptClientPrice")
+        send.tap()
+        settle(5)
+        snap("uz-35-driver-corridor-offer-sent")
+    }
+
+    /// Client: the listing's offers -> accept -> the booking chat.
+    @objc func testA28_3_ClientAccept() {
+        let listing = a28("A_LISTING")
+        launch(locale: "uz", theme: "light", extra: ["-uiTestOpenListing", listing])
+        signIn("930800801", driver: false)
+        waitFor("Buyurtma tafsilotlari", timeout: 30)
+        let choose = button("Tanlash", timeout: 30)
+        scrollTo(choose)
+        settle(2)
+        snap("uz-40-client-offers-\(a28("A_TAG"))")
+        choose.tap()
+        settle(1)
+        snap("uz-41-client-accept-dialog-\(a28("A_TAG"))")
+        tap("Ha, tanlayman")
+        XCTAssertTrue(app.textFields.firstMatch.waitForExistence(timeout: 30) || app.textViews.firstMatch.waitForExistence(timeout: 5),
+                      "no booking chat after accept")
+        settle(3)
+        snap("uz-42-client-booking-chat-\(a28("A_TAG"))")
+    }
+
+    /// Client (signed in): the booking detail - places and times in the same slots.
+    @objc func testA28_4_ClientBooking() {
+        launch(locale: "uz", theme: "light", reset: false, extra: ["-uiTestOpenBooking", a28("A_BOOKING")])
+        byId("elchi.booking.status", timeout: 30)
+        settle(3)
+        snap("uz-50-client-booking-\(a28("A_TAG"))")
+        app.swipeUp()
+        settle(1)
+        snap("uz-51-client-booking-bottom-\(a28("A_TAG"))")
+        app.swipeUp()
+        settle(1)
+        snap("uz-52-client-booking-bottom2-\(a28("A_TAG"))")
+    }
+
+    /// Driver: the trip detail (places along the road, stretches, manifest) and the booking card.
+    @objc func testA28_5_DriverTrip() {
+        startDriver(reset: true)
+        tab("routes")
+        let trip = byId("elchi.trip.\(a28("A_TRIP"))", timeout: 30)
+        scrollTo(trip)
+        settle(2)
+        snap("uz-60-driver-routes-\(a28("A_TAG"))")
+        trip.tap()
+        byId("elchi.trip.header", timeout: 20)
+        byId("elchi.trip.manifest", timeout: 20)
+        settle(3)
+        snap("uz-61-driver-trip-detail-\(a28("A_TAG"))")
+        scrollTo(byId("elchi.trip.availability"))
+        settle(1)
+        snap("uz-62-driver-trip-availability-\(a28("A_TAG"))")
+        scrollTo(byId("elchi.trip.manifest"))
+        settle(1)
+        snap("uz-63-driver-trip-manifest-\(a28("A_TAG"))")
+        back()
+        tab("orders")
+        tapId("elchi.driver.booking.\(a28("A_DRIVER_BOOKING"))", timeout: 25)
+        byId("elchi.driver.booking.card", timeout: 20)
+        settle(2)
+        snap("uz-64-driver-booking-\(a28("A_TAG"))")
+    }
+
+    /// Driver (signed in): the booking chat with places in the header, after boarding (the shell boarded it).
+    @objc func testA28_6_DriverBoarded() {
+        startDriver(reset: false)
+        tab("orders")
+        tapId("elchi.driver.booking.\(a28("A_DRIVER_BOOKING"))", timeout: 25)
+        byId("elchi.driver.booking.card", timeout: 20)
+        settle(2)
+        snap("uz-70-driver-booking-boarded-\(a28("A_TAG"))")
+        tapId("elchi.driver.booking.chat")
+        settle(3)
+        snap("uz-71-driver-booking-chat-\(a28("A_TAG"))")
+    }
+}

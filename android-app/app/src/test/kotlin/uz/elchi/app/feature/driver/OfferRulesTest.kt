@@ -39,21 +39,8 @@ class OfferRulesTest {
     // -- pickup window ----------------------------------------------------------------------------------------
 
     @Test
-    fun `stop-ended request - trip time at the origin plus minus 30 min, clipped to the client's window`() {
-        val listing = S08.listing(originStop = S08.stop("stp_tash"), destinationStop = S08.stop("stp_sam"), windowStart = "2026-10-02T04:10:00Z", windowEnd = "2026-10-02T13:00:00Z")
-        val trip = S08.trip(stops = listOf("stp_tash" to "2026-10-02T04:00:00Z", "stp_sam" to "2026-10-02T09:28:00Z"))
-        val w = OfferRules.pickupWindow(trip, listing)!!
-        assertEquals(Instant.parse("2026-10-02T04:10:00Z"), w.start) // clipped: the client asked from 09:10
-        assertEquals(Instant.parse("2026-10-02T04:30:00Z"), w.end)
-    }
-
-    @Test
-    fun `stop-ended request the trip misses, or a trip not passing the stop, has no window`() {
-        val listing = S08.listing(originStop = S08.stop("stp_tash"), destinationStop = S08.stop("stp_sam"), windowStart = "2026-10-02T08:00:00Z", windowEnd = "2026-10-02T13:00:00Z")
-        assertNull(OfferRules.pickupWindow(S08.trip(), listing))
-        val elsewhere = S08.listing(originStop = S08.stop("stp_jiz"), destinationStop = S08.stop("stp_sam"))
-        assertNull(OfferRules.pickupWindow(S08.trip(), elsewhere))
-        assertNull(OfferRules.pickupWindow(null, listing))
+    fun `no trip, no window (ADR-0028 - every request is point-ended)`() {
+        assertNull(OfferRules.pickupWindow(null, S08.listing()))
     }
 
     @Test
@@ -79,11 +66,9 @@ class OfferRulesTest {
     // -- offer body ---------------------------------------------------------------------------------------------
 
     @Test
-    fun `offer body - point request sends no stop ids, stop request sends both`() {
+    fun `offer body never carries place ids - the places come from the listing (ADR-0028)`() {
         val window = PickupWindow(Instant.parse("2026-10-02T04:00:00Z"), Instant.parse("2026-10-02T05:00:00Z"))
         val point = OfferRules.proposalBody(S08.listing(), "trp_1", window, 11_000_000, message = "  ")
-        assertNull(point.pickupStopId)
-        assertNull(point.dropoffStopId)
         assertNull(point.message)
         assertEquals("trp_1", point.tripId)
         assertEquals("2026-10-02T09:00:00+05:00", point.pickupWindowStart)
@@ -91,16 +76,12 @@ class OfferRulesTest {
         assertEquals(1L, point.quantity)
         assertEquals(PriceBasis.TOTAL, point.priceBasis)
         assertEquals(11_000_000L, point.unitPriceMinor)
+        val json = uz.elchi.app.api.ElchiJson.encodeToString(uz.elchi.app.api.generated.ProposalCreate.serializer(), point)
+        assertFalse(json, "stop" in json)
 
-        val stops = OfferRules.proposalBody(S08.listing(originStop = S08.stop("stp_tash"), destinationStop = S08.stop("stp_sam"), basis = PriceBasis.PER_SEAT, quantity = 2), "trp_1", window, 5_000_000)
-        assertEquals("stp_tash", stops.pickupStopId)
-        assertEquals("stp_sam", stops.dropoffStopId)
-        assertEquals(2L, stops.quantity)
-        assertEquals(PriceBasis.PER_SEAT, stops.priceBasis)
-        // One stop end and one point end: neither id (both or neither).
-        val mixed = OfferRules.proposalBody(S08.listing(originStop = S08.stop("stp_tash")), "trp_1", window, 1)
-        assertNull(mixed.pickupStopId)
-        assertNull(mixed.dropoffStopId)
+        val seats = OfferRules.proposalBody(S08.listing(basis = PriceBasis.PER_SEAT, quantity = 2), "trp_1", window, 5_000_000)
+        assertEquals(2L, seats.quantity)
+        assertEquals(PriceBasis.PER_SEAT, seats.priceBasis)
         assertEquals("120000", OfferRules.prefillPrice(S08.listing()))
     }
 

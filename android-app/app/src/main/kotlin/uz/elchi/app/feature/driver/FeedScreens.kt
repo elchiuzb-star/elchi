@@ -134,7 +134,7 @@ internal fun ColumnScope.FeedBody(
         onSaved, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.SOFT, ButtonSize.MEDIUM, icon = ElchiIcon.ARCHIVE,
     )
     // Q158: no "bekat" on screen - the matches follow the confirmed road, the meeting place is agreed in the chat.
-    Note(t(R.string.match_confirmedStopsNote), tone = Tone.WARN)
+    Note(t(R.string.match_confirmedRoadsNote), tone = Tone.WARN)
     s.degraded.forEach { code -> tOrNull("warning.$code")?.let { Note(it, tone = Tone.GRAY) } }
 
     val query = FeedRules.query(f, java.time.Instant.now())
@@ -172,7 +172,7 @@ internal fun ColumnScope.FeedBody(
 }
 
 /**
- * The prototype's feed `item`: route (stop or district names), the match badge (or an alternative's reason),
+ * The prototype's feed `item`: route (district names), the match badge (or an alternative's reason),
  * the window, what is carried, the client's total and "Taklif yuborish". Alternatives get a dashed frame.
  */
 @Composable
@@ -218,7 +218,7 @@ private fun FeedCard(item: FeedItemDTO, alternative: Boolean, mine: MyFeedOffer?
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ElchiIconView(ElchiIcon.PIN, c.accentText, size = 16.dp)
                 Text(
-                    "${FeedRules.endName(l.originStop, l.originPoint, ru)} → ${FeedRules.endName(l.destinationStop, l.destinationPoint, ru)}",
+                    "${FeedRules.endName(l.originPoint, ru)} → ${FeedRules.endName(l.destinationPoint, ru)}",
                     style = Elchi.type.bodyStrong,
                     color = c.text,
                 )
@@ -338,7 +338,7 @@ fun SavedSearchesScreen(vm: SavedSearchesViewModel, feed: FeedViewModel, onBack:
             } else {
                 saved.value.forEach { item ->
                     val range = OrderRules.dayRange(item.timeWindowStart, item.timeWindowEnd).orEmpty()
-                    val title = FeedRules.savedRouteTitle(item, fs.names(appRu()), stopLabel = "•")
+                    val title = FeedRules.savedRouteTitle(item, fs.names(appRu()))
                     val regions = (fs.regions as? Load.Ready)?.value.orEmpty()
                     val openable = Design07Rules.filterFor(item, fs.filter, regions, fs.allDistricts) != null
                     ItemCard(
@@ -369,7 +369,7 @@ fun SavedSearchesScreen(vm: SavedSearchesViewModel, feed: FeedViewModel, onBack:
     deleting?.let { item ->
         ElchiDialog(
             title = t(R.string.common_delete),
-            text = "${FeedRules.savedRouteTitle(item, fs.names(appRu()), stopLabel = "•")}. ${t(R.string.confirmDialog_cancelOrder_text)}",
+            text = "${FeedRules.savedRouteTitle(item, fs.names(appRu()))}. ${t(R.string.confirmDialog_cancelOrder_text)}",
             confirm = t(R.string.common_delete),
             onConfirm = {
                 deleting = null

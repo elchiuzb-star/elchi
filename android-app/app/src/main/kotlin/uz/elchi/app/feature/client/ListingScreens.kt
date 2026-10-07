@@ -277,7 +277,7 @@ internal fun ListingItem(listing: ListingDTO, stats: OfferStats?, ru: Boolean, l
 /** "Toshkent → Buxoro" */
 @Composable
 internal fun routeTitle(listing: ListingDTO, ru: Boolean): String =
-    "${OrderRules.shortEnd(listing.originStop, listing.originPoint, ru)} → ${OrderRules.shortEnd(listing.destinationStop, listing.destinationPoint, ru)}"
+    "${OrderRules.shortEnd(listing.originPoint, ru)} → ${OrderRules.shortEnd(listing.destinationPoint, ru)}"
 
 /** The listing's status pill: "Bron qilindi" for a fulfilled request (the client's word), the shared word otherwise. */
 @Composable
@@ -377,8 +377,8 @@ private fun ListingSheet(listing: ListingDTO, s: ListingViewModel.State, stats: 
             }
         }
         Tracker(OrderRules.listingProgress(listing, s.threadList, s.bookingStatus))
-        val startPlace = OrderRules.shortPlace(OrderRules.fullEnd(listing.originStop, listing.originPoint, ru))
-        val endPlace = OrderRules.shortPlace(OrderRules.fullEnd(listing.destinationStop, listing.destinationPoint, ru))
+        val startPlace = OrderRules.shortPlace(OrderRules.fullEnd(listing.originPoint, ru))
+        val endPlace = OrderRules.shortPlace(OrderRules.fullEnd(listing.destinationPoint, ru))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(t(R.string.client_listing_departAt, "time" to (OrderRules.dayTime(listing.departureWindowStart) ?: "—")), style = Elchi.type.caption, color = c.muted)
@@ -463,8 +463,8 @@ internal fun DottedLine(color: Color, modifier: Modifier) {
 private fun FactsGrid(listing: ListingDTO, s: ListingViewModel.State, stats: OfferStats, ru: Boolean) {
     val taxi = TaxiRules.isPassenger(listing.serviceType)
     val facts = buildList {
-        add(Triple(t(R.string.ui_from), OrderRules.fullEnd(listing.originStop, listing.originPoint, ru), null))
-        add(Triple(t(R.string.ui_to), OrderRules.fullEnd(listing.destinationStop, listing.destinationPoint, ru), null))
+        add(Triple(t(R.string.ui_from), OrderRules.fullEnd(listing.originPoint, ru), null))
+        add(Triple(t(R.string.ui_to), OrderRules.fullEnd(listing.destinationPoint, ru), null))
         add(Triple(t(R.string.common_price), soum(listing.totalMinor), if (taxi) seatsPrice(listing.quantity, listing.unitPriceMinor) else null))
         add(Triple(t(R.string.client_listing_views), t(R.string.client_listing_viewsCount, "count" to (listing.viewCount ?: 0L)), null))
         if (taxi) {
@@ -613,11 +613,11 @@ private fun OffersSection(
     }
 }
 
-/** An offer's own route, only when it is not the listing's ("Chilonzor → Registon" for a driver's other stop). */
+/** An offer's own route, only when it is not the listing's ("Chilonzor → Registon" for a driver's other place). */
 @Composable
 private fun offerRouteIfDifferent(thread: ProposalThreadDTO, listing: ListingDTO, ru: Boolean): String? {
     val v = thread.currentVersion ?: return null
-    val offer = "${OrderRules.shortEnd(v.pickupStop, v.pickupPoint, ru)} → ${OrderRules.shortEnd(v.dropoffStop, v.dropoffPoint, ru)}"
+    val offer = "${OrderRules.shortEnd(v.pickupPoint, ru)} → ${OrderRules.shortEnd(v.dropoffPoint, ru)}"
     return offer.takeIf { it != routeTitle(listing, ru) }
 }
 

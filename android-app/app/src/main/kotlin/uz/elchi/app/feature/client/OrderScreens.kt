@@ -237,7 +237,7 @@ private fun EndRow(key: String, place: Place?, ru: Boolean, first: Boolean, onCh
     )
 }
 
-/** The place as a title: "Joriy joylashuv" for the phone's position, else the stop, address or coordinates. */
+/** The place as a title: "Joriy joylashuv" for the phone's position, else the address or coordinates. */
 @Composable
 internal fun placeTitle(place: Place, ru: Boolean): String = if (place.current) t(R.string.home_currentLocation) else place.label(ru)
 
@@ -814,12 +814,9 @@ internal fun windowLine(d: ParcelDraft): String {
     return "${ParcelRules.displayShort(start)} – ${ParcelRules.displayShort(end)}"
 }
 
-/** "Chilonzor, Toshkent shahri", or "Tasdiqlangan bekat · …" for a verified stop (Q88.4). */
+/** "Chilonzor, Toshkent shahri" (ADR-0028: every end is a point, there is no verified stop). */
 @Composable
-private fun placeDetail(place: Place, ru: Boolean): String {
-    val where = place.areaLine(ru)
-    return if (place.stopId != null) t(R.string.orderForm_review_verifiedStop, "where" to where) else where
-}
+private fun placeDetail(place: Place, ru: Boolean): String = place.areaLine(ru)
 
 // -- client-success -----------------------------------------------------------------------------------------------
 

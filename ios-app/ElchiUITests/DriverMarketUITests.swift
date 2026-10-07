@@ -129,7 +129,7 @@ final class DriverMarketUITests: ClientUITestCase {
         snap("01b-orders-tab")
     }
 
-    /// DRIVER: trips list -> add trip (corridor, route by a stop, departure) -> detail -> start boarding too early.
+    /// DRIVER: trips list -> add trip (corridor, route, departure - ADR-0028: no stop filter) -> detail -> start boarding too early.
     func test2_AddTrip() {
         launch(theme: "light")
         signInAsDriver(env("DRIVER"))
@@ -141,10 +141,7 @@ final class DriverMarketUITests: ClientUITestCase {
         waitFor("Qayerdan - qayerga")
         snap("03-add-trip")
         choose("Toshkent - Qashqadaryo", in: "Qayerdan - qayerga")
-        type("Chiroq", into: "Bekat nomi bo'yicha marshrut topish")
-        tap("Chiroqchi bekati")
-        waitFor("orqali o'tadigan marshrutlar")
-        waitFor("bekat · ")
+        waitFor(" km · ")
         snap("04-add-trip-filled")
         app.buttons["Jo'nash vaqti"].firstMatch.tap()
         waitFor("Tasdiqlash")
@@ -167,7 +164,7 @@ final class DriverMarketUITests: ClientUITestCase {
         launch(theme: "light", reset: false)
         tab("matches")
         ensureFeedRoute()
-        waitFor("Mosliklar tasdiqlangan bekatlar", timeout: 20)
+        waitFor("Mosliklar tasdiqlangan yo'nalish", timeout: 20)
         tap("Ertaga")
         waitFor("Taklif yuborish", timeout: 20)
         snap("09-feed-tomorrow")

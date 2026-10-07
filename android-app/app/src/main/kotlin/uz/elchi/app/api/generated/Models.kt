@@ -80,8 +80,6 @@ data class AmendmentAccept(
 
 @Serializable
 data class AmendmentChanges(
-    @SerialName("dropoff_stop_id") val dropoffStopId: String? = null,
-    @SerialName("pickup_stop_id") val pickupStopId: String? = null,
     @SerialName("pickup_window_end") val pickupWindowEnd: String? = null,
     @SerialName("pickup_window_start") val pickupWindowStart: String? = null,
     @SerialName("quantity") val quantity: Long? = null,
@@ -515,7 +513,6 @@ data class CorridorDTO(
     @SerialName("id") val id: String,
     @SerialName("name") val name: String,
     @SerialName("origin_region") val originRegion: RegionRefDTO,
-    @SerialName("stops_count") val stopsCount: Long,
 )
 
 /**
@@ -525,14 +522,10 @@ data class CorridorDTO(
 data class CorridorDistrictDTO(
     @SerialName("district") val district: DistrictDTO,
     /**
-     * A confirmed route version of this corridor really stops in the district. False = the corridor owns a stop there, but no confirmed road reaches it yet (spec 6.1: proximity is not a route).
+     * Always true (ADR-0028): a district is listed only when its centre lies within the corridor's radius of a confirmed road. A district the road does not reach is not listed (spec 6.1: proximity is not a route).
      */
-    @SerialName("on_confirmed_route") val onConfirmedRoute: Boolean,
+    @SerialName("on_confirmed_route") val onConfirmedRoute: Boolean? = null,
     @SerialName("sequence") val sequence: Long,
-    /**
-     * Active stops of this corridor inside the district.
-     */
-    @SerialName("stops_count") val stopsCount: Long,
 )
 
 @Serializable(with = Currency.Serializer::class)
@@ -571,7 +564,7 @@ data class DirectionEndInput(
 )
 
 /**
- * Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027).
+ * Q152: an offer from a direction. The trip, window and quantity are the system's (ADR-0027).
  */
 @Serializable
 data class DirectionOfferCreate(
@@ -711,10 +704,6 @@ data class DistrictDTO(
     @SerialName("name_ru") val nameRu: String? = null,
     @SerialName("name_uz") val nameUz: String,
     @SerialName("region") val region: RegionRefDTO,
-    /**
-     * Active stops of publicly visible corridors in this district. 0 means the place can be named but no verified stop serves it yet - the client says so instead of promising a ride.
-     */
-    @SerialName("stops_count") val stopsCount: Long,
 )
 
 @Serializable
@@ -1007,12 +996,10 @@ data class ListingCreate(
     @SerialName("currency") val currency: Currency? = null,
     @SerialName("departure_window_end") val departureWindowEnd: String,
     @SerialName("departure_window_start") val departureWindowStart: String,
-    @SerialName("destination_point") val destinationPoint: PointEndInput? = null,
-    @SerialName("destination_stop_id") val destinationStopId: String? = null,
+    @SerialName("destination_point") val destinationPoint: PointEndInput,
     @SerialName("expires_at") val expiresAt: String? = null,
     @SerialName("kind") val kind: ListingKind,
-    @SerialName("origin_point") val originPoint: PointEndInput? = null,
-    @SerialName("origin_stop_id") val originStopId: String? = null,
+    @SerialName("origin_point") val originPoint: PointEndInput,
     @SerialName("parcel") val parcel: ParcelDetails? = null,
     @SerialName("passenger") val passenger: PassengerDetails? = null,
     @SerialName("payment_method") val paymentMethod: PaymentMethod? = null,
@@ -1032,12 +1019,10 @@ data class ListingDTO(
     @SerialName("departure_window_end") val departureWindowEnd: String,
     @SerialName("departure_window_start") val departureWindowStart: String,
     @SerialName("destination_point") val destinationPoint: PointEndDTO? = null,
-    @SerialName("destination_stop") val destinationStop: StopRefDTO? = null,
     @SerialName("expires_at") val expiresAt: String,
     @SerialName("id") val id: String,
     @SerialName("kind") val kind: ListingKind,
     @SerialName("origin_point") val originPoint: PointEndDTO? = null,
-    @SerialName("origin_stop") val originStop: StopRefDTO? = null,
     @SerialName("owner") val owner: ListingOwnerDTO,
     @SerialName("parcel") val parcel: ParcelDetails? = null,
     @SerialName("passenger") val passenger: PassengerDetails? = null,
@@ -1088,14 +1073,12 @@ data class ListingOfferDTO(
     @SerialName("completed_bookings") val completedBookings: Long? = null,
     @SerialName("currency") val currency: Currency,
     @SerialName("dropoff_point") val dropoffPoint: PointEndDTO? = null,
-    @SerialName("dropoff_stop") val dropoffStop: StopRefDTO? = null,
     @SerialName("is_mine") val isMine: Boolean,
     /**
      * Stable per listing, e.g. "Haydovchi #2"; not derived from any id.
      */
     @SerialName("label") val label: String,
     @SerialName("pickup_point") val pickupPoint: PointEndDTO? = null,
-    @SerialName("pickup_stop") val pickupStop: StopRefDTO? = null,
     @SerialName("pickup_window_end") val pickupWindowEnd: String,
     @SerialName("pickup_window_start") val pickupWindowStart: String,
     @SerialName("price_basis") val priceBasis: PriceBasis,
@@ -1131,10 +1114,8 @@ data class ListingPatch(
     @SerialName("comment") val comment: String? = null,
     @SerialName("departure_window_end") val departureWindowEnd: String? = null,
     @SerialName("departure_window_start") val departureWindowStart: String? = null,
-    @SerialName("destination_stop_id") val destinationStopId: String? = null,
     @SerialName("expected_version") val expectedVersion: Long,
     @SerialName("expires_at") val expiresAt: String? = null,
-    @SerialName("origin_stop_id") val originStopId: String? = null,
     @SerialName("parcel") val parcel: ParcelDetails? = null,
     @SerialName("passenger") val passenger: PassengerDetails? = null,
     @SerialName("price_basis") val priceBasis: PriceBasis? = null,
@@ -1150,11 +1131,9 @@ data class ListingPublicDTO(
     @SerialName("departure_window_end") val departureWindowEnd: String,
     @SerialName("departure_window_start") val departureWindowStart: String,
     @SerialName("destination_point") val destinationPoint: PointEndDTO? = null,
-    @SerialName("destination_stop") val destinationStop: StopRefDTO? = null,
     @SerialName("id") val id: String,
     @SerialName("kind") val kind: ListingKind,
     @SerialName("origin_point") val originPoint: PointEndDTO? = null,
-    @SerialName("origin_stop") val originStop: StopRefDTO? = null,
     @SerialName("parcel_category") val parcelCategory: ParcelCategoryDTO? = null,
     @SerialName("parcel_type") val parcelType: ParcelType? = null,
     @SerialName("price_basis") val priceBasis: PriceBasis,
@@ -1203,13 +1182,12 @@ data class ManifestItemDTO(
 )
 
 @Serializable
-data class ManifestStopDTO(
+data class ManifestPlaceDTO(
     @SerialName("dropoffs") val dropoffs: List<ManifestItemDTO>,
     @SerialName("pickups") val pickups: List<ManifestItemDTO>,
     @SerialName("planned_arrival_at") val plannedArrivalAt: String,
     @SerialName("point") val point: PointEndDTO? = null,
     @SerialName("seq") val seq: Long,
-    @SerialName("stop") val stop: StopRefDTO? = null,
 )
 
 @Serializable(with = MatchGroup.Serializer::class)
@@ -1225,19 +1203,15 @@ enum class MatchGroup(override val value: String) : WireEnum {
 /**
  * Stable reason codes explaining a match decision (spec §6.4, §8; FeedItemDTO.match.reasons).
  *
- * Promoted from ``app.modules.geo.types`` (A2) in integration pass 1; geo re-exports it.
+ * Promoted from ``app.modules.geo.types`` (A2) in integration pass 1. Q160: no stop reasons - a place is on the road.
  */
 @Serializable(with = MatchReason.Serializer::class)
 enum class MatchReason(override val value: String) : WireEnum {
     FULL_ROUTE("full_route"),
     INTERMEDIATE_SEGMENT("intermediate_segment"),
-    PICKUP_AT_STOP("pickup_at_stop"),
-    DROPOFF_AT_STOP("dropoff_at_stop"),
     PICKUP_DETOUR("pickup_detour"),
     DROPOFF_DETOUR("dropoff_detour"),
-    NEARBY_STOP("nearby_stop"),
     TIME_DIFFERS("time_differs"),
-    SAME_STOP("same_stop"),
     PICKUP_NOT_ON_ROUTE("pickup_not_on_route"),
     DROPOFF_NOT_ON_ROUTE("dropoff_not_on_route"),
     REVERSE_DIRECTION("reverse_direction"),
@@ -1753,7 +1727,6 @@ data class ProposalBaggage(
 @Serializable
 data class ProposalCounter(
     @SerialName("baggage") val baggage: ProposalBaggage? = null,
-    @SerialName("dropoff_stop_id") val dropoffStopId: String? = null,
     @SerialName("expected_revision") val expectedRevision: Long,
     @SerialName("message") val message: String? = null,
     /**
@@ -1761,7 +1734,6 @@ data class ProposalCounter(
      */
     @SerialName("outside_request_window") val outsideRequestWindow: Boolean? = null,
     @SerialName("parcel") val parcel: ProposalParcel? = null,
-    @SerialName("pickup_stop_id") val pickupStopId: String? = null,
     @SerialName("pickup_window_end") val pickupWindowEnd: String? = null,
     @SerialName("pickup_window_start") val pickupWindowStart: String? = null,
     @SerialName("promo_consent") val promoConsent: ProposalPromoConsent? = null,
@@ -1772,14 +1744,12 @@ data class ProposalCounter(
 @Serializable
 data class ProposalCreate(
     @SerialName("baggage") val baggage: ProposalBaggage? = null,
-    @SerialName("dropoff_stop_id") val dropoffStopId: String? = null,
     @SerialName("message") val message: String? = null,
     /**
      * ADR-0027 Q153: true - the driver proposes a pickup time outside the client's request window (at most 12 h away). Only a driver may; the client's own accept or counter is the consent. Omitted / false: the window must meet the request window, as before.
      */
     @SerialName("outside_request_window") val outsideRequestWindow: Boolean? = null,
     @SerialName("parcel") val parcel: ProposalParcel? = null,
-    @SerialName("pickup_stop_id") val pickupStopId: String? = null,
     @SerialName("pickup_window_end") val pickupWindowEnd: String,
     @SerialName("pickup_window_start") val pickupWindowStart: String,
     @SerialName("price_basis") val priceBasis: PriceBasis,
@@ -1975,7 +1945,6 @@ data class ProposalVersionDTO(
     @SerialName("currency") val currency: Currency,
     @SerialName("demand") val demand: ProposalDemandDTO,
     @SerialName("dropoff_point") val dropoffPoint: PointEndDTO? = null,
-    @SerialName("dropoff_stop") val dropoffStop: StopRefDTO? = null,
     @SerialName("expires_at") val expiresAt: String,
     /**
      * Only shown to the driver side.
@@ -1992,7 +1961,6 @@ data class ProposalVersionDTO(
      */
     @SerialName("outside_request_window") val outsideRequestWindow: Boolean? = null,
     @SerialName("pickup_point") val pickupPoint: PointEndDTO? = null,
-    @SerialName("pickup_stop") val pickupStop: StopRefDTO? = null,
     @SerialName("pickup_window_end") val pickupWindowEnd: String,
     @SerialName("pickup_window_start") val pickupWindowStart: String,
     @SerialName("price_basis") val priceBasis: PriceBasis,
@@ -2037,13 +2005,13 @@ data class PublicListingPageDTO(
     @SerialName("departure_date") val departureDate: String,
     @SerialName("departure_window_end") val departureWindowEnd: String,
     @SerialName("departure_window_start") val departureWindowStart: String,
-    @SerialName("destination_stop_name") val destinationStopName: String,
+    @SerialName("destination_name") val destinationName: String,
     @SerialName("kind") val kind: ListingKind,
     /**
      * Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). A public id is not a secret (ADR-0002); no owner data is added.
      */
     @SerialName("listing_id") val listingId: String? = null,
-    @SerialName("origin_stop_name") val originStopName: String,
+    @SerialName("origin_name") val originName: String,
     @SerialName("price_basis") val priceBasis: PriceBasis,
     @SerialName("quantity") val quantity: Long,
     @SerialName("service_type") val serviceType: ServiceType,
@@ -2286,10 +2254,15 @@ data class RoleActivateRequest(
     @SerialName("role") val role: String,
 )
 
+/**
+ * A road to propose for confirmation (ADR-0028): from A to B on a corridor - no intermediate point.
+ */
 @Serializable
 data class RoutePreviewRequest(
+    @SerialName("corridor_id") val corridorId: String,
     @SerialName("departure_at") val departureAt: String,
-    @SerialName("stop_ids") val stopIds: List<String>,
+    @SerialName("destination") val destination: PointDTO,
+    @SerialName("origin") val origin: PointDTO,
 )
 
 @Serializable
@@ -2303,26 +2276,15 @@ data class RouteVersionDTO(
     @SerialName("provider") val provider: String,
     @SerialName("provider_version") val providerVersion: String,
     @SerialName("status") val status: String,
-    @SerialName("stops") val stops: List<RouteVersionStopDTO>,
-)
-
-@Serializable
-data class RouteVersionStopDTO(
-    @SerialName("cumulative_distance_m") val cumulativeDistanceM: Long,
-    @SerialName("cumulative_duration_s") val cumulativeDurationS: Long,
-    @SerialName("seq") val seq: Long,
-    @SerialName("stop_id") val stopId: String,
 )
 
 @Serializable
 data class SavedSearchCreate(
     @SerialName("destination_district_id") val destinationDistrictId: String? = null,
     @SerialName("destination_region_id") val destinationRegionId: String? = null,
-    @SerialName("destination_stop_id") val destinationStopId: String? = null,
     @SerialName("notify") val notify: Boolean? = null,
     @SerialName("origin_district_id") val originDistrictId: String? = null,
     @SerialName("origin_region_id") val originRegionId: String? = null,
-    @SerialName("origin_stop_id") val originStopId: String? = null,
     @SerialName("quantity") val quantity: Long? = null,
     @SerialName("service_type") val serviceType: ServiceType,
     @SerialName("side") val side: FeedSide,
@@ -2335,30 +2297,16 @@ data class SavedSearchDTO(
     @SerialName("created_at") val createdAt: String,
     @SerialName("destination_district_id") val destinationDistrictId: String? = null,
     @SerialName("destination_region_id") val destinationRegionId: String? = null,
-    @SerialName("destination_stop_id") val destinationStopId: String? = null,
     @SerialName("id") val id: String,
     @SerialName("last_notified_at") val lastNotifiedAt: String? = null,
     @SerialName("notify") val notify: Boolean,
     @SerialName("origin_district_id") val originDistrictId: String? = null,
     @SerialName("origin_region_id") val originRegionId: String? = null,
-    @SerialName("origin_stop_id") val originStopId: String? = null,
     @SerialName("quantity") val quantity: Long,
     @SerialName("service_type") val serviceType: ServiceType,
     @SerialName("side") val side: FeedSide,
     @SerialName("time_window_end") val timeWindowEnd: String,
     @SerialName("time_window_start") val timeWindowStart: String,
-)
-
-@Serializable
-data class SegmentAvailabilityDTO(
-    @SerialName("baggage_remaining_ml") val baggageRemainingMl: Long,
-    @SerialName("cargo_remaining_volume_ml") val cargoRemainingVolumeMl: Long,
-    @SerialName("cargo_remaining_weight_g") val cargoRemainingWeightG: Long,
-    @SerialName("from_seq") val fromSeq: Long,
-    @SerialName("from_stop_id") val fromStopId: String,
-    @SerialName("seats_remaining") val seatsRemaining: Long,
-    @SerialName("to_seq") val toSeq: Long,
-    @SerialName("to_stop_id") val toStopId: String,
 )
 
 @Serializable(with = ServiceType.Serializer::class)
@@ -2500,29 +2448,18 @@ data class StaffMfaStepUpDTO(
     @SerialName("stepped_up_at") val steppedUpAt: String,
 )
 
+/**
+ * ADR-0028: what is still free on ``[from_m, to_m)`` of the trip's road - one row per piece between bookings'
+ * places (the use is constant inside a piece).
+ */
 @Serializable
-data class StopDTO(
-    @SerialName("district") val district: DistrictRefDTO,
-    @SerialName("id") val id: String,
-    @SerialName("is_active") val isActive: Boolean,
-    @SerialName("meeting_note") val meetingNote: String? = null,
-    @SerialName("name_ru") val nameRu: String? = null,
-    @SerialName("name_uz") val nameUz: String,
-    @SerialName("point") val point: PointDTO,
-)
-
-@Serializable
-data class StopRefDTO(
-    /**
-     * Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, never by a stop name (ELCHI works point A -> point B).
-     */
-    @SerialName("district_name_uz") val districtNameUz: String? = null,
-    /**
-     * Opaque stop id (stp_...).
-     */
-    @SerialName("id") val id: String,
-    @SerialName("name_ru") val nameRu: String? = null,
-    @SerialName("name_uz") val nameUz: String,
+data class StretchAvailabilityDTO(
+    @SerialName("baggage_remaining_ml") val baggageRemainingMl: Long,
+    @SerialName("cargo_remaining_volume_ml") val cargoRemainingVolumeMl: Long,
+    @SerialName("cargo_remaining_weight_g") val cargoRemainingWeightG: Long,
+    @SerialName("from_m") val fromM: Long,
+    @SerialName("seats_remaining") val seatsRemaining: Long,
+    @SerialName("to_m") val toM: Long,
 )
 
 /**
@@ -2804,7 +2741,7 @@ data class TripAvailabilityDTO(
     /**
      * Computed remaining capacity; not a reservation.
      */
-    @SerialName("segments") val segments: List<SegmentAvailabilityDTO>,
+    @SerialName("stretches") val stretches: List<StretchAvailabilityDTO>,
     @SerialName("trip_id") val tripId: String,
     @SerialName("trip_version") val tripVersion: Long,
 )
@@ -2820,9 +2757,16 @@ data class TripCreate(
     @SerialName("pickup_wait_minutes") val pickupWaitMinutes: Long? = null,
     @SerialName("planned_end_at") val plannedEndAt: String,
     @SerialName("planned_start_at") val plannedStartAt: String,
+    /**
+     * ADR-0028: where on the road the trip ends.
+     */
+    @SerialName("route_end_m") val routeEndM: Long? = null,
+    /**
+     * ADR-0028: where on the confirmed road the trip starts, metres from its start.
+     */
+    @SerialName("route_start_m") val routeStartM: Long? = null,
     @SerialName("route_version_id") val routeVersionId: String,
     @SerialName("seat_capacity") val seatCapacity: Long,
-    @SerialName("stops") val stops: List<TripStopInput>,
     @SerialName("vehicle_id") val vehicleId: String,
 )
 
@@ -2850,10 +2794,17 @@ data class TripDTO(
     @SerialName("pickup_wait_minutes") val pickupWaitMinutes: Long,
     @SerialName("planned_end_at") val plannedEndAt: String,
     @SerialName("planned_start_at") val plannedStartAt: String,
+    /**
+     * ADR-0028: where on the road the trip ends (metres).
+     */
+    @SerialName("route_end_m") val routeEndM: Long? = null,
+    /**
+     * ADR-0028: where on the road the trip starts (metres).
+     */
+    @SerialName("route_start_m") val routeStartM: Long? = null,
     @SerialName("route_version_id") val routeVersionId: String,
     @SerialName("seat_capacity") val seatCapacity: Long,
     @SerialName("status") val status: TripStatus,
-    @SerialName("stops") val stops: List<TripStopDTO>,
     @SerialName("timezone") val timezone: String,
     @SerialName("vehicle") val vehicle: TripVehicleDTO,
     @SerialName("version") val version: Long,
@@ -2912,19 +2863,17 @@ data class TripIntentEndDTO(
     @SerialName("district") val district: DistrictRefDTO? = null,
     @SerialName("lat") val lat: Double? = null,
     @SerialName("lng") val lng: Double? = null,
-    @SerialName("stop") val stop: StopRefDTO? = null,
 )
 
 /**
- * One end: a verified stop, or a district with an optional marked place (Q88) - what the search used.
+ * One end: a district with an optional marked place (Q88). Retired with ADR-0025 (Q138): kept for the shape.
  */
 @Serializable
 data class TripIntentEndInput(
     @SerialName("address") val address: String? = null,
-    @SerialName("district_id") val districtId: String? = null,
+    @SerialName("district_id") val districtId: String,
     @SerialName("lat") val lat: Double? = null,
     @SerialName("lng") val lng: Double? = null,
-    @SerialName("stop_id") val stopId: String? = null,
 )
 
 @Serializable
@@ -3109,7 +3058,7 @@ data class TripListingRefDTO(
 
 @Serializable
 data class TripManifestDTO(
-    @SerialName("stops") val stops: List<ManifestStopDTO>,
+    @SerialName("places") val places: List<ManifestPlaceDTO>,
     @SerialName("trip_id") val tripId: String,
     @SerialName("trip_version") val tripVersion: Long,
 )
@@ -3121,7 +3070,11 @@ data class TripPatch(
     @SerialName("max_detour_minutes") val maxDetourMinutes: Long? = null,
     @SerialName("planned_end_at") val plannedEndAt: String? = null,
     @SerialName("planned_start_at") val plannedStartAt: String? = null,
-    @SerialName("stops") val stops: List<TripStopInput>? = null,
+    @SerialName("route_end_m") val routeEndM: Long? = null,
+    /**
+     * ADR-0028: a new road stretch (no claim yet).
+     */
+    @SerialName("route_start_m") val routeStartM: Long? = null,
 )
 
 @Serializable(with = TripStatus.Serializer::class)
@@ -3137,23 +3090,6 @@ enum class TripStatus(override val value: String) : WireEnum {
 
     object Serializer : KSerializer<TripStatus> by LenientEnumSerializer("TripStatus", entries, UNKNOWN, { it.value })
 }
-
-@Serializable
-data class TripStopDTO(
-    @SerialName("dwell_minutes") val dwellMinutes: Long,
-    @SerialName("eta_arrival_at") val etaArrivalAt: String? = null,
-    @SerialName("planned_arrival_at") val plannedArrivalAt: String,
-    @SerialName("seq") val seq: Long,
-    @SerialName("stop") val stop: StopRefDTO,
-)
-
-@Serializable
-data class TripStopInput(
-    @SerialName("dwell_minutes") val dwellMinutes: Long? = null,
-    @SerialName("planned_arrival_at") val plannedArrivalAt: String,
-    @SerialName("seq") val seq: Long,
-    @SerialName("stop_id") val stopId: String,
-)
 
 @Serializable
 data class TripVehicleDTO(

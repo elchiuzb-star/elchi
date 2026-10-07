@@ -142,9 +142,9 @@ class Design07RulesTest {
 
     // -- saved routes (§6.2, §6.3, §6.5) ----------------------------------------------------------------------
 
-    private fun saved(id: String, originRegion: String? = null, originDistrict: String? = null, destRegion: String? = null, destDistrict: String? = null, service: ServiceType = ServiceType.PARCEL, originStop: String? = null) = SavedSearchDTO(
+    private fun saved(id: String, originRegion: String? = null, originDistrict: String? = null, destRegion: String? = null, destDistrict: String? = null, service: ServiceType = ServiceType.PARCEL) = SavedSearchDTO(
         createdAt = "2026-10-01T06:00:00Z", id = id, notify = true, quantity = 1, serviceType = service, side = FeedSide.REQUESTS,
-        originRegionId = originRegion, originDistrictId = originDistrict, originStopId = originStop,
+        originRegionId = originRegion, originDistrictId = originDistrict,
         destinationRegionId = destRegion, destinationDistrictId = destDistrict,
         timeWindowEnd = "2026-10-15T06:00:00Z", timeWindowStart = "2026-10-01T06:00:00Z",
     )
@@ -168,12 +168,12 @@ class Design07RulesTest {
     }
 
     @Test
-    fun `open in feed rebuilds the ends from the catalogue, never from a stop`() {
+    fun `open in feed rebuilds the ends from the catalogue`() {
         val regions = listOf(
             RegionDTO(code = "TK", id = "reg_tash", nameUz = "Toshkent shahri", nameRu = "Ташкент", requiresDistrict = false),
             RegionDTO(code = "SA", id = "reg_sam", nameUz = "Samarqand viloyati", requiresDistrict = true),
         )
-        val districts = mapOf("dst_sam" to DistrictDTO(id = "dst_sam", nameUz = "Samarqand", nameRu = "Самарканд", region = RegionRefDTO("SA", "reg_sam", "Samarqand viloyati"), stopsCount = 3))
+        val districts = mapOf("dst_sam" to DistrictDTO(id = "dst_sam", nameUz = "Samarqand", nameRu = "Самарканд", region = RegionRefDTO("SA", "reg_sam", "Samarqand viloyati")))
         val f = Design07Rules.filterFor(saved("1", originRegion = "reg_tash", destDistrict = "dst_sam"), FeedFilter(days = FeedDays.THREE), regions, districts)!!
         assertEquals(FeedEnd(regionId = "reg_tash", regionName = "Toshkent shahri", regionNameRu = "Ташкент", requiresDistrict = false), f.origin)
         assertEquals("reg_sam", f.destination.regionId)
@@ -181,7 +181,8 @@ class Design07RulesTest {
         assertEquals("Самарканд", f.destination.districtNameRu)
         assertEquals(FeedDays.THREE, f.days)
         assertEquals(query.copy(dateFrom = "", dateTo = "").origin, FeedRules.endIds(f.origin))
-        assertNull(Design07Rules.filterFor(saved("2", originStop = "stp_1", destDistrict = "dst_sam"), FeedFilter(), regions, districts))
+        // An end with neither region nor district cannot be opened.
+        assertNull(Design07Rules.filterFor(saved("2", destDistrict = "dst_sam"), FeedFilter(), regions, districts))
         assertNull(Design07Rules.filterFor(saved("3", originRegion = "reg_tash", destDistrict = "dst_unknown"), FeedFilter(), regions, districts))
     }
 

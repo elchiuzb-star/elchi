@@ -4,7 +4,7 @@ import Testing
 
 /// Stage 08 pure logic: trip next action and pause / resume / cancel availability, the add-trip payload, the feed query
 /// (ends, date chips -> Tashkent bounds), feed groups and the alternative's reason, the pickup window, the offer body
-/// (stop vs point listings), the rival board summary, the driver's turn -> allowed actions and revisions left, expiry
+/// (point listings, never a stop id - ADR-0028), the rival board summary, the driver's turn -> allowed actions and revisions left, expiry
 /// text, terms version for accept, and error -> sentence.
 enum MarketFixture {
     static let tz = TimeZone(identifier: "Asia/Tashkent")!
@@ -18,30 +18,24 @@ enum MarketFixture {
 
     static func iso(_ date: Date) -> String { DepartureWindow.iso(date) }
 
-    static func stop(_ id: String, _ name: String) -> StopRefDTO { StopRefDTO(id: id, nameRu: nil, nameUz: name) }
-
     static func trip(id: String = "trp_1", status: TripStatus = .planned, start: Date = at(2026, 10, 2, 8), cutoff: Date? = nil,
-                     stops: [(String, String, TimeInterval)] = [("stp_a", "Toshkent", 0), ("stp_b", "Samarqand", 5 * 3600), ("stp_c", "Qarshi", 8 * 3600)],
-                     version: Int = 1) -> TripDTO {
+                     duration: TimeInterval = 8 * 3600, version: Int = 1) -> TripDTO {
         TripDTO(baggageCapacityMl: 0, bookingCutoffAt: iso(cutoff ?? start), cargoCapacityVolumeMl: 100_000, cargoCapacityWeightG: 20_000,
                 createdAt: iso(start.addingTimeInterval(-86_400)), detourUsedM: 0, detourUsedMinutes: 0, detourUsedS: 0, id: id, listings: [],
-                maxDetourM: 5000, maxDetourMinutes: 15, pickupWaitMinutes: 10, plannedEndAt: iso(start.addingTimeInterval(stops.last?.2 ?? 0)),
-                plannedStartAt: iso(start), routeVersionId: "rtv_1", seatCapacity: 3, status: status,
-                stops: stops.enumerated().map { index, stop in
-                    TripStopDTO(dwellMinutes: 5, plannedArrivalAt: iso(start.addingTimeInterval(stop.2)), seq: index + 1, stop: self.stop(stop.0, stop.1))
-                },
+                maxDetourM: 5000, maxDetourMinutes: 15, pickupWaitMinutes: 10, plannedEndAt: iso(start.addingTimeInterval(duration)),
+                plannedStartAt: iso(start), routeEndM: 512_463, routeStartM: 0, routeVersionId: "rtv_1", seatCapacity: 3, status: status,
                 timezone: "Asia/Tashkent", vehicle: TripVehicleDTO(color: "Oq", id: "veh_1", makeModel: "Cobalt", plateMasked: "01****KA", seatCapacity: 4),
                 version: version)
     }
 
-    static func listing(id: String = "lst_1", originStop: StopRefDTO? = nil, destinationStop: StopRefDTO? = nil,
+    static func listing(id: String = "lst_1",
                         start: Date = at(2026, 10, 2, 9), end: Date = at(2026, 10, 2, 18), basis: PriceBasis = .total, quantity: Int = 1,
                         service: ServiceType = .parcel, unit: Int = 12_000_000) -> ListingPublicDTO {
         let point = { (district: String) in PointEndDTO(address: "Amir Temur ko'chasi, 2", district: DistrictRefDTO(id: "dst_\(district)", nameUz: district),
                                                         lat: 41.3, lng: 69.2) }
         return ListingPublicDTO(currency: .uzs, departureWindowEnd: iso(end), departureWindowStart: iso(start),
-                                destinationPoint: destinationStop == nil ? point("Samarqand") : nil, destinationStop: destinationStop, id: id,
-                                kind: .request, originPoint: originStop == nil ? point("Toshkent shahri") : nil, originStop: originStop,
+                                destinationPoint: point("Samarqand"), id: id,
+                                kind: .request, originPoint: point("Toshkent shahri"),
                                 priceBasis: basis, quantity: quantity, serviceType: service, status: .published, timezone: "Asia/Tashkent",
                                 totalMinor: basis == .perSeat ? unit * quantity : unit, unitPriceMinor: unit)
     }
@@ -78,10 +72,7 @@ enum MarketFixture {
     }
 
     static let route = RouteVersionDTO(attribution: "", distanceM: 512_463, durationS: 30_748, geometryPolyline: "", id: "rtv_1", isEstimate: true,
-                                       provider: "fake", providerVersion: "1", status: "confirmed",
-                                       stops: [RouteVersionStopDTO(cumulativeDistanceM: 0, cumulativeDurationS: 0, seq: 0, stopId: "stp_a"),
-                                               RouteVersionStopDTO(cumulativeDistanceM: 328_214, cumulativeDurationS: 19_693, seq: 1, stopId: "stp_b"),
-                                               RouteVersionStopDTO(cumulativeDistanceM: 512_463, cumulativeDurationS: 30_748, seq: 2, stopId: "stp_c")])
+                                       provider: "fake", providerVersion: "1", status: "confirmed")
 
     static func error(_ code: String, _ details: [String: JSONValue]? = nil, status: Int = 409) -> APIError {
         APIError(status: status, code: code, message: "", details: details.map { .object($0) })
@@ -159,15 +150,15 @@ struct TripPlanTests {
         TripPlanForm(vehicleId: "veh_1", corridorId: "cor_1", routeId: "rtv_1", start: start, seats: "3", cargoKg: "20", cargoLitres: "100")
     }
 
-    @Test func bodyCarriesStopsTimesAndUnits() throws {
+    @Test func bodyCarriesTheRoadTimesAndUnitsNeverStops() throws {
         let body = try #require(TripPlan.body(form, route: MarketFixture.route))
         #expect(body.vehicleId == "veh_1" && body.routeVersionId == "rtv_1")
         #expect(body.plannedStartAt == "2026-10-02T07:30:00+05:00")
         #expect(body.plannedEndAt == DepartureWindow.iso(start.addingTimeInterval(30_748)))
-        #expect(body.stops.map(\.seq) == [1, 2, 3])
-        #expect(body.stops.map(\.stopId) == ["stp_a", "stp_b", "stp_c"])
-        #expect(body.stops[1].plannedArrivalAt == DepartureWindow.iso(start.addingTimeInterval(19_693)))
-        #expect(body.stops.allSatisfy { $0.dwellMinutes == 5 })
+        // ADR-0028: the whole confirmed road - no stretch the form cannot know, and no `stops` on the wire.
+        #expect(body.routeStartM == nil && body.routeEndM == nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(body)) as? [String: Any])
+        #expect(json["stops"] == nil && json["route_version_id"] as? String == "rtv_1")
         #expect(body.cargoCapacityWeightG == 20_000 && body.cargoCapacityVolumeMl == 100_000)
         #expect(body.maxDetourMinutes == 15 && body.maxDetourM == 5000 && body.pickupWaitMinutes == 10)
         #expect(body.bookingCutoffAt == nil)
@@ -215,12 +206,16 @@ struct TripPlanTests {
         #expect(TripPlan.problems(TripPlanForm(), vehicle: nil, now: now)[.vehicle] == .required)
     }
 
-    @Test func routeFiguresAndStopFilter() {
+    @Test func routeFigures() {
         let figures = TripPlan.figures(MarketFixture.route)
-        #expect(figures.stops == 3 && figures.km == 512 && figures.hours == 9)
-        #expect(TripPlan.routesThrough([MarketFixture.route], stopId: "stp_b").count == 1)
-        #expect(TripPlan.routesThrough([MarketFixture.route], stopId: "stp_x").isEmpty)
-        #expect(TripPlan.routesThrough([MarketFixture.route], stopId: nil).count == 1)
+        #expect(figures.km == 512 && figures.hours == 9)
+    }
+
+    @Test func stretchKilometresAlongTheTrip() {
+        #expect(TripStretch.km(0, startM: 0) == 0)
+        #expect(TripStretch.km(120_400, startM: 0) == 120)
+        #expect(TripStretch.km(150_600, startM: 30_000) == 121)
+        #expect(TripStretch.km(10_000, startM: 30_000) == 0)
     }
 
     @Test func vehicleRefusalMarksTheField() {
@@ -284,16 +279,16 @@ struct FeedQueryTests {
 
 struct FeedGroupsTests {
     @Test func alternativesAreNeverMixedIn() {
-        let items = [MarketFixture.feedItem("a"), MarketFixture.feedItem("b", group: .alternative, reasons: [.nearbyStop]),
+        let items = [MarketFixture.feedItem("a"), MarketFixture.feedItem("b", group: .alternative, reasons: [.pickupDetour]),
                      MarketFixture.feedItem("c", group: .unknown("future")), MarketFixture.feedItem("d", group: .alternative, reasons: [.timeDiffers])]
         let groups = FeedGroups.split(items)
         #expect(groups.primary.map(\.listing.id) == ["a", "c"])
         #expect(groups.alternative.map(\.listing.id) == ["b", "d"])
     }
 
-    @Test func timeDiffersWins() {
-        #expect(FeedGroups.alternativeReason([.nearbyStop, .timeDiffers]) == .timeDiffers)
-        #expect(FeedGroups.alternativeReason([.nearbyStop]) == .nearbyStop)
+    @Test func timeDiffersIsTheOnlyReasonNamed() {
+        #expect(FeedGroups.alternativeReason([.pickupDetour, .timeDiffers]) == .timeDiffers)
+        #expect(FeedGroups.alternativeReason([.unknown("nearby_stop")]) == nil)
         #expect(FeedGroups.alternativeReason([.intermediateSegment]) == nil)
     }
 
@@ -304,25 +299,12 @@ struct FeedGroupsTests {
 }
 
 struct OfferTests {
-    @Test func pickupWindowAroundTheStopClippedToTheRequest() throws {
-        // Trip at 08:00 reaches Samarqand at 13:00; request 09:00-18:00 -> 12:30-13:30.
-        let trip = MarketFixture.trip(start: MarketFixture.at(2026, 10, 2, 8))
-        let listing = MarketFixture.listing(originStop: MarketFixture.stop("stp_b", "Samarqand"), destinationStop: MarketFixture.stop("stp_c", "Qarshi"))
-        let window = try #require(PickupWindow.of(trip: trip, listing: listing))
-        #expect(window.start == MarketFixture.at(2026, 10, 2, 12, 30) && window.end == MarketFixture.at(2026, 10, 2, 13, 30))
-        // Clipped: the request ends at 13:10.
-        let tight = MarketFixture.listing(originStop: MarketFixture.stop("stp_b", "Samarqand"), end: MarketFixture.at(2026, 10, 2, 13, 10))
-        #expect(PickupWindow.of(trip: trip, listing: tight)?.end == MarketFixture.at(2026, 10, 2, 13, 10))
-        // The trip does not pass the stop, or arrives outside the window.
-        #expect(PickupWindow.of(trip: trip, listing: MarketFixture.listing(originStop: MarketFixture.stop("stp_x", "Buxoro"))) == nil)
-        let late = MarketFixture.listing(originStop: MarketFixture.stop("stp_c", "Qarshi"), end: MarketFixture.at(2026, 10, 2, 12))
-        #expect(PickupWindow.of(trip: trip, listing: late) == nil)
-    }
-
-    @Test func pointListingsUseTheClientsWindow() throws {
+    @Test func theOfferCarriesTheClientsWindow() throws {
+        // ADR-0028: nothing on the trip to anchor a narrower window on - the server checks the ETA at the place.
         let listing = MarketFixture.listing()
         let window = try #require(PickupWindow.of(trip: MarketFixture.trip(), listing: listing))
         #expect(window.start == MarketFixture.at(2026, 10, 2, 9) && window.end == MarketFixture.at(2026, 10, 2, 18))
+        #expect(PickupWindow.of(trip: MarketFixture.trip(start: MarketFixture.at(2026, 10, 5, 8)), listing: listing) != nil)
     }
 
     @Test func preselectTheTripThatFits() {
@@ -333,19 +315,16 @@ struct OfferTests {
         #expect(PickupWindow.preselect([early], listing: listing) == nil)
     }
 
-    @Test func bodyForPointAndStopListings() {
+    @Test func bodyNeverCarriesStopIds() throws {
         let window = (MarketFixture.at(2026, 10, 2, 9), MarketFixture.at(2026, 10, 2, 10))
         let point = OfferBody.make(listing: MarketFixture.listing(), tripId: "trp_1", window: window, unitPriceMinor: 11_000_000, message: "  ")
-        #expect(point.pickupStopId == nil && point.dropoffStopId == nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(point)) as? [String: Any])
+        #expect(json["pickup_stop_id"] == nil && json["dropoff_stop_id"] == nil)
         #expect(point.tripId == "trp_1" && point.quantity == 1 && point.priceBasis == .total && point.unitPriceMinor == 11_000_000)
         #expect(point.pickupWindowStart == "2026-10-02T09:00:00+05:00" && point.pickupWindowEnd == "2026-10-02T10:00:00+05:00")
         #expect(point.message == nil)
-        let stops = OfferBody.make(listing: MarketFixture.listing(originStop: MarketFixture.stop("stp_a", "A"), destinationStop: MarketFixture.stop("stp_b", "B")),
-                                   tripId: "trp_1", window: window, unitPriceMinor: 1, message: "Salom")
-        #expect(stops.pickupStopId == "stp_a" && stops.dropoffStopId == "stp_b" && stops.message == "Salom")
-        // Only one end is a stop: neither is sent (both or neither).
-        let half = OfferBody.make(listing: MarketFixture.listing(originStop: MarketFixture.stop("stp_a", "A")), tripId: "t", window: window, unitPriceMinor: 1)
-        #expect(half.pickupStopId == nil && half.dropoffStopId == nil)
+        let typed = OfferBody.make(listing: MarketFixture.listing(), tripId: "trp_1", window: window, unitPriceMinor: 1, message: "Salom")
+        #expect(typed.message == "Salom")
         let seats = OfferBody.make(listing: MarketFixture.listing(basis: .perSeat, quantity: 2, service: .passenger), tripId: "t", window: window, unitPriceMinor: 1)
         #expect(seats.quantity == 2 && seats.priceBasis == .perSeat)
     }

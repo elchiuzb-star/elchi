@@ -163,22 +163,21 @@ object Design07Rules {
     /** The feed's current direction is already in the list (same ends, same service). */
     fun alreadySaved(saved: List<SavedSearchDTO>, query: FeedQuery?): Boolean {
         query ?: return false
-        fun same(end: EndIds, stop: String?, district: String?, region: String?): Boolean = stop == null && when {
+        fun same(end: EndIds, district: String?, region: String?): Boolean = when {
             end.districtId != null -> district == end.districtId
             else -> district == null && region == end.regionId
         }
         return saved.any {
             it.serviceType == query.service &&
-                same(query.origin, it.originStopId, it.originDistrictId, it.originRegionId) &&
-                same(query.destination, it.destinationStopId, it.destinationDistrictId, it.destinationRegionId)
+                same(query.origin, it.originDistrictId, it.originRegionId) &&
+                same(query.destination, it.destinationDistrictId, it.destinationRegionId)
         }
     }
 
     fun atLimit(saved: List<SavedSearchDTO>): Boolean = saved.size >= FeedRules.SAVED_LIMIT
 
-    /** One end of a saved route as the feed's pick; null when it cannot be (a stop end, or names not read yet). */
-    fun feedEnd(stopId: String?, districtId: String?, regionId: String?, regions: List<RegionDTO>, districts: Map<String, DistrictDTO>): FeedEnd? {
-        if (stopId != null) return null
+    /** One end of a saved route as the feed's pick; null when it cannot be (names not read yet). */
+    fun feedEnd(districtId: String?, regionId: String?, regions: List<RegionDTO>, districts: Map<String, DistrictDTO>): FeedEnd? {
         if (districtId != null) {
             val d = districts[districtId] ?: return null
             val r = regions.firstOrNull { it.id == d.region.id }
@@ -198,8 +197,8 @@ object Design07Rules {
 
     /** "Lentada ochish": the feed filter for a saved route (dates and service kept/switched), null when not possible. */
     fun filterFor(saved: SavedSearchDTO, current: FeedFilter, regions: List<RegionDTO>, districts: Map<String, DistrictDTO>): FeedFilter? {
-        val origin = feedEnd(saved.originStopId, saved.originDistrictId, saved.originRegionId, regions, districts) ?: return null
-        val destination = feedEnd(saved.destinationStopId, saved.destinationDistrictId, saved.destinationRegionId, regions, districts) ?: return null
+        val origin = feedEnd(saved.originDistrictId, saved.originRegionId, regions, districts) ?: return null
+        val destination = feedEnd(saved.destinationDistrictId, saved.destinationRegionId, regions, districts) ?: return null
         val service = saved.serviceType.takeIf { it != ServiceType.UNKNOWN } ?: current.serviceType
         return current.copy(service = service.value, origin = origin, destination = destination)
     }
@@ -226,7 +225,7 @@ object Design07Rules {
     fun blocksStart(trips: List<TripDTO>, trip: TripDTO, command: TripCommand): Boolean =
         command == TripCommand.START_BOARDING && trips.any { it.id != trip.id && TripRules.publishable(it.status) }
 
-    /** The stops ladder from the trip status (per-stop passage is not sent by the server). */
+    /** The places ladder from the trip status (per-place passage is not sent by the server). */
     fun ladder(status: TripStatus, count: Int): List<LadderState> = List(count) { i ->
         when (status) {
             TripStatus.COMPLETED -> LadderState.DONE

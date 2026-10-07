@@ -40,7 +40,7 @@ class OrderRulesTest {
     ): ProposalThreadDTO {
         val version = """{"id":"prv_$id","listing_terms_version":2,"revision":2,"author_side":"$author","status":"$status","status_reason":${reason?.let { "\"$it\"" } ?: "null"},
             "pickup_point":{"lat":41.3,"lng":69.2,"district":{"id":"dst_a","name_uz":"Chilonzor"},"address":"Toshkent, Chilonzor"},
-            "dropoff_stop":{"id":"stp_b","name_uz":"Buxoro avtovokzali","name_ru":"Бухарский автовокзал"},
+            "dropoff_point":{"lat":39.77,"lng":64.42,"district":{"id":"dst_b","name_uz":"Buxoro"},"address":"Oʻzbekiston, Buxoro avtovokzali"},
             "pickup_window_start":"$pickupStart","pickup_window_end":"2026-09-30T07:00:00Z","quantity":1,"price_basis":"total",
             "unit_price_minor":$total,"total_minor":$total,"currency":"UZS","expires_at":"$expires","created_at":"2026-09-29T09:48:00Z",
             "demand":{"baggage_ml":0,"cargo_weight_g":5000,"cargo_volume_ml":12000},"promo_quote":$promo,
@@ -291,15 +291,16 @@ class OrderRulesTest {
     // -- names, dates -------------------------------------------------------------------------------------------
 
     @Test
-    fun `route ends are named by stop, then district or address, else coordinates`() {
+    fun `route ends are named by district or address, else coordinates (ADR-0028 - no stops)`() {
         val v = thread().currentVersion!!
-        assertEquals("Chilonzor", OrderRules.shortEnd(v.pickupStop, v.pickupPoint, ru = false))
-        assertEquals("Toshkent, Chilonzor", OrderRules.fullEnd(v.pickupStop, v.pickupPoint, ru = false))
-        assertEquals("Buxoro avtovokzali", OrderRules.fullEnd(v.dropoffStop, v.dropoffPoint, ru = false))
-        assertEquals("Бухарский автовокзал", OrderRules.shortEnd(v.dropoffStop, v.dropoffPoint, ru = true))
+        assertEquals("Chilonzor", OrderRules.shortEnd(v.pickupPoint, ru = false))
+        assertEquals("Toshkent, Chilonzor", OrderRules.fullEnd(v.pickupPoint, ru = false))
+        assertEquals("Buxoro avtovokzali", OrderRules.fullEnd(v.dropoffPoint, ru = false))
+        assertEquals("Buxoro", OrderRules.shortEnd(v.dropoffPoint, ru = true))
         val l = listing()
-        assertEquals("Toshkent, Chilonzor", OrderRules.fullEnd(l.originStop, l.originPoint, ru = false))
-        assertEquals("Buxoro", OrderRules.fullEnd(l.destinationStop, l.destinationPoint, ru = false))
+        assertEquals("Toshkent, Chilonzor", OrderRules.fullEnd(l.originPoint, ru = false))
+        assertEquals("Buxoro", OrderRules.fullEnd(l.destinationPoint, ru = false))
+        assertEquals("?", OrderRules.shortEnd(null, ru = false))
     }
 
     @Test
@@ -320,15 +321,17 @@ class OrderRulesTest {
     fun `the client view of a booking is read from the raw union, a driver row is not`() {
         val json = ElchiJson.parseToJsonElement(
             """{"id":"bkg_1","viewer_side":"client","service_type":"parcel","service_status":"confirmed","cash_status":"pending",
-            "pickup":{"point":{"lat":41.3,"lng":69.2,"district":{"id":"d","name_uz":"Chilonzor"}},"occurrence_seq":1,"window_start":"2026-09-30T05:00:00Z"},
-            "dropoff":{"stop":{"id":"stp","name_uz":"Registon"},"occurrence_seq":3},"quantity":1,"unit_price_minor":14000000,"total_minor":14000000,
+            "pickup":{"point":{"lat":41.3,"lng":69.2,"district":{"id":"d","name_uz":"Chilonzor"}},"window_start":"2026-09-30T05:00:00Z"},
+            "dropoff":{"point":{"lat":39.65,"lng":66.97,"district":{"id":"dst_s","name_uz":"Samarqand"},"address":"Registon"},"planned_arrival_at":"2026-09-30T10:00:00Z"},"quantity":1,"unit_price_minor":14000000,"total_minor":14000000,
             "currency":"UZS","promo":{"view":"client","fare_minor":14000000,"passenger_discount_minor":1000000,"cash_due_minor":13000000,"currency":"UZS"},
             "created_at":"2026-09-29T10:00:00Z","listing_ids":{"request":"lst_1"},"contact":{"phones_visible":false}}""",
         )
         val booking = BookingClientDTO.fromJson(json)!!
         assertEquals("bkg_1", booking.id)
         assertEquals(13_000_000L, booking.promo!!.cashDueMinor)
-        assertEquals("Registon", OrderRules.shortEnd(booking.dropoff.stop, booking.dropoff.point, ru = false))
+        assertEquals("Samarqand", OrderRules.shortEnd(booking.dropoff.point, ru = false))
+        assertEquals("Registon", OrderRules.fullEnd(booking.dropoff.point, ru = false))
+        assertEquals("2026-09-30T10:00:00Z", booking.dropoff.plannedArrivalAt)
         val driver = ElchiJson.parseToJsonElement(json.toString().replace("\"viewer_side\":\"client\"", "\"viewer_side\":\"driver\""))
         assertNull(BookingClientDTO.fromJson(driver))
     }

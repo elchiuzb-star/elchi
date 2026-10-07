@@ -4,11 +4,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import uz.elchi.app.api.ApiException
+import uz.elchi.app.api.generated.DriverDirectionDTO
+import uz.elchi.app.api.generated.ManifestPlaceDTO
+import uz.elchi.app.api.generated.PointEndDTO
 import uz.elchi.app.api.generated.RouteVersionDTO
 import uz.elchi.app.api.generated.TripCreate
 import uz.elchi.app.api.generated.TripDTO
 import uz.elchi.app.api.generated.TripStatus
-import uz.elchi.app.api.generated.TripStopInput
 import uz.elchi.app.api.generated.VehicleDTO
 import uz.elchi.app.feature.client.OrderRules
 import uz.elchi.app.feature.client.ParcelRules
@@ -38,9 +40,6 @@ data class TripForm(
     val vehicleId: String? = null,
     val corridorId: String? = null,
     val routeId: String? = null,
-    /** "Jizzax orqali o'tadigan marshrutlar": a stop the routes must pass (only offered for > 1 route). */
-    val stopFilterId: String? = null,
-    val stopFilterName: String? = null,
     val departure: LocalDateTime? = null,
     val seats: String = "",
     val cargoKg: String = "",
@@ -112,25 +111,30 @@ object TripRules {
             done.sortedByDescending { OrderRules.parseInstant(it.plannedStartAt) ?: Instant.MIN }
     }
 
-    /** "Toshkent → Samarqand": the first and the last stop. */
-    fun routeTitle(trip: TripDTO, ru: Boolean): String {
-        val first = trip.stops.minByOrNull { it.seq }?.stop
-        val last = trip.stops.maxByOrNull { it.seq }?.stop
-        return "${placeName(first, ru)} → ${placeName(last, ru)}"
-    }
-
     /**
-     * Q158 (ADR-0027): a route node is internal - the driver reads it as the district it is in. The node's own name
-     * only when the server sends no district (an older node).
+     * ADR-0028 (web `tripRouteName`): a trip is a stretch of road, named by the direction it was planned for
+     * ("Toshkent → Samarqand"); without one, by its times ("29.09, 07:30 → 29.09, 12:00").
      */
-    fun placeName(stop: uz.elchi.app.api.generated.StopRefDTO?, ru: Boolean): String =
-        stop?.districtNameUz?.takeIf { it.isNotBlank() } ?: stop?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz } ?: "?"
-
-    /** Q158: the trip's nodes read by district, a run of nodes in one district shown once (web `alongTheRoad`). */
-    fun alongTheRoad(stops: List<uz.elchi.app.api.generated.TripStopDTO>, ru: Boolean): List<Int> {
-        val ordered = stops.sortedBy { it.seq }
-        return ordered.indices.filter { i -> i == 0 || placeName(ordered[i].stop, ru) != placeName(ordered[i - 1].stop, ru) }
+    fun routeTitle(trip: TripDTO, direction: DriverDirectionDTO?, ru: Boolean): String {
+        direction?.let { return DirectionRules.title(it, ru) }
+        fun at(iso: String) = OrderRules.parseInstant(iso)?.let(DriverTime::dayClock) ?: "?"
+        return "${at(trip.plannedStartAt)} → ${at(trip.plannedEndAt)}"
     }
+
+    /** The direction whose active trip this is (web `tripDirectionName`), or null. */
+    fun directionOf(tripId: String, directions: List<DriverDirectionDTO>): DriverDirectionDTO? =
+        directions.firstOrNull { it.activeTrip?.id == tripId }
+
+    /** A client's marked place on the trip: its address, else its district (never a stop, ADR-0028). */
+    fun placeName(point: PointEndDTO?): String? =
+        point?.address?.let(ParcelRules::withoutCountry)?.takeIf { it.isNotBlank() } ?: point?.district?.nameUz
+
+    /** The manifest's places in road order that have someone to pick up or drop off (the trip's "ladder"). */
+    fun ladderPlaces(places: List<ManifestPlaceDTO>): List<ManifestPlaceDTO> =
+        places.sortedBy { it.seq }.filter { it.pickups.isNotEmpty() || it.dropoffs.isNotEmpty() }
+
+    /** A road position as whole kilometres from the start of this trip's stretch (web `kmAlong`). */
+    fun kmAlong(positionM: Long, startM: Long): Long = maxOf(0L, Math.round((positionM - startM) / 1000.0))
 
     /** Planned and not yet past its booking cutoff: a trip an offer can be made from. */
     fun offerable(trip: TripDTO, now: Instant): Boolean =
@@ -177,10 +181,6 @@ object TripRules {
 
     fun approvedVehicles(vehicles: List<VehicleDTO>): List<VehicleDTO> = vehicles.filter { it.verificationStatus == "approved" }
 
-    /** Only routes that pass [stopId] (the stop-name filter); all of them without one. */
-    fun routesThrough(routes: List<RouteVersionDTO>, stopId: String?): List<RouteVersionDTO> =
-        if (stopId == null) routes else routes.filter { route -> route.stops.any { it.stopId == stopId } }
-
     /** `308` (km, rounded). */
     fun km(meters: Long): String = ((meters + 500) / 1000).toString()
 
@@ -223,20 +223,13 @@ object TripRules {
         instant.atZone(ParcelRules.TASHKENT).toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     /**
-     * `POST /trips`: the route's stops in order (`seq` from 1, arrival = start + the route's cumulative time), the
-     * end = start + the route's duration, the pilot detour budget (15 min / 5 km), pickup wait 10 min, dwell 5 min,
-     * cutoff left to the server (= start), kg/litres in g/ml. Call only when [issues] is empty.
+     * `POST /trips` (ADR-0028): the confirmed route as a whole (`route_version_id`; the form has no stretch, so
+     * `route_start_m`/`route_end_m` are left to the server = the full road), the end = start + the route's duration,
+     * the pilot detour budget (15 min / 5 km), pickup wait 10 min, cutoff left to the server (= start), kg/litres in
+     * g/ml. Never `stops`. Call only when [issues] is empty.
      */
     fun buildTripCreate(form: TripForm, vehicle: VehicleDTO, route: RouteVersionDTO): TripCreate {
         val start = requireNotNull(form.departure).withSecond(0).withNano(0).atZone(ParcelRules.TASHKENT).toInstant()
-        val stops = route.stops.sortedBy { it.seq }.mapIndexed { index, stop ->
-            TripStopInput(
-                dwellMinutes = DWELL_MINUTES,
-                plannedArrivalAt = iso(start.plusSeconds(stop.cumulativeDurationS)),
-                seq = index + 1L,
-                stopId = stop.stopId,
-            )
-        }
         return TripCreate(
             cargoCapacityVolumeMl = (count(form.cargoLitres) ?: 0) * 1000,
             cargoCapacityWeightG = (count(form.cargoKg) ?: 0) * 1000,
@@ -247,12 +240,10 @@ object TripRules {
             plannedStartAt = iso(start),
             routeVersionId = route.id,
             seatCapacity = count(form.seats) ?: 0,
-            stops = stops,
             vehicleId = vehicle.id,
         )
     }
 
-    const val DWELL_MINUTES = 5L
     const val MAX_DETOUR_MINUTES = 15L
     const val MAX_DETOUR_M = 5_000L
     const val PICKUP_WAIT_MINUTES = 10L

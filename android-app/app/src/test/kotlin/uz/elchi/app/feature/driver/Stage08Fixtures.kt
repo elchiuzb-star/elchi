@@ -23,26 +23,20 @@ import uz.elchi.app.api.generated.ProposalThreadDTO
 import uz.elchi.app.api.generated.ProposalVersionDTO
 import uz.elchi.app.api.generated.ReputationLabel
 import uz.elchi.app.api.generated.RouteVersionDTO
-import uz.elchi.app.api.generated.RouteVersionStopDTO
 import uz.elchi.app.api.generated.ServiceType
-import uz.elchi.app.api.generated.StopRefDTO
 import uz.elchi.app.api.generated.TripDTO
 import uz.elchi.app.api.generated.TripStatus
-import uz.elchi.app.api.generated.TripStopDTO
 import uz.elchi.app.api.generated.TripVehicleDTO
 import uz.elchi.app.api.generated.VehicleDTO
 
 /** Small builders for the Stage 08 DTOs (only the fields the rules read vary). */
 object S08 {
-    fun stop(id: String, name: String = id) = StopRefDTO(id = id, nameUz = name)
-
     fun trip(
         id: String = "trp_1",
         status: TripStatus = TripStatus.PLANNED,
         start: String = "2026-10-02T04:00:00Z",
         end: String = "2026-10-02T12:30:00Z",
         cutoff: String = start,
-        stops: List<Pair<String, String>> = listOf("stp_tash" to "2026-10-02T04:00:00Z", "stp_sam" to "2026-10-02T09:28:00Z"),
         version: Long = 3,
     ) = TripDTO(
         baggageCapacityMl = 0,
@@ -63,7 +57,6 @@ object S08 {
         routeVersionId = "rtv_1",
         seatCapacity = 3,
         status = status,
-        stops = stops.mapIndexed { i, (stopId, at) -> TripStopDTO(dwellMinutes = 5, plannedArrivalAt = at, seq = i + 1L, stop = stop(stopId, stopId.removePrefix("stp_"))) },
         timezone = "Asia/Tashkent",
         vehicle = TripVehicleDTO(color = "oq", id = "veh_1", makeModel = "Cobalt", plateMasked = "01****KA", seatCapacity = 4),
         version = version,
@@ -84,7 +77,7 @@ object S08 {
         version = 2,
     )
 
-    fun route(id: String = "rtv_1", durationS: Long = 30_748, stops: List<Pair<String, Long>> = listOf("stp_tash" to 0L, "stp_sam" to 19_693L, "stp_qarshi" to 30_748L)) = RouteVersionDTO(
+    fun route(id: String = "rtv_1", durationS: Long = 30_748) = RouteVersionDTO(
         attribution = "",
         distanceM = 512_463,
         durationS = durationS,
@@ -94,14 +87,10 @@ object S08 {
         provider = "fixture",
         providerVersion = "1",
         status = "confirmed",
-        // The server numbers route stops from 0; the trip body renumbers them from 1.
-        stops = stops.mapIndexed { i, (stopId, cumulative) -> RouteVersionStopDTO(cumulativeDistanceM = 0, cumulativeDurationS = cumulative, seq = i.toLong(), stopId = stopId) },
     )
 
     fun listing(
         id: String = "lst_1",
-        originStop: StopRefDTO? = null,
-        destinationStop: StopRefDTO? = null,
         windowStart: String = "2026-10-02T04:00:00Z",
         windowEnd: String = "2026-10-02T13:00:00Z",
         unitMinor: Long = 12_000_000,
@@ -112,12 +101,10 @@ object S08 {
         currency = Currency.UZS,
         departureWindowEnd = windowEnd,
         departureWindowStart = windowStart,
-        destinationPoint = if (destinationStop == null) PointEndDTO(address = "Samarqand, Amir Temur 18", district = DistrictRefDTO("dst_sam", "Samarqand"), lat = 39.65, lng = 66.96) else null,
-        destinationStop = destinationStop,
+        destinationPoint = PointEndDTO(address = "Samarqand, Amir Temur 18", district = DistrictRefDTO("dst_sam", "Samarqand"), lat = 39.65, lng = 66.96),
         id = id,
         kind = ListingKind.REQUEST,
-        originPoint = if (originStop == null) PointEndDTO(address = "Toshkent, Amir Temur 2", district = DistrictRefDTO("dst_tash", "Toshkent shahri"), lat = 41.31, lng = 69.28) else null,
-        originStop = originStop,
+        originPoint = PointEndDTO(address = "Toshkent, Amir Temur 2", district = DistrictRefDTO("dst_tash", "Toshkent shahri"), lat = 41.31, lng = 69.28),
         priceBasis = basis,
         quantity = quantity,
         serviceType = service,

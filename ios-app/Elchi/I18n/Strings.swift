@@ -45,6 +45,13 @@ public final class LocaleStore {
         lookup(key).map { fill($0, values) }
     }
 
+    /// A native-only sentence the shared dictionary does not carry (yet): the dictionary's text once the key is added
+    /// there, else the given Uzbek / Russian fallback. Kept for the few keys the web dropped that a native screen still
+    /// shows (ADR-0028); each one is listed in the hand-off so the dictionary can take it over.
+    public func t(_ key: String, uz: String, ru: String, _ values: (String, Any)...) -> String {
+        fill(lookup(key) ?? (locale == .ru ? ru : uz), values)
+    }
+
     /// `tOrNil` with the fillers as a list (a notification's `params`, known only at runtime).
     public func tOrNil(_ key: String, values: [(String, Any)]) -> String? {
         lookup(key).map { fill($0, values) }

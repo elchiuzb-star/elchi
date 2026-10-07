@@ -360,8 +360,8 @@ private struct BookingSheetCard: View {
     private var ends: some View {
         let created = ServerTime.parse(booking.createdAt)
         let planned = ServerTime.parse(booking.dropoff.plannedArrivalAt)
-        let from = PlaceShort.of(strings.endAddress(stop: booking.pickup.stop, point: booking.pickup.point))
-        let to = PlaceShort.of(strings.endAddress(stop: booking.dropoff.stop, point: booking.dropoff.point))
+        let from = PlaceShort.of(strings.endAddress(booking.pickup.point))
+        let to = PlaceShort.of(strings.endAddress(booking.dropoff.point))
         return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(created.map { strings.t("client.booking.createdAt", ("date", strings.dayMonth($0))) } ?? strings.t("ui.from"))
@@ -388,8 +388,8 @@ private struct BookingSheetCard: View {
         let price = (strings.t("client.booking.finalPrice"), strings.money(booking.cashDueMinor),
                      parcel || !PassengerMoney.perSeat(booking.priceBasis) ? nil : strings.seatsTotal(booking.quantity, unitMinor: booking.unitPriceMinor))
         var items: [(String, String, String?)] = [
-            (strings.t("ui.from"), strings.endAddress(stop: booking.pickup.stop, point: booking.pickup.point), nil),
-            (strings.t("ui.to"), strings.endAddress(stop: booking.dropoff.stop, point: booking.dropoff.point), nil),
+            (strings.t("ui.from"), strings.endAddress(booking.pickup.point), nil),
+            (strings.t("ui.to"), strings.endAddress(booking.dropoff.point), nil),
         ]
         if parcel {
             let receiver = model.receiver

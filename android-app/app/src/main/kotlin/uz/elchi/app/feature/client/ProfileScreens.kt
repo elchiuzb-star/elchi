@@ -195,7 +195,7 @@ fun ProfileScreen(vm: ProfileViewModel, session: Session, onBack: () -> Unit, na
             label = t(R.string.clientProfile_fullName),
             placeholder = t(R.string.clientProfile_fullNamePlaceholder),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-            error = if (s.nameTooShort) t(R.string.stopSearch_minChars) else null,
+            error = if (s.nameTooShort) t(R.string.clientProfile_nameMinChars) else null,
         )
         s.saveError?.let { Note(t(R.string.client_profile_nameSaveFailed, "error" to errorText(it)), tone = Tone.ERR) }
         if (s.saved != null) Note(t(R.string.clientProfile_updated), tone = Tone.OK)

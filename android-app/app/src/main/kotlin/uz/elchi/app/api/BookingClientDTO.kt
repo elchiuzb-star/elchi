@@ -9,12 +9,10 @@ import uz.elchi.app.api.generated.MediaRefDTO
 import uz.elchi.app.api.generated.ParcelCategoryDTO
 import uz.elchi.app.api.generated.PointEndDTO
 import uz.elchi.app.api.generated.ServiceType
-import uz.elchi.app.api.generated.StopRefDTO
 
-/** One end of a booking: a verified stop or the agreed map point (Q88), with its window. */
+/** One end of a booking: the agreed map point (ADR-0028: no stops), its window and planned arrival. */
 @Serializable
 data class BookingEndDTO(
-    val stop: StopRefDTO? = null,
     val point: PointEndDTO? = null,
     @SerialName("window_start") val windowStart: String? = null,
     @SerialName("window_end") val windowEnd: String? = null,

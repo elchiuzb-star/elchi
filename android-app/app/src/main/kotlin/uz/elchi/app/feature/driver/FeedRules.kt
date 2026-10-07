@@ -11,7 +11,6 @@ import uz.elchi.app.api.generated.PointEndDTO
 import uz.elchi.app.api.generated.SavedSearchCreate
 import uz.elchi.app.api.generated.SavedSearchDTO
 import uz.elchi.app.api.generated.ServiceType
-import uz.elchi.app.api.generated.StopRefDTO
 import uz.elchi.app.feature.client.ParcelRules
 import java.time.Instant
 import java.time.LocalDate
@@ -113,24 +112,21 @@ object FeedRules {
         return FeedGroups(primary, alternative)
     }
 
-    /** Why an alternative is one: `time_differs` wins (it can break the trip; a nearby stop is a few minutes). */
+    /** Why an alternative is one: `time_differs` (ADR-0028: there is no nearby-stop reason any more). */
     fun alternativeReason(reasons: List<MatchReason>): String? = when {
         MatchReason.TIME_DIFFERS in reasons -> "time_differs"
-        MatchReason.NEARBY_STOP in reasons -> "nearby_stop"
         else -> null
     }
 
-    /** The primary card's badge: "Bekat mos" / "Yo'l yo'nalishida". */
+    /** The primary card's badge: "Aniq yo'nalish" / "Yo'l yo'nalishida". */
     fun matchKey(type: MatchType): String? = when (type) {
         MatchType.EXACT -> "match.exact"
         MatchType.ON_ROUTE -> "match.on_route"
         else -> null
     }
 
-    /** A card's end: the stop's district, else the district of the map point - never the street address (Q43 spirit). */
-    fun endName(stop: StopRefDTO?, point: PointEndDTO?, ru: Boolean): String =
-        // Q158 (ADR-0027): a legacy stop end reads as its district, not as a stop.
-        stop?.let { TripRules.placeName(it, ru) } ?: point?.district?.nameUz ?: "?"
+    /** A card's end: the district of the map point - never the street address (Q43 spirit). */
+    fun endName(point: PointEndDTO?, ru: Boolean): String = point?.district?.nameUz ?: "?"
 
     // -- saved routes -------------------------------------------------------------------------------------------
 
@@ -152,11 +148,11 @@ object FeedRules {
     }
 
     /** A saved route's ends by name from the catalogue the screen has read; the id itself never shows. */
-    fun savedRouteTitle(saved: SavedSearchDTO, names: Map<String, String>, stopLabel: String): String {
-        fun end(stop: String?, district: String?, region: String?): String =
-            district?.let(names::get) ?: region?.let(names::get) ?: stop?.let { stopLabel } ?: "?"
-        return "${end(saved.originStopId, saved.originDistrictId, saved.originRegionId)} → " +
-            end(saved.destinationStopId, saved.destinationDistrictId, saved.destinationRegionId)
+    fun savedRouteTitle(saved: SavedSearchDTO, names: Map<String, String>): String {
+        fun end(district: String?, region: String?): String =
+            district?.let(names::get) ?: region?.let(names::get) ?: "?"
+        return "${end(saved.originDistrictId, saved.originRegionId)} → " +
+            end(saved.destinationDistrictId, saved.destinationRegionId)
     }
 
     // -- remembering the filter ---------------------------------------------------------------------------------

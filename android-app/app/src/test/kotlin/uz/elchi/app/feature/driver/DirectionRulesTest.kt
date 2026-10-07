@@ -19,7 +19,6 @@ import uz.elchi.app.api.generated.MatchType
 import uz.elchi.app.api.generated.PointEndDTO
 import uz.elchi.app.api.generated.RegionDTO
 import uz.elchi.app.api.generated.RegionRefDTO
-import uz.elchi.app.api.generated.StopRefDTO
 import uz.elchi.app.api.generated.TripStatus
 import uz.elchi.app.api.generated.DistrictRefDTO
 import java.time.Instant
@@ -55,7 +54,7 @@ class DirectionRulesTest {
 
     private val tashkent = RegionDTO(code = "TK", id = "reg_tash", nameUz = "Toshkent shahri", requiresDistrict = false)
     private val samarqand = RegionDTO(code = "SA", id = "reg_sam", nameUz = "Samarqand viloyati", requiresDistrict = true)
-    private fun district(id: String, name: String, ru: String? = null) = DistrictDTO(id = id, nameUz = name, nameRu = ru, region = RegionRefDTO("SA", "reg_sam", "Samarqand viloyati"), stopsCount = 0)
+    private fun district(id: String, name: String, ru: String? = null) = DistrictDTO(id = id, nameUz = name, nameRu = ru, region = RegionRefDTO("SA", "reg_sam", "Samarqand viloyati"))
 
     // -- the feed -----------------------------------------------------------------------------------------------
 
@@ -104,13 +103,12 @@ class DirectionRulesTest {
     }
 
     @Test
-    fun `a card names places by address or district, never by a stop (Q158)`() {
-        val stop = StopRefDTO(id = "stp_1", nameUz = "Chilonzor bekati", districtNameUz = "Chilonzor")
-        assertEquals("Chilonzor", DirectionRules.place(stop, null, "Xaritadagi joy"))
-        assertEquals("Xaritadagi joy", DirectionRules.place(StopRefDTO(id = "stp_2", nameUz = "Eski bekat"), null, "Xaritadagi joy"))
+    fun `a card names places by address or district, never by a stop (ADR-0028)`() {
+        assertEquals("Xaritadagi joy", DirectionRules.place(null, "Xaritadagi joy"))
         val point = PointEndDTO(address = "Toshkent, Amir Temur 2", district = DistrictRefDTO("dst_t", "Yunusobod"), lat = 41.3, lng = 69.2)
-        assertEquals("Toshkent, Amir Temur 2", DirectionRules.place(null, point, "?"))
-        assertEquals("Yunusobod", DirectionRules.place(null, point.copy(address = " "), "?"))
+        assertEquals("Toshkent, Amir Temur 2", DirectionRules.place(point, "?"))
+        assertEquals("Yunusobod", DirectionRules.place(point.copy(address = " "), "?"))
+        assertEquals("?", DirectionRules.place(point.copy(address = null, district = null), "?"))
     }
 
     @Test

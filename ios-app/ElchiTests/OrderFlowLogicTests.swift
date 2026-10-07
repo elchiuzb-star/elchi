@@ -3,7 +3,7 @@ import Testing
 @testable import Elchi
 
 /// BOSQICH 02 design ("Elchi Buyurtma Yaratish"): the step counter, tap-to-validate lists, the Taksi block, the price
-/// stepper, the comment warning, the window sheet's rules, "locate -> Qayerdan", stops in the request body and the
+/// stepper, the comment warning, the window sheet's rules, "locate -> Qayerdan", points in the request body (ADR-0028: never a stop id) and the
 /// place wording.
 struct OrderFlowLogicTests {
     private static func date(_ text: String) -> Date { ISO8601DateFormatter().date(from: text)! }
@@ -111,19 +111,19 @@ struct OrderFlowLogicTests {
         #expect(LocateRules.region(of: chilonzor, in: [RequestBodyTests.region]).requiresDistrict == false)
     }
 
-    @Test func aChosenStopGoesAsTheStopId() throws {
+    @Test func bothEndsGoAsPointsNeverStopIds() throws {
         let start = Self.date("2026-09-29T04:00:00Z")
-        let stop = PlaceStop(id: "stp_1", nameUz: "Registon bekati", nameRu: nil)
         let draft = PassengerRequestDraft(
             pickup: PlaceEnd(region: RequestBodyTests.region, district: RequestBodyTests.district, point: GeoPoint(lat: 41.28, lng: 69.2),
                              address: "Chilonzor"),
             dropoff: PlaceEnd(region: RequestBodyTests.region, district: RequestBodyTests.sam, point: GeoPoint(lat: 39.65, lng: 66.97),
-                              address: "Registon bekati", stop: stop),
+                              address: "Registon maydoni"),
             windowStart: start, windowEnd: start.addingTimeInterval(3600), seats: TaxiSeats.wholeCabin, unitPriceMinor: 10_000_000)
         let json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(draft.listingCreate())) as? [String: Any])
-        #expect(json["destination_stop_id"] as? String == "stp_1")
-        #expect(json["destination_point"] == nil)
-        #expect(json["origin_stop_id"] == nil)
+        #expect(json["destination_stop_id"] == nil && json["origin_stop_id"] == nil)
+        let destination = try #require(json["destination_point"] as? [String: Any])
+        #expect(destination["district_id"] as? String == "dst_sam" && destination["address"] as? String == "Registon maydoni")
+        #expect(destination["lat"] as? Double == 39.65 && destination["lng"] as? Double == 66.97)
         #expect((json["origin_point"] as? [String: Any])?["district_id"] as? String == "dst_tk")
         // "Butun salon" books all four seats.
         #expect((json["passenger"] as? [String: Any])?["seat_count"] as? Int == 4)
@@ -144,20 +144,14 @@ struct OrderWordingTests {
         var noAddress = sam
         noAddress.address = nil
         #expect(strings.place(noAddress) == point.text)
-        var stop = sam
-        stop.stop = PlaceStop(id: "stp_1", nameUz: "Registon bekati", nameRu: "Регистан")
-        #expect(strings.place(stop) == "Registon bekati")
-        // The regenerated dictionary (Q158) says "Belgilangan joy", never "bekat".
-        #expect(strings.areaDetail(stop) == "Belgilangan joy · Samarqand, Samarqand viloyati")
+        // ADR-0028: the review's detail is the place's area - no "bekat" anywhere.
+        #expect(strings.areaDetail(sam) == "Samarqand, Samarqand viloyati")
         var here = sam
         here.currentLocation = true
         #expect(strings.place(here) == "Joriy joylashuv")
         // Tashkent city has no districts: one name.
         let city = PlaceEnd(region: RequestBodyTests.region, district: RequestBodyTests.district, point: point, address: nil)
         #expect(strings.area(city) == "Toshkent shahri")
-        strings.set(.ru)
-        #expect(strings.place(stop) == "Регистан")
-        strings.set(.uz)
     }
 
     @Test func windowWordsAndDesignKeys() {

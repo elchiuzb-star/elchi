@@ -3,9 +3,7 @@ package uz.elchi.app.feature.driver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,9 +11,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import uz.elchi.app.api.ElchiJson
 import uz.elchi.app.api.generated.CorridorDTO
+import uz.elchi.app.api.generated.DriverDirectionDTO
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.api.generated.RouteVersionDTO
-import uz.elchi.app.api.generated.StopDTO
 import uz.elchi.app.api.generated.TripActionRequest
 import uz.elchi.app.api.generated.TripAvailabilityDTO
 import uz.elchi.app.api.generated.TripDTO
@@ -106,8 +104,12 @@ class TripsViewModel(private val api: ElchiApi, private val banners: BannerCente
         val busy: Set<String> = emptySet(),
         /** "Chiqish oynasi 10:30 da ochiladi" under a planned card after a too-early press. */
         val opensAt: Map<String, Instant> = emptyMap(),
+        /** ADR-0028: the driver's directions, only to name a trip by the direction it serves (no stops to name it). */
+        val directions: List<DriverDirectionDTO> = emptyList(),
     ) {
         val list: List<TripDTO> get() = (trips as? Load.Ready)?.value.orEmpty()
+
+        fun direction(tripId: String): DriverDirectionDTO? = TripRules.directionOf(tripId, directions)
     }
 
     private val _state = MutableStateFlow(State())
@@ -122,9 +124,12 @@ class TripsViewModel(private val api: ElchiApi, private val banners: BannerCente
         if (_state.value.refreshing) return
         _state.update { it.copy(refreshing = true) }
         viewModelScope.launch {
+            val directions = async { tryCall { api.listMyDriverDirections().data } }
             tryCall { api.listMyTrips(limit = PAGE).data }
                 .onSuccess { list -> _state.update { it.copy(trips = Load.Ready(TripRules.ordered(list))) } }
                 .onFailure { e -> _state.update { if (it.trips is Load.Ready) it else it.copy(trips = Load.Failed(e)) } }
+            // A missing name is not an error: the card then shows the trip's times.
+            directions.await().onSuccess { list -> _state.update { it.copy(directions = list) } }
             _state.update { it.copy(refreshing = false) }
         }
     }
@@ -151,12 +156,12 @@ class TripsViewModel(private val api: ElchiApi, private val banners: BannerCente
     }
 }
 
-/** The corridor's catalogue the add-trip form needs: its routes and the names of its stops. */
-data class CorridorCatalog(val routes: List<RouteVersionDTO>, val stops: Map<String, StopDTO>)
+/** The corridor's catalogue the add-trip form needs: its confirmed routes (ADR-0028: no stops). */
+data class CorridorCatalog(val routes: List<RouteVersionDTO>)
 
 /**
- * "Yo'nalish qo'shish" (web ConnectedApp.tsx:6246): an approved car, a corridor → a confirmed route (filtered by a
- * stop it passes), the departure, the free seats and the cargo room. `POST /trips` with an Idempotency-Key.
+ * "Yo'nalish qo'shish" (web ConnectedApp.tsx:6246): an approved car, a corridor → a confirmed route, the
+ * departure, the free seats and the cargo room. `POST /trips` with an Idempotency-Key.
  */
 class AddTripViewModel(
     private val api: ElchiApi,
@@ -168,8 +173,6 @@ class AddTripViewModel(
         val corridors: Load<List<CorridorDTO>> = Load.Loading,
         val catalog: Load<CorridorCatalog>? = null,
         val form: TripForm = TripForm(),
-        val stopQuery: String = "",
-        val stopResults: List<StopDTO> = emptyList(),
         val saving: Boolean = false,
         val showIssues: Boolean = false,
         /** The field the server said the car cannot take (VEHICLE_NOT_ELIGIBLE) and the car's limit. */
@@ -180,7 +183,7 @@ class AddTripViewModel(
     ) {
         val approved: List<VehicleDTO> get() = TripRules.approvedVehicles((vehicles as? Load.Ready)?.value.orEmpty())
         val vehicle: VehicleDTO? get() = approved.firstOrNull { it.id == form.vehicleId }
-        val routes: List<RouteVersionDTO> get() = TripRules.routesThrough((catalog as? Load.Ready)?.value?.routes.orEmpty(), form.stopFilterId)
+        val routes: List<RouteVersionDTO> get() = (catalog as? Load.Ready)?.value?.routes.orEmpty()
         val route: RouteVersionDTO? get() = routes.firstOrNull { it.id == form.routeId }
         fun issues(now: Instant): Set<TripFormIssue> = TripRules.issues(form, vehicle, route, now)
     }
@@ -188,7 +191,6 @@ class AddTripViewModel(
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
     private val keys = ActionKeys()
-    private var searchJob: Job? = null
 
     init {
         load()
@@ -218,14 +220,11 @@ class AddTripViewModel(
 
     fun pickCorridor(id: String) {
         if (_state.value.form.corridorId == id && _state.value.catalog is Load.Ready) return
-        _state.update { it.copy(form = it.form.copy(corridorId = id, routeId = null, stopFilterId = null, stopFilterName = null), catalog = Load.Loading, stopQuery = "", stopResults = emptyList()) }
+        _state.update { it.copy(form = it.form.copy(corridorId = id, routeId = null), catalog = Load.Loading) }
         viewModelScope.launch {
-            val routes = async { tryCall { api.listCorridorRoutes(id).data } }
-            val stops = async { tryCall { api.listCorridorStops(id).data } }
-            val r = routes.await()
-            val st = stops.await()
+            val r = tryCall { api.listCorridorRoutes(id).data }
             if (_state.value.form.corridorId != id) return@launch
-            val error = r.exceptionOrNull() ?: st.exceptionOrNull()
+            val error = r.exceptionOrNull()
             if (error != null) {
                 _state.update { it.copy(catalog = Load.Failed(error)) }
                 return@launch
@@ -233,7 +232,7 @@ class AddTripViewModel(
             val list = r.getOrThrow().filter { it.status == CONFIRMED }
             _state.update { s ->
                 s.copy(
-                    catalog = Load.Ready(CorridorCatalog(list, st.getOrThrow().associateBy { it.id })),
+                    catalog = Load.Ready(CorridorCatalog(list)),
                     // A single route needs no choice.
                     form = if (list.size == 1) s.form.copy(routeId = list.first().id) else s.form,
                 )
@@ -242,33 +241,6 @@ class AddTripViewModel(
     }
 
     fun pickRoute(id: String) = _state.update { it.copy(form = it.form.copy(routeId = id)) }
-
-    /** `GET /stops/search?q`, 300 ms after the last letter; only stops of this corridor are offered. */
-    fun searchStop(query: String) {
-        _state.update { it.copy(stopQuery = query) }
-        searchJob?.cancel()
-        val q = query.trim()
-        if (q.length < 2) {
-            _state.update { it.copy(stopResults = emptyList()) }
-            return
-        }
-        searchJob = viewModelScope.launch {
-            delay(SEARCH_DEBOUNCE_MS)
-            val corridorStops = (_state.value.catalog as? Load.Ready)?.value?.stops.orEmpty()
-            tryCall { api.searchStops(q, limit = 20).data }
-                .onSuccess { found -> _state.update { it.copy(stopResults = found.filter { stop -> stop.id in corridorStops }) } }
-        }
-    }
-
-    fun pickStopFilter(stop: StopDTO?) = _state.update { s ->
-        val form = s.form.copy(stopFilterId = stop?.id, stopFilterName = stop?.nameUz)
-        val routes = TripRules.routesThrough((s.catalog as? Load.Ready)?.value?.routes.orEmpty(), stop?.id)
-        s.copy(
-            form = form.copy(routeId = form.routeId?.takeIf { id -> routes.any { it.id == id } } ?: routes.singleOrNull()?.id),
-            stopQuery = "",
-            stopResults = emptyList(),
-        )
-    }
 
     fun edit(change: (TripForm) -> TripForm) = _state.update { it.copy(form = change(it.form), serverIssue = null, error = null) }
 
@@ -308,7 +280,6 @@ class AddTripViewModel(
 
     private companion object {
         const val CONFIRMED = "confirmed"
-        const val SEARCH_DEBOUNCE_MS = 300L
     }
 }
 

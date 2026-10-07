@@ -241,17 +241,10 @@ fun PointPickerScreen(
                     Text(listOfNotNull(districtName, regionName.takeIf { it != districtName }).joinToString(", "), style = Elchi.type.secondary.copy(fontWeight = FontWeight.SemiBold), color = c.text)
                 }
                 s.loadError?.let { Note(errorText(it), tone = Tone.ERR) }
-                if (s.stops.isNotEmpty() || (!mapUsable && s.districtCentre != null)) {
+                // ADR-0028: the verified-stop chips are gone (no stops); only the district-centre chip stays.
+                if (!mapUsable && s.districtCentre != null) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (!mapUsable && s.districtCentre != null) {
-                            Chip(t(R.string.client_pointPicker_useDistrictCentre), selected = false, onClick = vm::useDistrictCentre, icon = ElchiIcon.LOCATE)
-                        }
-                        s.stops.forEach { stop ->
-                            Chip(if (ru) stop.nameRu ?: stop.nameUz else stop.nameUz, selected = s.candidate?.stop?.id == stop.id, onClick = {
-                                vm.pickStop(stop)
-                                focus = MapFocus.At(GeoPoint(stop.point.lat, stop.point.lng), 16f)
-                            }, icon = ElchiIcon.PIN)
-                        }
+                        Chip(t(R.string.client_pointPicker_useDistrictCentre), selected = false, onClick = vm::useDistrictCentre, icon = ElchiIcon.LOCATE)
                     }
                 }
                 if (!mapUsable && s.district != null && s.districtCentre == null) Note(t(R.string.location_mapKeyMissingNoCentre), tone = Tone.WARN)
@@ -261,7 +254,7 @@ fun PointPickerScreen(
                         candidate == null -> CardRow(t(R.string.location_chosenPlace), t(R.string.location_placeNotMarked), first = true, muted = true)
                         else -> {
                             val coords = ParcelRules.coordinates(candidate.point.lat, candidate.point.lng)
-                            val name = candidate.stop?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz } ?: candidate.address
+                            val name = candidate.address
                             CardRow(
                                 t(R.string.location_chosenPlace),
                                 when {

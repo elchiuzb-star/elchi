@@ -17,6 +17,9 @@ final class TripsModel {
     /// The last refusal per trip, shown on its card and detail (the boarding window, unresolved bookings…).
     private(set) var refusals: [String: Error] = [:]
     private var details: [String: TripDetailModel] = [:]
+    /// ADR-0028: the driver's directions, read with the list - a trip is named by the direction it was planned for
+    /// (`active_trip`); best effort, a trip without one is named by its times.
+    private(set) var directions: [DriverDirectionDTO] = []
     /// Stage 09 GPS: runs before a command is sent (the last points go out before `complete`).
     var beforeCommand: (@MainActor (TripCommand, TripDTO) async -> Void)?
     /// Stage 09 GPS: runs after the server accepted a command (publishing starts on boarding / departure, ends with
@@ -33,7 +36,9 @@ final class TripsModel {
 
     func load() async {
         do {
+            async let names = try? api.listMyDriverDirections().data
             let list = try await api.listMyTrips(limit: 50).data
+            if let fresh = await names { directions = fresh }
             trips = .loaded(list)
             await onLoaded?(list)
         } catch {
@@ -114,7 +119,8 @@ final class TripsModel {
     }
 }
 
-/// One trip: the header (status, times, vehicle, cutoff), its stops, free capacity per segment and the manifest.
+/// One trip: the header (status, times, vehicle, cutoff), free capacity per stretch of road and the manifest (whose
+/// places and times also feed the "along the road" ladder - ADR-0028, no stops).
 @MainActor @Observable
 final class TripDetailModel {
     let id: String
@@ -167,8 +173,8 @@ final class TripDetailModel {
 
 // MARK: - Planning a trip
 
-/// "Yo'nalish qo'shish": an approved vehicle, a corridor, one of its operator-approved routes (optionally found by a
-/// stop it passes), the departure, seats and cargo within the vehicle's limits.
+/// "Yo'nalish qo'shish": an approved vehicle, a corridor, one of its operator-approved routes, the departure, seats
+/// and cargo within the vehicle's limits (ADR-0028: the trip is the whole confirmed road, no stops).
 @MainActor @Observable
 final class AddTripModel {
     private let api: ElchiAPI
@@ -177,9 +183,6 @@ final class AddTripModel {
     var form = TripPlanForm()
     private(set) var corridors: Loadable<[CorridorDTO]> = .loading
     private(set) var routes: Loadable<[RouteVersionDTO]>?
-    /// The stop the routes are filtered by ("Jizzax orqali o'tadigan marshrutlar").
-    private(set) var stopFilter: StopDTO?
-    private(set) var stopResults: [StopDTO] = []
     private(set) var saving = false
     private(set) var attempted = false
     private(set) var error: Error?
@@ -195,8 +198,6 @@ final class AddTripModel {
     func reset(vehicles: [VehicleDTO]) {
         form = TripPlanForm()
         routes = nil
-        stopFilter = nil
-        stopResults = []
         attempted = false
         error = nil
         refused = nil
@@ -226,8 +227,6 @@ final class AddTripModel {
         guard form.corridorId != id else { return }
         form.corridorId = id
         form.routeId = nil
-        stopFilter = nil
-        stopResults = []
         routes = .loading
         do {
             let list = try await api.listCorridorRoutes(corridorId: id).data
@@ -239,22 +238,7 @@ final class AddTripModel {
         }
     }
 
-    var shownRoutes: [RouteVersionDTO] { TripPlan.routesThrough(routes?.value ?? [], stopId: stopFilter?.id) }
-
-    func searchStops(_ query: String) async {
-        let text = query.trimmingCharacters(in: .whitespaces)
-        guard text.count >= 2 else { stopResults = []; return }
-        stopResults = (try? await api.searchStops(q: text, limit: 8).data) ?? []
-    }
-
-    /// Keeps the routes through that stop; the chosen route stays only if it passes it (or the only one left is taken).
-    func filter(by stop: StopDTO?) {
-        stopFilter = stop
-        stopResults = []
-        guard stop != nil else { return }
-        let through = shownRoutes
-        if !through.contains(where: { $0.id == form.routeId }) { form.routeId = through.count == 1 ? through[0].id : nil }
-    }
+    var shownRoutes: [RouteVersionDTO] { routes?.value ?? [] }
 
     func problems(vehicle: VehicleDTO?) -> [TripPlanField: TripPlanProblem] {
         var out = TripPlan.problems(form, vehicle: vehicle)

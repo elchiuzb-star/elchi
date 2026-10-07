@@ -35,7 +35,7 @@ struct TripsTabView: View {
     }
 }
 
-/// One trip: route, date · stops · seats, the status in its tone, and the next step (the boarding window hint on a
+/// One trip: route, date · seats, the status in its tone, and the next step (the boarding window hint on a
 /// planned one; the refusal's sentence when the server said no).
 struct TripCard: View {
     let trip: TripDTO
@@ -45,7 +45,7 @@ struct TripCard: View {
 
     var body: some View {
         let actions = TripActions.of(trip.status)
-        ItemCard(title: strings.route(trip), icon: .route, badge: (strings.tripStatus(trip.status), TripStatusStyle.tone(trip.status)),
+        ItemCard(title: strings.route(trip, directions: trips.directions), icon: .route, badge: (strings.tripStatus(trip.status), TripStatusStyle.tone(trip.status)),
                  sub: strings.tripMeta(trip), lines: lines) {
             if let next = actions.next {
                 ElchiButton(strings.t(next.labelKey), size: .medium, loading: trips.running == trip.id) {
@@ -77,7 +77,7 @@ struct TripCard: View {
 // MARK: - Yo'nalish qo'shish
 
 /// Planning a trip on an operator-approved route (web ConnectedApp.tsx:6246): approved vehicles only, a corridor and
-/// its route (found by a stop when there are several), the departure, seats and cargo within the vehicle.
+/// its route, the departure, seats and cargo within the vehicle (ADR-0028: no stop filter - a route is A to B).
 struct AddTripView: View {
     let model: AddTripModel
     let driver: DriverModel
@@ -86,7 +86,6 @@ struct AddTripView: View {
     @Environment(LocaleStore.self) private var strings
     @Environment(\.elchi) private var c
     @State private var picking = false
-    @State private var stopQuery = ""
     /// "Saqlash" was tapped with something missing: every field says what (DESIGN07 3.7).
     @State private var tried = false
     @State private var scrollTop = 0
@@ -103,7 +102,6 @@ struct AddTripView: View {
             if tried, problems[.vehicle] != nil, !approved.isEmpty { fieldError(strings.t("addRoute.vehiclePlaceholder")) }
             corridorField
             if tried, problems[.corridor] != nil { fieldError(strings.t("addRoute.corridorPlaceholder")) }
-            if (model.routes?.value?.count ?? 0) > 1 { stopFilter }
             routeField
             if tried, problems[.route] != nil, model.form.corridorId != nil { fieldError(strings.t("addRoute.routePlaceholder")) }
             PickerField(label: strings.t("addRoute.departureTime"), value: model.form.start.map(DepartureWindow.text),
@@ -193,54 +191,13 @@ struct AddTripView: View {
         }
     }
 
-    /// Several approved routes: a stop name finds the ones that pass it (the stops stay the route's own).
-    @ViewBuilder
-    private var stopFilter: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let stop = model.stopFilter {
-                Text(strings.t("tripPlan.stopFilter", ("name", stop.nameUz))).font(ElchiFont.poppins(13, .medium)).foregroundStyle(c.text)
-                if model.shownRoutes.isEmpty {
-                    Text(strings.t("tripPlan.stopFilterNone", ("name", stop.nameUz))).font(ElchiFont.caption).foregroundStyle(c.tone(.warn).fg)
-                }
-                Button(strings.t("tripPlan.stopFilterClear")) {
-                    stopQuery = ""
-                    model.filter(by: nil)
-                }
-                .font(ElchiFont.poppins(13, .semibold)).foregroundStyle(c.accentText).frame(minHeight: 44)
-            } else {
-                ElchiField(text: $stopQuery, placeholder: strings.t("tripPlan.stopSearchLabel"), icon: .search)
-                ForEach(model.stopResults, id: \.id) { stop in
-                    Button {
-                        model.filter(by: stop)
-                    } label: {
-                        HStack {
-                            Text(strings.locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz).font(ElchiFont.poppins(14, .medium)).foregroundStyle(c.text)
-                            Spacer(minLength: 0)
-                            Text(stop.district.nameUz).font(ElchiFont.caption).foregroundStyle(c.muted)
-                        }
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(c.line, lineWidth: 1) }
-        .task(id: stopQuery) {
-            try? await Task.sleep(for: .milliseconds(300))
-            if !Task.isCancelled { await model.searchStops(stopQuery) }
-        }
-    }
-
     @ViewBuilder
     private var routeField: some View {
         let routes = model.shownRoutes
         SelectField(label: strings.t("addRoute.route"),
                     options: routes.map { route in
                         let figures = TripPlan.figures(route)
-                        return (route.id, strings.t("addRoute.routeOption", ("stops", figures.stops), ("km", figures.km), ("hours", figures.hours)))
+                        return (route.id, strings.t("addRoute.routeOption", ("km", figures.km), ("hours", figures.hours)))
                     },
                     selected: model.form.routeId,
                     placeholder: strings.t(model.form.corridorId == nil ? "addRoute.pickCorridorFirst" : "addRoute.routePlaceholder")) { id in
@@ -273,7 +230,7 @@ struct AddTripView: View {
 
 // MARK: - Safar tafsilotlari
 
-/// One trip: header, stops, free capacity per segment (computed, not reserved), the manifest, and the commands
+/// One trip: header, the places along the road, free capacity per stretch (computed, not reserved), the manifest, and the commands
 /// (next step, pause / resume with a reason, cancel with a reason behind a danger confirmation, refresh).
 struct TripDetailView: View {
     let model: TripDetailModel
@@ -355,7 +312,7 @@ struct TripDetailView: View {
 
     private func header(_ trip: TripDTO) -> some View {
         ElchiCard {
-            CardTitle(strings.route(trip), badge: (strings.tripStatus(trip.status), TripStatusStyle.tone(trip.status)))
+            CardTitle(strings.route(trip, directions: trips.directions), badge: (strings.tripStatus(trip.status), TripStatusStyle.tone(trip.status)))
             CardRow(strings.t("tripDetail.departure"), time(trip.plannedStartAt))
             CardRow(strings.t("tripDetail.arrival"), time(trip.plannedEndAt))
             CardRow(strings.t("tripDetail.vehicle"), "\(trip.vehicle.makeModel), \(trip.vehicle.color) · \(trip.vehicle.plateMasked)")
@@ -367,27 +324,34 @@ struct TripDetailView: View {
         .accessibilityIdentifier("elchi.trip.header")
     }
 
-    /// Q158 (ADR-0027): the road as districts with the estimated time (the ETA when the server has one, else the
-    /// planned one) - never the internal route nodes. Consecutive nodes in one district read as one place.
+    /// ADR-0028 (Q160): the road as the clients' own places with their estimated times, from the manifest (the trip
+    /// has no stops any more) - the same ladder rows. Consecutive rows at one place read as one. Hidden while the trip
+    /// has no booked place to show.
     @ViewBuilder
     private func stops(_ trip: TripDTO) -> some View {
-        let places = TripPlaces.alongTheRoad(trip.stops.sorted { $0.seq < $1.seq }) { strings.placeName($0.stop) }
-        SectionTitle(strings.t("tripDetail.alongTheRoad")).accessibilityIdentifier("elchi.trip.alongTheRoad")
-        StepLadder(places.enumerated().map { index, place in
-            // DESIGN07 4.2: the dots follow the trip status (the DTO has no per-stop passage).
-            let state: StepLadder.Step.State = switch TripStopDot.of(index: index, status: trip.status) {
-            case .done: .done
-            case .current: .current
-            case .ahead: .ahead
-            }
-            let when = ServerTime.parse(place.stop.etaArrivalAt) ?? ServerTime.parse(place.stop.plannedArrivalAt)
-            return StepLadder.Step(place.name, detail: when.map(DepartureWindow.shortText) ?? "", state: state)
-        }, doneLabel: strings.t("client.tracking.stepDone"), currentLabel: strings.t("client.tracking.stepCurrent"))
+        let sorted = (model.manifest.value?.places ?? []).sorted { $0.seq < $1.seq }.filter { !$0.pickups.isEmpty || !$0.dropoffs.isEmpty }
+        let places = TripPlaces.alongTheRoad(sorted) { strings.placeText($0.point) }
+        if !places.isEmpty {
+            SectionTitle(strings.t("tripDetail.alongTheRoad", uz: "Yo'l bo'yi va taxminiy vaqt", ru: "По пути и примерное время"))
+                .accessibilityIdentifier("elchi.trip.alongTheRoad")
+            StepLadder(places.enumerated().map { index, place in
+                // DESIGN07 4.2: the dots follow the trip status (the DTO has no per-place passage).
+                let state: StepLadder.Step.State = switch TripStopDot.of(index: index, status: trip.status) {
+                case .done: .done
+                case .current: .current
+                case .ahead: .ahead
+                }
+                let when = ServerTime.parse(place.stop.plannedArrivalAt)
+                return StepLadder.Step(place.name, detail: when.map(DepartureWindow.shortText) ?? "", state: state)
+            }, doneLabel: strings.t("client.tracking.stepDone"), currentLabel: strings.t("client.tracking.stepCurrent"))
+        }
     }
 
+    /// Free capacity per stretch of the trip's road, named by kilometres along the trip (`0–120 km`, web
+    /// `tripDetail.stretchKm`).
     @ViewBuilder
     private var availability: some View {
-        let names = Dictionary((model.trip.value?.stops ?? []).map { ($0.stop.id, strings.placeName($0.stop)) }, uniquingKeysWith: { a, _ in a })
+        let startM = model.trip.value?.routeStartM ?? 0
         ElchiCard {
             CardTitle(strings.t("tripDetail.availabilityTitle"))
             switch model.availability {
@@ -395,14 +359,15 @@ struct TripDetailView: View {
                 SkeletonCards(count: 1).padding(.vertical, 8)
             case .failed(let error):
                 Text(strings.errorText(error)).font(ElchiFont.caption).foregroundStyle(c.tone(.err).fg).padding(.vertical, 8)
-            case .loaded(let dto) where dto.segments.isEmpty:
+            case .loaded(let dto) where dto.stretches.isEmpty:
                 Text(strings.t("tripDetail.availabilityEmpty")).font(ElchiFont.caption).foregroundStyle(c.muted).padding(.vertical, 8)
             case .loaded(let dto):
-                let segments = dto.segments.sorted { $0.fromSeq < $1.fromSeq }
-                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
-                    CardRow("\(names[segment.fromStopId] ?? "#\(segment.fromSeq)") → \(names[segment.toStopId] ?? "#\(segment.toSeq)")",
-                            strings.segmentLine(segment),
-                            detail: index == segments.count - 1
+                let stretches = dto.stretches.sorted { $0.fromM < $1.fromM }
+                ForEach(Array(stretches.enumerated()), id: \.offset) { index, stretch in
+                    CardRow(strings.t("tripDetail.stretchKm", ("from", TripStretch.km(stretch.fromM, startM: startM)),
+                                      ("to", TripStretch.km(stretch.toM, startM: startM))),
+                            strings.segmentLine(stretch),
+                            detail: index == stretches.count - 1
                                 ? strings.t("tripDetail.computedNote", ("time", ServerTime.parse(dto.computedAt).map(strings.clock) ?? "?")) : nil)
                 }
             }
@@ -410,7 +375,7 @@ struct TripDetailView: View {
         .accessibilityIdentifier("elchi.trip.availability")
     }
 
-    /// Pickups and drop-offs per stop. A phone only when the server sends it (Q142: a parcel's receiver once the trip
+    /// Pickups and drop-offs per place. A phone only when the server sends it (Q142: a parcel's receiver once the trip
     /// departs; a passenger once on board); otherwise the grey note. "Chat" opens the booking's chat (Q100).
     @ViewBuilder
     private func manifest(_ trip: TripDTO) -> some View {
@@ -422,17 +387,16 @@ struct TripDetailView: View {
             case .failed(let error):
                 Text(strings.errorText(error)).font(ElchiFont.caption).foregroundStyle(c.tone(.err).fg).padding(.vertical, 8)
             case .loaded(let dto):
-                let rows = dto.stops.sorted { $0.seq < $1.seq }.flatMap { stop in
-                    stop.pickups.map { (stop, $0, true) } + stop.dropoffs.map { (stop, $0, false) }
+                let rows = dto.places.sorted { $0.seq < $1.seq }.flatMap { place in
+                    place.pickups.map { (place, $0, true) } + place.dropoffs.map { (place, $0, false) }
                 }
                 if rows.isEmpty {
                     Text(strings.t("driver.trip.manifestEmpty")).font(ElchiFont.caption).foregroundStyle(c.muted).padding(.vertical, 8)
                 } else {
                     ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                         let (stop, item, pickup) = row
-                        // Q158: the agreed place's address or district, else the node's district.
-                        let place = stop.point.map { $0.address?.isEmpty == false ? $0.address! : strings.feedEnd(stop: nil, point: $0) }
-                            ?? stop.stop.map(strings.placeName) ?? "#\(stop.seq)"
+                        // ADR-0028: the agreed place's address, else its district.
+                        let place = strings.placeText(stop.point)
                         let when = ServerTime.parse(stop.plannedArrivalAt).map(strings.clock) ?? ""
                         let what = item.parcelSummary.map { "\(strings.t("tripDetail.parcel")): \($0)" }
                             ?? item.seats.map { strings.t("tripDetail.seats", ("count", $0)) } ?? ""

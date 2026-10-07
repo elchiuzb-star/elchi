@@ -129,7 +129,7 @@ struct Design07Tests {
     @Test func savedRouteOpensInTheFeed() {
         let regions = [RegionDTO(code: "TK", id: "reg_tash", nameRu: "Ташкент", nameUz: "Toshkent"), RegionDTO(code: "SM", id: "reg_sam", nameUz: "Samarqand")]
         let districts = ["dst_chil": DistrictDTO(id: "dst_chil", nameRu: "Чиланзар", nameUz: "Chilonzor",
-                                                 region: RegionRefDTO(code: "TK", id: "reg_tash", nameUz: "Toshkent"), stopsCount: 1)]
+                                                 region: RegionRefDTO(code: "TK", id: "reg_tash", nameUz: "Toshkent"))]
         let current = FeedFilter(chip: .three)
         let opened = SavedRoute.feedFilter(from: saved("ss", originDistrict: "dst_chil", destinationRegion: "reg_sam", service: .passenger),
                                            current: current, regions: regions, districts: districts)

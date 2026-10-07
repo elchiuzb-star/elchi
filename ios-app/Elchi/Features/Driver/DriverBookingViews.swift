@@ -187,10 +187,10 @@ struct DriverBookingDetailView: View {
     private func detailsCard(_ booking: DriverBookingDTO) -> some View {
         let base = booking.base
         return ElchiCard {
-            CardRow(strings.t(base.pickup.stop != nil ? "driverBooking.pickupStop" : "driverBooking.pickupPoint"),
-                    strings.endName(stop: base.pickup.stop, point: base.pickup.point), first: true)
-            CardRow(strings.t(base.dropoff.stop != nil ? "driverBooking.dropoffStop" : "driverBooking.dropoffPoint"),
-                    strings.endName(stop: base.dropoff.stop, point: base.dropoff.point))
+            CardRow(strings.t("driverBooking.pickupPoint"),
+                    strings.endName(base.pickup.point), first: true)
+            CardRow(strings.t("driverBooking.dropoffPoint"),
+                    strings.endName(base.dropoff.point))
             CardRow(strings.t("safety.clientTitle"), clientName(booking))
             if base.serviceType == .passenger {
                 passengerRows(booking)

@@ -60,18 +60,18 @@ class FeedRulesTest {
     }
 
     @Test
-    fun `alternatives are split off and time_differs wins over nearby_stop`() {
+    fun `alternatives are split off and time_differs is the only named reason`() {
         val items = listOf(
             S08.feedItem("a"),
-            S08.feedItem("b", MatchGroup.ALTERNATIVE, listOf(MatchReason.NEARBY_STOP, MatchReason.TIME_DIFFERS)),
+            S08.feedItem("b", MatchGroup.ALTERNATIVE, listOf(MatchReason.PICKUP_DETOUR, MatchReason.TIME_DIFFERS)),
             S08.feedItem("c", type = MatchType.EXACT),
             S08.feedItem("d", MatchGroup.UNKNOWN),
         )
         val g = FeedRules.split(items)
         assertEquals(listOf("a", "c", "d"), g.primary.map { it.listing.id })
         assertEquals(listOf("b"), g.alternative.map { it.listing.id })
-        assertEquals("time_differs", FeedRules.alternativeReason(listOf(MatchReason.NEARBY_STOP, MatchReason.TIME_DIFFERS)))
-        assertEquals("nearby_stop", FeedRules.alternativeReason(listOf(MatchReason.NEARBY_STOP)))
+        assertEquals("time_differs", FeedRules.alternativeReason(listOf(MatchReason.PICKUP_DETOUR, MatchReason.TIME_DIFFERS)))
+        assertNull(FeedRules.alternativeReason(listOf(MatchReason.PICKUP_DETOUR)))
         assertNull(FeedRules.alternativeReason(listOf(MatchReason.FULL_ROUTE)))
         assertEquals("match.exact", FeedRules.matchKey(MatchType.EXACT))
         assertEquals("match.on_route", FeedRules.matchKey(MatchType.ON_ROUTE))
@@ -79,11 +79,11 @@ class FeedRulesTest {
     }
 
     @Test
-    fun `card ends use the stop or the district, never the street address`() {
+    fun `card ends use the point's district, never the street address`() {
         val l = S08.listing()
-        assertEquals("Toshkent shahri", FeedRules.endName(l.originStop, l.originPoint, ru = false))
-        assertEquals("Samarqand", FeedRules.endName(l.destinationStop, l.destinationPoint, ru = false))
-        assertEquals("Registon", FeedRules.endName(S08.stop("stp_reg", "Registon"), null, ru = false))
+        assertEquals("Toshkent shahri", FeedRules.endName(l.originPoint, ru = false))
+        assertEquals("Samarqand", FeedRules.endName(l.destinationPoint, ru = false))
+        assertEquals("?", FeedRules.endName(null, ru = false))
     }
 
     @Test
@@ -109,7 +109,7 @@ class FeedRulesTest {
             originRegionId = "reg_tash", destinationDistrictId = "dst_sam",
             timeWindowEnd = "2026-10-15T06:00:00Z", timeWindowStart = "2026-10-01T06:00:00Z",
         )
-        assertEquals("Toshkent shahri → Samarqand", FeedRules.savedRouteTitle(saved, mapOf("reg_tash" to "Toshkent shahri", "dst_sam" to "Samarqand"), "•"))
-        assertEquals("? → Samarqand", FeedRules.savedRouteTitle(saved, mapOf("dst_sam" to "Samarqand"), "•"))
+        assertEquals("Toshkent shahri → Samarqand", FeedRules.savedRouteTitle(saved, mapOf("reg_tash" to "Toshkent shahri", "dst_sam" to "Samarqand")))
+        assertEquals("? → Samarqand", FeedRules.savedRouteTitle(saved, mapOf("dst_sam" to "Samarqand")))
     }
 }

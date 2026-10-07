@@ -160,7 +160,7 @@ private fun <T> LazyListScope.section(
 private fun BookingRow(booking: BookingClientDTO, ru: Boolean, languageTag: String, onClick: () -> Unit) {
     val status = booking.serviceStatus
     ItemCard(
-        title = "${OrderRules.shortEnd(booking.pickup.stop, booking.pickup.point, ru)} → ${OrderRules.shortEnd(booking.dropoff.stop, booking.dropoff.point, ru)}",
+        title = "${OrderRules.shortEnd(booking.pickup.point, ru)} → ${OrderRules.shortEnd(booking.dropoff.point, ru)}",
         icon = ElchiIcon.PIN,
         badge = (tOrNull(OrderRules.bookingStatusKey(booking.serviceType, status)) ?: status) to OrderRules.clientBookingTone(booking.serviceType, status),
         // "29 sen, 10:00–12:00": the day and the agreed pickup window.
@@ -256,7 +256,7 @@ fun ProposalsScreen(vm: OrdersViewModel, ru: Boolean, onBack: () -> Unit, onAcce
                             OfferCard(
                                 thread, b, handlers, now, ru,
                                 previousTotal = s.previousTotals[thread.id],
-                                route = thread.currentVersion?.let { "${OrderRules.shortEnd(it.pickupStop, it.pickupPoint, ru)} → ${OrderRules.shortEnd(it.dropoffStop, it.dropoffPoint, ru)}" },
+                                route = thread.currentVersion?.let { "${OrderRules.shortEnd(it.pickupPoint, ru)} → ${OrderRules.shortEnd(it.dropoffPoint, ru)}" },
                                 requestWindow = s.listings.items.firstOrNull { it.id == thread.listingId }?.let { it.departureWindowStart to it.departureWindowEnd },
                             )
                         }

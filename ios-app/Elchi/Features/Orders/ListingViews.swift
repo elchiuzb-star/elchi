@@ -270,8 +270,8 @@ private struct ListingSheetCard: View {
     private var windowEnds: some View {
         let start = ServerTime.parse(listing.departureWindowStart).map(DepartureWindow.shortText) ?? "?"
         let end = ServerTime.parse(listing.departureWindowEnd).map(DepartureWindow.shortText) ?? "?"
-        let from = PlaceShort.of(strings.endAddress(stop: listing.originStop, point: listing.originPoint))
-        let to = PlaceShort.of(strings.endAddress(stop: listing.destinationStop, point: listing.destinationPoint))
+        let from = PlaceShort.of(strings.endAddress(listing.originPoint))
+        let to = PlaceShort.of(strings.endAddress(listing.destinationPoint))
         return HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("client.listing.departAt", ("time", start))).font(ElchiFont.caption).foregroundStyle(c.muted)
@@ -293,8 +293,8 @@ private struct ListingSheetCard: View {
     private var facts: some View {
         let parcel = listing.serviceType == .parcel
         let items: [(String, String, String?)] = [
-            (strings.t("ui.from"), strings.endAddress(stop: listing.originStop, point: listing.originPoint), nil),
-            (strings.t("ui.to"), strings.endAddress(stop: listing.destinationStop, point: listing.destinationPoint), nil),
+            (strings.t("ui.from"), strings.endAddress(listing.originPoint), nil),
+            (strings.t("ui.to"), strings.endAddress(listing.destinationPoint), nil),
             (strings.t("common.price"), strings.money(listing.totalMinor),
              parcel ? nil : strings.seatsTotal(listing.passenger?.seatCount ?? listing.quantity, unitMinor: listing.unitPriceMinor)),
             (strings.t("client.listing.views"), strings.t("client.listing.viewsCount", ("count", listing.viewCount ?? 0)), nil),

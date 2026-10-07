@@ -121,7 +121,7 @@ private fun DriverBookingRow(booking: DriverBookingDTO, onClick: () -> Unit) {
     val ru = appRu()
     val status = booking.serviceStatus
     ItemCard(
-        title = "${OrderRules.shortEnd(booking.pickup.stop, booking.pickup.point, ru)} → ${OrderRules.shortEnd(booking.dropoff.stop, booking.dropoff.point, ru)}",
+        title = "${OrderRules.shortEnd(booking.pickup.point, ru)} → ${OrderRules.shortEnd(booking.dropoff.point, ru)}",
         icon = ElchiIcon.PIN,
         badge = (tOrNull(DriverBookingRules.badgeKey(booking.serviceType, status)) ?: status) to DriverBookingRules.badgeTone(booking.serviceType, status),
         sub = booking.client?.displayName?.takeIf { it.isNotBlank() },
@@ -273,7 +273,7 @@ private fun Header(view: DriverBookingDTO) {
     val window = OrderRules.windowText(view.pickup.windowStart, view.pickup.windowEnd)
     val passenger = TaxiRules.isPassenger(view.serviceType) && view.promo == null
     ItemCard(
-        title = "${OrderRules.shortEnd(view.pickup.stop, view.pickup.point, ru)} → ${OrderRules.shortEnd(view.dropoff.stop, view.dropoff.point, ru)}",
+        title = "${OrderRules.shortEnd(view.pickup.point, ru)} → ${OrderRules.shortEnd(view.dropoff.point, ru)}",
         badge = (tOrNull(DriverBookingRules.badgeKey(view.serviceType, status)) ?: status) to DriverBookingRules.badgeTone(view.serviceType, status),
         lines = listOfNotNull(cancelled?.let { ItemLine(it, Elchi.colors.tone(Tone.ERR).fg) }),
         meta = window,
@@ -282,15 +282,15 @@ private fun Header(view: DriverBookingDTO) {
     )
 }
 
-/** Ends (stop name or the point's district - never a street the server did not send), client, parcel, receiver, money. */
+/** Ends (the point's district - never a street the server did not send), client, parcel, receiver, money. */
 @Composable
 private fun Details(view: DriverBookingDTO) {
     val ru = appRu()
     val context = LocalContext.current
     val activity = LocalActivity.current
     ElchiCard {
-        CardRow(t(if (view.pickup.stop != null) R.string.driverBooking_pickupStop else R.string.driverBooking_pickupPoint), OrderRules.shortEnd(view.pickup.stop, view.pickup.point, ru), first = true)
-        CardRow(t(if (view.dropoff.stop != null) R.string.driverBooking_dropoffStop else R.string.driverBooking_dropoffPoint), OrderRules.shortEnd(view.dropoff.stop, view.dropoff.point, ru))
+        CardRow(t(R.string.driverBooking_pickupPoint), OrderRules.shortEnd(view.pickup.point, ru), first = true)
+        CardRow(t(R.string.driverBooking_dropoffPoint), OrderRules.shortEnd(view.dropoff.point, ru))
         CardRow(t(R.string.driver_booking_clientTitle), view.client?.displayName?.takeIf { it.isNotBlank() } ?: t(R.string.driver_booking_clientFallback))
         if (TaxiRules.isPassenger(view.serviceType)) {
             // Q44: the client's phone opens when the service starts (onboard); before that the in-app chat.

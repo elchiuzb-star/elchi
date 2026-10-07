@@ -16,8 +16,6 @@ import uz.elchi.app.api.PlaceSuggestion
 import uz.elchi.app.api.generated.DistrictDTO
 import uz.elchi.app.api.generated.ElchiApi
 import uz.elchi.app.api.generated.RegionDTO
-import uz.elchi.app.api.generated.ServiceType
-import uz.elchi.app.api.generated.StopDTO
 import uz.elchi.app.ui.map.GeoPoint
 
 /**
@@ -37,14 +35,12 @@ class PlacePickerViewModel(
         /** A real address (without the country), or null when the geocoder has none - the coordinates stand. */
         val address: String? = null,
         val resolving: Boolean = false,
-        val stop: StopDTO? = null,
     )
 
     data class PointState(
         val region: RegionDTO? = null,
         val district: DistrictDTO? = null,
         val candidate: Candidate? = null,
-        val stops: List<StopDTO> = emptyList(),
         val query: String = "",
         val suggestions: List<PlaceSuggestion> = emptyList(),
         val searching: Boolean = false,
@@ -74,9 +70,6 @@ class PlacePickerViewModel(
 
     private var reverseJob: Job? = null
     private var searchJob: Job? = null
-    /** Active stops by corridor, loaded once per flow (only when a district has any). */
-    private var corridorStops: List<StopDTO>? = null
-
     init {
         loadRegions()
     }
@@ -135,7 +128,7 @@ class PlacePickerViewModel(
                 val district = ((_districts.value as? Load.Ready)?.value ?: api.listDistricts(regionId = regionId, limit = 500).data).firstOrNull { it.id == districtId }
                 _point.update { it.copy(region = region, district = district) }
                 val start = when {
-                    existing != null && existing.districtId == districtId -> Candidate(GeoPoint(existing.lat, existing.lng), existing.address, stop = null)
+                    existing != null && existing.districtId == districtId -> Candidate(GeoPoint(existing.lat, existing.lng), existing.address)
                     mapUsable -> _point.value.centre?.let { Candidate(it, resolving = true) }
                     else -> null
                 }
@@ -143,7 +136,6 @@ class PlacePickerViewModel(
                     _point.update { it.copy(candidate = start) }
                     if (start.address == null) reverse(start.point, immediate = true)
                 }
-                if ((district?.stopsCount ?: 0) > 0) loadStops(districtId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -162,12 +154,6 @@ class PlacePickerViewModel(
         val centre = _point.value.districtCentre ?: return
         _point.update { it.copy(candidate = Candidate(centre, resolving = true), suggestions = emptyList(), searchMiss = false) }
         reverse(centre, immediate = true)
-    }
-
-    /** A verified stop (optional): the pin jumps to it and the listing names the stop. */
-    fun pickStop(stop: StopDTO) {
-        reverseJob?.cancel()
-        _point.update { it.copy(candidate = Candidate(GeoPoint(stop.point.lat, stop.point.lng), address = null, stop = stop)) }
     }
 
     private fun reverse(point: GeoPoint, immediate: Boolean) {
@@ -262,7 +248,6 @@ class PlacePickerViewModel(
         val region = s.region ?: return null
         val district = s.district ?: return null
         val candidate = s.candidate ?: return null
-        val stop = candidate.stop
         return Place(
             regionId = region.id,
             regionUz = region.nameUz,
@@ -272,10 +257,7 @@ class PlacePickerViewModel(
             districtRu = district.nameRu,
             lat = candidate.point.lat,
             lng = candidate.point.lng,
-            address = candidate.address ?: stop?.nameUz,
-            stopId = stop?.id,
-            stopUz = stop?.nameUz,
-            stopRu = stop?.nameRu,
+            address = candidate.address,
         )
     }
 
@@ -284,18 +266,6 @@ class PlacePickerViewModel(
         reverseJob?.cancel()
         searchJob?.cancel()
         _point.value = PointState()
-    }
-
-    /**
-     * Verified stops in this district. There is no stops-by-district endpoint; the public corridors' stop lists
-     * are read once and filtered (only for districts whose `stops_count` says there is something to find).
-     */
-    private suspend fun loadStops(districtId: String) {
-        val all = corridorStops ?: runCatching {
-            api.listCorridors(ServiceType.PARCEL).data.flatMap { corridor -> runCatching { api.listCorridorStops(corridor.id).data }.getOrDefault(emptyList()) }
-        }.getOrNull()?.also { corridorStops = it } ?: return
-        val here = all.filter { it.isActive && it.district.id == districtId }.distinctBy { it.id }
-        _point.update { s -> if (s.district?.id == districtId) s.copy(stops = here) else s }
     }
 
     private suspend fun <T> load(block: suspend () -> T): Load<T> = try {

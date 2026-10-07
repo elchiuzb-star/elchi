@@ -22,7 +22,6 @@ import uz.elchi.app.api.generated.TripDTO
 import uz.elchi.app.feature.client.NegotiationActions
 import uz.elchi.app.feature.client.OrderRules
 import uz.elchi.app.feature.client.ParcelRules
-import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 
@@ -82,31 +81,24 @@ object OfferRules {
         trips.filter { TripRules.offerable(it, now) }.sortedBy { OrderRules.parseInstant(it.plannedStartAt) ?: Instant.MAX }
 
     /**
-     * Web `proposalPickupWindow`: the trip's time at the request's origin stop ± 30 min, clipped to the client's
-     * window; null when they do not meet (the trip does not fit). A point-ended request (Q88) has no stop to anchor
-     * on: the client's own window is offered and the server checks the projection.
+     * Web `proposalPickupWindow` (ADR-0028): every request ends at points, so the client's own window is offered and
+     * the server checks the trip's position along the road; null without a trip or a readable window.
      */
     fun pickupWindow(trip: TripDTO?, listing: ListingPublicDTO): PickupWindow? {
         trip ?: return null
         val askedFrom = OrderRules.parseInstant(listing.departureWindowStart) ?: return null
         val askedTo = OrderRules.parseInstant(listing.departureWindowEnd) ?: return null
-        val originStop = listing.originStop?.id ?: return PickupWindow(askedFrom, askedTo)
-        val at = trip.stops.firstOrNull { it.stop.id == originStop } ?: return null
-        val arrival = OrderRules.parseInstant(at.etaArrivalAt ?: at.plannedArrivalAt) ?: return null
-        val start = maxOf(askedFrom, arrival.minus(HALF_WINDOW))
-        val end = minOf(askedTo, arrival.plus(HALF_WINDOW))
-        return if (end.isAfter(start)) PickupWindow(start, end) else null
+        return PickupWindow(askedFrom, askedTo)
     }
 
     /**
-     * The trip to start with: the first candidate whose time fits the request (a stop-ended request: a pickup window
-     * exists; a point-ended one: the trip runs while the client's window is open). Null = let the driver choose.
+     * The trip to start with: the first candidate that runs while the client's window is open. Null = let the
+     * driver choose.
      */
     fun preselect(candidates: List<TripDTO>, listing: ListingPublicDTO): TripDTO? {
         val from = OrderRules.parseInstant(listing.departureWindowStart)
         val to = OrderRules.parseInstant(listing.departureWindowEnd)
         return candidates.firstOrNull { trip ->
-            if (listing.originStop != null) return@firstOrNull pickupWindow(trip, listing) != null
             val start = OrderRules.parseInstant(trip.plannedStartAt)
             val end = OrderRules.parseInstant(trip.plannedEndAt)
             from != null && to != null && start != null && end != null && !start.isAfter(to) && !end.isBefore(from)
@@ -117,15 +109,12 @@ object OfferRules {
         instant.atZone(ParcelRules.TASHKENT).toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
     /**
-     * `POST /listings/{id}/proposals`: the trip, the window, the request's quantity and price basis, the price. Stop
-     * ids only for a stop-ended request, both or neither (a point-ended one supplies its own places, Q88).
+     * `POST /listings/{id}/proposals`: the trip, the window, the request's quantity and price basis, the price. No
+     * place ids (ADR-0028): the places come from the listing.
      */
     fun proposalBody(listing: ListingPublicDTO, tripId: String, window: PickupWindow, unitPriceMinor: Long, message: String? = null): ProposalCreate {
-        val stops = listing.originStop != null && listing.destinationStop != null
         return ProposalCreate(
-            dropoffStopId = listing.destinationStop?.id?.takeIf { stops },
             message = message?.trim()?.takeIf { it.isNotEmpty() },
-            pickupStopId = listing.originStop?.id?.takeIf { stops },
             pickupWindowEnd = iso(window.end),
             pickupWindowStart = iso(window.start),
             priceBasis = listing.priceBasis,
@@ -201,10 +190,10 @@ object OfferRules {
     /** "1 soat 12 daqiqa" parts, rounded up to whole minutes. */
     fun expiryParts(seconds: Long): Pair<Long, Long> = OrderRules.countdownParts(seconds)
 
-    /** "Chilonzor → Registon" of a thread: the latest version's pickup and drop-off (stop or district). */
+    /** "Chilonzor → Registon" of a thread: the latest version's pickup and drop-off (district of the point). */
     fun routeTitle(thread: ProposalThreadDTO, ru: Boolean): String {
         val v = thread.currentVersion ?: thread.versions?.lastOrNull() ?: return "?"
-        return "${FeedRules.endName(v.pickupStop, v.pickupPoint, ru)} → ${FeedRules.endName(v.dropoffStop, v.dropoffPoint, ru)}"
+        return "${FeedRules.endName(v.pickupPoint, ru)} → ${FeedRules.endName(v.dropoffPoint, ru)}"
     }
 
     /** Versions oldest first, for the history. */
@@ -247,6 +236,5 @@ object OfferRules {
     fun needsRefresh(error: Throwable): Boolean =
         (error as? ApiException)?.code in setOf("VERSION_CONFLICT", "PROPOSAL_CHANGED", "PROPOSAL_EXPIRED", "INVALID_STATE_TRANSITION")
 
-    private val HALF_WINDOW: Duration = Duration.ofMinutes(30)
     const val PRICE_OUTSIDE_REFERENCE = "PRICE_OUTSIDE_REFERENCE"
 }

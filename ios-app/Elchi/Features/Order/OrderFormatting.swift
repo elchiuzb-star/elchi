@@ -5,11 +5,10 @@ extension LocaleStore {
     func name(_ region: RegionDTO) -> String { locale == .ru ? region.nameRu ?? region.nameUz : region.nameUz }
     func name(_ district: DistrictDTO) -> String { locale == .ru ? district.nameRu ?? district.nameUz : district.nameUz }
 
-    /// The place itself (the design's card title): "Joriy joylashuv" for the locate button's fill, the verified stop,
-    /// the street address, else the coordinates.
+    /// The place itself (the design's card title): "Joriy joylashuv" for the locate button's fill, the street
+    /// address, else the coordinates.
     func place(_ end: PlaceEnd) -> String {
         if end.currentLocation { return t("home.currentLocation") }
-        if let stop = end.stop { return locale == .ru ? stop.nameRu ?? stop.nameUz : stop.nameUz }
         return end.address ?? end.point.text
     }
 
@@ -19,10 +18,8 @@ extension LocaleStore {
         return end.region.requiresDistrict == false || district == region ? region : "\(district), \(region)"
     }
 
-    /// The review's detail for an end: "Tasdiqlangan bekat · District, Region" for a stop.
-    func areaDetail(_ end: PlaceEnd) -> String {
-        end.stop == nil ? area(end) : t("orderForm.review.verifiedStop", ("where", area(end)))
-    }
+    /// The review's detail for an end: the district and region of the marked place (ADR-0028: no stops).
+    func areaDetail(_ end: PlaceEnd) -> String { area(end) }
 
     /// `308 km · 4 soat 35 daqiqa`.
     func routeFigures(distanceM: Int, durationS: Int) -> String {

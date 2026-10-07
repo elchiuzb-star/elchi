@@ -237,7 +237,7 @@ private fun RequestSummary(listing: ListingPublicDTO) {
     val start = OrderRules.parseInstant(listing.departureWindowStart)
     val end = OrderRules.parseInstant(listing.departureWindowEnd)
     ElchiCard(padding = PaddingValues(horizontal = 16.dp, vertical = 14.dp), background = if (c.isDark) c.field else Color(0xFFEEF1F5)) {
-        Text("${FeedRules.endName(listing.originStop, listing.originPoint, ru)} → ${FeedRules.endName(listing.destinationStop, listing.destinationPoint, ru)}", style = Elchi.type.bodyStrong, color = c.text)
+        Text("${FeedRules.endName(listing.originPoint, ru)} → ${FeedRules.endName(listing.destinationPoint, ru)}", style = Elchi.type.bodyStrong, color = c.text)
         Text(t(R.string.driverBid_clientPrice, "price" to soum(listing.totalMinor)), Modifier.padding(top = 4.dp), style = Elchi.type.label, color = c.muted)
         val what = if (listing.serviceType == ServiceType.PARCEL) listing.parcelCategory?.let { "${categoryName(it, ru)} · ${categoryLimits(it)}" } else seatsLine(listing.quantity, listing.unitPriceMinor)
         what?.let { Text(it, style = Elchi.type.caption, color = c.muted) }
@@ -318,7 +318,7 @@ private fun TripChoice(vm: BidViewModel, ts: TripsViewModel.State, trip: TripDTO
         label = t(R.string.driverBid_trip),
         value = trip?.id,
         options = candidates.map { c ->
-            c.id to "${TripRules.routeTitle(c, ru)} · ${OrderRules.parseInstant(c.plannedStartAt)?.let(DriverTime::dayClock).orEmpty()}"
+            c.id to "${TripRules.routeTitle(c, ts.direction(c.id), ru)} · ${OrderRules.parseInstant(c.plannedStartAt)?.let(DriverTime::dayClock).orEmpty()}"
         },
         onSelect = vm::pickTrip,
         placeholder = t(if (candidates.isEmpty()) R.string.driverBid_noPlannedTrips else R.string.driverBid_tripPlaceholder),

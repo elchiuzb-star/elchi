@@ -409,9 +409,8 @@ class ElchiApi(private val transport: ApiTransport) {
      *
      * G17: which districts this direction really passes, in travel order (wave 10).
      *
-     * This is what "Toshkent -> Qarshi" covers: the districts of the stops on the corridor's confirmed routes.
-     * Districts whose stops no confirmed route reaches are still listed, with ``on_confirmed_route=false``, so
-     * the client can offer them without claiming they are on the way (spec 6.1, 6.5).
+     * This is what "Toshkent -> Qarshi" covers: the districts whose centre lies on a confirmed road of the corridor
+     * (ADR-0028). A district the road does not reach is not listed (spec 6.1, 6.5).
      */
     suspend fun listCorridorDistricts(corridorId: String): ApiResult<List<CorridorDistrictDTO>> =
         transport.send(
@@ -440,19 +439,6 @@ class ElchiApi(private val transport: ApiTransport) {
             body = null,
             idempotencyKey = null,
             result = ListSerializer(RouteVersionDTO.serializer()),
-        )
-
-    /**
-     * List Corridor Stops
-     */
-    suspend fun listCorridorStops(corridorId: String): ApiResult<List<StopDTO>> =
-        transport.send(
-            method = "GET",
-            path = "/corridors/${corridorId}/stops",
-            query = listOf(),
-            body = null,
-            idempotencyKey = null,
-            result = ListSerializer(StopDTO.serializer()),
         )
 
     /**
@@ -624,11 +610,11 @@ class ElchiApi(private val transport: ApiTransport) {
     /**
      * Get Feed
      */
-    suspend fun getFeed(serviceType: ServiceType, side: FeedSide, dateFrom: String, dateTo: String, originStopId: String? = null, originRegionId: String? = null, originDistrictId: String? = null, destinationStopId: String? = null, destinationRegionId: String? = null, destinationDistrictId: String? = null, seats: Long? = null, maxTotalMinor: Long? = null, amenities: List<String>? = null, sort: FeedSort? = null, includeAlternatives: Boolean? = null, cursor: String? = null, limit: Long? = null): ApiResult<FeedEnvelope> =
+    suspend fun getFeed(serviceType: ServiceType, side: FeedSide, dateFrom: String, dateTo: String, originRegionId: String? = null, originDistrictId: String? = null, destinationRegionId: String? = null, destinationDistrictId: String? = null, seats: Long? = null, maxTotalMinor: Long? = null, amenities: List<String>? = null, sort: FeedSort? = null, includeAlternatives: Boolean? = null, cursor: String? = null, limit: Long? = null): ApiResult<FeedEnvelope> =
         transport.send(
             method = "GET",
             path = "/feed",
-            query = listOf("service_type" to serviceType, "side" to side, "date_from" to dateFrom, "date_to" to dateTo, "origin_stop_id" to originStopId, "origin_region_id" to originRegionId, "origin_district_id" to originDistrictId, "destination_stop_id" to destinationStopId, "destination_region_id" to destinationRegionId, "destination_district_id" to destinationDistrictId, "seats" to seats, "max_total_minor" to maxTotalMinor, "amenities" to amenities, "sort" to sort, "include_alternatives" to includeAlternatives, "cursor" to cursor, "limit" to limit),
+            query = listOf("service_type" to serviceType, "side" to side, "date_from" to dateFrom, "date_to" to dateTo, "origin_region_id" to originRegionId, "origin_district_id" to originDistrictId, "destination_region_id" to destinationRegionId, "destination_district_id" to destinationDistrictId, "seats" to seats, "max_total_minor" to maxTotalMinor, "amenities" to amenities, "sort" to sort, "include_alternatives" to includeAlternatives, "cursor" to cursor, "limit" to limit),
             body = null,
             idempotencyKey = null,
             result = FeedEnvelope.serializer(),
@@ -1531,19 +1517,6 @@ class ElchiApi(private val transport: ApiTransport) {
             body = null,
             idempotencyKey = null,
             result = EmptyDTO.serializer(),
-        )
-
-    /**
-     * Search Stops
-     */
-    suspend fun searchStops(q: String, regionId: String? = null, limit: Long? = null): ApiResult<List<StopDTO>> =
-        transport.send(
-            method = "GET",
-            path = "/stops/search",
-            query = listOf("q" to q, "region_id" to regionId, "limit" to limit),
-            body = null,
-            idempotencyKey = null,
-            result = ListSerializer(StopDTO.serializer()),
         )
 
     /**

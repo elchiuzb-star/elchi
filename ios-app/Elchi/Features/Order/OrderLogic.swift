@@ -30,40 +30,22 @@ public struct PlaceEnd: Hashable, Sendable {
     public var point: GeoPoint
     /// Reverse-geocoded street address; nil when the geocoder had none (the screen shows coordinates instead).
     public var address: String?
-    /// A verified stop the person picked on the point step (optional): the listing then names the stop.
-    public var stop: PlaceStop?
     /// Set by the home's locate button: the card says "Joriy joylashuv" instead of the street.
     public var currentLocation: Bool
 
-    public init(region: RegionDTO, district: DistrictDTO, point: GeoPoint, address: String?, stop: PlaceStop? = nil,
-                currentLocation: Bool = false) {
+    public init(region: RegionDTO, district: DistrictDTO, point: GeoPoint, address: String?, currentLocation: Bool = false) {
         self.region = region
         self.district = district
         self.point = point
         self.address = address
-        self.stop = stop
         self.currentLocation = currentLocation
     }
 }
 
-/// A verified corridor stop (`StopDTO`), as the request keeps it.
-public struct PlaceStop: Hashable, Sendable {
-    public var id: String
-    public var nameUz: String
-    public var nameRu: String?
-
-    public init(id: String, nameUz: String, nameRu: String?) {
-        self.id = id
-        self.nameUz = nameUz
-        self.nameRu = nameRu
-    }
-}
-
 extension PlaceEnd {
-    /// `POST /listings` end: the stop's id when one was picked (the server then names the stop), else the point.
-    var stopId: String? { stop?.id }
-    var pointInput: PointEndInput? {
-        stop == nil ? PointEndInput(address: address, districtId: district.id, lat: point.lat, lng: point.lng) : nil
+    /// `POST /listings` end (ADR-0028, Q160): always the marked place - never a stop id.
+    var pointInput: PointEndInput {
+        PointEndInput(address: address, districtId: district.id, lat: point.lat, lng: point.lng)
     }
 }
 
@@ -278,10 +260,8 @@ public struct ParcelRequestDraft: Sendable {
             departureWindowEnd: DepartureWindow.iso(windowEnd),
             departureWindowStart: DepartureWindow.iso(windowStart),
             destinationPoint: dropoff.pointInput,
-            destinationStopId: dropoff.stopId,
             kind: .request,
             originPoint: pickup.pointInput,
-            originStopId: pickup.stopId,
             parcel: ParcelDetails(
                 categoryId: categoryId,
                 parcelType: parcelType,

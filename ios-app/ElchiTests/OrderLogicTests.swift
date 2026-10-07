@@ -72,10 +72,8 @@ struct DepartureWindowTests {
 
 struct RequestBodyTests {
     static let region = RegionDTO(centerLat: 41.31, centerLng: 69.28, code: "UZ-TK", id: "reg_tk", nameUz: "Toshkent shahri", requiresDistrict: false)
-    static let district = DistrictDTO(id: "dst_tk", nameUz: "Toshkent shahri", region: RegionRefDTO(code: "UZ-TK", id: "reg_tk", nameUz: "Toshkent shahri"),
-                                      stopsCount: 4)
-    static let sam = DistrictDTO(id: "dst_sam", nameUz: "Samarqand", region: RegionRefDTO(code: "UZ-SA", id: "reg_sa", nameUz: "Samarqand viloyati"),
-                                 stopsCount: 3)
+    static let district = DistrictDTO(id: "dst_tk", nameUz: "Toshkent shahri", region: RegionRefDTO(code: "UZ-TK", id: "reg_tk", nameUz: "Toshkent shahri"))
+    static let sam = DistrictDTO(id: "dst_sam", nameUz: "Samarqand", region: RegionRefDTO(code: "UZ-SA", id: "reg_sa", nameUz: "Samarqand viloyati"))
 
     @Test func buildsTheParcelRequest() throws {
         var contacts = ContactsForm()

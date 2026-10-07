@@ -2058,7 +2058,7 @@
         }
       }
     },
-    "app.progress.driverAtStop": {
+    "app.progress.driverArrived": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
@@ -2275,23 +2275,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tuman"
-          }
-        }
-      }
-    },
-    "app.savedEnd.stop": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Выбранное место"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Belgilangan joy"
           }
         }
       }
@@ -10813,6 +10796,23 @@
         }
       }
     },
+    "clientProfile.nameMinChars": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите не менее 2 букв."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kamida 2 ta harf kiriting."
+          }
+        }
+      }
+    },
     "clientProfile.notificationsHint": {
       "extractionState": "manual",
       "localizations": {
@@ -16644,23 +16644,6 @@
         }
       }
     },
-    "driverBooking.dropoffStop": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Место высадки"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tushirish joyi"
-          }
-        }
-      }
-    },
     "driverBooking.fare": {
       "extractionState": "manual",
       "localizations": {
@@ -16781,23 +16764,6 @@
       }
     },
     "driverBooking.pickupPoint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Место посадки"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Olib ketish joyi"
-          }
-        }
-      }
-    },
-    "driverBooking.pickupStop": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
@@ -21098,23 +21064,6 @@
         }
       }
     },
-    "home.districtDriversNote": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Водители из этих районов тоже увидят ваше объявление."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shu tumanlardagi haydovchilar ham e'loningizni ko'radi."
-          }
-        }
-      }
-    },
     "home.estimatedTime": {
       "extractionState": "manual",
       "localizations": {
@@ -21183,23 +21132,6 @@
         }
       }
     },
-    "home.noConfirmedRoute": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Между этими местами нет утверждённого направления."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bu ikki joy orasida tasdiqlangan yo'nalish yo'q."
-          }
-        }
-      }
-    },
     "home.parcelClosed": {
       "extractionState": "manual",
       "localizations": {
@@ -21247,57 +21179,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Taklif kodi saqlandi: {code} — tasdiqlash uchun bosing"
-          }
-        }
-      }
-    },
-    "home.routeDistricts": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Районы по направлению"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yo'nalishdagi tumanlar"
-          }
-        }
-      }
-    },
-    "home.routeLoading": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Загружаем направление..."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yo'nalish yuklanmoqda..."
-          }
-        }
-      }
-    },
-    "home.sameStop": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Места отправления и доставки не могут совпадать."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Olib ketish va yetkazish joyi bir xil bo'lishi mumkin emas."
           }
         }
       }
@@ -22713,23 +22594,6 @@
         }
       }
     },
-    "listingDetail.dropoffStop": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Место доставки"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yetkazish joyi"
-          }
-        }
-      }
-    },
     "listingDetail.parcel": {
       "extractionState": "manual",
       "localizations": {
@@ -22782,23 +22646,6 @@
       }
     },
     "listingDetail.pickupPoint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Место отправления"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Olib ketish joyi"
-          }
-        }
-      }
-    },
-    "listingDetail.pickupStop": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
@@ -24855,7 +24702,7 @@
         }
       }
     },
-    "match.confirmedStopsNote": {
+    "match.confirmedRoadsNote": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
@@ -24919,23 +24766,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Yo'l yo'nalishida"
-          }
-        }
-      }
-    },
-    "match.reason.nearby_stop": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Рядом"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yaqin joy"
           }
         }
       }
@@ -26793,23 +26623,6 @@
         }
       }
     },
-    "offerCreate.sameStops": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Места не могут совпадать."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ikki joy bir xil bo'lishi mumkin emas."
-          }
-        }
-      }
-    },
     "offerCreate.serviceParcel": {
       "extractionState": "manual",
       "localizations": {
@@ -26891,23 +26704,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bu — boshlang'ich narxingiz. Mijoz o'z narxini taklif qiladi, siz qarshi taklif yuborasiz. Bron faqat ikkalangiz kelishgandan keyin yaratiladi; e'lon o'rin yoki balansni band qilmaydi."
-          }
-        }
-      }
-    },
-    "offerCreate.stopPlaceholder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Выберите место"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Joyni tanlang"
           }
         }
       }
@@ -28030,23 +27826,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Yuklangan"
-          }
-        }
-      }
-    },
-    "orderForm.review.verifiedStop": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Отмеченное место · {where}"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Belgilangan joy · {where}"
           }
         }
       }
@@ -32352,6 +32131,91 @@
         }
       }
     },
+    "referralCheck.Check": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tekshirish"
+          }
+        }
+      }
+    },
+    "referralCheck.Invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот код недействителен."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bu kod amal qilmaydi."
+          }
+        }
+      }
+    },
+    "referralCheck.Label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код приглашения"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taklif kodi"
+          }
+        }
+      }
+    },
+    "referralCheck.Placeholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите код"
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kodni kiriting"
+          }
+        }
+      }
+    },
+    "referralCheck.Valid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код действителен."
+          }
+        },
+        "uz": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kod amal qiladi."
+          }
+        }
+      }
+    },
     "reissue.button": {
       "extractionState": "manual",
       "localizations": {
@@ -34014,193 +33878,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Qaytarib olingan"
-          }
-        }
-      }
-    },
-    "stopSearch.empty": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Место не найдено. Попробуйте другое название."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Joy topilmadi. Boshqa nom bilan qidiring."
-          }
-        }
-      }
-    },
-    "stopSearch.inactive": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "неактивна"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "faol emas"
-          }
-        }
-      }
-    },
-    "stopSearch.label": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Поиск места"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Joy qidirish"
-          }
-        }
-      }
-    },
-    "stopSearch.minChars": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Введите не менее 2 букв."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kamida 2 ta harf kiriting."
-          }
-        }
-      }
-    },
-    "stopSearch.placeholder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Например: Карши автовокзал"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Masalan: Qarshi avtovokzal"
-          }
-        }
-      }
-    },
-    "stopSearch.referralCheck": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Проверить"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tekshirish"
-          }
-        }
-      }
-    },
-    "stopSearch.referralInvalid": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот код недействителен."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bu kod amal qilmaydi."
-          }
-        }
-      }
-    },
-    "stopSearch.referralLabel": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Код приглашения"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Taklif kodi"
-          }
-        }
-      }
-    },
-    "stopSearch.referralPlaceholder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Введите код"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kodni kiriting"
-          }
-        }
-      }
-    },
-    "stopSearch.referralValid": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Код действителен."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kod amal qiladi."
-          }
-        }
-      }
-    },
-    "stopSearch.searching": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Идёт поиск..."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Qidirilmoqda..."
           }
         }
       }
@@ -35939,19 +35616,19 @@
         }
       }
     },
-    "tripDetail.stopSeq": {
+    "tripDetail.stretchKm": {
       "extractionState": "manual",
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Точка {seq}"
+            "value": "{from}–{to} км"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "{seq}-nuqta"
+            "value": "{from}–{to} km"
           }
         }
       }
@@ -36649,74 +36326,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Siz o'ylagan narx: {price}"
-          }
-        }
-      }
-    },
-    "tripPlan.stopFilter": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Маршруты через {name}"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{name} orqali o'tadigan marshrutlar"
-          }
-        }
-      }
-    },
-    "tripPlan.stopFilterClear": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сбросить фильтр"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtrni olib tashlash"
-          }
-        }
-      }
-    },
-    "tripPlan.stopFilterNone": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Утверждённые маршруты этого направления не проходят через {name}."
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bu yo'nalishning tasdiqlangan marshrutlari {name} orqali o'tmaydi."
-          }
-        }
-      }
-    },
-    "tripPlan.stopSearchLabel": {
-      "extractionState": "manual",
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Найти маршрут по названию места"
-          }
-        },
-        "uz": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Joy nomi bo'yicha marshrut topish"
           }
         }
       }

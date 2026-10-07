@@ -31,8 +31,8 @@ import kotlin.math.sqrt
 enum class End { ORIGIN, DESTINATION }
 
 /**
- * One end of the direction (Q88): region -> district -> a point on the map. A verified stop is optional; when the
- * person picks one, [stopId] is set and the listing names the stop (an `exact` match) instead of the point.
+ * One end of the direction (Q88): region -> district -> a point on the map. ADR-0028: an end is always the point
+ * (`*_point {lat, lng, district_id, address?}`); there are no stops.
  */
 @Serializable
 data class Place(
@@ -46,18 +46,14 @@ data class Place(
     val lng: Double,
     /** Reverse-geocoded, without the country. Null when the geocoder had no real answer: the coordinates stand. */
     val address: String? = null,
-    val stopId: String? = null,
-    val stopUz: String? = null,
-    val stopRu: String? = null,
     /** Set from the phone's position by the home's locate button (design `locate`): titled "Joriy joylashuv". */
     val current: Boolean = false,
 ) {
     fun region(ru: Boolean) = if (ru) regionRu ?: regionUz else regionUz
     fun district(ru: Boolean) = if (ru) districtRu ?: districtUz else districtUz
-    fun stop(ru: Boolean) = if (ru) stopRu ?: stopUz else stopUz
 
-    /** What identifies the place for a person: the stop, the address, or - honestly - the coordinates. */
-    fun label(ru: Boolean): String = stop(ru) ?: address ?: ParcelRules.coordinates(lat, lng)
+    /** What identifies the place for a person: the address, or - honestly - the coordinates. */
+    fun label(ru: Boolean): String = address ?: ParcelRules.coordinates(lat, lng)
 
     /** "Samarqand viloyati / Samarqand"; one name when the district is the region (Toshkent shahri). */
     fun area(ru: Boolean): String = if (region(ru) == district(ru)) region(ru) else "${region(ru)} / ${district(ru)}"
@@ -307,10 +303,8 @@ object ParcelRules {
         return ListingCreate(
             kind = ListingKind.REQUEST,
             serviceType = ServiceType.PARCEL,
-            originStopId = origin.stopId,
-            originPoint = if (origin.stopId == null) point(origin) else null,
-            destinationStopId = destination.stopId,
-            destinationPoint = if (destination.stopId == null) point(destination) else null,
+            originPoint = point(origin),
+            destinationPoint = point(destination),
             departureWindowStart = toOffsetIso(start),
             departureWindowEnd = toOffsetIso(end),
             timezone = TIMEZONE,

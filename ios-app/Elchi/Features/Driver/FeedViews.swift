@@ -105,7 +105,7 @@ struct FeedTabView: View {
             Note(strings.errorText(error), tone: .err)
             ElchiButton(strings.t("common.retry"), variant: .ghost, size: .medium, icon: .refresh) { Task { await feed.load() } }
         case .loaded(let items)?:
-            Note(strings.t("match.confirmedStopsNote"), tone: .warn)
+            Note(strings.t("match.confirmedRoadsNote"), tone: .warn)
             ForEach(feed.degraded, id: \.self) { code in
                 Text(strings.tOrNil("warning.\(code)") ?? code).font(ElchiFont.caption).foregroundStyle(c.muted)
             }
@@ -519,7 +519,7 @@ struct OfferView: View {
             Note(strings.t("driverBid.planTripFirst"), tone: .err).accessibilityIdentifier("elchi.offer.planTripFirst")
             ElchiButton(strings.t("driver.offer.planTrip"), variant: .soft, size: .medium, icon: .plus, action: onAddTrip)
         case .loaded(let list):
-            SelectField(label: strings.t("driverBid.trip"), options: list.map { ($0.id, "\(strings.route($0)) · \(strings.tripMeta($0))") },
+            SelectField(label: strings.t("driverBid.trip"), options: list.map { ($0.id, "\(strings.route($0, directions: trips.directions)) · \(strings.tripMeta($0))") },
                         selected: model.tripId, placeholder: strings.t("driverBid.tripPlaceholder")) { model.choose($0) }
             if model.tripId != nil && model.window == nil {
                 Note(strings.t("driverBid.tripWindowMismatch"), tone: .err)

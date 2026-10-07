@@ -77,15 +77,11 @@ class TripRulesTest {
     }
 
     @Test
-    fun `route labels, stop filter and approved cars`() {
+    fun `route labels and approved cars`() {
         assertEquals("512", TripRules.km(512_463))
         assertEquals("564", TripRules.km(563_607))
         assertEquals("8,5", TripRules.hours(30_748))
         assertEquals("4", TripRules.hours(14_400))
-        val a = S08.route("a", stops = listOf("stp_tash" to 0L, "stp_jiz" to 1L, "stp_sam" to 2L))
-        val b = S08.route("b", stops = listOf("stp_tash" to 0L, "stp_sam" to 2L))
-        assertEquals(listOf("a"), TripRules.routesThrough(listOf(a, b), "stp_jiz").map { it.id })
-        assertEquals(listOf("a", "b"), TripRules.routesThrough(listOf(a, b), null).map { it.id })
         assertEquals(listOf("veh_ok"), TripRules.approvedVehicles(listOf(S08.vehicle("pending", id = "veh_p"), S08.vehicle(id = "veh_ok"))).map { it.id })
     }
 
@@ -107,17 +103,19 @@ class TripRulesTest {
     }
 
     @Test
-    fun `trip body numbers stops from 1, times from the route, units in g and ml`() {
+    fun `trip body is the route version without stops (ADR-0028), times from the route, units in g and ml`() {
         val car = S08.vehicle()
         val route = S08.route()
         val form = TripRules.formFromVehicle(TripForm(), car).copy(seats = "3", cargoKg = "20", cargoLitres = "100", departure = LocalDateTime.of(2026, 10, 2, 7, 30, 41))
         val body = TripRules.buildTripCreate(form, car, route)
         assertEquals("2026-10-02T07:30:00+05:00", body.plannedStartAt)
         assertEquals("2026-10-02T16:02:28+05:00", body.plannedEndAt) // + 30 748 s
-        assertEquals(listOf(1L, 2L, 3L), body.stops.map { it.seq })
-        assertEquals(listOf("stp_tash", "stp_sam", "stp_qarshi"), body.stops.map { it.stopId })
-        assertEquals("2026-10-02T12:58:13+05:00", body.stops[1].plannedArrivalAt) // + 19 693 s
-        assertEquals(5L, body.stops.first().dwellMinutes)
+        assertEquals("rtv_1", body.routeVersionId)
+        // The form has no stretch: the server takes the whole road.
+        assertNull(body.routeStartM)
+        assertNull(body.routeEndM)
+        val json = uz.elchi.app.api.ElchiJson.encodeToString(uz.elchi.app.api.generated.TripCreate.serializer(), body)
+        assertFalse(json, "stops" in json)
         assertEquals(3L, body.seatCapacity)
         assertEquals(20_000L, body.cargoCapacityWeightG)
         assertEquals(100_000L, body.cargoCapacityVolumeMl)
@@ -142,5 +140,38 @@ class TripRulesTest {
         assertEquals("02.10, 09:00", DriverTime.clockOrDay(opens, now))
         assertEquals("09:00", DriverTime.clockOrDay(opens, Instant.parse("2026-10-02T01:00:00Z")))
         assertEquals("02.10, 09:00 - 18:00", DriverTime.range(opens, Instant.parse("2026-10-02T13:00:00Z")))
+    }
+
+    // -- ADR-0028: trips without stops ----------------------------------------------------------------------------
+
+    @Test
+    fun `a trip is named by the direction it serves, else by its times`() {
+        val trip = S08.trip("trp_9")
+        val end = { region: String, district: String? -> uz.elchi.app.api.generated.DirectionEndDTO(regionId = "r", regionNameUz = region, districtId = district?.let { "d" }, districtNameUz = district) }
+        val direction = uz.elchi.app.api.generated.DriverDirectionDTO(
+            activeTrip = uz.elchi.app.api.generated.DirectionTripRefDTO(id = "trp_9", plannedEndAt = trip.plannedEndAt, plannedStartAt = trip.plannedStartAt, seatsBooked = 0, status = TripStatus.PLANNED),
+            cargoCapacityVolumeMl = 0, cargoCapacityWeightG = 0, createdAt = "2026-10-01T06:00:00Z",
+            destination = end("Samarqand viloyati", "Samarqand"), id = "drd_1", origin = end("Toshkent shahri", null), seatCapacity = 4,
+            status = "active", updatedAt = "2026-10-01T06:00:00Z", vehicleId = "veh_1", version = 1,
+        )
+        assertEquals(direction, TripRules.directionOf("trp_9", listOf(direction)))
+        assertNull(TripRules.directionOf("trp_other", listOf(direction)))
+        assertEquals("Toshkent shahri → Samarqand", TripRules.routeTitle(trip, direction, ru = false))
+        assertEquals("02.10, 09:00 → 02.10, 17:30", TripRules.routeTitle(trip, null, ru = false))
+    }
+
+    @Test
+    fun `places and stretches replace the stop ladder`() {
+        val point = uz.elchi.app.api.generated.PointEndDTO(address = "O'zbekiston, Samarqand, Registon", district = uz.elchi.app.api.generated.DistrictRefDTO("dst_s", "Samarqand"), lat = 39.6, lng = 66.9)
+        assertEquals("Samarqand, Registon", TripRules.placeName(point))
+        assertEquals("Samarqand", TripRules.placeName(point.copy(address = " ")))
+        assertNull(TripRules.placeName(null))
+        val item = uz.elchi.app.api.generated.ManifestItemDTO(bookingId = "bkg_1", clientFirstName = "Ali", serviceStatus = "confirmed", serviceType = uz.elchi.app.api.generated.ServiceType.PARCEL)
+        fun place(seq: Long, pickups: Int, dropoffs: Int) = uz.elchi.app.api.generated.ManifestPlaceDTO(
+            dropoffs = List(dropoffs) { item }, pickups = List(pickups) { item }, plannedArrivalAt = "2026-10-02T04:00:00Z", point = point, seq = seq,
+        )
+        assertEquals(listOf(1L, 3L), TripRules.ladderPlaces(listOf(place(3, 0, 1), place(2, 0, 0), place(1, 1, 0))).map { it.seq })
+        assertEquals(0L, TripRules.kmAlong(1_000, 5_000))
+        assertEquals(12L, TripRules.kmAlong(17_400, 5_000))
     }
 }

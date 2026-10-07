@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.elchi.app.R
+import uz.elchi.app.api.generated.DriverDirectionDTO
 import uz.elchi.app.api.generated.ManifestItemDTO
 import uz.elchi.app.api.generated.ServiceType
 import uz.elchi.app.api.generated.TripDTO
@@ -96,14 +97,14 @@ internal fun TripsList(vm: TripsViewModel, onAdd: () -> Unit, onTrip: (String) -
         } else {
             Text(t(R.string.driver_routes_privateHint), style = Elchi.type.caption, color = Elchi.colors.muted)
             trips.value.forEach { trip ->
-                TripCard(trip, busy = trip.id in s.busy, opensAt = s.opensAt[trip.id], onClick = { onTrip(trip.id) }, onAction = { vm.act(trip, it) })
+                TripCard(trip, busy = trip.id in s.busy, opensAt = s.opensAt[trip.id], direction = s.direction(trip.id), onClick = { onTrip(trip.id) }, onAction = { vm.act(trip, it) })
             }
         }
     }
 }
 
 @Composable
-internal fun TripCard(trip: TripDTO, busy: Boolean, opensAt: Instant?, onClick: () -> Unit, onAction: (TripCommand) -> Unit) {
+internal fun TripCard(trip: TripDTO, busy: Boolean, opensAt: Instant?, direction: DriverDirectionDTO?, onClick: () -> Unit, onAction: (TripCommand) -> Unit) {
     val c = Elchi.colors
     val ru = appRu()
     val start = OrderRules.parseInstant(trip.plannedStartAt)
@@ -115,11 +116,11 @@ internal fun TripCard(trip: TripDTO, busy: Boolean, opensAt: Instant?, onClick: 
     val next = TripRules.nextAction(trip.status)
     // Design 07 §2.1-2.3: the status as a toned badge, the next step as the primary button, history faded.
     ItemCard(
-        title = TripRules.routeTitle(trip, ru),
+        title = TripRules.routeTitle(trip, direction, ru),
         modifier = if (TripRules.isActive(trip.status)) Modifier else Modifier.alpha(0.7f),
         icon = ElchiIcon.ROUTE,
         badge = tripStatusText(trip.status) to TripRules.statusTone(trip.status),
-        sub = t(R.string.driverRoutes_tripMeta, "date" to date, "stops" to trip.stops.size, "seats" to trip.seatCapacity),
+        sub = t(R.string.driverRoutes_tripMeta, "date" to date, "seats" to trip.seatCapacity),
         lines = lines,
         onClick = onClick,
         footer = next?.let { command ->
@@ -130,7 +131,7 @@ internal fun TripCard(trip: TripDTO, busy: Boolean, opensAt: Instant?, onClick: 
 
 // -- driver-add-route -------------------------------------------------------------------------------------------
 
-/** `driver-add-route`: the car, corridor → route (with the stop filter), departure, seats and cargo room. */
+/** `driver-add-route`: the car, corridor → route, departure, seats and cargo room (ADR-0028: no stop filter). */
 @Composable
 fun AddTripScreen(vm: AddTripViewModel, onBack: () -> Unit, onCreated: (String) -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -261,42 +262,17 @@ private fun RoutePicker(s: AddTripViewModel.State, vm: AddTripViewModel, ru: Boo
                 Note(t(R.string.addRoute_noApprovedRoute), tone = Tone.WARN)
                 return
             }
-            fun stopName(id: String) = catalog.value.stops[id]?.let { if (ru) it.nameRu ?: it.nameUz else it.nameUz } ?: "?"
-            // More than one route: "which one passes Jizzax?" (GET /stops/search, corridor stops only).
-            if (all.size > 1) {
-                val filter = s.form.stopFilterName
-                if (filter == null) {
-                    ElchiField(
-                        s.stopQuery, vm::searchStop,
-                        placeholder = t(R.string.tripPlan_stopSearchLabel),
-                        icon = ElchiIcon.SEARCH,
-                    )
-                    if (s.stopResults.isNotEmpty()) {
-                        ListCard {
-                            s.stopResults.forEachIndexed { i, stop ->
-                                ListRow(if (ru) stop.nameRu ?: stop.nameUz else stop.nameUz, icon = ElchiIcon.PIN, description = stop.district.nameUz, first = i == 0, onClick = { vm.pickStopFilter(stop) })
-                            }
-                        }
-                    }
-                } else {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.field).padding(horizontal = 14.dp, vertical = 4.dp)) {
-                        Text(t(R.string.tripPlan_stopFilter, "name" to filter), Modifier.weight(1f).padding(vertical = 10.dp), style = Elchi.type.label, color = c.text)
-                        ElchiButton(t(R.string.tripPlan_stopFilterClear), { vm.pickStopFilter(null) }, Modifier.height(40.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, horizontalPadding = 8.dp)
-                    }
-                    if (s.routes.isEmpty()) Note(t(R.string.tripPlan_stopFilterNone, "name" to filter), tone = Tone.WARN)
-                }
-            }
             if (s.routes.isNotEmpty()) {
                 SelectField(
                     label = t(R.string.addRoute_route),
                     value = s.form.routeId,
                     options = s.routes.map { r ->
-                        r.id to t(R.string.addRoute_routeOption, "stops" to r.stops.size, "km" to TripRules.km(r.distanceM), "hours" to TripRules.hours(r.durationS))
+                        r.id to t(R.string.addRoute_routeOption, "km" to TripRules.km(r.distanceM), "hours" to TripRules.hours(r.durationS))
                     },
                     onSelect = vm::pickRoute,
                     placeholder = t(R.string.addRoute_routePlaceholder),
-                    // The stops say which road it is - the numbers alone do not tell two routes apart.
-                    hint = s.route?.stops?.sortedBy { it.seq }?.joinToString(" → ") { stopName(it.stopId) } ?: routeError,
+                    // ADR-0028: a route has no stops to list; the km and hours tell the roads apart.
+                    hint = routeError,
                 )
             }
         }
@@ -305,9 +281,9 @@ private fun RoutePicker(s: AddTripViewModel.State, vm: AddTripViewModel, ru: Boo
 
 // -- driver-trip-detail -----------------------------------------------------------------------------------------
 
-/** `driver-trip-detail`: header, stops, free room per segment, the manifest, and the commands. */
+/** `driver-trip-detail`: header, the clients' places, free room per stretch, the manifest, and the commands. */
 @Composable
-fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.elchi.app.gps.DriverTracker? = null, onBooking: (String) -> Unit = {}) {
+fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.elchi.app.gps.DriverTracker? = null, direction: DriverDirectionDTO? = null, onBooking: (String) -> Unit = {}) {
     val s by vm.state.collectAsStateWithLifecycle()
     var reasonFor by remember { mutableStateOf<TripCommand?>(null) }
     // Design 07 §4.7: a cancelled trip goes back to the list (the banner says the open offers were closed).
@@ -325,8 +301,8 @@ fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.el
             Load.Loading -> LoadingState(count = 3)
             is Load.Failed -> LoadFailed(t(R.string.trip_detailsTitle), trip.error) { vm.refresh() }
             is Load.Ready -> {
-                TripHeader(trip.value)
-                TripStops(trip.value)
+                TripHeader(trip.value, direction)
+                TripStops(trip.value, s)
                 Availability(s, trip.value)
                 Manifest(s, onBooking)
                 TripCommands(trip.value, s.busy, s.opensAt, onCommand = { command -> if (command.needsReason) reasonFor = command else vm.act(command) })
@@ -347,13 +323,13 @@ fun TripDetailScreen(vm: TripDetailViewModel, onBack: () -> Unit, tracker: uz.el
 }
 
 @Composable
-private fun TripHeader(trip: TripDTO) {
+private fun TripHeader(trip: TripDTO, direction: DriverDirectionDTO?) {
     val ru = appRu()
     val start = OrderRules.parseInstant(trip.plannedStartAt)
     val end = OrderRules.parseInstant(trip.plannedEndAt)
     val cutoff = OrderRules.parseInstant(trip.bookingCutoffAt)
     ElchiCard {
-        CardHeader(TripRules.routeTitle(trip, ru), badge = tripStatusText(trip.status), badgeTone = TripRules.statusTone(trip.status))
+        CardHeader(TripRules.routeTitle(trip, direction, ru), badge = tripStatusText(trip.status), badgeTone = TripRules.statusTone(trip.status))
         CardRow(t(R.string.tripDetail_departure), start?.let(DriverTime::dayClock) ?: "—", first = true, strong = true)
         CardRow(t(R.string.tripDetail_arrival), end?.let(DriverTime::dayClock) ?: "—")
         CardRow(t(R.string.tripDetail_vehicle), "${trip.vehicle.makeModel}, ${trip.vehicle.color} · ${trip.vehicle.plateMasked}")
@@ -363,21 +339,19 @@ private fun TripHeader(trip: TripDTO) {
 }
 
 @Composable
-private fun TripStops(trip: TripDTO) {
-    val ru = appRu()
-    val stops = trip.stops.sortedBy { it.seq }
-    // Design 07 §4.2: the dots follow the trip status (the server sends no per-stop passage).
-    val states = Design07Rules.ladder(trip.status, stops.size)
-    // Q158 (ADR-0027): the road by its districts and estimated times - route nodes are internal.
+private fun TripStops(trip: TripDTO, s: TripDetailViewModel.State) {
+    // ADR-0028: the ladder's rows are the clients' marked places (manifest `places[]`) with their planned times -
+    // a trip has no stops. Nothing booked yet: nothing to list.
+    val places = TripRules.ladderPlaces((s.manifest as? Load.Ready)?.value?.places.orEmpty())
+    if (places.isEmpty()) return
+    // Design 07 §4.2: the dots follow the trip status (the server sends no per-place passage).
+    val states = Design07Rules.ladder(trip.status, places.size)
     Text(t(R.string.tripDetail_alongTheRoad), style = Elchi.type.caption.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = Elchi.colors.muted)
     StatusLadder(
-        TripRules.alongTheRoad(stops, ru).map { i ->
-            val stop = stops[i]
-            val planned = OrderRules.parseInstant(stop.plannedArrivalAt)?.let(DriverTime::clock)
-            val eta = OrderRules.parseInstant(stop.etaArrivalAt)?.let(DriverTime::clock)?.takeIf { it != planned }
+        places.mapIndexed { i, place ->
             LadderRow(
-                title = TripRules.placeName(stop.stop, ru),
-                time = listOfNotNull(planned, eta?.let { "ETA $it" }).joinToString(" · ").ifEmpty { null },
+                title = TripRules.placeName(place.point) ?: t(R.string.tripDetail_agreedPoint),
+                time = OrderRules.parseInstant(place.plannedArrivalAt)?.let(DriverTime::clock),
                 state = states[i],
             )
         },
@@ -386,21 +360,21 @@ private fun TripStops(trip: TripDTO) {
 
 @Composable
 private fun Availability(s: TripDetailViewModel.State, trip: TripDTO) {
-    val ru = appRu()
-    val names = trip.stops.associate { it.stop.id to TripRules.placeName(it.stop, ru) }
+    val startM = trip.routeStartM ?: 0L
     ElchiCard {
         CardHeader(t(R.string.tripDetail_availabilityTitle))
         when (val a = s.availability) {
             Load.Loading -> LoadingLine(t(R.string.common_loading))
             is Load.Failed -> Note(uz.elchi.app.i18n.errorText(a.error), Modifier.padding(vertical = 8.dp), tone = Tone.ERR)
-            is Load.Ready -> if (a.value.segments.isEmpty()) {
+            is Load.Ready -> if (a.value.stretches.isEmpty()) {
                 Text(t(R.string.tripDetail_availabilityEmpty), Modifier.padding(vertical = 10.dp), style = Elchi.type.label, color = Elchi.colors.muted)
             } else {
-                val segments = a.value.segments.sortedBy { it.fromSeq }
+                // ADR-0028: capacity per stretch of road, in km along this trip (web `tripDetail.stretchKm`).
+                val stretches = a.value.stretches.sortedBy { it.fromM }
                 val computed = OrderRules.parseInstant(a.value.computedAt)?.let(DriverTime::clock) ?: "—"
-                segments.forEachIndexed { i, seg ->
+                stretches.forEachIndexed { i, seg ->
                     CardRow(
-                        "${names[seg.fromStopId] ?: "?"} → ${names[seg.toStopId] ?: "?"}",
+                        t(R.string.tripDetail_stretchKm, "from" to TripRules.kmAlong(seg.fromM, startM), "to" to TripRules.kmAlong(seg.toM, startM)),
                         t(
                             R.string.tripDetail_segmentLine,
                             "seats" to seg.seatsRemaining,
@@ -409,7 +383,7 @@ private fun Availability(s: TripDetailViewModel.State, trip: TripDTO) {
                             "baggage" to t(R.string.tripDetail_litres, "value" to seg.baggageRemainingMl / 1000),
                         ),
                         first = i == 0,
-                        detail = if (i == segments.lastIndex) t(R.string.tripDetail_computedNote, "time" to computed) else null,
+                        detail = if (i == stretches.lastIndex) t(R.string.tripDetail_computedNote, "time" to computed) else null,
                     )
                 }
             }
@@ -419,19 +393,18 @@ private fun Availability(s: TripDetailViewModel.State, trip: TripDTO) {
 
 @Composable
 private fun Manifest(s: TripDetailViewModel.State, onBooking: (String) -> Unit) {
-    val ru = appRu()
     ElchiCard {
         CardHeader(t(R.string.tripDetail_manifestTitle))
         when (val m = s.manifest) {
             Load.Loading -> LoadingLine(t(R.string.common_loading))
             is Load.Failed -> Note(uz.elchi.app.i18n.errorText(m.error), Modifier.padding(vertical = 8.dp), tone = Tone.ERR)
             is Load.Ready -> {
-                val rows = m.value.stops.sortedBy { it.seq }.flatMap { stop ->
-                    // Q158: the client's own place (address or district), a legacy node by its district.
-                    val place = stop.point?.address?.let(ParcelRules::withoutCountry)?.takeIf { it.isNotBlank() } ?: stop.point?.district?.nameUz ?: stop.stop?.let { TripRules.placeName(it, ru) } ?: "?"
-                    val time = OrderRules.parseInstant(stop.plannedArrivalAt)?.let(DriverTime::clock).orEmpty()
-                    stop.pickups.map { Triple("$place · $time · ${t(R.string.tripDetail_pickups)}", it, true) } +
-                        stop.dropoffs.map { Triple("$place · $time · ${t(R.string.tripDetail_dropoffs)}", it, false) }
+                val rows = m.value.places.sortedBy { it.seq }.flatMap { place ->
+                    // ADR-0028: the client's own place (address or district) and its planned time.
+                    val name = TripRules.placeName(place.point) ?: t(R.string.tripDetail_agreedPoint)
+                    val time = OrderRules.parseInstant(place.plannedArrivalAt)?.let(DriverTime::clock).orEmpty()
+                    place.pickups.map { Triple("$name · $time · ${t(R.string.tripDetail_pickups)}", it, true) } +
+                        place.dropoffs.map { Triple("$name · $time · ${t(R.string.tripDetail_dropoffs)}", it, false) }
                 }
                 if (rows.isEmpty()) {
                     Text(t(R.string.driver_trip_manifestEmpty), Modifier.padding(vertical = 10.dp), style = Elchi.type.label, color = Elchi.colors.muted)

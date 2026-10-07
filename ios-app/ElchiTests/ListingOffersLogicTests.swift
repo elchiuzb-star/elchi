@@ -253,8 +253,8 @@ struct LegacyAndBookingTests {
         let json = Fixture.decode(JSONValue.self, """
             {"id":"bkg_1","viewer_side":"client","service_type":"parcel","service_status":"confirmed","cash_status":"pending",
              "pickup":{"point":{"lat":41.3,"lng":69.2,"address":"Chilonzor","district":{"id":"dst_1","name_uz":"Chilonzor"}},
-                       "occurrence_seq":1,"window_start":"2026-09-30T05:00:00.123456Z","window_end":"2026-09-30T07:00:00Z"},
-             "dropoff":{"stop":{"id":"stp_1","name_uz":"Registon","name_ru":"Регистан"},"occurrence_seq":3},
+                       "window_start":"2026-09-30T05:00:00.123456Z","window_end":"2026-09-30T07:00:00Z"},
+             "dropoff":{"point":{"lat":39.65,"lng":66.97,"address":"Registon","district":{"id":"dst_2","name_uz":"Samarqand"}},"planned_arrival_at":"2026-09-30T10:00:00Z"},
              "quantity":1,"unit_price_minor":14000000,"total_minor":14000000,"currency":"UZS",
              "promo":{"view":"client","fare_minor":14000000,"passenger_discount_minor":1000000,"cash_due_minor":13000000,"currency":"UZS"},
              "created_at":"2026-09-29T10:00:00Z","listing_ids":{"request":"lst_1","supply":null},"version":1}
@@ -262,7 +262,7 @@ struct LegacyAndBookingTests {
         let booking = try #require(ClientBookingDTO.from(json))
         #expect(booking.serviceStatus == "confirmed")
         #expect(booking.pickup.point?.district?.nameUz == "Chilonzor")
-        #expect(booking.dropoff.stop?.nameUz == "Registon")
+        #expect(booking.dropoff.point?.address == "Registon" && booking.dropoff.plannedArrivalAt != nil)
         // With a bonus the client hands over the discounted amount, not the total.
         #expect(booking.cashDueMinor == 13_000_000)
         #expect(ServerTime.parse(booking.pickup.windowStart) != nil)

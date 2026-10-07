@@ -149,23 +149,6 @@ final class ParcelRequestModel {
 
     /// Every district (the locate button's nearest-centre search), read once.
     private var allDistricts: [DistrictDTO]?
-    /// Verified stops of the public corridors, read once (there is no stops-by-district endpoint).
-    private var corridorStops: [StopDTO]?
-
-    /// Active verified stops in these districts (the point step's chips), only when a district says it has some.
-    func stops(inDistricts ids: Set<String>) async -> [StopDTO] {
-        if corridorStops == nil {
-            guard let corridors = try? await api.listCorridors(serviceType: mode).data else { return [] }
-            var all: [StopDTO] = []
-            for corridor in corridors where corridor.stopsCount > 0 {
-                if let stops = try? await api.listCorridorStops(corridorId: corridor.id).data { all += stops }
-            }
-            corridorStops = all
-        }
-        var seen = Set<String>()
-        return (corridorStops ?? []).filter { $0.isActive && ids.contains($0.district.id) && seen.insert($0.id).inserted }
-    }
-
     /// The locate button: with "Qayerdan" still empty, the person's position becomes it - the nearest district centre
     /// (v2 ids) and the reverse-geocoded street - and the direction check runs as for any picked place.
     func fillPickup(from point: GeoPoint) async -> LocateOutcome {

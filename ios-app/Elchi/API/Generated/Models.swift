@@ -116,16 +116,12 @@ public struct AmendmentAccept: Codable, Hashable, Sendable {
 }
 
 public struct AmendmentChanges: Codable, Hashable, Sendable {
-    public var dropoffStopId: String?
-    public var pickupStopId: String?
     public var pickupWindowEnd: String?
     public var pickupWindowStart: String?
     public var quantity: Int?
     public var unitPriceMinor: Int?
 
-    public init(dropoffStopId: String? = nil, pickupStopId: String? = nil, pickupWindowEnd: String? = nil, pickupWindowStart: String? = nil, quantity: Int? = nil, unitPriceMinor: Int? = nil) {
-        self.dropoffStopId = dropoffStopId
-        self.pickupStopId = pickupStopId
+    public init(pickupWindowEnd: String? = nil, pickupWindowStart: String? = nil, quantity: Int? = nil, unitPriceMinor: Int? = nil) {
         self.pickupWindowEnd = pickupWindowEnd
         self.pickupWindowStart = pickupWindowStart
         self.quantity = quantity
@@ -133,8 +129,6 @@ public struct AmendmentChanges: Codable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case dropoffStopId = "dropoff_stop_id"
-        case pickupStopId = "pickup_stop_id"
         case pickupWindowEnd = "pickup_window_end"
         case pickupWindowStart = "pickup_window_start"
         case quantity = "quantity"
@@ -1113,15 +1107,13 @@ public struct CorridorDTO: Codable, Hashable, Sendable {
     public var id: String
     public var name: String
     public var originRegion: RegionRefDTO
-    public var stopsCount: Int
 
-    public init(destinationRegion: RegionRefDTO, enabledServices: [ServiceType], id: String, name: String, originRegion: RegionRefDTO, stopsCount: Int) {
+    public init(destinationRegion: RegionRefDTO, enabledServices: [ServiceType], id: String, name: String, originRegion: RegionRefDTO) {
         self.destinationRegion = destinationRegion
         self.enabledServices = enabledServices
         self.id = id
         self.name = name
         self.originRegion = originRegion
-        self.stopsCount = stopsCount
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1130,31 +1122,26 @@ public struct CorridorDTO: Codable, Hashable, Sendable {
         case id = "id"
         case name = "name"
         case originRegion = "origin_region"
-        case stopsCount = "stops_count"
     }
 }
 
 /// G17: one district a corridor passes, in travel order.
 public struct CorridorDistrictDTO: Codable, Hashable, Sendable {
     public var district: DistrictDTO
-    /// A confirmed route version of this corridor really stops in the district. False = the corridor owns a stop there, but no confirmed road reaches it yet (spec 6.1: proximity is not a route).
-    public var onConfirmedRoute: Bool
+    /// Always true (ADR-0028): a district is listed only when its centre lies within the corridor's radius of a confirmed road. A district the road does not reach is not listed (spec 6.1: proximity is not a route).
+    public var onConfirmedRoute: Bool?
     public var sequence: Int
-    /// Active stops of this corridor inside the district.
-    public var stopsCount: Int
 
-    public init(district: DistrictDTO, onConfirmedRoute: Bool, sequence: Int, stopsCount: Int) {
+    public init(district: DistrictDTO, onConfirmedRoute: Bool? = nil, sequence: Int) {
         self.district = district
         self.onConfirmedRoute = onConfirmedRoute
         self.sequence = sequence
-        self.stopsCount = stopsCount
     }
 
     enum CodingKeys: String, CodingKey {
         case district = "district"
         case onConfirmedRoute = "on_confirmed_route"
         case sequence = "sequence"
-        case stopsCount = "stops_count"
     }
 }
 
@@ -1247,7 +1234,7 @@ public struct DirectionEndInput: Codable, Hashable, Sendable {
     }
 }
 
-/// Q152: an offer from a direction. The trip, stops, window and quantity are the system's (ADR-0027).
+/// Q152: an offer from a direction. The trip, window and quantity are the system's (ADR-0027).
 public struct DirectionOfferCreate: Codable, Hashable, Sendable {
     public var listingId: String
     public var message: String?
@@ -1454,10 +1441,8 @@ public struct DistrictDTO: Codable, Hashable, Sendable {
     public var nameRu: String?
     public var nameUz: String
     public var region: RegionRefDTO
-    /// Active stops of publicly visible corridors in this district. 0 means the place can be named but no verified stop serves it yet - the client says so instead of promising a ride.
-    public var stopsCount: Int
 
-    public init(centerLat: Double? = nil, centerLng: Double? = nil, id: String, isActive: Bool? = nil, nameRu: String? = nil, nameUz: String, region: RegionRefDTO, stopsCount: Int) {
+    public init(centerLat: Double? = nil, centerLng: Double? = nil, id: String, isActive: Bool? = nil, nameRu: String? = nil, nameUz: String, region: RegionRefDTO) {
         self.centerLat = centerLat
         self.centerLng = centerLng
         self.id = id
@@ -1465,7 +1450,6 @@ public struct DistrictDTO: Codable, Hashable, Sendable {
         self.nameRu = nameRu
         self.nameUz = nameUz
         self.region = region
-        self.stopsCount = stopsCount
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1476,7 +1460,6 @@ public struct DistrictDTO: Codable, Hashable, Sendable {
         case nameRu = "name_ru"
         case nameUz = "name_uz"
         case region = "region"
-        case stopsCount = "stops_count"
     }
 }
 
@@ -2116,12 +2099,10 @@ public struct ListingCreate: Codable, Hashable, Sendable {
     public var currency: Currency?
     public var departureWindowEnd: String
     public var departureWindowStart: String
-    public var destinationPoint: PointEndInput?
-    public var destinationStopId: String?
+    public var destinationPoint: PointEndInput
     public var expiresAt: String?
     public var kind: ListingKind
-    public var originPoint: PointEndInput?
-    public var originStopId: String?
+    public var originPoint: PointEndInput
     public var parcel: ParcelDetails?
     public var passenger: PassengerDetails?
     public var paymentMethod: PaymentMethod?
@@ -2131,17 +2112,15 @@ public struct ListingCreate: Codable, Hashable, Sendable {
     public var tripId: String?
     public var unitPriceMinor: Int
 
-    public init(comment: String? = nil, currency: Currency? = nil, departureWindowEnd: String, departureWindowStart: String, destinationPoint: PointEndInput? = nil, destinationStopId: String? = nil, expiresAt: String? = nil, kind: ListingKind, originPoint: PointEndInput? = nil, originStopId: String? = nil, parcel: ParcelDetails? = nil, passenger: PassengerDetails? = nil, paymentMethod: PaymentMethod? = nil, priceBasis: PriceBasis, serviceType: ServiceType, timezone: String? = nil, tripId: String? = nil, unitPriceMinor: Int) {
+    public init(comment: String? = nil, currency: Currency? = nil, departureWindowEnd: String, departureWindowStart: String, destinationPoint: PointEndInput, expiresAt: String? = nil, kind: ListingKind, originPoint: PointEndInput, parcel: ParcelDetails? = nil, passenger: PassengerDetails? = nil, paymentMethod: PaymentMethod? = nil, priceBasis: PriceBasis, serviceType: ServiceType, timezone: String? = nil, tripId: String? = nil, unitPriceMinor: Int) {
         self.comment = comment
         self.currency = currency
         self.departureWindowEnd = departureWindowEnd
         self.departureWindowStart = departureWindowStart
         self.destinationPoint = destinationPoint
-        self.destinationStopId = destinationStopId
         self.expiresAt = expiresAt
         self.kind = kind
         self.originPoint = originPoint
-        self.originStopId = originStopId
         self.parcel = parcel
         self.passenger = passenger
         self.paymentMethod = paymentMethod
@@ -2158,11 +2137,9 @@ public struct ListingCreate: Codable, Hashable, Sendable {
         case departureWindowEnd = "departure_window_end"
         case departureWindowStart = "departure_window_start"
         case destinationPoint = "destination_point"
-        case destinationStopId = "destination_stop_id"
         case expiresAt = "expires_at"
         case kind = "kind"
         case originPoint = "origin_point"
-        case originStopId = "origin_stop_id"
         case parcel = "parcel"
         case passenger = "passenger"
         case paymentMethod = "payment_method"
@@ -2182,12 +2159,10 @@ public struct ListingDTO: Codable, Hashable, Sendable {
     public var departureWindowEnd: String
     public var departureWindowStart: String
     public var destinationPoint: PointEndDTO?
-    public var destinationStop: StopRefDTO?
     public var expiresAt: String
     public var id: String
     public var kind: ListingKind
     public var originPoint: PointEndDTO?
-    public var originStop: StopRefDTO?
     public var owner: ListingOwnerDTO
     public var parcel: ParcelDetails?
     public var passenger: PassengerDetails?
@@ -2208,7 +2183,7 @@ public struct ListingDTO: Codable, Hashable, Sendable {
     /// Q98: distinct people who opened this listing. Counts neither the owner, nor staff, nor anonymous readers (including the public share page) - with no identity there is nothing to deduplicate by. It is a count of people, never of openings.
     public var viewCount: Int?
 
-    public init(comment: String? = nil, corridorId: String, createdAt: String, currency: Currency, departureWindowEnd: String, departureWindowStart: String, destinationPoint: PointEndDTO? = nil, destinationStop: StopRefDTO? = nil, expiresAt: String, id: String, kind: ListingKind, originPoint: PointEndDTO? = nil, originStop: StopRefDTO? = nil, owner: ListingOwnerDTO, parcel: ParcelDetails? = nil, passenger: PassengerDetails? = nil, paymentMethod: PaymentMethod, priceBasis: PriceBasis, publishedAt: String? = nil, quantity: Int, serviceType: ServiceType, status: ListingStatus, termsVersion: Int, timezone: String, totalMinor: Int, tripId: String? = nil, unitPriceMinor: Int, version: Int, viewCount: Int? = nil) {
+    public init(comment: String? = nil, corridorId: String, createdAt: String, currency: Currency, departureWindowEnd: String, departureWindowStart: String, destinationPoint: PointEndDTO? = nil, expiresAt: String, id: String, kind: ListingKind, originPoint: PointEndDTO? = nil, owner: ListingOwnerDTO, parcel: ParcelDetails? = nil, passenger: PassengerDetails? = nil, paymentMethod: PaymentMethod, priceBasis: PriceBasis, publishedAt: String? = nil, quantity: Int, serviceType: ServiceType, status: ListingStatus, termsVersion: Int, timezone: String, totalMinor: Int, tripId: String? = nil, unitPriceMinor: Int, version: Int, viewCount: Int? = nil) {
         self.comment = comment
         self.corridorId = corridorId
         self.createdAt = createdAt
@@ -2216,12 +2191,10 @@ public struct ListingDTO: Codable, Hashable, Sendable {
         self.departureWindowEnd = departureWindowEnd
         self.departureWindowStart = departureWindowStart
         self.destinationPoint = destinationPoint
-        self.destinationStop = destinationStop
         self.expiresAt = expiresAt
         self.id = id
         self.kind = kind
         self.originPoint = originPoint
-        self.originStop = originStop
         self.owner = owner
         self.parcel = parcel
         self.passenger = passenger
@@ -2248,12 +2221,10 @@ public struct ListingDTO: Codable, Hashable, Sendable {
         case departureWindowEnd = "departure_window_end"
         case departureWindowStart = "departure_window_start"
         case destinationPoint = "destination_point"
-        case destinationStop = "destination_stop"
         case expiresAt = "expires_at"
         case id = "id"
         case kind = "kind"
         case originPoint = "origin_point"
-        case originStop = "origin_stop"
         case owner = "owner"
         case parcel = "parcel"
         case passenger = "passenger"
@@ -2312,12 +2283,10 @@ public struct ListingOfferDTO: Codable, Hashable, Sendable {
     public var completedBookings: Int?
     public var currency: Currency
     public var dropoffPoint: PointEndDTO?
-    public var dropoffStop: StopRefDTO?
     public var isMine: Bool
     /// Stable per listing, e.g. "Haydovchi #2"; not derived from any id.
     public var label: String
     public var pickupPoint: PointEndDTO?
-    public var pickupStop: StopRefDTO?
     public var pickupWindowEnd: String
     public var pickupWindowStart: String
     public var priceBasis: PriceBasis
@@ -2335,15 +2304,13 @@ public struct ListingOfferDTO: Codable, Hashable, Sendable {
     public var updatedAt: String
     public var vehicleClass: String
 
-    public init(completedBookings: Int? = nil, currency: Currency, dropoffPoint: PointEndDTO? = nil, dropoffStop: StopRefDTO? = nil, isMine: Bool, label: String, pickupPoint: PointEndDTO? = nil, pickupStop: StopRefDTO? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, quantity: Int, ratingBucket: RatingBucket? = nil, ratingCount: Int? = nil, responsePending: Bool? = nil, revision: Int, seatCapacity: Int, totalMinor: Int, unitPriceMinor: Int, updatedAt: String, vehicleClass: String) {
+    public init(completedBookings: Int? = nil, currency: Currency, dropoffPoint: PointEndDTO? = nil, isMine: Bool, label: String, pickupPoint: PointEndDTO? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, quantity: Int, ratingBucket: RatingBucket? = nil, ratingCount: Int? = nil, responsePending: Bool? = nil, revision: Int, seatCapacity: Int, totalMinor: Int, unitPriceMinor: Int, updatedAt: String, vehicleClass: String) {
         self.completedBookings = completedBookings
         self.currency = currency
         self.dropoffPoint = dropoffPoint
-        self.dropoffStop = dropoffStop
         self.isMine = isMine
         self.label = label
         self.pickupPoint = pickupPoint
-        self.pickupStop = pickupStop
         self.pickupWindowEnd = pickupWindowEnd
         self.pickupWindowStart = pickupWindowStart
         self.priceBasis = priceBasis
@@ -2363,11 +2330,9 @@ public struct ListingOfferDTO: Codable, Hashable, Sendable {
         case completedBookings = "completed_bookings"
         case currency = "currency"
         case dropoffPoint = "dropoff_point"
-        case dropoffStop = "dropoff_stop"
         case isMine = "is_mine"
         case label = "label"
         case pickupPoint = "pickup_point"
-        case pickupStop = "pickup_stop"
         case pickupWindowEnd = "pickup_window_end"
         case pickupWindowStart = "pickup_window_start"
         case priceBasis = "price_basis"
@@ -2403,23 +2368,19 @@ public struct ListingPatch: Codable, Hashable, Sendable {
     public var comment: String?
     public var departureWindowEnd: String?
     public var departureWindowStart: String?
-    public var destinationStopId: String?
     public var expectedVersion: Int
     public var expiresAt: String?
-    public var originStopId: String?
     public var parcel: ParcelDetails?
     public var passenger: PassengerDetails?
     public var priceBasis: PriceBasis?
     public var unitPriceMinor: Int?
 
-    public init(comment: String? = nil, departureWindowEnd: String? = nil, departureWindowStart: String? = nil, destinationStopId: String? = nil, expectedVersion: Int, expiresAt: String? = nil, originStopId: String? = nil, parcel: ParcelDetails? = nil, passenger: PassengerDetails? = nil, priceBasis: PriceBasis? = nil, unitPriceMinor: Int? = nil) {
+    public init(comment: String? = nil, departureWindowEnd: String? = nil, departureWindowStart: String? = nil, expectedVersion: Int, expiresAt: String? = nil, parcel: ParcelDetails? = nil, passenger: PassengerDetails? = nil, priceBasis: PriceBasis? = nil, unitPriceMinor: Int? = nil) {
         self.comment = comment
         self.departureWindowEnd = departureWindowEnd
         self.departureWindowStart = departureWindowStart
-        self.destinationStopId = destinationStopId
         self.expectedVersion = expectedVersion
         self.expiresAt = expiresAt
-        self.originStopId = originStopId
         self.parcel = parcel
         self.passenger = passenger
         self.priceBasis = priceBasis
@@ -2430,10 +2391,8 @@ public struct ListingPatch: Codable, Hashable, Sendable {
         case comment = "comment"
         case departureWindowEnd = "departure_window_end"
         case departureWindowStart = "departure_window_start"
-        case destinationStopId = "destination_stop_id"
         case expectedVersion = "expected_version"
         case expiresAt = "expires_at"
-        case originStopId = "origin_stop_id"
         case parcel = "parcel"
         case passenger = "passenger"
         case priceBasis = "price_basis"
@@ -2447,11 +2406,9 @@ public struct ListingPublicDTO: Codable, Hashable, Sendable {
     public var departureWindowEnd: String
     public var departureWindowStart: String
     public var destinationPoint: PointEndDTO?
-    public var destinationStop: StopRefDTO?
     public var id: String
     public var kind: ListingKind
     public var originPoint: PointEndDTO?
-    public var originStop: StopRefDTO?
     public var parcelCategory: ParcelCategoryDTO?
     public var parcelType: ParcelType?
     public var priceBasis: PriceBasis
@@ -2469,16 +2426,14 @@ public struct ListingPublicDTO: Codable, Hashable, Sendable {
     /// Q98: distinct people who opened this listing. Counts neither the owner, nor staff, nor anonymous readers (including the public share page) - with no identity there is nothing to deduplicate by. It is a count of people, never of openings.
     public var viewCount: Int?
 
-    public init(currency: Currency, departureWindowEnd: String, departureWindowStart: String, destinationPoint: PointEndDTO? = nil, destinationStop: StopRefDTO? = nil, id: String, kind: ListingKind, originPoint: PointEndDTO? = nil, originStop: StopRefDTO? = nil, parcelCategory: ParcelCategoryDTO? = nil, parcelType: ParcelType? = nil, priceBasis: PriceBasis, publishedAt: String? = nil, quantity: Int, reputation: JSONValue? = nil, serviceType: ServiceType, status: ListingStatus, timezone: String, totalMinor: Int, tripId: String? = nil, unitPriceMinor: Int, viewCount: Int? = nil) {
+    public init(currency: Currency, departureWindowEnd: String, departureWindowStart: String, destinationPoint: PointEndDTO? = nil, id: String, kind: ListingKind, originPoint: PointEndDTO? = nil, parcelCategory: ParcelCategoryDTO? = nil, parcelType: ParcelType? = nil, priceBasis: PriceBasis, publishedAt: String? = nil, quantity: Int, reputation: JSONValue? = nil, serviceType: ServiceType, status: ListingStatus, timezone: String, totalMinor: Int, tripId: String? = nil, unitPriceMinor: Int, viewCount: Int? = nil) {
         self.currency = currency
         self.departureWindowEnd = departureWindowEnd
         self.departureWindowStart = departureWindowStart
         self.destinationPoint = destinationPoint
-        self.destinationStop = destinationStop
         self.id = id
         self.kind = kind
         self.originPoint = originPoint
-        self.originStop = originStop
         self.parcelCategory = parcelCategory
         self.parcelType = parcelType
         self.priceBasis = priceBasis
@@ -2499,11 +2454,9 @@ public struct ListingPublicDTO: Codable, Hashable, Sendable {
         case departureWindowEnd = "departure_window_end"
         case departureWindowStart = "departure_window_start"
         case destinationPoint = "destination_point"
-        case destinationStop = "destination_stop"
         case id = "id"
         case kind = "kind"
         case originPoint = "origin_point"
-        case originStop = "origin_stop"
         case parcelCategory = "parcel_category"
         case parcelType = "parcel_type"
         case priceBasis = "price_basis"
@@ -2593,21 +2546,19 @@ public struct ManifestItemDTO: Codable, Hashable, Sendable {
     }
 }
 
-public struct ManifestStopDTO: Codable, Hashable, Sendable {
+public struct ManifestPlaceDTO: Codable, Hashable, Sendable {
     public var dropoffs: [ManifestItemDTO]
     public var pickups: [ManifestItemDTO]
     public var plannedArrivalAt: String
     public var point: PointEndDTO?
     public var seq: Int
-    public var stop: StopRefDTO?
 
-    public init(dropoffs: [ManifestItemDTO], pickups: [ManifestItemDTO], plannedArrivalAt: String, point: PointEndDTO? = nil, seq: Int, stop: StopRefDTO? = nil) {
+    public init(dropoffs: [ManifestItemDTO], pickups: [ManifestItemDTO], plannedArrivalAt: String, point: PointEndDTO? = nil, seq: Int) {
         self.dropoffs = dropoffs
         self.pickups = pickups
         self.plannedArrivalAt = plannedArrivalAt
         self.point = point
         self.seq = seq
-        self.stop = stop
     }
 
     enum CodingKeys: String, CodingKey {
@@ -2616,7 +2567,6 @@ public struct ManifestStopDTO: Codable, Hashable, Sendable {
         case plannedArrivalAt = "planned_arrival_at"
         case point = "point"
         case seq = "seq"
-        case stop = "stop"
     }
 }
 
@@ -2653,17 +2603,13 @@ public enum MatchGroup: WireEnum, CaseIterable {
 
 /// Stable reason codes explaining a match decision (spec §6.4, §8; FeedItemDTO.match.reasons).
 ///
-/// Promoted from ``app.modules.geo.types`` (A2) in integration pass 1; geo re-exports it.
+/// Promoted from ``app.modules.geo.types`` (A2) in integration pass 1. Q160: no stop reasons - a place is on the road.
 public enum MatchReason: WireEnum, CaseIterable {
     case fullRoute
     case intermediateSegment
-    case pickupAtStop
-    case dropoffAtStop
     case pickupDetour
     case dropoffDetour
-    case nearbyStop
     case timeDiffers
-    case sameStop
     case pickupNotOnRoute
     case dropoffNotOnRoute
     case reverseDirection
@@ -2674,19 +2620,15 @@ public enum MatchReason: WireEnum, CaseIterable {
     /// A value this app version does not know yet. Never sent to the server.
     case unknown(String)
 
-    public static var allCases: [MatchReason] { [.fullRoute, .intermediateSegment, .pickupAtStop, .dropoffAtStop, .pickupDetour, .dropoffDetour, .nearbyStop, .timeDiffers, .sameStop, .pickupNotOnRoute, .dropoffNotOnRoute, .reverseDirection, .detourOrderUnknown, .timeWindowMismatch, .detourLimitExceeded, .routingUnavailable] }
+    public static var allCases: [MatchReason] { [.fullRoute, .intermediateSegment, .pickupDetour, .dropoffDetour, .timeDiffers, .pickupNotOnRoute, .dropoffNotOnRoute, .reverseDirection, .detourOrderUnknown, .timeWindowMismatch, .detourLimitExceeded, .routingUnavailable] }
 
     public var rawValue: String {
         switch self {
         case .fullRoute: return "full_route"
         case .intermediateSegment: return "intermediate_segment"
-        case .pickupAtStop: return "pickup_at_stop"
-        case .dropoffAtStop: return "dropoff_at_stop"
         case .pickupDetour: return "pickup_detour"
         case .dropoffDetour: return "dropoff_detour"
-        case .nearbyStop: return "nearby_stop"
         case .timeDiffers: return "time_differs"
-        case .sameStop: return "same_stop"
         case .pickupNotOnRoute: return "pickup_not_on_route"
         case .dropoffNotOnRoute: return "dropoff_not_on_route"
         case .reverseDirection: return "reverse_direction"
@@ -2703,13 +2645,9 @@ public enum MatchReason: WireEnum, CaseIterable {
         switch value {
         case "full_route": self = .fullRoute
         case "intermediate_segment": self = .intermediateSegment
-        case "pickup_at_stop": self = .pickupAtStop
-        case "dropoff_at_stop": self = .dropoffAtStop
         case "pickup_detour": self = .pickupDetour
         case "dropoff_detour": self = .dropoffDetour
-        case "nearby_stop": self = .nearbyStop
         case "time_differs": self = .timeDiffers
-        case "same_stop": self = .sameStop
         case "pickup_not_on_route": self = .pickupNotOnRoute
         case "dropoff_not_on_route": self = .dropoffNotOnRoute
         case "reverse_direction": self = .reverseDirection
@@ -3740,27 +3678,23 @@ public struct ProposalBaggage: Codable, Hashable, Sendable {
 
 public struct ProposalCounter: Codable, Hashable, Sendable {
     public var baggage: ProposalBaggage?
-    public var dropoffStopId: String?
     public var expectedRevision: Int
     public var message: String?
     /// ADR-0027 Q153: a driver's counter may move the pickup outside the request window when true. A counter that keeps the current window keeps its time proposal; a client cannot move it outside.
     public var outsideRequestWindow: Bool?
     public var parcel: ProposalParcel?
-    public var pickupStopId: String?
     public var pickupWindowEnd: String?
     public var pickupWindowStart: String?
     public var promoConsent: ProposalPromoConsent?
     public var quantity: Int?
     public var unitPriceMinor: Int?
 
-    public init(baggage: ProposalBaggage? = nil, dropoffStopId: String? = nil, expectedRevision: Int, message: String? = nil, outsideRequestWindow: Bool? = nil, parcel: ProposalParcel? = nil, pickupStopId: String? = nil, pickupWindowEnd: String? = nil, pickupWindowStart: String? = nil, promoConsent: ProposalPromoConsent? = nil, quantity: Int? = nil, unitPriceMinor: Int? = nil) {
+    public init(baggage: ProposalBaggage? = nil, expectedRevision: Int, message: String? = nil, outsideRequestWindow: Bool? = nil, parcel: ProposalParcel? = nil, pickupWindowEnd: String? = nil, pickupWindowStart: String? = nil, promoConsent: ProposalPromoConsent? = nil, quantity: Int? = nil, unitPriceMinor: Int? = nil) {
         self.baggage = baggage
-        self.dropoffStopId = dropoffStopId
         self.expectedRevision = expectedRevision
         self.message = message
         self.outsideRequestWindow = outsideRequestWindow
         self.parcel = parcel
-        self.pickupStopId = pickupStopId
         self.pickupWindowEnd = pickupWindowEnd
         self.pickupWindowStart = pickupWindowStart
         self.promoConsent = promoConsent
@@ -3770,12 +3704,10 @@ public struct ProposalCounter: Codable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case baggage = "baggage"
-        case dropoffStopId = "dropoff_stop_id"
         case expectedRevision = "expected_revision"
         case message = "message"
         case outsideRequestWindow = "outside_request_window"
         case parcel = "parcel"
-        case pickupStopId = "pickup_stop_id"
         case pickupWindowEnd = "pickup_window_end"
         case pickupWindowStart = "pickup_window_start"
         case promoConsent = "promo_consent"
@@ -3786,12 +3718,10 @@ public struct ProposalCounter: Codable, Hashable, Sendable {
 
 public struct ProposalCreate: Codable, Hashable, Sendable {
     public var baggage: ProposalBaggage?
-    public var dropoffStopId: String?
     public var message: String?
     /// ADR-0027 Q153: true - the driver proposes a pickup time outside the client's request window (at most 12 h away). Only a driver may; the client's own accept or counter is the consent. Omitted / false: the window must meet the request window, as before.
     public var outsideRequestWindow: Bool?
     public var parcel: ProposalParcel?
-    public var pickupStopId: String?
     public var pickupWindowEnd: String
     public var pickupWindowStart: String
     public var priceBasis: PriceBasis
@@ -3803,13 +3733,11 @@ public struct ProposalCreate: Codable, Hashable, Sendable {
     public var tripIntent: TripIntentRef?
     public var unitPriceMinor: Int
 
-    public init(baggage: ProposalBaggage? = nil, dropoffStopId: String? = nil, message: String? = nil, outsideRequestWindow: Bool? = nil, parcel: ProposalParcel? = nil, pickupStopId: String? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, promoConsent: ProposalPromoConsent? = nil, quantity: Int, tripId: String? = nil, tripIntent: TripIntentRef? = nil, unitPriceMinor: Int) {
+    public init(baggage: ProposalBaggage? = nil, message: String? = nil, outsideRequestWindow: Bool? = nil, parcel: ProposalParcel? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, promoConsent: ProposalPromoConsent? = nil, quantity: Int, tripId: String? = nil, tripIntent: TripIntentRef? = nil, unitPriceMinor: Int) {
         self.baggage = baggage
-        self.dropoffStopId = dropoffStopId
         self.message = message
         self.outsideRequestWindow = outsideRequestWindow
         self.parcel = parcel
-        self.pickupStopId = pickupStopId
         self.pickupWindowEnd = pickupWindowEnd
         self.pickupWindowStart = pickupWindowStart
         self.priceBasis = priceBasis
@@ -3822,11 +3750,9 @@ public struct ProposalCreate: Codable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case baggage = "baggage"
-        case dropoffStopId = "dropoff_stop_id"
         case message = "message"
         case outsideRequestWindow = "outside_request_window"
         case parcel = "parcel"
-        case pickupStopId = "pickup_stop_id"
         case pickupWindowEnd = "pickup_window_end"
         case pickupWindowStart = "pickup_window_start"
         case priceBasis = "price_basis"
@@ -4171,7 +4097,6 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
     public var currency: Currency
     public var demand: ProposalDemandDTO
     public var dropoffPoint: PointEndDTO?
-    public var dropoffStop: StopRefDTO?
     public var expiresAt: String
     /// Only shown to the driver side.
     public var feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO?
@@ -4182,7 +4107,6 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
     /// ADR-0027 Q153: the driver proposes a pickup outside the client's requested time; booking it needs the client's own accept (or the client's counter).
     public var outsideRequestWindow: Bool?
     public var pickupPoint: PointEndDTO?
-    public var pickupStop: StopRefDTO?
     public var pickupWindowEnd: String
     public var pickupWindowStart: String
     public var priceBasis: PriceBasis
@@ -4202,13 +4126,12 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
     public var totalMinor: Int
     public var unitPriceMinor: Int
 
-    public init(authorSide: ActorSide, createdAt: String, currency: Currency, demand: ProposalDemandDTO, dropoffPoint: PointEndDTO? = nil, dropoffStop: StopRefDTO? = nil, expiresAt: String, feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO? = nil, id: String, listingTermsVersion: Int, message: String? = nil, outsideRequestWindow: Bool? = nil, pickupPoint: PointEndDTO? = nil, pickupStop: StopRefDTO? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, priceRevisionsLeft: PriceRevisionsLeftDTO, promoConfirmation: String? = nil, promoQuote: ProposalPromo? = nil, promoUnavailableReason: String? = nil, quantity: Int, receiver: ContactDetails? = nil, revision: Int, status: ProposalStatus, statusReason: String? = nil, totalMinor: Int, unitPriceMinor: Int) {
+    public init(authorSide: ActorSide, createdAt: String, currency: Currency, demand: ProposalDemandDTO, dropoffPoint: PointEndDTO? = nil, expiresAt: String, feeQuote: app__modules__marketplace__schemas__FeeQuoteDTO? = nil, id: String, listingTermsVersion: Int, message: String? = nil, outsideRequestWindow: Bool? = nil, pickupPoint: PointEndDTO? = nil, pickupWindowEnd: String, pickupWindowStart: String, priceBasis: PriceBasis, priceRevisionsLeft: PriceRevisionsLeftDTO, promoConfirmation: String? = nil, promoQuote: ProposalPromo? = nil, promoUnavailableReason: String? = nil, quantity: Int, receiver: ContactDetails? = nil, revision: Int, status: ProposalStatus, statusReason: String? = nil, totalMinor: Int, unitPriceMinor: Int) {
         self.authorSide = authorSide
         self.createdAt = createdAt
         self.currency = currency
         self.demand = demand
         self.dropoffPoint = dropoffPoint
-        self.dropoffStop = dropoffStop
         self.expiresAt = expiresAt
         self.feeQuote = feeQuote
         self.id = id
@@ -4216,7 +4139,6 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
         self.message = message
         self.outsideRequestWindow = outsideRequestWindow
         self.pickupPoint = pickupPoint
-        self.pickupStop = pickupStop
         self.pickupWindowEnd = pickupWindowEnd
         self.pickupWindowStart = pickupWindowStart
         self.priceBasis = priceBasis
@@ -4239,7 +4161,6 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
         case currency = "currency"
         case demand = "demand"
         case dropoffPoint = "dropoff_point"
-        case dropoffStop = "dropoff_stop"
         case expiresAt = "expires_at"
         case feeQuote = "fee_quote"
         case id = "id"
@@ -4247,7 +4168,6 @@ public struct ProposalVersionDTO: Codable, Hashable, Sendable {
         case message = "message"
         case outsideRequestWindow = "outside_request_window"
         case pickupPoint = "pickup_point"
-        case pickupStop = "pickup_stop"
         case pickupWindowEnd = "pickup_window_end"
         case pickupWindowStart = "pickup_window_start"
         case priceBasis = "price_basis"
@@ -4274,11 +4194,11 @@ public struct PublicListingPageDTO: Codable, Hashable, Sendable {
     public var departureDate: String
     public var departureWindowEnd: String
     public var departureWindowStart: String
-    public var destinationStopName: String
+    public var destinationName: String
     public var kind: ListingKind
     /// Public id of the listing, so 'open in app' can show this request (elchi://listings/{id}). A public id is not a secret (ADR-0002); no owner data is added.
     public var listingId: String?
-    public var originStopName: String
+    public var originName: String
     public var priceBasis: PriceBasis
     public var quantity: Int
     public var serviceType: ServiceType
@@ -4287,16 +4207,16 @@ public struct PublicListingPageDTO: Codable, Hashable, Sendable {
     public var totalMinor: Int
     public var unitPriceMinor: Int
 
-    public init(cta: String, currency: Currency, departureDate: String, departureWindowEnd: String, departureWindowStart: String, destinationStopName: String, kind: ListingKind, listingId: String? = nil, originStopName: String, priceBasis: PriceBasis, quantity: Int, serviceType: ServiceType, statusOpen: Bool, timezone: String, totalMinor: Int, unitPriceMinor: Int) {
+    public init(cta: String, currency: Currency, departureDate: String, departureWindowEnd: String, departureWindowStart: String, destinationName: String, kind: ListingKind, listingId: String? = nil, originName: String, priceBasis: PriceBasis, quantity: Int, serviceType: ServiceType, statusOpen: Bool, timezone: String, totalMinor: Int, unitPriceMinor: Int) {
         self.cta = cta
         self.currency = currency
         self.departureDate = departureDate
         self.departureWindowEnd = departureWindowEnd
         self.departureWindowStart = departureWindowStart
-        self.destinationStopName = destinationStopName
+        self.destinationName = destinationName
         self.kind = kind
         self.listingId = listingId
-        self.originStopName = originStopName
+        self.originName = originName
         self.priceBasis = priceBasis
         self.quantity = quantity
         self.serviceType = serviceType
@@ -4312,10 +4232,10 @@ public struct PublicListingPageDTO: Codable, Hashable, Sendable {
         case departureDate = "departure_date"
         case departureWindowEnd = "departure_window_end"
         case departureWindowStart = "departure_window_start"
-        case destinationStopName = "destination_stop_name"
+        case destinationName = "destination_name"
         case kind = "kind"
         case listingId = "listing_id"
-        case originStopName = "origin_stop_name"
+        case originName = "origin_name"
         case priceBasis = "price_basis"
         case quantity = "quantity"
         case serviceType = "service_type"
@@ -4878,18 +4798,25 @@ public struct RoleActivateRequest: Codable, Hashable, Sendable {
     }
 }
 
+/// A road to propose for confirmation (ADR-0028): from A to B on a corridor - no intermediate point.
 public struct RoutePreviewRequest: Codable, Hashable, Sendable {
+    public var corridorId: String
     public var departureAt: String
-    public var stopIds: [String]
+    public var destination: PointDTO
+    public var origin: PointDTO
 
-    public init(departureAt: String, stopIds: [String]) {
+    public init(corridorId: String, departureAt: String, destination: PointDTO, origin: PointDTO) {
+        self.corridorId = corridorId
         self.departureAt = departureAt
-        self.stopIds = stopIds
+        self.destination = destination
+        self.origin = origin
     }
 
     enum CodingKeys: String, CodingKey {
+        case corridorId = "corridor_id"
         case departureAt = "departure_at"
-        case stopIds = "stop_ids"
+        case destination = "destination"
+        case origin = "origin"
     }
 }
 
@@ -4903,9 +4830,8 @@ public struct RouteVersionDTO: Codable, Hashable, Sendable {
     public var provider: String
     public var providerVersion: String
     public var status: String
-    public var stops: [RouteVersionStopDTO]
 
-    public init(attribution: String, distanceM: Int, durationS: Int, geometryPolyline: String, id: String, isEstimate: Bool, provider: String, providerVersion: String, status: String, stops: [RouteVersionStopDTO]) {
+    public init(attribution: String, distanceM: Int, durationS: Int, geometryPolyline: String, id: String, isEstimate: Bool, provider: String, providerVersion: String, status: String) {
         self.attribution = attribution
         self.distanceM = distanceM
         self.durationS = durationS
@@ -4915,7 +4841,6 @@ public struct RouteVersionDTO: Codable, Hashable, Sendable {
         self.provider = provider
         self.providerVersion = providerVersion
         self.status = status
-        self.stops = stops
     }
 
     enum CodingKeys: String, CodingKey {
@@ -4928,53 +4853,27 @@ public struct RouteVersionDTO: Codable, Hashable, Sendable {
         case provider = "provider"
         case providerVersion = "provider_version"
         case status = "status"
-        case stops = "stops"
-    }
-}
-
-public struct RouteVersionStopDTO: Codable, Hashable, Sendable {
-    public var cumulativeDistanceM: Int
-    public var cumulativeDurationS: Int
-    public var seq: Int
-    public var stopId: String
-
-    public init(cumulativeDistanceM: Int, cumulativeDurationS: Int, seq: Int, stopId: String) {
-        self.cumulativeDistanceM = cumulativeDistanceM
-        self.cumulativeDurationS = cumulativeDurationS
-        self.seq = seq
-        self.stopId = stopId
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case cumulativeDistanceM = "cumulative_distance_m"
-        case cumulativeDurationS = "cumulative_duration_s"
-        case seq = "seq"
-        case stopId = "stop_id"
     }
 }
 
 public struct SavedSearchCreate: Codable, Hashable, Sendable {
     public var destinationDistrictId: String?
     public var destinationRegionId: String?
-    public var destinationStopId: String?
     public var notify: Bool?
     public var originDistrictId: String?
     public var originRegionId: String?
-    public var originStopId: String?
     public var quantity: Int?
     public var serviceType: ServiceType
     public var side: FeedSide
     public var timeWindowEnd: String
     public var timeWindowStart: String
 
-    public init(destinationDistrictId: String? = nil, destinationRegionId: String? = nil, destinationStopId: String? = nil, notify: Bool? = nil, originDistrictId: String? = nil, originRegionId: String? = nil, originStopId: String? = nil, quantity: Int? = nil, serviceType: ServiceType, side: FeedSide, timeWindowEnd: String, timeWindowStart: String) {
+    public init(destinationDistrictId: String? = nil, destinationRegionId: String? = nil, notify: Bool? = nil, originDistrictId: String? = nil, originRegionId: String? = nil, quantity: Int? = nil, serviceType: ServiceType, side: FeedSide, timeWindowEnd: String, timeWindowStart: String) {
         self.destinationDistrictId = destinationDistrictId
         self.destinationRegionId = destinationRegionId
-        self.destinationStopId = destinationStopId
         self.notify = notify
         self.originDistrictId = originDistrictId
         self.originRegionId = originRegionId
-        self.originStopId = originStopId
         self.quantity = quantity
         self.serviceType = serviceType
         self.side = side
@@ -4985,11 +4884,9 @@ public struct SavedSearchCreate: Codable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case destinationDistrictId = "destination_district_id"
         case destinationRegionId = "destination_region_id"
-        case destinationStopId = "destination_stop_id"
         case notify = "notify"
         case originDistrictId = "origin_district_id"
         case originRegionId = "origin_region_id"
-        case originStopId = "origin_stop_id"
         case quantity = "quantity"
         case serviceType = "service_type"
         case side = "side"
@@ -5002,30 +4899,26 @@ public struct SavedSearchDTO: Codable, Hashable, Sendable {
     public var createdAt: String
     public var destinationDistrictId: String?
     public var destinationRegionId: String?
-    public var destinationStopId: String?
     public var id: String
     public var lastNotifiedAt: String?
     public var notify: Bool
     public var originDistrictId: String?
     public var originRegionId: String?
-    public var originStopId: String?
     public var quantity: Int
     public var serviceType: ServiceType
     public var side: FeedSide
     public var timeWindowEnd: String
     public var timeWindowStart: String
 
-    public init(createdAt: String, destinationDistrictId: String? = nil, destinationRegionId: String? = nil, destinationStopId: String? = nil, id: String, lastNotifiedAt: String? = nil, notify: Bool, originDistrictId: String? = nil, originRegionId: String? = nil, originStopId: String? = nil, quantity: Int, serviceType: ServiceType, side: FeedSide, timeWindowEnd: String, timeWindowStart: String) {
+    public init(createdAt: String, destinationDistrictId: String? = nil, destinationRegionId: String? = nil, id: String, lastNotifiedAt: String? = nil, notify: Bool, originDistrictId: String? = nil, originRegionId: String? = nil, quantity: Int, serviceType: ServiceType, side: FeedSide, timeWindowEnd: String, timeWindowStart: String) {
         self.createdAt = createdAt
         self.destinationDistrictId = destinationDistrictId
         self.destinationRegionId = destinationRegionId
-        self.destinationStopId = destinationStopId
         self.id = id
         self.lastNotifiedAt = lastNotifiedAt
         self.notify = notify
         self.originDistrictId = originDistrictId
         self.originRegionId = originRegionId
-        self.originStopId = originStopId
         self.quantity = quantity
         self.serviceType = serviceType
         self.side = side
@@ -5037,51 +4930,16 @@ public struct SavedSearchDTO: Codable, Hashable, Sendable {
         case createdAt = "created_at"
         case destinationDistrictId = "destination_district_id"
         case destinationRegionId = "destination_region_id"
-        case destinationStopId = "destination_stop_id"
         case id = "id"
         case lastNotifiedAt = "last_notified_at"
         case notify = "notify"
         case originDistrictId = "origin_district_id"
         case originRegionId = "origin_region_id"
-        case originStopId = "origin_stop_id"
         case quantity = "quantity"
         case serviceType = "service_type"
         case side = "side"
         case timeWindowEnd = "time_window_end"
         case timeWindowStart = "time_window_start"
-    }
-}
-
-public struct SegmentAvailabilityDTO: Codable, Hashable, Sendable {
-    public var baggageRemainingMl: Int
-    public var cargoRemainingVolumeMl: Int
-    public var cargoRemainingWeightG: Int
-    public var fromSeq: Int
-    public var fromStopId: String
-    public var seatsRemaining: Int
-    public var toSeq: Int
-    public var toStopId: String
-
-    public init(baggageRemainingMl: Int, cargoRemainingVolumeMl: Int, cargoRemainingWeightG: Int, fromSeq: Int, fromStopId: String, seatsRemaining: Int, toSeq: Int, toStopId: String) {
-        self.baggageRemainingMl = baggageRemainingMl
-        self.cargoRemainingVolumeMl = cargoRemainingVolumeMl
-        self.cargoRemainingWeightG = cargoRemainingWeightG
-        self.fromSeq = fromSeq
-        self.fromStopId = fromStopId
-        self.seatsRemaining = seatsRemaining
-        self.toSeq = toSeq
-        self.toStopId = toStopId
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case baggageRemainingMl = "baggage_remaining_ml"
-        case cargoRemainingVolumeMl = "cargo_remaining_volume_ml"
-        case cargoRemainingWeightG = "cargo_remaining_weight_g"
-        case fromSeq = "from_seq"
-        case fromStopId = "from_stop_id"
-        case seatsRemaining = "seats_remaining"
-        case toSeq = "to_seq"
-        case toStopId = "to_stop_id"
     }
 }
 
@@ -5323,56 +5181,32 @@ public struct StaffMfaStepUpDTO: Codable, Hashable, Sendable {
     }
 }
 
-public struct StopDTO: Codable, Hashable, Sendable {
-    public var district: DistrictRefDTO
-    public var id: String
-    public var isActive: Bool
-    public var meetingNote: String?
-    public var nameRu: String?
-    public var nameUz: String
-    public var point: PointDTO
+/// ADR-0028: what is still free on ``[from_m, to_m)`` of the trip's road - one row per piece between bookings'
+/// places (the use is constant inside a piece).
+public struct StretchAvailabilityDTO: Codable, Hashable, Sendable {
+    public var baggageRemainingMl: Int
+    public var cargoRemainingVolumeMl: Int
+    public var cargoRemainingWeightG: Int
+    public var fromM: Int
+    public var seatsRemaining: Int
+    public var toM: Int
 
-    public init(district: DistrictRefDTO, id: String, isActive: Bool, meetingNote: String? = nil, nameRu: String? = nil, nameUz: String, point: PointDTO) {
-        self.district = district
-        self.id = id
-        self.isActive = isActive
-        self.meetingNote = meetingNote
-        self.nameRu = nameRu
-        self.nameUz = nameUz
-        self.point = point
+    public init(baggageRemainingMl: Int, cargoRemainingVolumeMl: Int, cargoRemainingWeightG: Int, fromM: Int, seatsRemaining: Int, toM: Int) {
+        self.baggageRemainingMl = baggageRemainingMl
+        self.cargoRemainingVolumeMl = cargoRemainingVolumeMl
+        self.cargoRemainingWeightG = cargoRemainingWeightG
+        self.fromM = fromM
+        self.seatsRemaining = seatsRemaining
+        self.toM = toM
     }
 
     enum CodingKeys: String, CodingKey {
-        case district = "district"
-        case id = "id"
-        case isActive = "is_active"
-        case meetingNote = "meeting_note"
-        case nameRu = "name_ru"
-        case nameUz = "name_uz"
-        case point = "point"
-    }
-}
-
-public struct StopRefDTO: Codable, Hashable, Sendable {
-    /// Q158 (ADR-0027): the district of this internal route node. Clients show the place by its district, never by a stop name (ELCHI works point A -> point B).
-    public var districtNameUz: String?
-    /// Opaque stop id (stp_...).
-    public var id: String
-    public var nameRu: String?
-    public var nameUz: String
-
-    public init(districtNameUz: String? = nil, id: String, nameRu: String? = nil, nameUz: String) {
-        self.districtNameUz = districtNameUz
-        self.id = id
-        self.nameRu = nameRu
-        self.nameUz = nameUz
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case districtNameUz = "district_name_uz"
-        case id = "id"
-        case nameRu = "name_ru"
-        case nameUz = "name_uz"
+        case baggageRemainingMl = "baggage_remaining_ml"
+        case cargoRemainingVolumeMl = "cargo_remaining_volume_ml"
+        case cargoRemainingWeightG = "cargo_remaining_weight_g"
+        case fromM = "from_m"
+        case seatsRemaining = "seats_remaining"
+        case toM = "to_m"
     }
 }
 
@@ -6067,20 +5901,20 @@ public struct TripActionRequest: Codable, Hashable, Sendable {
 public struct TripAvailabilityDTO: Codable, Hashable, Sendable {
     public var computedAt: String
     /// Computed remaining capacity; not a reservation.
-    public var segments: [SegmentAvailabilityDTO]
+    public var stretches: [StretchAvailabilityDTO]
     public var tripId: String
     public var tripVersion: Int
 
-    public init(computedAt: String, segments: [SegmentAvailabilityDTO], tripId: String, tripVersion: Int) {
+    public init(computedAt: String, stretches: [StretchAvailabilityDTO], tripId: String, tripVersion: Int) {
         self.computedAt = computedAt
-        self.segments = segments
+        self.stretches = stretches
         self.tripId = tripId
         self.tripVersion = tripVersion
     }
 
     enum CodingKeys: String, CodingKey {
         case computedAt = "computed_at"
-        case segments = "segments"
+        case stretches = "stretches"
         case tripId = "trip_id"
         case tripVersion = "trip_version"
     }
@@ -6096,12 +5930,15 @@ public struct TripCreate: Codable, Hashable, Sendable {
     public var pickupWaitMinutes: Int?
     public var plannedEndAt: String
     public var plannedStartAt: String
+    /// ADR-0028: where on the road the trip ends.
+    public var routeEndM: Int?
+    /// ADR-0028: where on the confirmed road the trip starts, metres from its start.
+    public var routeStartM: Int?
     public var routeVersionId: String
     public var seatCapacity: Int
-    public var stops: [TripStopInput]
     public var vehicleId: String
 
-    public init(baggageCapacityMl: Int? = nil, bookingCutoffAt: String? = nil, cargoCapacityVolumeMl: Int? = nil, cargoCapacityWeightG: Int? = nil, maxDetourM: Int, maxDetourMinutes: Int, pickupWaitMinutes: Int? = nil, plannedEndAt: String, plannedStartAt: String, routeVersionId: String, seatCapacity: Int, stops: [TripStopInput], vehicleId: String) {
+    public init(baggageCapacityMl: Int? = nil, bookingCutoffAt: String? = nil, cargoCapacityVolumeMl: Int? = nil, cargoCapacityWeightG: Int? = nil, maxDetourM: Int, maxDetourMinutes: Int, pickupWaitMinutes: Int? = nil, plannedEndAt: String, plannedStartAt: String, routeEndM: Int? = nil, routeStartM: Int? = nil, routeVersionId: String, seatCapacity: Int, vehicleId: String) {
         self.baggageCapacityMl = baggageCapacityMl
         self.bookingCutoffAt = bookingCutoffAt
         self.cargoCapacityVolumeMl = cargoCapacityVolumeMl
@@ -6111,9 +5948,10 @@ public struct TripCreate: Codable, Hashable, Sendable {
         self.pickupWaitMinutes = pickupWaitMinutes
         self.plannedEndAt = plannedEndAt
         self.plannedStartAt = plannedStartAt
+        self.routeEndM = routeEndM
+        self.routeStartM = routeStartM
         self.routeVersionId = routeVersionId
         self.seatCapacity = seatCapacity
-        self.stops = stops
         self.vehicleId = vehicleId
     }
 
@@ -6127,9 +5965,10 @@ public struct TripCreate: Codable, Hashable, Sendable {
         case pickupWaitMinutes = "pickup_wait_minutes"
         case plannedEndAt = "planned_end_at"
         case plannedStartAt = "planned_start_at"
+        case routeEndM = "route_end_m"
+        case routeStartM = "route_start_m"
         case routeVersionId = "route_version_id"
         case seatCapacity = "seat_capacity"
-        case stops = "stops"
         case vehicleId = "vehicle_id"
     }
 }
@@ -6153,15 +5992,18 @@ public struct TripDTO: Codable, Hashable, Sendable {
     public var pickupWaitMinutes: Int
     public var plannedEndAt: String
     public var plannedStartAt: String
+    /// ADR-0028: where on the road the trip ends (metres).
+    public var routeEndM: Int?
+    /// ADR-0028: where on the road the trip starts (metres).
+    public var routeStartM: Int?
     public var routeVersionId: String
     public var seatCapacity: Int
     public var status: TripStatus
-    public var stops: [TripStopDTO]
     public var timezone: String
     public var vehicle: TripVehicleDTO
     public var version: Int
 
-    public init(baggageCapacityMl: Int, bookingCutoffAt: String, cargoCapacityVolumeMl: Int, cargoCapacityWeightG: Int, createdAt: String, detourUsedM: Int, detourUsedMinutes: Int, detourUsedS: Int, id: String, listings: [TripListingRefDTO], maxDetourM: Int, maxDetourMinutes: Int, openCases: OpenCasesDTO? = nil, pickupWaitMinutes: Int, plannedEndAt: String, plannedStartAt: String, routeVersionId: String, seatCapacity: Int, status: TripStatus, stops: [TripStopDTO], timezone: String, vehicle: TripVehicleDTO, version: Int) {
+    public init(baggageCapacityMl: Int, bookingCutoffAt: String, cargoCapacityVolumeMl: Int, cargoCapacityWeightG: Int, createdAt: String, detourUsedM: Int, detourUsedMinutes: Int, detourUsedS: Int, id: String, listings: [TripListingRefDTO], maxDetourM: Int, maxDetourMinutes: Int, openCases: OpenCasesDTO? = nil, pickupWaitMinutes: Int, plannedEndAt: String, plannedStartAt: String, routeEndM: Int? = nil, routeStartM: Int? = nil, routeVersionId: String, seatCapacity: Int, status: TripStatus, timezone: String, vehicle: TripVehicleDTO, version: Int) {
         self.baggageCapacityMl = baggageCapacityMl
         self.bookingCutoffAt = bookingCutoffAt
         self.cargoCapacityVolumeMl = cargoCapacityVolumeMl
@@ -6178,10 +6020,11 @@ public struct TripDTO: Codable, Hashable, Sendable {
         self.pickupWaitMinutes = pickupWaitMinutes
         self.plannedEndAt = plannedEndAt
         self.plannedStartAt = plannedStartAt
+        self.routeEndM = routeEndM
+        self.routeStartM = routeStartM
         self.routeVersionId = routeVersionId
         self.seatCapacity = seatCapacity
         self.status = status
-        self.stops = stops
         self.timezone = timezone
         self.vehicle = vehicle
         self.version = version
@@ -6204,10 +6047,11 @@ public struct TripDTO: Codable, Hashable, Sendable {
         case pickupWaitMinutes = "pickup_wait_minutes"
         case plannedEndAt = "planned_end_at"
         case plannedStartAt = "planned_start_at"
+        case routeEndM = "route_end_m"
+        case routeStartM = "route_start_m"
         case routeVersionId = "route_version_id"
         case seatCapacity = "seat_capacity"
         case status = "status"
-        case stops = "stops"
         case timezone = "timezone"
         case vehicle = "vehicle"
         case version = "version"
@@ -6319,14 +6163,12 @@ public struct TripIntentEndDTO: Codable, Hashable, Sendable {
     public var district: DistrictRefDTO?
     public var lat: Double?
     public var lng: Double?
-    public var stop: StopRefDTO?
 
-    public init(address: String? = nil, district: DistrictRefDTO? = nil, lat: Double? = nil, lng: Double? = nil, stop: StopRefDTO? = nil) {
+    public init(address: String? = nil, district: DistrictRefDTO? = nil, lat: Double? = nil, lng: Double? = nil) {
         self.address = address
         self.district = district
         self.lat = lat
         self.lng = lng
-        self.stop = stop
     }
 
     enum CodingKeys: String, CodingKey {
@@ -6334,24 +6176,21 @@ public struct TripIntentEndDTO: Codable, Hashable, Sendable {
         case district = "district"
         case lat = "lat"
         case lng = "lng"
-        case stop = "stop"
     }
 }
 
-/// One end: a verified stop, or a district with an optional marked place (Q88) - what the search used.
+/// One end: a district with an optional marked place (Q88). Retired with ADR-0025 (Q138): kept for the shape.
 public struct TripIntentEndInput: Codable, Hashable, Sendable {
     public var address: String?
-    public var districtId: String?
+    public var districtId: String
     public var lat: Double?
     public var lng: Double?
-    public var stopId: String?
 
-    public init(address: String? = nil, districtId: String? = nil, lat: Double? = nil, lng: Double? = nil, stopId: String? = nil) {
+    public init(address: String? = nil, districtId: String, lat: Double? = nil, lng: Double? = nil) {
         self.address = address
         self.districtId = districtId
         self.lat = lat
         self.lng = lng
-        self.stopId = stopId
     }
 
     enum CodingKeys: String, CodingKey {
@@ -6359,7 +6198,6 @@ public struct TripIntentEndInput: Codable, Hashable, Sendable {
         case districtId = "district_id"
         case lat = "lat"
         case lng = "lng"
-        case stopId = "stop_id"
     }
 }
 
@@ -6737,18 +6575,18 @@ public struct TripListingRefDTO: Codable, Hashable, Sendable {
 }
 
 public struct TripManifestDTO: Codable, Hashable, Sendable {
-    public var stops: [ManifestStopDTO]
+    public var places: [ManifestPlaceDTO]
     public var tripId: String
     public var tripVersion: Int
 
-    public init(stops: [ManifestStopDTO], tripId: String, tripVersion: Int) {
-        self.stops = stops
+    public init(places: [ManifestPlaceDTO], tripId: String, tripVersion: Int) {
+        self.places = places
         self.tripId = tripId
         self.tripVersion = tripVersion
     }
 
     enum CodingKeys: String, CodingKey {
-        case stops = "stops"
+        case places = "places"
         case tripId = "trip_id"
         case tripVersion = "trip_version"
     }
@@ -6760,15 +6598,18 @@ public struct TripPatch: Codable, Hashable, Sendable {
     public var maxDetourMinutes: Int?
     public var plannedEndAt: String?
     public var plannedStartAt: String?
-    public var stops: [TripStopInput]?
+    public var routeEndM: Int?
+    /// ADR-0028: a new road stretch (no claim yet).
+    public var routeStartM: Int?
 
-    public init(expectedVersion: Int, maxDetourM: Int? = nil, maxDetourMinutes: Int? = nil, plannedEndAt: String? = nil, plannedStartAt: String? = nil, stops: [TripStopInput]? = nil) {
+    public init(expectedVersion: Int, maxDetourM: Int? = nil, maxDetourMinutes: Int? = nil, plannedEndAt: String? = nil, plannedStartAt: String? = nil, routeEndM: Int? = nil, routeStartM: Int? = nil) {
         self.expectedVersion = expectedVersion
         self.maxDetourM = maxDetourM
         self.maxDetourMinutes = maxDetourMinutes
         self.plannedEndAt = plannedEndAt
         self.plannedStartAt = plannedStartAt
-        self.stops = stops
+        self.routeEndM = routeEndM
+        self.routeStartM = routeStartM
     }
 
     enum CodingKeys: String, CodingKey {
@@ -6777,7 +6618,8 @@ public struct TripPatch: Codable, Hashable, Sendable {
         case maxDetourMinutes = "max_detour_minutes"
         case plannedEndAt = "planned_end_at"
         case plannedStartAt = "planned_start_at"
-        case stops = "stops"
+        case routeEndM = "route_end_m"
+        case routeStartM = "route_start_m"
     }
 }
 
@@ -6821,51 +6663,6 @@ public enum TripStatus: WireEnum, CaseIterable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
-    }
-}
-
-public struct TripStopDTO: Codable, Hashable, Sendable {
-    public var dwellMinutes: Int
-    public var etaArrivalAt: String?
-    public var plannedArrivalAt: String
-    public var seq: Int
-    public var stop: StopRefDTO
-
-    public init(dwellMinutes: Int, etaArrivalAt: String? = nil, plannedArrivalAt: String, seq: Int, stop: StopRefDTO) {
-        self.dwellMinutes = dwellMinutes
-        self.etaArrivalAt = etaArrivalAt
-        self.plannedArrivalAt = plannedArrivalAt
-        self.seq = seq
-        self.stop = stop
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case dwellMinutes = "dwell_minutes"
-        case etaArrivalAt = "eta_arrival_at"
-        case plannedArrivalAt = "planned_arrival_at"
-        case seq = "seq"
-        case stop = "stop"
-    }
-}
-
-public struct TripStopInput: Codable, Hashable, Sendable {
-    public var dwellMinutes: Int?
-    public var plannedArrivalAt: String
-    public var seq: Int
-    public var stopId: String
-
-    public init(dwellMinutes: Int? = nil, plannedArrivalAt: String, seq: Int, stopId: String) {
-        self.dwellMinutes = dwellMinutes
-        self.plannedArrivalAt = plannedArrivalAt
-        self.seq = seq
-        self.stopId = stopId
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case dwellMinutes = "dwell_minutes"
-        case plannedArrivalAt = "planned_arrival_at"
-        case seq = "seq"
-        case stopId = "stop_id"
     }
 }
 

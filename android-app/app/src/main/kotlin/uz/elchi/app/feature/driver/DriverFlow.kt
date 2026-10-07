@@ -342,6 +342,7 @@ fun DriverFlow(container: AppContainer, session: Session) {
                 vm = vm,
                 onBack = { nav.popBackStack() },
                 tracker = container.tracker,
+                direction = tripList.direction(id),
                 // The manifest's "Xabarlar": the booking's chat, over its detail (back = the booking).
                 onBooking = { bookingId ->
                     nav.navigate(DriverBooking(bookingId))

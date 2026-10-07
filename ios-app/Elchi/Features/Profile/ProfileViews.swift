@@ -92,7 +92,7 @@ struct ProfileView: View {
             stats
             SectionTitle(strings.t("clientProfile.personalTitle"))
             ElchiField(text: $model.name, label: strings.t("clientProfile.fullName"), placeholder: strings.t("clientProfile.fullNamePlaceholder"),
-                       error: model.nameTooShort ? strings.t("stopSearch.minChars") : nil, contentType: .name)
+                       error: model.nameTooShort ? strings.t("clientProfile.nameMinChars", uz: "Kamida 2 ta harf kiriting.", ru: "Введите не менее 2 букв.") : nil, contentType: .name)
             switch model.saveResult {
             case .success?: Note(strings.t("clientProfile.updated"), tone: .ok)
             case .failure(let error)?: Note(strings.t("client.profile.nameSaveFailed", ("error", strings.errorText(error))), tone: .err)

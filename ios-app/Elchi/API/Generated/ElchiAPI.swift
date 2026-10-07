@@ -378,9 +378,8 @@ public struct ElchiAPI: Sendable {
     ///
     /// G17: which districts this direction really passes, in travel order (wave 10).
     ///
-    /// This is what "Toshkent -> Qarshi" covers: the districts of the stops on the corridor's confirmed routes.
-    /// Districts whose stops no confirmed route reaches are still listed, with ``on_confirmed_route=false``, so
-    /// the client can offer them without claiming they are on the way (spec 6.1, 6.5).
+    /// This is what "Toshkent -> Qarshi" covers: the districts whose centre lies on a confirmed road of the corridor
+    /// (ADR-0028). A district the road does not reach is not listed (spec 6.1, 6.5).
     public func listCorridorDistricts(corridorId: String) async throws -> APIResult<[CorridorDistrictDTO]> {
         try await transport.send(
             method: "GET",
@@ -407,18 +406,6 @@ public struct ElchiAPI: Sendable {
             body: Optional<JSONValue>.none,
             idempotencyKey: nil,
             as: [RouteVersionDTO].self
-        )
-    }
-
-    /// List Corridor Stops
-    public func listCorridorStops(corridorId: String) async throws -> APIResult<[StopDTO]> {
-        try await transport.send(
-            method: "GET",
-            path: "/corridors/\(corridorId)/stops",
-            query: [],
-            body: Optional<JSONValue>.none,
-            idempotencyKey: nil,
-            as: [StopDTO].self
         )
     }
 
@@ -578,11 +565,11 @@ public struct ElchiAPI: Sendable {
     }
 
     /// Get Feed
-    public func getFeed(serviceType: ServiceType, side: FeedSide, dateFrom: String, dateTo: String, originStopId: String? = nil, originRegionId: String? = nil, originDistrictId: String? = nil, destinationStopId: String? = nil, destinationRegionId: String? = nil, destinationDistrictId: String? = nil, seats: Int? = nil, maxTotalMinor: Int? = nil, amenities: [String]? = nil, sort: FeedSort? = nil, includeAlternatives: Bool? = nil, cursor: String? = nil, limit: Int? = nil) async throws -> APIResult<FeedEnvelope> {
+    public func getFeed(serviceType: ServiceType, side: FeedSide, dateFrom: String, dateTo: String, originRegionId: String? = nil, originDistrictId: String? = nil, destinationRegionId: String? = nil, destinationDistrictId: String? = nil, seats: Int? = nil, maxTotalMinor: Int? = nil, amenities: [String]? = nil, sort: FeedSort? = nil, includeAlternatives: Bool? = nil, cursor: String? = nil, limit: Int? = nil) async throws -> APIResult<FeedEnvelope> {
         try await transport.send(
             method: "GET",
             path: "/feed",
-            query: [("service_type", serviceType), ("side", side), ("date_from", dateFrom), ("date_to", dateTo), ("origin_stop_id", originStopId), ("origin_region_id", originRegionId), ("origin_district_id", originDistrictId), ("destination_stop_id", destinationStopId), ("destination_region_id", destinationRegionId), ("destination_district_id", destinationDistrictId), ("seats", seats), ("max_total_minor", maxTotalMinor), ("amenities", amenities), ("sort", sort), ("include_alternatives", includeAlternatives), ("cursor", cursor), ("limit", limit)],
+            query: [("service_type", serviceType), ("side", side), ("date_from", dateFrom), ("date_to", dateTo), ("origin_region_id", originRegionId), ("origin_district_id", originDistrictId), ("destination_region_id", destinationRegionId), ("destination_district_id", destinationDistrictId), ("seats", seats), ("max_total_minor", maxTotalMinor), ("amenities", amenities), ("sort", sort), ("include_alternatives", includeAlternatives), ("cursor", cursor), ("limit", limit)],
             body: Optional<JSONValue>.none,
             idempotencyKey: nil,
             as: FeedEnvelope.self
@@ -1420,18 +1407,6 @@ public struct ElchiAPI: Sendable {
             body: Optional<JSONValue>.none,
             idempotencyKey: nil,
             as: EmptyDTO.self
-        )
-    }
-
-    /// Search Stops
-    public func searchStops(q: String, regionId: String? = nil, limit: Int? = nil) async throws -> APIResult<[StopDTO]> {
-        try await transport.send(
-            method: "GET",
-            path: "/stops/search",
-            query: [("q", q), ("region_id", regionId), ("limit", limit)],
-            body: Optional<JSONValue>.none,
-            idempotencyKey: nil,
-            as: [StopDTO].self
         )
     }
 

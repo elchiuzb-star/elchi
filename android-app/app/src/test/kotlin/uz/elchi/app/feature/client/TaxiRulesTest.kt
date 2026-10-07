@@ -27,7 +27,7 @@ class TaxiRulesTest {
     private val now: Instant = Instant.parse("2026-09-29T10:00:00Z")
 
     private val tashkent = Place(regionId = "reg_tk", regionUz = "Toshkent shahri", districtId = "dst_tk", districtUz = "Toshkent shahri", lat = 41.2856, lng = 69.2044, address = "Chilonzor")
-    private val samarkand = Place(regionId = "reg_sa", regionUz = "Samarqand viloyati", districtId = "dst_sa", districtUz = "Samarqand", lat = 39.6547, lng = 66.9758, stopId = "stp_reg", stopUz = "Registon")
+    private val samarkand = Place(regionId = "reg_sa", regionUz = "Samarqand viloyati", districtId = "dst_sa", districtUz = "Samarqand", lat = 39.6547, lng = 66.9758, address = "Registon")
 
     private fun draft(seats: List<String> = listOf("rear-right", "rear-left")) = ParcelDraft(
         origin = tashkent,
@@ -137,9 +137,11 @@ class TaxiRulesTest {
         assertEquals("2", passenger["seat_count"]!!.jsonPrimitive.content)
         assertEquals("2", passenger["adults"]!!.jsonPrimitive.content)
         assertTrue(json["parcel"] == null || json["parcel"] == JsonNull)
-        // The ends exactly as for a parcel: a point with its district, a verified stop by id.
+        // The ends exactly as for a parcel: always a point with its district (ADR-0028 - never a stop id).
         assertEquals("dst_tk", json["origin_point"]!!.jsonObject["district_id"]!!.jsonPrimitive.content)
-        assertEquals("stp_reg", json["destination_stop_id"]!!.jsonPrimitive.content)
+        assertEquals("dst_sa", json["destination_point"]!!.jsonObject["district_id"]!!.jsonPrimitive.content)
+        assertEquals("Registon", json["destination_point"]!!.jsonObject["address"]!!.jsonPrimitive.content)
+        assertTrue(json.keys.none { "stop" in it })
         assertEquals("2026-09-30T09:00:00+05:00", json["departure_window_start"]!!.jsonPrimitive.content)
         assertEquals(Currency.UZS, body.currency)
         assertEquals(PriceBasis.PER_SEAT, body.priceBasis)

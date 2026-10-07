@@ -18,7 +18,6 @@ import uz.elchi.app.api.generated.ProposalThreadDTO
 import uz.elchi.app.api.generated.ProposalVersionDTO
 import uz.elchi.app.api.generated.RatingBucket
 import uz.elchi.app.api.generated.ServiceType
-import uz.elchi.app.api.generated.StopRefDTO
 import uz.elchi.app.ui.theme.Tone
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -544,27 +543,21 @@ object OrderRules {
     // -- names, dates -------------------------------------------------------------------------------------------
 
     /**
-     * A short name for a route end ("Toshkent → Buxoro"): the verified stop, else the district the point was
-     * marked in, else its address, else - honestly - the coordinates.
+     * A short name for a route end ("Toshkent → Buxoro"): the district the point was marked in, else its address,
+     * else - honestly - the coordinates (ADR-0028: an end is always a point).
      */
-    fun shortEnd(stop: StopRefDTO?, point: PointEndDTO?, ru: Boolean): String =
-        stopPlace(stop, ru)
-            ?: point?.district?.nameUz
+    fun shortEnd(point: PointEndDTO?, ru: Boolean): String =
+        point?.district?.nameUz
             ?: point?.address?.let(ParcelRules::withoutCountry)?.takeIf { it.isNotBlank() }
             ?: point?.let { ParcelRules.coordinates(it.lat, it.lng) }
             ?: "?"
 
-    /** The full name for a detail row: the stop, the address, else the district or coordinates. */
-    fun fullEnd(stop: StopRefDTO?, point: PointEndDTO?, ru: Boolean): String =
-        stopPlace(stop, ru)
-            ?: point?.address?.let(ParcelRules::withoutCountry)?.takeIf { it.isNotBlank() }
+    /** The full name for a detail row: the address, else the district or coordinates. */
+    fun fullEnd(point: PointEndDTO?, ru: Boolean): String =
+        point?.address?.let(ParcelRules::withoutCountry)?.takeIf { it.isNotBlank() }
             ?: point?.district?.nameUz
             ?: point?.let { ParcelRules.coordinates(it.lat, it.lng) }
             ?: "?"
-
-    /** Q158 (ADR-0027): a legacy stop end is named by its district (no "bekat" on screen); its name only without one. */
-    private fun stopPlace(stop: StopRefDTO?, ru: Boolean): String? =
-        stop?.let { it.districtNameUz?.takeIf { d -> d.isNotBlank() } ?: if (ru) it.nameRu ?: it.nameUz else it.nameUz }
 
     fun parseInstant(value: String?): Instant? = value?.let { runCatching { Instant.parse(it) }.getOrNull() ?: runCatching { java.time.OffsetDateTime.parse(it).toInstant() }.getOrNull() }
 

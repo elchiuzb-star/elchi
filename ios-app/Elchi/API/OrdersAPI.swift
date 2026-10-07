@@ -7,16 +7,16 @@ import Foundation
 /// side, told apart by `viewer_side == "client"`. Typed: what the orders list and the booking's screens show (Stage 04
 /// adds the driver and vehicle, the contact rules, the parcel photo and category, the cancellation).
 public struct ClientBookingDTO: Codable, Hashable, Sendable, Identifiable {
-    /// One end of the booking: a verified stop or the agreed map point (Q88), and its time window.
+    /// One end of the booking (`BookingEndDTO`, ADR-0028): the agreed map point (Q88), its time window and the
+    /// arrival estimated from its road position.
     public struct End: Codable, Hashable, Sendable {
-        public let stop: StopRefDTO?
         public let point: PointEndDTO?
         public let windowStart: String?
         public let windowEnd: String?
         public let plannedArrivalAt: String?
 
         enum CodingKeys: String, CodingKey {
-            case stop, point
+            case point
             case windowStart = "window_start"
             case windowEnd = "window_end"
             case plannedArrivalAt = "planned_arrival_at"

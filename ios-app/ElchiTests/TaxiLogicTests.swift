@@ -30,9 +30,9 @@ enum TaxiFixture {
              "quantity_amendable":false,"version":7,"trip_id":"trp_p","listing_ids":{"request":"lst_p","supply":null},
              "accepted_proposal_version_id":"prv_p","quantity":2,"price_basis":"per_seat","unit_price_minor":15000000,"total_minor":30000000,
              "currency":"UZS","payment_method":"cash",
-             "pickup":{"stop":null,"point":{"lat":41.31,"lng":69.27,"district":{"id":"dst_1","name_uz":"Chilonzor"}},
-                       "occurrence_seq":1,"window_start":"2026-09-30T05:00:00Z","window_end":"2026-09-30T07:00:00Z"},
-             "dropoff":{"stop":{"id":"stp_2","name_uz":"Registon"},"point":null,"occurrence_seq":3},
+             "pickup":{"point":{"lat":41.31,"lng":69.27,"district":{"id":"dst_1","name_uz":"Chilonzor"}},
+                       "window_start":"2026-09-30T05:00:00Z","window_end":"2026-09-30T07:00:00Z"},
+             "dropoff":{"point":{"lat":39.65,"lng":66.97,"address":"Registon","district":{"id":"dst_2","name_uz":"Samarqand"}},"planned_arrival_at":"2026-09-30T10:00:00Z"},
              "driver":{"id":"usr_d","display_name":"Jasur","vehicle":{"vehicle_class":"car","seat_capacity":4,"make_model":"Cobalt",
                "color":"oq","plate_masked":"01 A ••• KA","plate_number":null},"contact_phone":null},
              \(driverOnly)
@@ -466,7 +466,7 @@ struct TaxiStringsTests {
                     "driverBooking.phoneHidden", "app.cash.title", "app.cash.explainer", "app.cash.markGiven", "app.cash.markReceived",
                     "app.cash.acknowledge", "app.cash.contest", "app.cash.bothConfirmed", "app.cash.contested", "app.cash.reportedByMe",
                     "app.cash.reportedByOther", "app.cash.awaitingOther", "bookingCancel.reviewPending", "bookingCancel.refused.noShowPending",
-                    "app.progress.driverAtStop"] + CabinSeat.allCases.map(\.labelKey) + PassengerStatus.ladder
+                    "app.progress.driverArrived"] + CabinSeat.allCases.map(\.labelKey) + PassengerStatus.ladder
         for locale in AppLocale.allCases {
             strings.set(locale)
             for key in keys { #expect(strings.tOrNil(key) != nil, "\(key) (\(locale))") }

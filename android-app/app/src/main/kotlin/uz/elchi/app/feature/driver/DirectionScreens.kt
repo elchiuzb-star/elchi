@@ -130,7 +130,7 @@ internal fun ColumnScope.DirectionsBody(
         Load.Loading -> LoadingState(count = 1)
         is Load.Failed -> LoadFailed(t(R.string.dir_tripsTitle), list.error, trips::refresh)
         is Load.Ready -> list.value.forEach { trip ->
-            TripCard(trip, busy = trip.id in ts.busy, opensAt = ts.opensAt[trip.id], onClick = { onTrip(trip.id) }, onAction = { trips.act(trip, it) })
+            TripCard(trip, busy = trip.id in ts.busy, opensAt = ts.opensAt[trip.id], direction = ts.direction(trip.id), onClick = { onTrip(trip.id) }, onAction = { trips.act(trip, it) })
         }
     }
     ElchiButton(t(R.string.driver_offer_planTrip), onAddTrip, Modifier.fillMaxWidth().height(44.dp), ButtonVariant.GHOST, ButtonSize.MEDIUM, icon = ElchiIcon.PLUS)
@@ -305,7 +305,7 @@ private fun whatLine(listing: ListingPublicDTO): String? =
 @Composable
 private fun placeTitle(listing: ListingPublicDTO): String {
     val fallback = t(R.string.app_endLabel_mapPlace)
-    return "${DirectionRules.place(listing.originStop, listing.originPoint, fallback)} → ${DirectionRules.place(listing.destinationStop, listing.destinationPoint, fallback)}"
+    return "${DirectionRules.place(listing.originPoint, fallback)} → ${DirectionRules.place(listing.destinationPoint, fallback)}"
 }
 
 /** One request along the direction: places (never a stop, Q158), the client's window, the car's time, the price. */

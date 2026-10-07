@@ -145,7 +145,7 @@ class FeedViewModel(
 
     /**
      * "Lentada ochish" (design 07 §6.5): the saved route's ends (and service) become the feed's filter. False when
-     * an end cannot be shown as a pick (a stop end, or its district not read yet).
+     * an end cannot be shown as a pick (its district not read yet).
      */
     fun applySaved(saved: SavedSearchDTO): Boolean {
         val s = _state.value

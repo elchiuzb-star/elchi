@@ -181,7 +181,7 @@ class ParcelRulesTest {
     fun `the current place is the nearest active district centre within 50 km`() {
         fun district(id: String, lat: Double?, lng: Double?, active: Boolean = true) = uz.elchi.app.api.generated.DistrictDTO(
             centerLat = lat, centerLng = lng, id = id, isActive = active, nameUz = id,
-            region = uz.elchi.app.api.generated.RegionRefDTO(code = "R", id = "reg", nameUz = "Region"), stopsCount = 0,
+            region = uz.elchi.app.api.generated.RegionRefDTO(code = "R", id = "reg", nameUz = "Region"),
         )
         val chilonzor = district("chilonzor", 41.2756, 69.2034)
         val yunusobod = district("yunusobod", 41.3650, 69.2850)
@@ -238,11 +238,11 @@ class ParcelRulesTest {
     }
 
     @Test
-    fun `a verified stop replaces the point, and a blank comment is left out`() {
-        val draft = complete().copy(origin = tashkent.copy(stopId = "stp_1", stopUz = "Chilonzor bekati"), comment = "   ")
+    fun `both ends are always points (ADR-0028 - never a stop id), and a blank comment is left out`() {
+        val draft = complete().copy(comment = "   ")
         val json = ElchiJson.encodeToJsonElement(ListingCreate.serializer(), ParcelRules.buildListingCreate(draft)).jsonObject
-        assertEquals("stp_1", json.str("origin_stop_id"))
-        assertFalse("origin_point" in json)
+        assertFalse("origin_stop_id" in json || "destination_stop_id" in json)
+        assertTrue("origin_point" in json)
         assertTrue("destination_point" in json)
         assertFalse("comment" in json)
     }

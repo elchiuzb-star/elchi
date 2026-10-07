@@ -16,7 +16,6 @@ import uz.elchi.app.api.generated.DriverDirectionCreate
 import uz.elchi.app.api.generated.DriverDirectionDTO
 import uz.elchi.app.api.generated.PointEndDTO
 import uz.elchi.app.api.generated.RegionDTO
-import uz.elchi.app.api.generated.StopRefDTO
 import uz.elchi.app.api.generated.VehicleDTO
 import uz.elchi.app.feature.client.OrderRules
 import uz.elchi.app.feature.client.ParcelRules
@@ -78,7 +77,7 @@ sealed interface DirectionOfferOutcome {
 
 /**
  * ADR-0027 (Q150-Q158), the rules of the driver's direction screens - a port of the web `directionFeed.ts`. The
- * driver names two ends; trips, stops and the departure are the server's. Pure, so it is unit-tested.
+ * driver names two ends; trips and the departure are the server's. Pure, so it is unit-tested.
  */
 object DirectionRules {
     const val ACTIVE = "active"
@@ -173,12 +172,8 @@ object DirectionRules {
         return iso(start) to iso(end)
     }
 
-    /**
-     * Q158: a place on a card - a legacy stop end as the district it is in, a marked point by its address, else
-     * its district. Never a stop name.
-     */
-    fun place(stop: StopRefDTO?, point: PointEndDTO?, fallback: String): String {
-        if (stop != null) return stop.districtNameUz?.takeIf { it.isNotBlank() } ?: fallback
+    /** ADR-0028: a place on a card - a marked point by its address, else its district. Never a stop name. */
+    fun place(point: PointEndDTO?, fallback: String): String {
         point ?: return fallback
         return point.address?.let(ParcelRules::withoutCountry)?.trim()?.takeIf { it.isNotEmpty() } ?: point.district?.nameUz ?: fallback
     }
