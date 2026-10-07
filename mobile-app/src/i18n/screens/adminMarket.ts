@@ -9,11 +9,8 @@ import type { Message } from "../messages";
 
 export const adminMarketMessages = {
   // --- MFA step-up (ADR-0021), app/useStepUp.ts ---
-  "admin.stepUp.title": { uz: "Tasdiqlash kodi kerak", ru: "Нужен код подтверждения" },
-  "admin.stepUp.text": {
-    uz: "Bu pul/flag amali. Autentifikator kodini kiriting — amal shu kod bilan qayta yuboriladi.",
-    ru: "Это денежная операция или изменение флага. Введите код из аутентификатора — команда будет отправлена повторно с ним.",
-  },
+  "admin.stepUp.title": { uz: "Bu amal uchun autentifikator kodi kerak (MFA)", ru: "Для этого действия нужен код аутентификатора (MFA)" },
+  "admin.stepUp.text": { uz: "Pul, flag va promo amallari uchun yaqinda tasdiqlangan MFA kerak.", ru: "Для денежных операций, флагов и промо нужна недавно подтверждённая MFA." },
   "admin.stepUp.codeLabel": { uz: "Autentifikator kodi", ru: "Код аутентификатора" },
   "admin.stepUp.submit": { uz: "Tasdiqlash va davom etish", ru: "Подтвердить и продолжить" },
   "admin.stepUp.again": {
@@ -127,10 +124,7 @@ export const adminMarketMessages = {
 
   // --- Ishonch va operatsiyalar (§5) ---
   "admin.trust.title": { uz: "Ishonch va operatsiyalar", ru: "Доверие и операции" },
-  "admin.trust.subtitle": {
-    uz: "Tugmalar faqat rolingiz ruxsat bergan amallar uchun ko'rinadi; server rad etsa, sababi ko'rsatiladi.",
-    ru: "Кнопки видны только для действий, разрешённых вашей роли; если сервер откажет, будет показана причина.",
-  },
+  "admin.trust.subtitle": { uz: "Faqat ruxsat etilgan amallar ko'rinadi.", ru: "Видны только разрешённые вам действия." },
   "admin.trust.tab.bookings": { uz: "Bronlar", ru: "Брони" },
   "admin.trust.tab.reports": { uz: "Shikoyatlar", ru: "Жалобы" },
   "admin.trust.tab.fraud": { uz: "Firibgarlik signallari", ru: "Сигналы мошенничества" },
@@ -257,10 +251,7 @@ export const adminMarketMessages = {
   },
   "admin.trust.unfounded": { uz: "Asossiz", ru: "Необоснованно" },
   "admin.trust.noSignals": { uz: "Signal yo'q", ru: "Сигналов нет" },
-  "admin.trust.strikesNote": {
-    uz: "Pilotda jarima yo'q: strike'lar operator navbatiga signal beradi. Chatdagi 6 xonali kodlar strike emas (Q85).",
-    ru: "В пилоте штрафов нет: страйки дают сигнал в очередь оператора. Шестизначные коды в чате страйком не считаются (Q85).",
-  },
+  "admin.trust.strikesNote": { uz: "Pilotda jarima yo'q — strike'lar faqat signal.", ru: "В пилоте штрафов нет — страйки только сигнал." },
   "admin.trust.userId": { uz: "Foydalanuvchi ID", ru: "ID пользователя" },
   "admin.trust.strikesInWindow": { uz: "Oxirgi {days} kunda: {count} ta strike", ru: "За последние {days} дн.: страйков — {count}" },
   "admin.trust.noStrikes": { uz: "Strike yo'q", ru: "Страйков нет" },
@@ -268,19 +259,13 @@ export const adminMarketMessages = {
   "admin.trust.strikeSource.chat_message": { uz: "chat", ru: "чат" },
   "admin.trust.strikeSource.proposal": { uz: "taklif izohi", ru: "комментарий к предложению" },
   "admin.trust.strikeSource.listing": { uz: "e'lon izohi", ru: "комментарий к объявлению" },
-  "admin.trust.chatNote": {
-    uz: "Taklif yozishmasi faqat o'qiladi (Q100). Har ko'rish audit jurnaliga yoziladi.",
-    ru: "Переписка по предложению доступна только для чтения (Q100). Каждый просмотр записывается в журнал аудита.",
-  },
+  "admin.trust.chatNote": { uz: "Faqat o'qish · auditga yoziladi.", ru: "Только чтение · записывается в аудит." },
   "admin.trust.threadKind": { uz: "Yozishma turi", ru: "Тип переписки" },
   "admin.trust.bookingChat": { uz: "Bron chati", ru: "Чат брони" },
   "admin.trust.proposalThread": { uz: "Taklif yozishmasi", ru: "Переписка по предложению" },
   "admin.trust.proposalThreadId": { uz: "Taklif oqimi ID", ru: "ID ветки предложения" },
   "admin.trust.threadId": { uz: "Yozishma ID", ru: "ID переписки" },
-  "admin.trust.trackingNote": {
-    uz: "Kuzatuv oynasi yopiq bo'lsa ham oxirgi nuqta xizmat vazifasi uchun ko'rsatiladi; har ko'rish audit jurnaliga yoziladi (Q86).",
-    ru: "Даже при закрытом окне отслеживания последняя точка показывается для служебных задач; каждый просмотр записывается в журнал аудита (Q86).",
-  },
+  "admin.trust.trackingNote": { uz: "Har ko'rish auditga yoziladi.", ru: "Каждый просмотр записывается в аудит." },
   "admin.trust.tripId": { uz: "Safar ID", ru: "ID рейса" },
   "admin.trust.tripStatus.planned": { uz: "Rejalashtirilgan", ru: "Запланирован" },
   "admin.trust.tripStatus.boarding": { uz: "Chiqish", ru: "Посадка" },
@@ -303,10 +288,7 @@ export const adminMarketMessages = {
     uz: "30 daqiqalik iz hali ko'rsatilmaydi: server faqat oxirgi nuqtani beradi.",
     ru: "30-минутный трек пока не показывается: сервер отдаёт только последнюю точку.",
   },
-  "admin.trust.onBehalfNote": {
-    uz: "E'lon egasi — haqiqiy foydalanuvchi; siz audit'da «operator yaratgan» deb yozilasiz. Egasining roziligi (qo'ng'iroq yoki murojaat raqami) majburiy (§20.2).",
-    ru: "Владелец объявления — реальный пользователь; в аудите вы будете записаны как «создано оператором». Согласие владельца (звонок или номер обращения) обязательно (§20.2).",
-  },
+  "admin.trust.onBehalfNote": { uz: "Egasining roziligi majburiy.", ru: "Согласие владельца обязательно." },
   "admin.trust.onBehalfNoRole": {
     uz: "Boshqa foydalanuvchi nomidan e'lon yaratish sizning rolingizda yo'q.",
     ru: "Создание объявления от имени другого пользователя вашей роли недоступно.",
@@ -477,10 +459,7 @@ export const adminMarketMessages = {
 
   // --- Narx referensi (§7) ---
   "admin.bands.title": { uz: "Narx referensi", ru: "Ценовой ориентир" },
-  "admin.bands.subtitle": {
-    uz: "Diapazon narx belgilamaydi. U saralashga kiradi va odatdan tashqari taklifga ogohlantirish qo'yadi; narxni mijoz va haydovchi kelishadi. Faqat «qat'iy chegara» yoqilgan diapazon taklifni rad etadi.",
-    ru: "Диапазон не устанавливает цену. Он влияет на сортировку и помечает необычные предложения предупреждением; цену согласуют клиент и водитель. Отклоняет предложение только диапазон с включённой «жёсткой границей».",
-  },
+  "admin.bands.subtitle": { uz: "Diapazon faqat ogohlantirish beradi; narxni tomonlar kelishadi.", ru: "Диапазон только предупреждает; цену согласуют стороны." },
   "admin.bands.readOnly": {
     uz: "Diapazonni faqat admin va undan yuqori o'zgartiradi (Q52). Siz jadval va tarixni ko'rasiz.",
     ru: "Изменять диапазон может только администратор и выше (Q52). Вам доступны таблица и история.",
@@ -501,14 +480,14 @@ export const adminMarketMessages = {
     uz: "O'chirilgan diapazon saralashga ham kirmaydi.",
     ru: "Выключенный диапазон не участвует и в сортировке.",
   },
-  "admin.bands.enforced": { uz: "Qat'iy chegara (taklifni rad etadi)", ru: "Жёсткая граница (отклоняет предложение)" },
+  "admin.bands.enforced": { uz: "Qat'iy chegara — diapazondan tashqari takliflarni rad etadi", ru: "Жёсткая граница — отклоняет предложения вне диапазона" },
   "admin.bands.enforcedHint": {
     uz: "Odatda o'chiq. Yoqilsa, diapazondan tashqari har qanday taklif 400 PRICE_OUT_OF_BAND bilan rad etiladi.",
     ru: "Обычно выключена. Если включить, любое предложение вне диапазона будет отклонено с ошибкой 400 PRICE_OUT_OF_BAND.",
   },
   "admin.bands.reasonVisible": { uz: "Sabab (auditda ko'rinadi)", ru: "Причина (видна в аудите)" },
-  "admin.bands.saveVersion": { uz: "Yangilash (v{version})", ru: "Обновить (v{version})" },
-  "admin.bands.createVersion": { uz: "Yaratish (v{version})", ru: "Создать (v{version})" },
+  "admin.bands.saveVersion": { uz: "Yangilash", ru: "Обновить" },
+  "admin.bands.createVersion": { uz: "Yaratish", ru: "Создать" },
   "admin.bands.saving": { uz: "Saqlanmoqda...", ru: "Сохранение..." },
   "admin.bands.scope": { uz: "Doira", ru: "Область" },
   "admin.bands.range": { uz: "Diapazon", ru: "Диапазон" },
@@ -524,18 +503,12 @@ export const adminMarketMessages = {
   },
   "admin.bands.history": { uz: "O'zgarishlar tarixi", ru: "История изменений" },
   "admin.bands.noHistory": { uz: "Hozircha o'zgarish yo'q.", ru: "Изменений пока нет." },
-  "admin.bands.historyTitle": { uz: "{service} v{version} {min} – {max} so'm", ru: "{service} v{version} {min} – {max} сум" },
+  "admin.bands.historyTitle": { uz: "{service} · {min} – {max} so'm", ru: "{service} · {min} – {max} сум" },
 
   // --- Nizolar (v2) (§8) ---
-  "admin.disputes2.title": { uz: "Nizolar (v2)", ru: "Споры (v2)" },
-  "admin.disputes2.subtitleDecider": {
-    uz: "Siz nizo qarorini qabul qila olasiz. Foydalanuvchi endi nizo ochmaydi (Q141) — bu xodim ichki yozuvi.",
-    ru: "Вы можете принимать решение по спору. Пользователи больше не открывают споры (Q141) — это внутренняя запись сотрудников.",
-  },
-  "admin.disputes2.subtitleOperator": {
-    uz: "Operator ko'rikka oladi va izoh yozadi (qaror — admin+). Foydalanuvchi endi nizo ochmaydi (Q141) — bu xodim ichki yozuvi.",
-    ru: "Оператор берёт на рассмотрение и пишет комментарий (решение — администратор и выше). Пользователи больше не открывают споры (Q141) — это внутренняя запись сотрудников.",
-  },
+  "admin.disputes2.title": { uz: "Nizolar", ru: "Споры" },
+  "admin.disputes2.subtitleDecider": { uz: "Xodim ichki yozuvi.", ru: "Внутренняя запись сотрудников." },
+  "admin.disputes2.subtitleOperator": { uz: "Xodim ichki yozuvi.", ru: "Внутренняя запись сотрудников." },
   "admin.disputes2.onlyOpen": { uz: "Faqat ochiqlar", ru: "Только открытые" },
   "admin.disputes2.colOpened": { uz: "Ochilgan", ru: "Открыт" },
   "admin.disputes2.colEscalation": { uz: "Eskalatsiya", ru: "Эскалация" },
@@ -584,7 +557,7 @@ export const adminMarketMessages = {
   },
   "admin.support.colMessage": { uz: "Xabar", ru: "Сообщение" },
   "admin.support.colReceived": { uz: "Kelgan", ru: "Поступило" },
-  "admin.support.sosCount": { uz: "SOS × {count}", ru: "SOS-вызов × {count}" },
+  "admin.support.sosCount": { uz: "SOS · {count}", ru: "SOS · {count} шт." },
   "admin.support.kindTicket": { uz: "murojaat", ru: "обращение" },
   "admin.support.status.open": { uz: "Ochiq", ru: "Открыто" },
   "admin.support.status.acknowledged": { uz: "Qabul qilindi", ru: "Принято" },
@@ -692,12 +665,12 @@ export const adminMarketMessages = {
   },
 
   // --- Legacy (v1) arxiv (§20) ---
-  "admin.legacy.title": { uz: "Legacy (v1) buyurtmalar", ru: "Заказы Legacy (v1)" },
+  "admin.legacy.title": { uz: "Buyurtmalar arxivi", ru: "Архив заказов" },
   "admin.legacy.subtitle": {
     uz: "Faqat o'qish. Bu buyurtmalar v1 lifecycle'ida yakunlanadi; v2 ularni faqat o'qiydi.",
     ru: "Только чтение. Эти заказы завершаются в жизненном цикле v1; v2 их только читает.",
   },
-  "admin.legacy.readOnly": { uz: "faqat o'qish", ru: "только чтение" },
+  "admin.legacy.readOnly": { uz: "Faqat o'qish.", ru: "Только чтение." },
   "admin.legacy.colOrder": { uz: "Buyurtma", ru: "Заказ" },
   "admin.legacy.colFinalPrice": { uz: "Yakuniy narx", ru: "Итоговая цена" },
   "admin.legacy.colCommission": { uz: "Hisoblangan komissiya (undirilmagan)", ru: "Расчётная комиссия (не списана)" },
@@ -731,10 +704,7 @@ export const adminMarketMessages = {
     uz: "Kunlik konversiya grafigi hali yo'q: server davr bo'yicha bitta yig'indi qaytaradi.",
     ru: "Графика ежедневной конверсии пока нет: сервер возвращает одну сумму за период.",
   },
-  "admin.metrics.unmeasured": {
-    uz: "O'lchanmaydigan ko'rsatkichlar (nol sifatida ko'rsatilmaydi): {list}",
-    ru: "Неизмеряемые показатели (не показываются как ноль): {list}",
-  },
+  "admin.metrics.unmeasured": { uz: "O'lchanmaydi: {list}.", ru: "Не измеряется: {list}." },
   "admin.metrics.colValue": { uz: "Qiymat", ru: "Значение" },
   "admin.metrics.colN": { uz: "n", ru: "Выборка" },
   "admin.metrics.colTarget": { uz: "Maqsad", ru: "Цель" },
@@ -743,4 +713,9 @@ export const adminMarketMessages = {
   "admin.metrics.slo.server_error_rate": { uz: "Server xatolari ulushi", ru: "Доля ошибок сервера" },
   "admin.metrics.slo.outbox_oldest_pending_seconds": { uz: "Eng eski yuborilmagan hodisa", ru: "Самое старое неотправленное событие" },
   "admin.metrics.slo.offer_response_median_seconds": { uz: "Taklif → javob (median)", ru: "Предложение → ответ (медиана)" },
+
+  // --- Design v3 (elchi-dev/DESIGN-V3-ADMIN-DIFF.md §99.3) ---
+  "admin.v3.trust.mapLastPoint": { uz: "Oxirgi nuqta", ru: "Последняя точка" },
+  "admin.v3.threads.internalPrefix": { uz: "Ichki izoh: {text}", ru: "Внутренняя заметка: {text}" },
+  "admin.v3.drivers.registeredOn": { uz: "Ro'yxatga olingan: {date}", ru: "Зарегистрирован: {date}" },
 } as const satisfies Record<string, Message>;

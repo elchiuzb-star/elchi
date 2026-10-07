@@ -125,7 +125,9 @@ describe("AdminDriversPanel", () => {
   it("gives the operator only the vehicle correction", async () => {
     render(<AdminDriversPanel user={staff("operator")} initialSearch="id:120" />);
     const drawer = await screen.findByRole("dialog", { name: "Jasur Sintetik" });
-    expect(within(drawer).getByRole("button", { name: /Avtomobilni o'zgartirish/ })).toBeInTheDocument();
+    // v3 §15.3: the correction lives on the vehicle block of «Hujjatlar va avtomobil».
+    fireEvent.click(within(drawer).getByRole("button", { name: "Hujjatlar va avtomobil" }));
+    expect(await within(drawer).findByRole("button", { name: /Avtomobilni o'zgartirish/ })).toBeInTheDocument();
     expect(within(drawer).queryByRole("button", { name: /Blokdan chiqarish/ })).toBeNull();
     expect(within(drawer).queryByRole("button", { name: /Tasdiqlash/ })).toBeNull();
   });

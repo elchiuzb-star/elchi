@@ -70,7 +70,7 @@ describe("flags", () => {
       new ApiError(503, { code: "PRODUCTION_INVARIANTS_FAILED", message: "x", details: { gate: "q48", reason: "gate_failed" } }),
     );
     render(<AdminPlatformPanel />);
-    const section = await screen.findByRole("region", { name: "Pochta (v2)" });
+    const section = await screen.findByRole("region", { name: "Pochta" });
     expect(section).toHaveTextContent("Saqlangan qator yo'q");
     fireEvent.click(within(section).getByRole("button", { name: "Yangi doira qo'shish…" }));
     fireEvent.change(within(section).getByLabelText("Doira turi"), { target: { value: "country" } });
@@ -96,7 +96,7 @@ describe("flags", () => {
   it("hides change buttons without the capability", async () => {
     caps.capabilities.mockResolvedValue({ capabilities: ["ops.view"], roles: ["operator"] });
     render(<AdminPlatformPanel />);
-    await screen.findByRole("region", { name: "Pochta (v2)" });
+    await screen.findByRole("region", { name: "Pochta" });
     expect(screen.queryByRole("button", { name: "Yangi doira qo'shish…" })).toBeNull();
   });
 });
@@ -244,7 +244,7 @@ describe("outbox", () => {
 describe("system", () => {
   it("says an empty quota list is not 'unknown'", async () => {
     render(<AdminPlatformPanel initialTab="system" />);
-    expect(await screen.findByText(/noma'lum» degani emas/)).toBeInTheDocument();
+    expect(await screen.findByText(/provayder chaqiruvi bo'lmagan/)).toBeInTheDocument();
   });
 
   it("renders a legacy order read-only", async () => {

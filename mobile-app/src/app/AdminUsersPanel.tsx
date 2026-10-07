@@ -305,7 +305,6 @@ export function AdminUsersPanel({ user, initialSearch }: { user: AuthUser; initi
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-foreground">{t("admin.nav.users")}</h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("admin.staff.subtitle")}</p>
           {!isSuperAdmin && <p className="mt-1 text-xs font-semibold text-warning">{t("admin.staff.readOnly")}</p>}
         </div>
         <div className="flex gap-2">

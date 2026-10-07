@@ -124,7 +124,7 @@ describe("AdminFinancePanel", () => {
     render(<AdminFinancePanel />);
     fireEvent.click(await screen.findByText("Ko'rib chiqish"));
     // the card and the review modal both say the request is not money yet
-    expect(screen.getAllByText(/hali pul emas/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Hali pul emas/).length).toBeGreaterThan(0);
     expect(screen.getByRole("dialog", { name: "Top-upni ko'rib chiqish · 200 000 so'm" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Hujjat raqami"), { target: { value: "BS-0001" } });
     fireEvent.change(screen.getByLabelText("Haqiqatda qabul qilingan summa (so'm)"), { target: { value: "200 000" } });
@@ -230,7 +230,7 @@ describe("AdminFinancePanel", () => {
     fireEvent.click(await screen.findByRole("tab", { name: "Tuzatishlar" }));
     fireEvent.click(await screen.findByText("Tasdiqlash"));
     fireEvent.click(screen.getByText("Ha, bajarish"));
-    const prompt = await screen.findByRole("dialog", { name: "Tasdiqlash kodi kerak" });
+    const prompt = await screen.findByRole("dialog", { name: "Bu amal uchun autentifikator kodi kerak (MFA)" });
     fireEvent.change(prompt.querySelector("input") as HTMLInputElement, { target: { value: "123456" } });
     fireEvent.click(screen.getByText("Tasdiqlash va davom etish"));
     await waitFor(() => expect(api.approveAdjustment).toHaveBeenCalledTimes(2));

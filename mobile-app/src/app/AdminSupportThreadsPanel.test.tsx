@@ -61,7 +61,7 @@ describe("AdminSupportThreadsPanel", () => {
     fireEvent.click(row);
     await screen.findByText("Haydovchi kechikdi");
     expect(screen.getByText(/mas'ul: hech kim/)).toBeTruthy();
-    expect(screen.getByText(/pul qaytarmaydi/)).toBeTruthy();
+    expect(screen.queryByText(/pul qaytarmaydi/)).toBeNull();
     expect(m(trust.listSupportThreadsAdmin)).toHaveBeenCalledWith({ status: "open", assigned: "unassigned", limit: 50 });
   });
 
@@ -96,8 +96,8 @@ describe("AdminSupportThreadsPanel", () => {
     expect(screen.getByText(/1 ta xabar/)).toBeTruthy();
     fireEvent.click(screen.getByText(/Mijoz · bkg_1/));
     expect(await screen.findByText("Bron bkg_1")).toBeTruthy();
-    expect(screen.getByText(/faqat xodimga \(so'rovchiga ko'rinmaydi\)/)).toBeTruthy();
-    expect(screen.getByText(/Q141\/Q146/)).toBeTruthy();
+    expect(screen.getByText(/^Ichki izoh: /)).toBeTruthy();
+    expect(screen.queryByText(/Q141\/Q146/)).toBeNull(); // v3 §8.1: no subtitle
   });
 
   it("hides the commands without ops.trust_review", async () => {

@@ -42,10 +42,7 @@ export const adminMoneyMessages = {
   "admin.finance.tab.adjustments": { uz: "Tuzatishlar", ru: "Корректировки" },
   "admin.finance.tab.reports": { uz: "Solishtiruv va hisobotlar", ru: "Сверка и отчёты" },
   "admin.finance.tab.policies": { uz: "Komissiya siyosati", ru: "Политика комиссии" },
-  "admin.finance.topupsNote": {
-    uz: "Haydovchi hamyoni — komissiya uchun oldindan to'lov. So'rov va skrinshot pul emas: balans faqat hujjat bilan tasdiqlangandan keyin o'zgaradi. Katta summani ikki turli moliya xodimi tasdiqlaydi.",
-    ru: "Кошелёк водителя — предоплата комиссии. Заявка и скриншот — ещё не деньги: баланс меняется только после подтверждения документом. Крупную сумму подтверждают два разных финансовых сотрудника.",
-  },
+  "admin.finance.topupsNote": { uz: "So'rov va skrinshot pul emas: balans faqat hujjat tasdiqlangandan keyin o'zgaradi. Katta summani ikki turli xodim tasdiqlaydi.", ru: "Заявка и скриншот — не деньги: баланс меняется только после проверки документа. Крупную сумму подтверждают два разных сотрудника." },
   "admin.finance.status.second": { uz: "Ikkinchi tasdiq kutilmoqda", ru: "Ожидает второго подтверждения" },
   "admin.finance.status.posted": { uz: "O'tkazilgan", ru: "Проведено" },
   "admin.finance.method.bank": { uz: "bank o'tkazmasi", ru: "банковский перевод" },
@@ -59,10 +56,7 @@ export const adminMoneyMessages = {
     uz: "Tasdiqlangan manba: {source} {reference} · qabul qilingan: {amount}",
     ru: "Подтверждённый источник: {source} {reference} · получено: {amount}",
   },
-  "admin.finance.notMoneyYet": {
-    uz: "Bu haydovchining so'rovi — hali pul emas. Skrinshot yoki to'lovchi izohi to'lov dalili hisoblanmaydi: bank ko'chirmasi yoki kassa kvitansiyasini tekshiring.",
-    ru: "Это заявка водителя — ещё не деньги. Скриншот или комментарий плательщика не являются подтверждением оплаты: проверьте банковскую выписку или кассовую квитанцию.",
-  },
+  "admin.finance.notMoneyYet": { uz: "Hali pul emas: skrinshot dalil emas — bank ko'chirmasi yoki kvitansiyani tekshiring.", ru: "Это ещё не деньги: скриншот не доказательство — проверьте банковскую выписку или квитанцию." },
   "admin.finance.firstNotYetMoney": {
     uz: "Birinchi tasdiq bor, lekin pul hali balansga o'tmagan.",
     ru: "Первое подтверждение есть, но деньги на баланс ещё не зачислены.",
@@ -70,10 +64,7 @@ export const adminMoneyMessages = {
   "admin.finance.review": { uz: "Ko'rib chiqish", ru: "Рассмотреть" },
   "admin.finance.firstApprover": { uz: "1-tasdiq: {name} (moliya)", ru: "1-е подтверждение: {name} (финансы)" },
   "admin.finance.secondApprover": { uz: "2-tasdiq: {name} (moliya)", ru: "2-е подтверждение: {name} (финансы)" },
-  "admin.finance.youApprovedFirst": {
-    uz: "Siz birinchi tasdiqlagansiz — ikkinchi tasdiqni boshqa moliya xodimi beradi.",
-    ru: "Вы дали первое подтверждение — второе даёт другой финансовый сотрудник.",
-  },
+  "admin.finance.youApprovedFirst": { uz: "Ikkinchi tasdiq boshqa xodimdan.", ru: "Второе подтверждение — от другого сотрудника." },
   "admin.finance.topupOnlyFinance": {
     uz: "Top-upni faqat faol moliya xodimi yoki super admin tasdiqlaydi.",
     ru: "Пополнение подтверждает только активный финансовый сотрудник или суперадмин.",
@@ -259,10 +250,7 @@ export const adminMoneyMessages = {
     uz: "{campaign} · {status} · ajratilgan {allocated} · sarflangan {consumed} · majburiyat {liability} · yangi uchun {free}",
     ru: "{campaign} · {status} · выделено {allocated} · потрачено {consumed} · обязательства {liability} · свободно для новых {free}",
   },
-  "admin.finance.policyNote": {
-    uz: "Komissiya siyosatini faqat super admin yaratadi va o'zgartiradi (Q2). Mijozga komissiya ko'rsatilmaydi.",
-    ru: "Политику комиссии создаёт и меняет только суперадмин (Q2). Клиенту комиссия не показывается.",
-  },
+  "admin.finance.policyNote": { uz: "Faqat super admin o'zgartiradi.", ru: "Изменяет только супер-администратор." },
   "admin.finance.policyReadOnly": {
     uz: "Faqat o'qish: komissiya siyosatini super admin boshqaradi (Q2).",
     ru: "Только чтение: политикой комиссии управляет суперадмин (Q2).",
@@ -297,10 +285,7 @@ export const adminMoneyMessages = {
   "admin.finance.endSet": { uz: "Tugash vaqti belgilandi.", ru: "Время окончания установлено." },
   "admin.finance.noPolicies": { uz: "Siyosat yo'q.", ru: "Политик нет." },
   "admin.finance.newPolicy": { uz: "Yangi siyosat", ru: "Новая политика" },
-  "admin.finance.newPolicyHint": {
-    uz: "Stavka butun bps'da (100 bps = 1%). 0% faqat aniq muddatli kampaniya sifatida (Q1).",
-    ru: "Ставка в целых bps (100 bps = 1%). 0% — только как кампания с чётким сроком (Q1).",
-  },
+  "admin.finance.newPolicyHint": { uz: "100 bps = 1%. 0% — faqat muddatli kampaniya.", ru: "100 bps = 1%. 0% — только как кампания с конечным сроком." },
   "admin.finance.type": { uz: "Turi", ru: "Тип" },
   "admin.finance.standardCap": { uz: "Standart", ru: "Стандартная" },
   "admin.finance.campaignTimed": { uz: "Kampaniya (muddatli)", ru: "Кампания (срочная)" },
@@ -530,10 +515,7 @@ export const adminMoneyMessages = {
     ru: "Только просмотр: запросы бюджета отправляет и подтверждает финансовый сотрудник или суперадмин (Q105).",
   },
   "admin.promo.noBudgetRequests": { uz: "So'rovlar yo'q.", ru: "Запросов нет." },
-  "admin.promo.reviewsNote": {
-    uz: "Operator tekshiruvni boshlaydi va izoh yozadi; qarorni vakolatli admin qabul qiladi. Tasdiq mukofot yaratmaydi va taklif qiluvchini almashtirmaydi.",
-    ru: "Оператор начинает проверку и пишет комментарий; решение принимает уполномоченный администратор. Подтверждение не создаёт вознаграждение и не меняет пригласившего.",
-  },
+  "admin.promo.reviewsNote": { uz: "Qarorni admin qabul qiladi.", ru: "Решение принимает администратор." },
   "admin.promo.noReviews": { uz: "Ochiq tekshiruv yo'q.", ru: "Открытых проверок нет." },
   "admin.promo.review.identity_match": {
     uz: "Telefon mosligi — taklif qilgan va qo'shilgan bir oila",
@@ -614,24 +596,18 @@ export const adminMoneyMessages = {
   "admin.platform.onCap": { uz: "Yoqiq", ru: "Включён" },
   "admin.platform.offCap": { uz: "O'chiq", ru: "Выключен" },
   "admin.platform.new": { uz: "yangi", ru: "новая" },
-  "admin.platform.flagsNote": {
-    uz: "Ustunlik: kohorta → koridor → hudud → mamlakat. Qator bo'lmasa standart qiymat; bir darajada ziddiyatli qatorlar bo'lsa xavfsiz standart (Q26). Production'da v2 xizmat flaglari Q48 sharti o'tmaguncha yoqilmaydi va faqat shu panel/API orqali o'zgaradi (Q72).",
-    ru: "Приоритет: когорта → коридор → регион → страна. Нет строки — значение по умолчанию; конфликтующие строки на одном уровне — безопасное значение по умолчанию (Q26). В продакшене флаги услуг v2 не включаются, пока не выполнено условие Q48, и меняются только через эту панель/API (Q72).",
-  },
+  "admin.platform.flagsNote": { uz: "Ustunlik: kohorta → koridor → hudud → mamlakat.", ru: "Приоритет: когорта → коридор → регион → страна." },
   "admin.platform.effectiveCorridor": { uz: "Samarali qiymatni ko'rish uchun koridor", ru: "Коридор для просмотра действующего значения" },
   "admin.platform.countryOnly": { uz: "Faqat mamlakat (UZ)", ru: "Только страна (UZ)" },
   "admin.flag.passenger_enabled": { uz: "Yo'lovchi xizmati", ru: "Пассажирская услуга" },
-  "admin.flag.parcel_enabled": { uz: "Pochta (v2)", ru: "Посылки (v2)" },
+  "admin.flag.parcel_enabled": { uz: "Pochta", ru: "Посылки" },
   "admin.flag.driver_listing_enabled": { uz: "Haydovchi e'lonlari", ru: "Объявления водителей" },
   "admin.flag.corridor_matching_enabled": { uz: "Koridor bo'yicha moslash", ru: "Подбор по коридору" },
   "admin.flag.tracking_enabled": { uz: "Jonli kuzatuv", ru: "Живое отслеживание" },
   "admin.flag.card_payments_enabled": { uz: "Karta to'lovlari", ru: "Оплата картой" },
   "admin.flag.wallet_required": { uz: "Balans tekshiruvi", ru: "Проверка баланса" },
   "admin.flag.promotions_enabled": { uz: "Referral va bonuslar", ru: "Рефералы и бонусы" },
-  "admin.flag.hint.passenger_enabled": {
-    uz: "Production'da huquqiy tekshiruvgacha o'chiq (K7/Q5). Yoqish: super_admin, tasdiq hujjati, support telefoni (Q87) va Q48.",
-    ru: "В продакшене выключено до юридической проверки (K7/Q5). Включение: super_admin, документ-основание, телефон поддержки (Q87) и Q48.",
-  },
+  "admin.flag.hint.passenger_enabled": { uz: "Huquqiy tekshiruvgacha o'chiq.", ru: "Выключено до юридической проверки." },
   "admin.flag.hint.parcel_enabled": {
     uz: "Koridor bo'yicha yoqiladi (Q5); production'da Q48 o'tmaguncha yoqilmaydi.",
     ru: "Включается по коридору (Q5); в продакшене не включается, пока не пройдено Q48.",
@@ -814,10 +790,7 @@ export const adminMoneyMessages = {
   "admin.platform.effectiveFrom": { uz: "amalda: {time}", ru: "действует с {time}" },
   "admin.platform.noVersions": { uz: "Hali hech qanday versiya yaratilmagan.", ru: "Ещё не создано ни одной версии." },
   "admin.platform.approve": { uz: "Tasdiqlash…", ru: "Утвердить…" },
-  "admin.platform.authorCannot": {
-    uz: "Muallif o'z qoralamasini tasdiqlay olmaydi — ikkinchi super_admin kerak.",
-    ru: "Автор не может утвердить свой черновик — нужен второй super_admin.",
-  },
+  "admin.platform.authorCannot": { uz: "Tasdiq — ikkinchi super admindan.", ru: "Утверждает второй супер-администратор." },
   "admin.platform.confirmPolicy": { uz: "«{label}» ro'yxatini tasdiqlash", ru: "Утвердить список «{label}»" },
   "admin.platform.policyReplaces": {
     uz: "Tasdiqlangach amaldagi versiya almashtiriladi va jo'natuvchilarga shu ro'yxat ko'rsatiladi.",
@@ -924,10 +897,7 @@ export const adminMoneyMessages = {
   "admin.platform.noEvents": { uz: "Bu holatda hodisa yo'q.", ru: "Событий в этом статусе нет." },
   "admin.platform.quotaTitle": { uz: "Xarita/marshrut provayderi kvotasi", ru: "Квота провайдера карт/маршрутов" },
   "admin.platform.day": { uz: "Kun (YYYY-MM-DD, bo'sh = bugun)", ru: "День (ГГГГ-ММ-ДД, пусто = сегодня)" },
-  "admin.platform.noPaidCalls": {
-    uz: "Bu kunda pullik provayder chaqiruvi bo'lmagan (production'da marshrut provayderi o'chiq, Q24). Bu «noma'lum» degani emas.",
-    ru: "В этот день платных вызовов провайдера не было (в продакшене провайдер маршрутов выключен, Q24). Это не значит «неизвестно».",
-  },
+  "admin.platform.noPaidCalls": { uz: "Bu kunda provayder chaqiruvi bo'lmagan.", ru: "В этот день обращений к провайдеру не было." },
   "admin.platform.quotaRow": {
     uz: "{provider} · {day} · {calls} chaqiruv · {credits} kredit / {limit} · {percent}% · {state} · xatolar: {failures}",
     ru: "{provider} · {day} · вызовов: {calls} · кредитов {credits} / {limit} · {percent}% · {state} · ошибок: {failures}",
@@ -936,7 +906,7 @@ export const adminMoneyMessages = {
   "admin.platform.quota.warn": { uz: "Ogohlantirish (≥70%)", ru: "Предупреждение (≥70%)" },
   "admin.platform.quota.restrict": { uz: "Cheklangan (≥85%)", ru: "Ограничено (≥85%)" },
   "admin.platform.estimated": { uz: "taxminiy", ru: "оценочно" },
-  "admin.platform.v1Lookup": { uz: "v1 buyurtmani raqam bo'yicha ko'rish", ru: "Найти заказ v1 по номеру" },
+  "admin.platform.v1Lookup": { uz: "Eski buyurtmani raqam bo'yicha ko'rish", ru: "Найти старый заказ по номеру" },
   "admin.platform.orderNumber": { uz: "Buyurtma raqami", ru: "Номер заказа" },
   "admin.platform.view": { uz: "Ko'rish", ru: "Просмотр" },
   "admin.platform.legacyTitle": { uz: "v1 buyurtma {number}", ru: "Заказ v1 {number}" },
@@ -1054,10 +1024,7 @@ export const adminMoneyMessages = {
 
   // --- Tariflar (AdminTariffsPanel.tsx) ---
   "admin.tariffs.title": { uz: "Tariflar", ru: "Тарифы" },
-  "admin.tariffs.subtitle": {
-    uz: "Yangi buyurtmalar uchun hududdan hududga tavsiya narxlarini boshqaring (v1). v2 auksionda narxni tomonlar kelishadi — «Narx referensi»ga qarang.",
-    ru: "Управляйте рекомендуемыми ценами между регионами для новых заказов (v1). В аукционе v2 цену согласуют стороны — см. «Ценовой ориентир».",
-  },
+  "admin.tariffs.subtitle": { uz: "Tavsiya narxlari.", ru: "Рекомендованные цены." },
   "admin.tariffs.add": { uz: "Tarif qo'shish", ru: "Добавить тариф" },
   "admin.tariffs.readOnly": { uz: "Tarif yaratish yoki tahrirlash uchun ruxsat yo'q.", ru: "Нет прав создавать или менять тарифы." },
   "admin.tariffs.total": { uz: "Jami", ru: "Всего" },
@@ -1081,10 +1048,7 @@ export const adminMoneyMessages = {
   "admin.tariffs.currency": { uz: "Valyuta", ru: "Валюта" },
   "admin.tariffs.notFound": { uz: "Tariflar topilmadi", ru: "Тарифы не найдены" },
   "admin.tariffs.editTitle": { uz: "Tarifni tahrirlash", ru: "Изменить тариф" },
-  "admin.tariffs.editNote": {
-    uz: "Tariflar yo'nalish bo'yicha. Teskari yo'nalish alohida qo'shiladi. Mavjud buyurtmalar o'z nusxa narxini saqlaydi.",
-    ru: "Тарифы задаются по направлению. Обратное направление добавляется отдельно. Существующие заказы сохраняют свою копию цены.",
-  },
+  "admin.tariffs.editNote": { uz: "Teskari yo'nalish alohida qo'shiladi.", ru: "Обратное направление добавляется отдельно." },
   "admin.tariffs.suggestedReq": { uz: "Tavsiya narx *", ru: "Рекомендуемая цена *" },
   "admin.tariffs.preview": { uz: "Narx ko'rinishi", ru: "Отображение цены" },
   "admin.tariffs.previewValue": { uz: "{range} so'm", ru: "{range} сум" },
@@ -1127,4 +1091,12 @@ export const adminMoneyMessages = {
   "admin.tariffs.err.VALIDATION_ERROR": { uz: "Ma'lumotlarni tekshiring.", ru: "Проверьте введённые данные." },
   "admin.tariffs.err.FORBIDDEN": { uz: "Ruxsat yo'q.", ru: "Нет доступа." },
   "admin.tariffs.err.UNAUTHORIZED": { uz: "Qayta tizimga kiring.", ru: "Войдите в систему заново." },
+
+  // --- Design v3 (elchi-dev/DESIGN-V3-ADMIN-DIFF.md §99.3) ---
+  "admin.v3.cities.centreLat": { uz: "Markaz kengligi", ru: "Широта центра" },
+  "admin.v3.cities.centreLng": { uz: "Markaz uzunligi", ru: "Долгота центра" },
+  "admin.v3.cities.centreCol": { uz: "Markaz", ru: "Центр" },
+  "admin.v3.cities.centreHint": { uz: "Markazi kiritilmagan tuman yo'lga joylashtirilmaydi: u buyurtma va yo'nalishlarda ishlatilmaydi.", ru: "Район без центра не привязывается к дороге и не используется в заказах и направлениях." },
+  "admin.v3.cities.noCentre": { uz: "Markaz kiritilmagan", ru: "Центр не указан" },
+  "admin.v3.cities.noDistrictsYet": { uz: "Hozircha tuman yo'q", ru: "Районов пока нет" },
 } as const satisfies Record<string, Message>;

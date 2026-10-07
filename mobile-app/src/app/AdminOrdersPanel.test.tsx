@@ -73,7 +73,7 @@ describe("AdminOrdersPanel", () => {
   it("renders the design copy in Uzbek, with no English left", async () => {
     render(<AdminOrdersPanel user={staff("admin")} />);
     expect(await screen.findByText("EL-20931")).toBeInTheDocument();
-    expect(screen.getByText("Mijoz buyurtmalari, takliflar, haydovchilar, holatlar va nizolarni boshqarish (v1).")).toBeInTheDocument();
+    expect(screen.queryByText(/\(v1\)/)).toBeNull();
     expect(screen.getByText("Sahifa 1 / 79 · jami 1564")).toBeInTheDocument();
     expect(screen.getByText("3 ta")).toBeInTheDocument();
     expect(screen.getByText("Biriktirilmagan")).toBeInTheDocument();
@@ -98,7 +98,7 @@ describe("AdminOrdersPanel", () => {
     render(<AdminOrdersPanel user={staff("admin")} />);
     fireEvent.click(await screen.findByRole("button", { name: /Boshqarish/ }));
     const drawer = await screen.findByRole("dialog");
-    expect(within(drawer).getByText("Xarita ko'rinishi (faqat o'qish)")).toBeInTheDocument();
+    expect(within(drawer).getByText("Olib ketish va yetkazish nuqtalari")).toBeInTheDocument();
     expect(within(drawer).getByText("Chilonzor 9 · 41.3, 69.2")).toBeInTheDocument();
     fireEvent.click(within(drawer).getByRole("button", { name: "Holatni o'zgartirish" }));
     const save = screen.getByRole("button", { name: "Saqlash" });
@@ -120,7 +120,7 @@ describe("AdminOrdersPanel", () => {
   it("speaks Russian", async () => {
     setLocale("ru");
     render(<AdminOrdersPanel user={staff("admin")} />);
-    expect(await screen.findByText("Управление заказами клиентов, предложениями, водителями, статусами и спорами (v1).")).toBeInTheDocument();
+    expect(await screen.findByText("Не назначен")).toBeInTheDocument();
     expect(screen.getByText("Не назначен")).toBeInTheDocument();
     setLocale("uz");
   });

@@ -159,7 +159,6 @@ export function AdminOpsQueuesPanel({ onOpenItem }: { onOpenItem?: (item: OpsQue
     <section className="grid gap-4">
       <PanelHead
         title={t("admin.queues.title")}
-        sub={t("admin.queues.subtitle")}
         actions={
           <Btn
             onClick={() => {
@@ -700,7 +699,6 @@ export function AdminSupportPanel() {
       <div className="grid gap-3">
         <PanelHead
           title={t("admin.support.title")}
-          sub={t("admin.support.subtitle")}
           actions={
             <Btn onClick={tickets.reload}>
               <RefreshCw size={14} /> {t("support.refresh")}
@@ -1019,13 +1017,8 @@ export function AdminLegacyOrdersPanel() {
     <section className="grid gap-4">
       <PanelHead
         title={t("admin.legacy.title")}
-        sub={t("admin.legacy.subtitle")}
-        actions={
-          <>
-            <Archive size={18} className="text-slate-400" />
-            <Badge>{t("admin.legacy.readOnly")}</Badge>
-          </>
-        }
+        sub={t("admin.legacy.readOnly")}
+        actions={<Archive size={18} className="text-slate-400" />}
       />
       <div className="flex flex-wrap items-end gap-3">
         <Field label={t("admin.mk.status")}>

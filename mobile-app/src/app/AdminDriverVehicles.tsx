@@ -28,7 +28,7 @@ import { capabilities, type CapabilitiesDTO } from "../api/v2/ops.api";
 import { translate, translateDynamic, type MessageKey } from "../i18n";
 import { useT } from "../i18n/react";
 import { v2ErrorMessage } from "../utils/v2Errors";
-import { formatDateTime } from "../utils/v2Format";
+import { formatDate, formatDateTime } from "../utils/v2Format";
 import { Badge, Btn, Note, hasCap, type BadgeTone } from "./adminMarketKit";
 import { X } from "./ui/icons";
 
@@ -163,9 +163,12 @@ function VehicleCard({
   vehicle,
   canManage,
   onChanged,
+  onChangeVehicle,
 }: {
   vehicle: AdminVehicle;
   canManage: boolean;
+  /** v3 §15.3: «Avtomobilni o'zgartirish» sits on the card; it opens the v1 vehicle correction (Q94). */
+  onChangeVehicle?: () => void;
   onChanged: () => void;
 }) {
   const t = useT();
@@ -219,7 +222,7 @@ function VehicleCard({
 
   return (
     <div
-      className={`space-y-3 rounded-[14px] border bg-card p-4 text-sm ${vehicle.verification_status === "pending" ? "border-primary/50 ring-2 ring-primary/10" : "border-border"}`}
+      className={`space-y-3 rounded-[14px] border-2 border-primary bg-card p-4 text-sm ${vehicle.verification_status === "pending" ? "ring-2 ring-primary/10" : ""}`}
       data-testid="vehicle-card"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -228,7 +231,8 @@ function VehicleCard({
         </p>
         <Badge tone={STATUS_TONE[vehicle.verification_status] ?? "gray"}>{statusLabel(vehicle.verification_status)}</Badge>
       </div>
-      <p className="text-secondary-foreground">
+      <p className="font-medium text-foreground">{`${t("driverProfileForm.passengerSeats")}: ${vehicle.seat_capacity}`}</p>
+      <p className="text-xs text-secondary-foreground">
         {t("admin.vehicles.capacity", {
           seats: vehicle.seat_capacity,
           luggage: litres(vehicle.baggage_capacity_ml),
@@ -237,7 +241,7 @@ function VehicleCard({
         })}
       </p>
       <p className="text-xs text-muted-foreground">
-        {t("admin.vehicles.registered", { date: formatDateTime(vehicle.created_at), count: vehicle.document_file_ids.length })}
+        {t("admin.v3.drivers.registeredOn", { date: formatDate(vehicle.created_at) })}
         {vehicle.verified_at ? ` · ${t("admin.vehicles.lastDecision", { date: formatDateTime(vehicle.verified_at) })}` : ""}
       </p>
       {vehicle.verification_reason && (
@@ -276,6 +280,7 @@ function VehicleCard({
 
       {pending === null ? (
         <div className="flex flex-wrap gap-2">
+          {onChangeVehicle ? <Btn onClick={onChangeVehicle}>{t("admin.drivers.changeVehicle")}</Btn> : null}
           {vehicle.document_file_ids.length > 0 ? <Btn onClick={() => setDocs(true)}>{t("admin.vehicles.viewDocs")}</Btn> : null}
           {canManage && CAN_APPROVE.has(vehicle.verification_status) && (
             <Btn tone="primary" disabled={busy} onClick={() => open("approve")}>
@@ -329,7 +334,7 @@ function VehicleCard({
 }
 
 /** The vehicles block of one driver's card. `ownerUserId` is the driver's `usr_` id (v1 `user_public_id`). */
-export function DriverVehicles({ ownerUserId }: { ownerUserId: string | null | undefined }) {
+export function DriverVehicles({ ownerUserId, onChangeVehicle }: { ownerUserId: string | null | undefined; onChangeVehicle?: () => void }) {
   const t = useT();
   const [rows, setRows] = useState<AdminVehicle[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -362,9 +367,13 @@ export function DriverVehicles({ ownerUserId }: { ownerUserId: string | null | u
 
   return (
     <section className="grid gap-3" aria-label={t("admin.vehicles.title")}>
-      <div>
-        <h3 className="text-base font-bold text-foreground">{t("admin.vehicles.title")}</h3>
-        <p className="text-xs text-muted-foreground">{t("admin.vehicles.subtitle")}</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-base font-bold text-foreground">{t("admin.vehicles.title")}</h3>
+          <p className="text-xs text-muted-foreground">{t("admin.vehicles.subtitle")}</p>
+        </div>
+        {/* No v2 card to carry the button (no car yet, no access, still loading): the v1 correction stays reachable. */}
+        {onChangeVehicle && !(rows && rows.length > 0) ? <Btn onClick={onChangeVehicle}>{t("admin.drivers.changeVehicle")}</Btn> : null}
       </div>
       {!ownerUserId ? <Note>{t("admin.vehicles.noOwner")}</Note> : null}
       {ownerUserId && noAccess ? <Note>{t("admin.vehicles.noAccess")}</Note> : null}
@@ -380,8 +389,8 @@ export function DriverVehicles({ ownerUserId }: { ownerUserId: string | null | u
         </p>
       )}
       {rows !== null && rows.length === 0 && <p className="text-sm text-muted-foreground">{t("admin.vehicles.empty")}</p>}
-      {(rows ?? []).map((vehicle) => (
-        <VehicleCard key={vehicle.id} vehicle={vehicle} canManage={canManage} onChanged={load} />
+      {(rows ?? []).map((vehicle, index) => (
+        <VehicleCard key={vehicle.id} vehicle={vehicle} canManage={canManage} onChanged={load} onChangeVehicle={index === 0 ? onChangeVehicle : undefined} />
       ))}
     </section>
   );

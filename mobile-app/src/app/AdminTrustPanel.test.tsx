@@ -331,7 +331,8 @@ describe("chat, strikes, tracking", () => {
     fireEvent.change(await screen.findByLabelText("Safar ID"), { target: { value: "trp_1" } });
     fireEvent.click(screen.getByRole("button", { name: "Ko'rish" }));
     expect(await screen.findByText(/Aloqa uzilgan/)).toBeInTheDocument();
-    expect(container.textContent).toMatch(/audit jurnaliga/);
+    expect(container.textContent).toMatch(/Har ko'rish auditga yoziladi/);
+    expect(container.textContent).toMatch(/Oxirgi nuqta/);
     expect(container.textContent).not.toMatch(/GPS faol/i);
   });
 });
@@ -518,7 +519,7 @@ describe("finance role and MFA step-up (Q17, ADR-0021)", () => {
     fireEvent.change(screen.getByLabelText("Sabab"), { target: { value: "Nizo hal qilindi, hold undiriladi" } });
     fireEvent.click(screen.getByRole("button", { name: "Komissiyani yakunlash" }));
     fireEvent.click(screen.getByRole("button", { name: "Ha, bajarish" }));
-    const dialog = await screen.findByRole("dialog", { name: "Tasdiqlash kodi kerak" });
+    const dialog = await screen.findByRole("dialog", { name: "Bu amal uchun autentifikator kodi kerak (MFA)" });
     const submit = within(dialog).getByRole("button", { name: "Tasdiqlash va davom etish" });
     expect(submit).toBeDisabled();
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "123456" } });
@@ -529,7 +530,7 @@ describe("finance role and MFA step-up (Q17, ADR-0021)", () => {
     expect(calls[0][1]).toBe("finalize_fee");
     expect(calls[0][2]).toMatchObject({ fee_decision: { mode: "capture" } });
     expect(calls[1][3]).toBe(calls[0][3]);
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Tasdiqlash kodi kerak" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Bu amal uchun autentifikator kodi kerak (MFA)" })).toBeNull());
   });
 
   it("closes quietly when the code prompt is cancelled - nothing is sent again", async () => {
@@ -543,9 +544,9 @@ describe("finance role and MFA step-up (Q17, ADR-0021)", () => {
     fireEvent.change(screen.getByLabelText("Sabab"), { target: { value: "sabab" } });
     fireEvent.click(screen.getByRole("button", { name: "Komissiyani yakunlash" }));
     fireEvent.click(screen.getByRole("button", { name: "Ha, bajarish" }));
-    const dialog = await screen.findByRole("dialog", { name: "Tasdiqlash kodi kerak" });
+    const dialog = await screen.findByRole("dialog", { name: "Bu amal uchun autentifikator kodi kerak (MFA)" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Bekor qilish" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Tasdiqlash kodi kerak" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Bu amal uchun autentifikator kodi kerak (MFA)" })).toBeNull());
     expect(screen.queryByRole("alert")).toBeNull();
     expect(mfa.stepUp).not.toHaveBeenCalled();
     expect(trust.adminBookingCommand).toHaveBeenCalledTimes(1);
@@ -611,7 +612,7 @@ describe("disputes v2 (§8, Q78/Q141)", () => {
     m(ops.listDisputes).mockResolvedValue([dispute]);
     render(<AdminDisputesV2Panel />);
     fireEvent.click(await screen.findByRole("button", { name: "Ko'rish" }));
-    expect(screen.getByText(/Q141/)).toBeInTheDocument();
+    expect(screen.getByText("Xodim ichki yozuvi.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ko'rikka olish" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Hal qilish" })).toBeNull();
   });

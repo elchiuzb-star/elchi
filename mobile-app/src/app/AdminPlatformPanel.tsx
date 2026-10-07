@@ -165,7 +165,6 @@ function FlagHistory({ flagKey }: { flagKey: FeatureFlagKey }) {
           {[
             formatAdminDate(row.changed_at),
             `${scopeLabel(row.scope_type)} ${row.scope_ref}`,
-            `v${row.version}`,
             `${row.old_enabled === null || row.old_enabled === undefined ? t("admin.platform.new") : onOff(row.old_enabled)} → ${onOff(row.new_enabled)}`,
             row.actor ?? t("admin.money.system"),
             row.reason,
@@ -222,7 +221,6 @@ function FlagsTab({ caps }: { caps: Caps }) {
       t("admin.finance.reasonLine", { reason: draft.reason.trim() }),
     ];
     if (draft.approval.trim()) lines.push(t("admin.platform.approvalLine", { ref: draft.approval.trim() }));
-    if (draft.enabled && meta.q48Gated) lines.push(t("admin.platform.q48Refusal"));
     if (draft.enabled && meta.needsApprovalReference) lines.push(t("admin.platform.q5Line"));
     action.ask({
       title: t("admin.platform.confirmFlag"),
@@ -293,7 +291,7 @@ function FlagsTab({ caps }: { caps: Caps }) {
                 {own.map((row) => (
                   <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-border p-2 text-xs">
                     <span className="min-w-0 break-words">
-                      {`${scopeLabel(row.scope_type)} «${row.scope_type === "corridor" ? corridorName(row.scope_ref) : row.scope_ref}» · ${onOff(row.enabled)} · v${row.version} · ${
+                      {`${scopeLabel(row.scope_type)} «${row.scope_type === "corridor" ? corridorName(row.scope_ref) : row.scope_ref}» · ${onOff(row.enabled)} · ${
                         row.updated_by ?? t("admin.money.system")
                       } · ${formatAdminDate(row.updated_at)}`}
                       {row.approval_reference ? ` · ${t("admin.platform.approvalShort", { ref: row.approval_reference })}` : ""}
@@ -937,7 +935,7 @@ function CategoriesTab({ caps }: { caps: Caps }) {
         ))}
 
       {canManage && (
-        <Section title={t("admin.platform.newCatalog")} sub={t("admin.platform.catalogHint")}>
+        <Section title={t("admin.platform.newCatalog")}>
           <div className="space-y-2 rounded-[14px] border border-dashed border-border p-4">
             <div className="grid gap-2 md:grid-cols-2">
               <Field label={t("admin.platform.versionName")} value={label} onChange={setLabel} placeholder="2026-09" />
@@ -1048,7 +1046,7 @@ function OutboxTab({ caps }: { caps: Caps }) {
       {(items ?? []).map((event) => (
         <Card
           key={event.id}
-          title={`${event.event_type} · ${event.aggregate_id} (v${event.aggregate_version})`}
+          title={`${event.event_type} · ${event.aggregate_id}`}
           badge={event.dead_lettered_at ? <Badge tone="err">{t("admin.platform.outbox.deadBadge")}</Badge> : <Badge tone="warn">{t("admin.platform.outbox.failedBadge")}</Badge>}
         >
           <p className="text-xs text-muted-foreground">

@@ -110,7 +110,7 @@ import { AdminSupportThreadsPanel } from "./AdminSupportThreadsPanel";
 
 export type Section =
   | "overview"
-  // Bozor (v2)
+  // Bozor
   | "opsQueues" | "trustOps" | "driverDirections" | "priceBands" | "disputesV2"
   // Ishonch
   | "support" | "supportThreads"
@@ -118,7 +118,7 @@ export type Section =
   | "finance" | "promotions"
   // Katalog va sozlamalar
   | "platform" | "cities" | "tariffs"
-  // Legacy (v1)
+  // Arxiv
   | "orders" | "drivers" | "clients" | "disputes" | "legacyOrders"
   // Tizim
   | "metrics" | "users" | "security" | "notifications" | "audit" | "profile";
@@ -600,7 +600,7 @@ export function AdminDisputesV1Panel() {
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-foreground">{t("admin.nav.disputesV1")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("admin.disputes1.subtitle")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("admin.legacy.readOnly")}</p>
         </div>
         <Button tone="neutral" disabled={busy} onClick={() => void load()}><RefreshCw size={16} /> {t("support.refresh")}</Button>
       </section>
@@ -687,6 +687,14 @@ export default function AdminApp() {
   const [focusDisputeId, setFocusDisputeId] = useState<string | null>(null);
   const [panelQuery, setPanelQuery] = useState<string | undefined>(undefined);
   const [caps, setCaps] = useState<string[] | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((text: string) => {
+    setToast(text);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2600);
+  }, []);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   const setSection = useCallback((next: Section, query?: string) => {
     setPanelQuery(query);
@@ -750,6 +758,7 @@ export default function AdminApp() {
     try {
       await refreshMe();
       setRefreshNonce((value) => value + 1);
+      showToast(t("admin.v3.shell.refreshed"));
     } finally {
       setBusy(false);
     }
@@ -770,9 +779,9 @@ export default function AdminApp() {
             <div className={`flex min-w-0 items-center gap-3 ${sidebarCollapsed ? "justify-center" : ""}`}>
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-primary"><Shield size={20} /></div>
               {!sidebarCollapsed && (
-                <div className="min-w-0">
+                <div className="grid min-w-0 gap-1">
                   <p className="font-bold">Elchi Admin</p>
-                  <p className="truncate text-xs text-background/60" data-testid="sidebar-role">{adminRoleLabel(user.role)}</p>
+                  <span className="max-w-full justify-self-start truncate rounded-full bg-background/15 px-2.5 py-0.5 text-[11px] font-semibold text-background/85" data-testid="sidebar-role">{adminRoleLabel(user.role)}</span>
                 </div>
               )}
             </div>
@@ -791,7 +800,7 @@ export default function AdminApp() {
               <div key={group.id} className="grid gap-1">
                 {group.label && (sidebarCollapsed
                   ? groupIndex > 0 && <hr className="my-2 border-background/15" />
-                  : <p className="mt-3 px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-background/60">{t(group.label)}</p>)}
+                  : <p className="mt-3 px-3 pb-1 text-[10.5px] font-bold uppercase tracking-[0.1em] text-background/60">{t(group.label)}</p>)}
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const active = section === item.id;
@@ -802,7 +811,7 @@ export default function AdminApp() {
                       onClick={() => navigate(item.id)}
                       title={t(item.label)}
                       aria-current={active ? "page" : undefined}
-                      className={`el-press flex h-10 min-w-0 items-center rounded-[10px] text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "bg-card text-foreground" : "text-background/75 hover:bg-background/10 hover:text-background"}`}
+                      className={`el-press flex h-[38px] min-w-0 items-center rounded-[10px] text-sm font-semibold ${sidebarCollapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "bg-card text-foreground" : "text-background/75 hover:bg-background/10 hover:text-background"}`}
                     >
                       <Icon size={17} />
                       {!sidebarCollapsed && <span className="truncate">{t(item.label)}</span>}
@@ -817,19 +826,18 @@ export default function AdminApp() {
         <section className="min-w-0 overflow-hidden">
           <header className="flex min-h-16 flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-3 lg:px-6">
             <div className="min-w-0 shrink-0">
-              <p className="text-xs text-muted-foreground">{currentGroup?.label ? t(currentGroup.label) : "Elchi Admin"}</p>
-              <h1 className="truncate text-base font-bold">{t(sectionLabelKey(section))}</h1>
+              <h1 className="truncate text-xl font-bold leading-tight sm:text-2xl" title={currentGroup?.label ? t(currentGroup.label) : undefined}>{t(sectionLabelKey(section))}</h1>
+              <p className="mt-0.5 max-w-[320px] truncate text-[13px] text-muted-foreground" data-testid="header-identity">
+                {user.full_name || user.username || user.phone} · {adminRoleLabel(user.role)}
+              </p>
             </div>
             {(caps === null || caps.includes("ops.view")) && <AdminGlobalSearch role={user.role} onOpen={navigate} />}
             <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
-              <p className="hidden max-w-[260px] truncate text-sm font-semibold text-secondary-foreground md:block" data-testid="header-identity">
-                {user.full_name || user.username || user.phone} · {adminRoleLabel(user.role)}
-              </p>
               <LanguageSwitch />
               <Button tone="neutral" disabled={busy} onClick={() => void refreshAll()} title={t("support.refresh")}>
                 <RefreshCw size={16} className={busy ? "animate-spin" : ""} /> <span className="hidden sm:inline">{t("support.refresh")}</span>
               </Button>
-              <Button tone="neutral" onClick={logout} title={t("nav.logout")}>
+              <Button tone="danger" onClick={logout} title={t("nav.logout")}>
                 <LogOut size={16} /> <span className="hidden sm:inline">{t("nav.logout")}</span>
               </Button>
             </div>
@@ -883,6 +891,12 @@ export default function AdminApp() {
           </div>
         </section>
       </div>
+      {toast && (
+        <div role="status" className="fixed bottom-7 left-1/2 z-[60] flex max-w-[min(560px,calc(100vw-32px))] -translate-x-1/2 items-center gap-2.5 rounded-[16px] bg-foreground px-[18px] py-3 text-[13.5px] font-medium text-background shadow-xl">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+          {toast}
+        </div>
+      )}
     </main>
   );
 }

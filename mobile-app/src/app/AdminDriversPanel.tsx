@@ -62,6 +62,10 @@ import { formatAdminMoney } from "../utils/money";
 import { statusToneClass } from "../utils/orderStatus";
 import { formatDate, formatDateTime } from "../utils/v2Format";
 import { DriverVehicles, usePendingVehicles } from "./AdminDriverVehicles";
+import { adminListDirections, type AdminDriverDirectionDTO } from "../api/v2/directions.api";
+import { translateDynamic } from "../i18n";
+import { v2ErrorMessage } from "../utils/v2Errors";
+import { directionEndName } from "./directionFeed";
 
 type DriversPanelProps = {
   user: AuthUser;
@@ -328,6 +332,66 @@ function isPdfFile(url?: string) {
   return Boolean(url?.split("?")[0].match(/\.pdf$/i));
 }
 
+/** "JPG", "PDF"... from the link; the document DTO has no mime or size field yet (v3 §15.7, BLOCKED part). */
+function fileTypeLabel(url?: string): string {
+  const match = url?.split("?")[0].match(/\.([a-z0-9]{2,5})$/i);
+  return match ? match[1].toUpperCase() : "-";
+}
+
+const DIRECTION_TONE: Record<string, string> = {
+  active: "border-success/25 bg-success/12 text-success",
+  paused: "border-warning/28 bg-warning/14 text-warning",
+  archived: "border-border bg-slate-50 text-secondary-foreground",
+};
+
+/** v3 §15.6 / Q150: the driver's directions (ADR-0027), read-only, filtered by the driver's `usr_` id. */
+function DriverDirections({ driverPublicId }: { driverPublicId?: string | null }) {
+  const t = useT();
+  const [rows, setRows] = useState<AdminDriverDirectionDTO[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!driverPublicId) {
+      setRows([]);
+      return;
+    }
+    let alive = true;
+    setRows(null);
+    setError(null);
+    adminListDirections({ driver_id: driverPublicId, limit: 100 })
+      .then((items) => { if (alive) setRows(items); })
+      .catch((cause) => { if (alive) setError(v2ErrorMessage(cause)); });
+    return () => { alive = false; };
+  }, [driverPublicId]);
+
+  if (error) return <div className="rounded-[12px] border border-destructive/25 bg-destructive/10 p-4 text-sm font-medium text-destructive">{error}</div>;
+  if (rows === null) return <div className="rounded-[12px] border border-border bg-card p-6 text-sm text-muted-foreground" aria-busy="true">{t("common.loading")}</div>;
+  if (!rows.length) return <div className="rounded-[12px] border border-border bg-card p-10 text-center text-sm text-muted-foreground">{t("admin.dir.empty")}</div>;
+  return (
+    <>
+      {rows.map((row) => (
+        <div key={row.id} className="rounded-[12px] border border-border bg-card p-4" data-testid="driver-direction">
+          <div className="flex items-start justify-between gap-3">
+            <p className="font-bold text-foreground">{directionEndName(row.origin)} {"->"} {directionEndName(row.destination)}</p>
+            <Badge className={DIRECTION_TONE[row.status] ?? DIRECTION_TONE.archived}>
+              {row.status === "active" ? t("dir.statusActive") : row.status === "paused" ? t("dir.statusPaused") : t("admin.dir.archivedStatus")}
+            </Badge>
+          </div>
+          {(row.via_district_names ?? []).length > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">{t("dir.via", { names: (row.via_district_names ?? []).join(", ") })}</p>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">{t("dir.capacity", { seats: row.seat_capacity, kg: Math.round(row.cargo_capacity_weight_g / 1000) })}</p>
+          {row.active_trip && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {`${formatDateTime(row.active_trip.planned_start_at)} · ${translateDynamic(`tripStatus.${row.active_trip.status}`) ?? row.active_trip.status} · ${t("dir.seatsBooked", { seats: row.active_trip.seats_booked })}`}
+            </p>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function DocumentPreviewModal({ document, onClose }: { document: AdminDriverDocument; onClose: () => void }) {
   const t = useT();
   const url = document.file_url;
@@ -338,7 +402,9 @@ function DocumentPreviewModal({ document, onClose }: { document: AdminDriverDocu
         <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <h3 className="text-base font-bold text-foreground">{title}</h3>
-            <p className="text-xs text-muted-foreground">{document.created_at ? t("admin.drivers.uploadedAt", { date: formatDateTime(document.created_at) }) : t("docState.missing")}</p>
+            <p className="text-xs text-muted-foreground">
+              {document.created_at ? t("admin.v3.docs.fileMeta", { type: fileTypeLabel(url), date: formatDate(document.created_at) }) : t("docState.missing")}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {url && <a href={url} target="_blank" rel="noreferrer" className="rounded-[10px] border border-border px-3 py-2 text-sm font-semibold text-secondary-foreground hover:bg-slate-50">{t("admin.drivers.openNewTab")}</a>}
@@ -420,7 +486,6 @@ function VehicleModal(props: {
   return (
     <ModalShell title={t("admin.drivers.vehicleTitle")} onClose={props.onClose}>
       <div className="grid gap-4 p-5">
-        <p className="rounded-[10px] border border-warning/28 bg-warning/14 p-3 text-sm text-warning">{t("admin.drivers.vehicleWarn")}</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <Input label={t("admin.drivers.fullName")} value={fullName} onChange={setFullName} />
           <Input label={t("driverProfileForm.carModel")} value={carModel} onChange={setCarModel} />
@@ -535,9 +600,6 @@ function DriverDrawer(props: {
             {canRejectDriver(driver, props.user) && <Button tone="danger" disabled={props.busy} onClick={() => setModal("reject")}><X size={15} /> {t("admin.common.reject")}</Button>}
             {canBlockDriver(driver, props.user) && <Button tone="danger" disabled={props.busy} onClick={() => setModal("block")}><Ban size={15} /> {t("blockReport.block")}</Button>}
             {canUnblockDriver(driver, props.user) && <Button disabled={props.busy} onClick={() => setModal("unblock")}><Unlock size={15} /> {t("blockReport.unblock")}</Button>}
-            {/* Operators may edit the vehicle as well as admins - that is what the server allows (Q94), and they
-                are the ones the driver reaches first. */}
-            {canEditDriverVehicle(props.user) && <Button disabled={props.busy} onClick={() => setModal("vehicle")}><Car size={15} /> {t("admin.drivers.changeVehicle")}</Button>}
             {!anyAction && <span className="rounded-[10px] bg-background px-3 py-2 text-sm font-semibold text-muted-foreground">{t("admin.drivers.noActions")}</span>}
           </div>
           <div className="mt-4 flex gap-2 overflow-x-auto border-b border-border">
@@ -580,16 +642,22 @@ function DriverDrawer(props: {
 
           {tab === "documents" && (
             <section className="grid gap-3 md:grid-cols-2">
-              {documents.map((document) => <DocumentCard key={document.document_type} document={document} onPreview={setPreviewDocument} />)}
+              {/* v3 §15.3: the car first, then the documents. Operators may correct the vehicle as well as admins -
+                  that is what the server allows (Q94), and they are the ones the driver reaches first. */}
               <div className="md:col-span-2">
-                <DriverVehicles ownerUserId={driver.user_public_id} />
+                <DriverVehicles
+                  ownerUserId={driver.user_public_id}
+                  onChangeVehicle={canEditDriverVehicle(props.user) && !props.busy ? () => setModal("vehicle") : undefined}
+                />
               </div>
+              {documents.map((document) => <DocumentCard key={document.document_type} document={document} onPreview={setPreviewDocument} />)}
             </section>
           )}
 
           {tab === "routes" && (
             <section className="grid gap-3">
-              {(driver.routes ?? []).length ? (driver.routes ?? []).map((route) => (
+              <DriverDirections driverPublicId={driver.user_public_id} />
+              {(driver.routes ?? []).length > 0 && (driver.routes ?? []).map((route) => (
                 <div key={route.id} className="rounded-[12px] border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-bold text-foreground">{routeName(route)}</p>
@@ -599,7 +667,7 @@ function DriverDrawer(props: {
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">{t("admin.drivers.routeMeta", { created: formatDateTime(route.created_at) })}</p>
                 </div>
-              )) : <div className="rounded-[12px] border border-border bg-card p-10 text-center text-sm text-muted-foreground">{t("admin.drivers.noRoutes")}</div>}
+              ))}
             </section>
           )}
 
@@ -787,7 +855,6 @@ export function AdminDriversPanel({ user, initialSearch }: DriversPanelProps) {
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-foreground">{t("admin.nav.drivers")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("admin.drivers.subtitle")}</p>
         </div>
         <Button disabled={busy} onClick={() => void loadDrivers()}><RefreshCw size={16} /> {t("support.refresh")}</Button>
       </section>

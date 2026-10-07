@@ -441,9 +441,9 @@ function OrdersDrawer(props: {
                 <DetailItem label={t("admin.orders.cargoPhoto")} value={order.cargo_photo_url ? <a href={order.cargo_photo_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{t("admin.orders.openPhoto")}</a> : "-"} />
               </section>
               {(pickupPoint || dropoffPoint) && (
-                <section className="rounded-[12px] border border-border bg-card p-4">
-                  <p className="mb-3 text-sm font-bold text-foreground">{t("admin.orders.mapReadOnly")}</p>
+                <section className="relative overflow-hidden rounded-[12px] border border-border bg-card">
                   <ReadOnlyOrderMap pickupLat={order.pickup_lat} pickupLng={order.pickup_lng} dropoffLat={order.dropoff_lat} dropoffLng={order.dropoff_lng} />
+                  <span className="pointer-events-none absolute left-3 top-3 z-[500] rounded-full bg-card/95 px-3 py-1 text-xs font-semibold text-foreground shadow-sm">{t("admin.orders.mapReadOnly")}</span>
                 </section>
               )}
               <section className="rounded-[12px] border border-border bg-card p-4">
@@ -680,7 +680,6 @@ export function AdminOrdersPanel({ user }: OrdersPanelProps) {
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-foreground">{t("orders.title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("admin.orders.subtitle")}</p>
         </div>
         <AdminButton disabled={busy} onClick={() => void loadOrders()}><RefreshCw size={16} /> {t("support.refresh")}</AdminButton>
       </section>

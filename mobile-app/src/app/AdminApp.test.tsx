@@ -154,7 +154,7 @@ describe("staff sign-in", () => {
     fireEvent.click(screen.getByRole("button", { name: "Kirish" }));
     const nav = await screen.findByRole("navigation");
     expect(within(nav).getByRole("button", { name: "Moliya" })).toBeInTheDocument();
-    expect(within(nav).queryByRole("button", { name: "Buyurtmalar (v1)" })).toBeNull();
+    expect(within(nav).queryByRole("button", { name: "Buyurtmalar" })).toBeNull();
     expect(within(nav).queryByRole("button", { name: "Xodimlar" })).toBeNull();
     expect(screen.getByTestId("sidebar-role")).toHaveTextContent("Moliya");
     expect(screen.getByTestId("header-identity")).toHaveTextContent("Moliya Sintetik · Moliya");
@@ -164,7 +164,7 @@ describe("staff sign-in", () => {
   it("speaks Russian when the reader chose it", () => {
     setLocale("ru");
     render(<AdminApp />);
-    expect(screen.getByText("Панель управления")).toBeInTheDocument();
+    expect(screen.getByText("Вход для сотрудников")).toBeInTheDocument();
     expect(screen.getByLabelText("Логин")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Войти" })).toBeInTheDocument();
   });
@@ -175,12 +175,12 @@ describe("shell", () => {
     signIn("operator");
     render(<AdminApp />);
     const nav = screen.getByRole("navigation");
-    for (const group of ["Bozor (v2)", "Ishonch", "Katalog va sozlamalar", "Legacy (v1)", "Tizim"]) {
+    for (const group of ["Bozor", "Ishonch", "Katalog va sozlamalar", "Arxiv", "Tizim"]) {
       expect(within(nav).getByText(group)).toBeInTheDocument();
     }
     expect(within(nav).queryByRole("button", { name: "Moliya" })).toBeNull();
     expect(within(nav).queryByRole("button", { name: "Audit jurnali" })).toBeNull();
-    expect(within(nav).getByRole("button", { name: "Buyurtmalar (v1)" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Buyurtmalar" })).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-role")).toHaveTextContent("Operator");
     await waitFor(() => expect(api.getAdminMe).toHaveBeenCalled());
   });
@@ -196,8 +196,8 @@ describe("shell", () => {
   it("navigates, and the header refresh remounts the panel", async () => {
     signIn("admin");
     render(<AdminApp />);
-    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: "Nizolar (v1)" }));
-    expect(await screen.findByText("Faqat o'qish jadvali. v1 nizoni hal qilish UI'da yo'q.")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: "Nizolar arxivi" }));
+    expect(await screen.findByText("Faqat o'qish.")).toBeInTheDocument();
     expect(api.listAdminDisputes).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getAllByRole("button", { name: /Yangilash/ })[0]);
     await waitFor(() => expect(api.listAdminDisputes).toHaveBeenCalledTimes(2));

@@ -81,7 +81,7 @@ describe("AdminProfilePanel (Q2)", () => {
     const block = await screen.findByTestId("commission-block");
     await waitFor(() => expect(within(block).getByLabelText(/Foiz/)).toHaveValue(8));
     expect(within(block).getByLabelText(/Foiz/)).toBeDisabled();
-    expect(within(block).getByText(/Faqat super admin o'zgartira oladi \(Q2\)/)).toBeInTheDocument();
+    expect(within(block).getByText("Faqat yangi buyurtmalarga qo'llanadi.")).toBeInTheDocument();
     expect(within(block).queryByRole("button", { name: /Saqlash/ })).toBeNull();
     expect(screen.queryByText(/OTP/)).toBeNull();
   });
@@ -139,7 +139,11 @@ describe("AdminOverviewPanel", () => {
     render(<AdminOverviewPanel user={staff("admin")} onNavigate={vi.fn()} />);
     expect(await screen.findByText("Bugungi hisoblangan ulush")).toBeInTheDocument();
     expect(screen.queryByText(/foydasi/)).toBeNull();
-    expect(screen.getByText("v1 va v2 ma'lumotlari birga: navbatlar, tekshiruvlar, moliya signallari.")).toBeInTheDocument();
+    expect(screen.getByText("Navbatlar, tekshiruvlar va moliya.")).toBeInTheDocument();
+    // v3 dashboard (§2.2-§2.3): accrued, never income
+    expect(screen.getByTestId("overview-dashboard")).toBeInTheDocument();
+    expect(screen.getByText("mln so'm · hisoblangan, tushum emas")).toBeInTheDocument();
+    expect(screen.getByText(/^Hisoblangan tizim ulushi · /)).toBeInTheDocument();
   });
 });
 

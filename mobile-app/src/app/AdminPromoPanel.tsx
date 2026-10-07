@@ -814,7 +814,6 @@ export function AdminPromoPanel() {
       {caps && visible.length > 0 && (
         <>
           <Tabs value={current} onChange={setTab} options={visible.map((id): [PromoTab, string] => [id, t(`admin.promo.tab.${id}`)])} />
-          <Note tone="warning">{t("admin.promo.offNote")}</Note>
           {current === "campaigns" && <CampaignsTab caps={caps} />}
           {current === "budget" && <BudgetTab caps={caps} />}
           {current === "reviews" && <ReviewsTab caps={caps} />}

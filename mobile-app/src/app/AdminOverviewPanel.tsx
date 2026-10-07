@@ -10,18 +10,12 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AlertTriangle,
-  Banknote,
   Bell,
-  CheckCircle2,
-  CircleDollarSign,
   ClipboardList,
   FileClock,
-  Percent,
   RefreshCw,
   Route,
   Truck,
-  WalletCards,
-  TrendingUp,
 } from "./ui/icons";
 
 import {
@@ -42,6 +36,7 @@ import { formatAdminMoney } from "../utils/money";
 import { statusToneClass } from "../utils/orderStatus";
 import { formatDate, formatDateTime, formatMinor } from "../utils/v2Format";
 import type { Section } from "./AdminApp";
+import { buildOverviewDash, millions, type DashDelta, type DashTile, type OverviewDash } from "./overviewDash";
 
 type Tone = "warn" | "err" | "blue" | "neutral";
 
@@ -64,28 +59,6 @@ function Kpi(props: { title: string; value: string | number; tone?: Tone; onClic
       <span className="block text-xs font-semibold text-muted-foreground">{props.title}</span>
       <span className={`mt-2 block text-2xl font-bold ${TONE_TEXT[props.tone ?? "neutral"]}`}>{props.value}</span>
     </Comp>
-  );
-}
-
-function MoneyCard(props: { title: string; value: number; note: string; icon: typeof Banknote; tone?: "blue" | "emerald" | "amber" | "slate" }) {
-  const Icon = props.icon;
-  const toneClass = {
-    blue: "bg-accent text-primary",
-    emerald: "bg-success/12 text-success",
-    amber: "bg-warning/14 text-warning",
-    slate: "bg-slate-50 text-secondary-foreground",
-  }[props.tone ?? "slate"];
-  return (
-    <div className="rounded-[12px] border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-muted-foreground">{props.title}</p>
-          <p className="mt-3 text-xl font-bold text-foreground">{formatAdminMoney(props.value)}</p>
-        </div>
-        <span className={`flex h-9 w-9 items-center justify-center rounded-[10px] ${toneClass}`}><Icon size={18} /></span>
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">{props.note}</p>
-    </div>
   );
 }
 
@@ -122,9 +95,172 @@ function SmallButton(props: { children: ReactNode; onClick: () => void; ghost?: 
   );
 }
 
-function percent(part: number, total: number): string {
-  if (!total) return "0%";
-  return `${((part / total) * 100).toFixed(1)}%`;
+const CARD = "min-w-0 rounded-[20px] border border-border bg-card px-5 py-[18px] shadow-sm";
+
+function DeltaChip({ delta }: { delta: DashDelta }) {
+  if (!delta) return null;
+  const tone =
+    delta.trend === "up" ? "bg-success/12 text-success" : delta.trend === "down" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground";
+  return <span className={`self-start whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone}`}>{delta.text}</span>;
+}
+
+function Legend(props: { color: string; label: string; value: ReactNode; extra?: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[12.5px]">
+      <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: props.color }} />
+      <span className="min-w-0 flex-1 truncate text-secondary-foreground">{props.label}</span>
+      <span className="font-semibold text-foreground">{props.value}</span>
+      {props.extra !== undefined && <span className="w-10 text-right text-muted-foreground">{props.extra}</span>}
+    </div>
+  );
+}
+
+function pct(part: number, total: number): string {
+  return total ? `${Math.round((part / total) * 100)}%` : "0%";
+}
+
+/** The v3 dashboard (§2.2): CSS bars, a conic donut, split and stacked bars, four sparkline tiles. No chart library. */
+function Dashboard({ dash }: { dash: OverviewDash }) {
+  const t = useT();
+  const weekdays = t("admin.v3.dash.weekdays").split(",");
+  const maxDay = Math.max(...dash.days.map((day) => day.amount), 0);
+  const statusRows = [
+    { key: "confirmed", label: t("status.approved"), value: dash.status.confirmed, color: "var(--success)" },
+    { key: "inProgress", label: t("admin.v3.dash.inProgress"), value: dash.status.inProgress, color: "var(--primary)" },
+    { key: "cancelled", label: t("status.cancelled"), value: dash.status.cancelled, color: "var(--muted-foreground)" },
+    { key: "disputed", label: t("admin.orders.disputed"), value: dash.status.disputed, color: "var(--destructive)" },
+  ];
+  let angle = 0;
+  const stops = statusRows
+    .filter((row) => row.value > 0)
+    .map((row) => {
+      const from = angle;
+      angle += (row.value / (dash.status.total || 1)) * 360;
+      return `${row.color} ${from}deg ${angle}deg`;
+    });
+  const donut = stops.length ? `conic-gradient(${stops.join(", ")})` : "var(--muted)";
+  const driverRows = [
+    { key: "approved", label: t("status.approved"), value: dash.drivers.approved, color: "var(--success)" },
+    { key: "pending", label: t("status.pending"), value: dash.drivers.pending, color: "var(--warning)" },
+    { key: "rejected", label: t("status.rejected"), value: dash.drivers.rejected, color: "var(--destructive)" },
+    { key: "blocked", label: t("admin.common.blocked"), value: dash.drivers.blocked, color: "var(--muted-foreground)" },
+  ];
+  const systemPct = `${dash.split.systemPct.toFixed(dash.split.systemPct > 0 && dash.split.systemPct < 10 ? 1 : 0)}%`;
+  const tileLabel: Record<DashTile["id"], MessageKey> = {
+    avgOrder: "admin.overview.avgOrder",
+    deliveredToday: "admin.overview.deliveredToday",
+    activeDeliveries: "admin.overview.activeDeliveries",
+    todayShare: "admin.overview.todayShare",
+  };
+
+  return (
+    <div className="grid min-w-0 gap-3.5" data-testid="overview-dashboard">
+      <div className="grid min-w-0 gap-3.5 lg:grid-cols-3">
+        <div className={`${CARD} grid gap-3.5 lg:col-span-3`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="grid gap-1">
+              <span className="text-[13px] text-muted-foreground">{t("admin.v3.dash.sum7d")}</span>
+              <span className="text-[30px] font-semibold leading-tight tracking-tight text-foreground" data-testid="dash-total">{formatAdminMoney(dash.total7d)}</span>
+            </div>
+            {dash.vsLastWeek && (
+              <span className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-semibold ${dash.vsLastWeek.trend === "down" ? "bg-destructive/10 text-destructive" : "bg-success/12 text-success"}`}>
+                {t("admin.v3.dash.vsLastWeek", { delta: dash.vsLastWeek.text })}
+              </span>
+            )}
+          </div>
+          <div className="flex h-[190px] items-end gap-2 pt-1.5 sm:gap-3">
+            {dash.days.map((day, index) => {
+              const top = maxDay > 0 && day.amount === maxDay;
+              const height = maxDay > 0 ? Math.max((day.amount / maxDay) * 130, day.amount > 0 ? 6 : 3) : 3;
+              return (
+                <div key={index} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2">
+                  <span className={`whitespace-nowrap text-[11.5px] ${top ? "font-bold text-primary" : "text-muted-foreground"}`}>{millions(day.amount)}</span>
+                  <span className={`w-full max-w-[46px] rounded-[12px_12px_6px_6px] ${top ? "bg-primary" : "bg-primary/25"}`} style={{ height }} />
+                  <span className="text-xs text-muted-foreground">{weekdays[day.weekday] ?? ""}</span>
+                </div>
+              );
+            })}
+          </div>
+          <span className="text-[11.5px] text-muted-foreground">{t("admin.v3.dash.unitCaption")}</span>
+        </div>
+
+        <div className={`${CARD} grid content-start gap-3.5`}>
+          <span className="text-[13px] text-muted-foreground">{t("clientProfile.ordersTitle")}</span>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="relative h-[132px] w-[132px] shrink-0 rounded-full" style={{ background: donut }}>
+              <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-card">
+                <span className="text-[22px] font-semibold leading-tight">{dash.status.total}</span>
+                <span className="text-[11px] lowercase text-muted-foreground">{t("common.total")}</span>
+              </div>
+            </div>
+            <div className="grid min-w-[130px] flex-1 gap-2">
+              {statusRows.map((row) => <Legend key={row.key} color={row.color} label={row.label} value={row.value} extra={pct(row.value, dash.status.total)} />)}
+            </div>
+          </div>
+        </div>
+
+        <div className={`${CARD} grid content-start gap-3.5`}>
+          <span className="text-[13px] text-muted-foreground">{t("admin.v3.dash.split")}</span>
+          <div className="grid gap-1">
+            <span className="text-2xl font-semibold leading-tight">{formatAdminMoney(dash.split.system)}</span>
+            <span className="text-[12.5px] text-muted-foreground">{t("admin.v3.dash.systemShareLine", { pct: systemPct })}</span>
+          </div>
+          <div className="flex h-3.5 overflow-hidden rounded-[7px] bg-muted">
+            <span className="bg-primary" style={{ width: `${Math.min(dash.split.systemPct, 100)}%` }} />
+            {dash.split.total > 0 && <span className="flex-1 bg-foreground" />}
+          </div>
+          <div className="grid gap-2">
+            <Legend color="var(--primary)" label={t("admin.nav.group.system")} value={formatAdminMoney(dash.split.system)} />
+            <Legend color="var(--foreground)" label={t("admin.v3.dash.toDrivers")} value={formatAdminMoney(dash.split.drivers)} />
+          </div>
+        </div>
+
+        <div className={`${CARD} grid content-start gap-3.5`}>
+          <div className="flex items-baseline justify-between">
+            <span className="text-[13px] text-muted-foreground">{t("admin.nav.drivers")}</span>
+            <span className="text-[22px] font-semibold">{dash.drivers.total}</span>
+          </div>
+          <div className="flex h-3.5 gap-0.5 overflow-hidden rounded-[7px] bg-muted">
+            {driverRows.filter((row) => row.value > 0).map((row) => (
+              <span key={row.key} style={{ width: `${(row.value / (dash.drivers.total || 1)) * 100}%`, background: row.color }} />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-x-3.5 gap-y-2">
+            {driverRows.map((row) => <Legend key={row.key} color={row.color} label={row.label} value={row.value} />)}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        {dash.tiles.map((tile) => {
+          const max = Math.max(...tile.spark, 0);
+          const value = tile.id === "deliveredToday" ? String(tile.value) : formatAdminMoney(tile.value);
+          return (
+            <div key={tile.id} data-testid={`dash-tile-${tile.id}`} className="flex min-w-0 items-end gap-3 rounded-[20px] border border-border bg-card px-4 py-3.5 shadow-sm">
+              <div className="grid min-w-0 flex-1 gap-1">
+                <span className="text-xs leading-snug text-muted-foreground">{t(tileLabel[tile.id])}</span>
+                <span className="whitespace-nowrap text-lg font-semibold">{value}</span>
+                {tile.count !== undefined ? (
+                  <span className="self-start whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-primary">{t("admin.v3.dash.countUnit", { count: tile.count })}</span>
+                ) : (
+                  <DeltaChip delta={tile.delta} />
+                )}
+              </div>
+              <div className="flex h-11 w-[70px] shrink-0 items-end gap-[3px]" aria-hidden="true">
+                {tile.spark.map((point, index) => (
+                  <span
+                    key={index}
+                    className={`flex-1 rounded-[3px] ${index === tile.spark.length - 1 ? "bg-primary" : "bg-primary/30"}`}
+                    style={{ height: `${max > 0 ? Math.max((point / max) * 100, 6) : 6}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 const V2_TILES: Array<{ id: V2TileId; label: MessageKey; tone: Tone; target: Section }> = [
@@ -307,8 +443,6 @@ export function AdminOverviewPanel({
   );
   // §3.6: the tile opens Nizolar (v2), so it counts v2 disputes when the queue answered; v1 count is the fallback.
   const openDisputes = queues.disputes ? formatTileCount(queues.disputes) : String(data.stats.openDisputes);
-  const systemShare = percent(data.finance.systemProfit, data.finance.totalOrderAmount);
-  const completedShare = percent(data.finance.completedSystemProfit, data.finance.completedOrderAmount);
   const go = (section: Section) => (visible(section) ? () => onNavigate(section) : undefined);
 
   const pending: Array<{ label: MessageKey; count: string | number; target: Section }> = [
@@ -323,29 +457,12 @@ export function AdminOverviewPanel({
   return (
     <div className="grid min-w-0 gap-5">
       {head}
-      {financeNote}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MoneyCard title={t("admin.overview.totalAmount")} value={data.finance.totalOrderAmount} note={t("admin.overview.noteTotal", { count: data.finance.pricedOrders })} icon={CircleDollarSign} tone="blue" />
-        <MoneyCard title={t("admin.overview.systemShare")} value={data.finance.systemProfit} note={t("admin.overview.noteShare", { share: systemShare })} icon={TrendingUp} tone="emerald" />
-        <MoneyCard title={t("admin.overview.driverShare")} value={data.finance.driverIncome} note={t("admin.overview.noteDriver")} icon={WalletCards} tone="amber" />
-        <MoneyCard title={t("admin.overview.avgOrder")} value={data.finance.averageOrderAmount} note={t("admin.overview.noteAvg", { amount: formatAdminMoney(data.finance.averageSystemProfit) })} icon={Banknote} />
-        <MoneyCard title={t("admin.overview.completedOrders")} value={data.finance.completedOrderAmount} note={t("admin.overview.noteCompleted", { count: data.finance.completedOrders })} icon={CheckCircle2} tone="emerald" />
-        <MoneyCard title={t("admin.overview.completedShare")} value={data.finance.completedSystemProfit} note={t("admin.overview.noteCompletedShare", { share: completedShare })} icon={Percent} tone="emerald" />
-        <MoneyCard title={t("admin.overview.activeAmount")} value={data.finance.activeOrderAmount} note={t("admin.overview.noteActive", { count: data.finance.activePricedOrders })} icon={Truck} tone="blue" />
-        <MoneyCard title={t("admin.overview.todayShare")} value={data.finance.todaySystemProfit} note={t("admin.overview.noteToday", { amount: formatAdminMoney(data.finance.todayOrderAmount) })} icon={FileClock} />
-      </div>
+      <Dashboard dash={buildOverviewDash(data.orders, data.drivers)} />
 
       {v2Section}
 
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi title={t("admin.overview.totalOrders")} value={data.stats.totalOrders} />
-        <Kpi title={t("admin.overview.inBidding")} value={data.stats.publishedOrders} />
-        <Kpi title={t("admin.overview.activeDeliveries")} value={data.stats.activeDeliveries} />
-        <Kpi title={t("admin.overview.deliveredToday")} value={data.stats.deliveredToday} />
-        <Kpi title={t("status.approved")} value={data.stats.confirmedOrders} />
-        <Kpi title={t("admin.overview.pendingDrivers")} value={data.stats.pendingDrivers} tone="warn" onClick={go("drivers")} />
-        <Kpi title={t("admin.overview.approvedDrivers")} value={data.stats.approvedDrivers} />
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
         <Kpi title={t("admin.overview.openDisputes")} value={openDisputes} tone="err" onClick={go("disputesV2")} />
         <Kpi title={t("admin.overview.activeCities")} value={data.stats.activeCities} />
         <Kpi title={t("admin.overview.districtIssues")} value={data.stats.districtIssues} tone="warn" onClick={go("cities")} />

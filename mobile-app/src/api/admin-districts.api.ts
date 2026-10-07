@@ -16,6 +16,9 @@ export type DistrictPayload = {
   name_ru?: string | null;
   display_order?: number;
   is_active?: boolean;
+  /** Q160: a district with no centre is not placed on a road; the operator enters it (v1 accepts both). */
+  center_lat?: number;
+  center_lng?: number;
 };
 
 function cleanFilters(params: AdminDistrictFilters): Record<string, string | number | boolean | undefined> {

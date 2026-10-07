@@ -55,6 +55,8 @@ type DistrictForm = {
   name_ru: string;
   display_order: string;
   is_active: boolean;
+  center_lat: string;
+  center_lng: string;
 };
 
 const emptyCityForm: CityForm = {
@@ -73,7 +75,27 @@ const emptyDistrictForm: DistrictForm = {
   name_ru: "",
   display_order: "1000",
   is_active: true,
+  center_lat: "",
+  center_lng: "",
 };
+
+/** Both centre fields or neither; numbers in range (DistrictCreate: lat ±90, lng ±180). */
+export function districtCentreValid(form: Pick<DistrictForm, "center_lat" | "center_lng">): boolean {
+  const lat = form.center_lat.trim().replace(",", ".");
+  const lng = form.center_lng.trim().replace(",", ".");
+  if (!lat && !lng) return true;
+  if (!lat || !lng) return false;
+  const a = Number(lat);
+  const b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180;
+}
+
+function centreText(district: District): string | null {
+  const lat = Number(district.center_lat);
+  const lng = Number(district.center_lng);
+  if (district.center_lat === null || district.center_lat === undefined || district.center_lat === "" || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
 
 function typeLabel(type?: string | null): string {
   if (type === "city" || type === "region" || type === "republic") return translate(`admin.cities.type.${type}`);
@@ -211,14 +233,22 @@ function cityFormToPayload(form: CityForm): CityPayload {
   };
 }
 
-function districtFormToPayload(form: DistrictForm): DistrictPayload {
-  return {
+export function districtFormToPayload(form: DistrictForm): DistrictPayload {
+  const payload: DistrictPayload = {
     city_id: Number(form.city_id),
     name_uz: form.name_uz.trim(),
     name_ru: form.name_ru.trim() || null,
     display_order: Number(form.display_order || 1000),
     is_active: form.is_active,
   };
+  // An empty pair is left out, so editing a name never clears a centre already entered.
+  const lat = form.center_lat.trim().replace(",", ".");
+  const lng = form.center_lng.trim().replace(",", ".");
+  if (lat && lng) {
+    payload.center_lat = Number(lat);
+    payload.center_lng = Number(lng);
+  }
+  return payload;
 }
 
 function CityModal(props: {
@@ -274,7 +304,8 @@ function DistrictModal(props: {
   onSubmit: () => void;
 }) {
   const t = useT();
-  const valid = Number(props.form.city_id) > 0 && props.form.name_uz.trim().length > 0 && !props.duplicate;
+  const centreOk = districtCentreValid(props.form);
+  const valid = Number(props.form.city_id) > 0 && props.form.name_uz.trim().length > 0 && !props.duplicate && centreOk;
   return (
     <ModalShell title={props.title} onClose={props.onClose}>
       <div className="grid gap-4 p-5">
@@ -294,7 +325,10 @@ function DistrictModal(props: {
           <div className="pt-6">
             <CheckField label={t("admin.cities.active")} checked={props.form.is_active} onChange={(is_active) => props.onChange({ ...props.form, is_active })} />
           </div>
+          <Input label={t("admin.v3.cities.centreLat")} value={props.form.center_lat} onChange={(center_lat) => props.onChange({ ...props.form, center_lat })} />
+          <Input label={t("admin.v3.cities.centreLng")} value={props.form.center_lng} onChange={(center_lng) => props.onChange({ ...props.form, center_lng })} />
         </div>
+        <p className={`rounded-[10px] border p-3 text-xs ${centreOk ? "border-primary/20 bg-accent text-primary" : "border-destructive/25 bg-destructive/10 text-destructive"}`}>{t("admin.v3.cities.centreHint")}</p>
         <div className="flex justify-end gap-2">
           <Button onClick={props.onClose}>{t("common.cancel")}</Button>
           <Button tone="primary" disabled={props.busy || !valid} onClick={props.onSubmit}>
@@ -434,10 +468,10 @@ function CityDrawer(props: {
               {props.districtError && <p className="rounded-[10px] border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">{props.districtError}</p>}
               <div className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-border bg-card">
                 <div className="min-w-0 overflow-x-auto">
-                  <table className="w-full min-w-[620px] text-left text-sm">
+                  <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                       <tr>
-                        {[t("admin.cities.nameUz"), t("admin.cities.nameRu"), t("admin.cities.active"), t("admin.cities.created"), ""].map((label, index) => (
+                        {[t("admin.cities.nameUz"), t("admin.cities.nameRu"), t("admin.v3.cities.centreCol"), t("admin.cities.active"), t("admin.cities.created"), ""].map((label, index) => (
                           <th key={index} className="px-4 py-3 font-semibold">
                             {label}
                           </th>
@@ -450,6 +484,9 @@ function CityDrawer(props: {
                           <tr key={district.id}>
                             <td className="px-4 py-3 font-semibold text-foreground">{formatDistrictDisplayName(district)}</td>
                             <td className="px-4 py-3">{hasEncodingIssue(district.name_ru) ? encodingBadge() : cleanLocationText(district.name_ru)}</td>
+                            <td className="px-4 py-3 text-xs">
+                              {centreText(district) ?? <span className="rounded-full border border-warning/28 bg-warning/14 px-2 py-0.5 font-semibold text-warning">{t("admin.v3.cities.noCentre")}</span>}
+                            </td>
                             <td className="px-4 py-3">{activeBadge(district.is_active)}</td>
                             <td className="px-4 py-3">{formatShortAdminDate(district.created_at)}</td>
                             <td className="px-4 py-3">
@@ -468,8 +505,8 @@ function CityDrawer(props: {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
-                            {t("admin.cities.noDistrictsFound")}
+                          <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                            {t("admin.v3.cities.noDistrictsYet")}
                           </td>
                         </tr>
                       )}
@@ -667,7 +704,6 @@ export function AdminCitiesPanel({ user }: Props) {
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-foreground">{t("admin.cities.title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("admin.cities.subtitle")}</p>
         </div>
         <div className="flex gap-2">
           <Button disabled={busy} onClick={() => void loadCities()}>
@@ -824,6 +860,8 @@ export function AdminCitiesPanel({ user }: Props) {
                 name_ru: district.name_ru ?? "",
                 display_order: String(district.display_order ?? 1000),
                 is_active: district.is_active,
+                center_lat: district.center_lat === null || district.center_lat === undefined ? "" : String(district.center_lat),
+                center_lng: district.center_lng === null || district.center_lng === undefined ? "" : String(district.center_lng),
               },
             })
           }

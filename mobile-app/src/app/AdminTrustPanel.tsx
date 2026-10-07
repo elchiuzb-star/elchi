@@ -1021,7 +1021,6 @@ function FraudTab({ caps, onStrikes }: { caps: CapabilitiesDTO | null; onStrikes
   const canReview = has(caps, "ops.trust_review");
   return (
     <div className="grid gap-3">
-      <Note tone="warn">{t("admin.trust.fraudNote")}</Note>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <StatusChips value={status} onChange={setStatus} options={["open", "under_review", "dismissed", "confirmed"]} />
         <Btn onClick={signals.reload}>
@@ -1239,8 +1238,12 @@ function TrackingTab() {
               ],
             ]}
           />
-          {point ? <VehicleMap point={point} live={data.freshness === "fresh"} /> : null}
-          <p className="text-xs text-muted-foreground">{t("admin.trust.trailBlocked")}</p>
+          {point ? (
+            <div className="relative">
+              <VehicleMap point={point} live={data.freshness === "fresh"} />
+              <span className="pointer-events-none absolute left-3 top-3 z-[500] rounded-full bg-card/95 px-3 py-1 text-xs font-semibold text-foreground shadow-sm">{t("admin.v3.trust.mapLastPoint")}</span>
+            </div>
+          ) : null}
         </>
       ) : null}
     </div>

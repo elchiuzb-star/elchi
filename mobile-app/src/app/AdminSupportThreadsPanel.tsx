@@ -132,7 +132,7 @@ export function AdminSupportThreadsPanel() {
 
   return (
     <div className="grid gap-4">
-      <PanelHead title={t("admin.threads.title")} sub={t("admin.threads.subtitle")} />
+      <PanelHead title={t("admin.threads.title")} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -194,7 +194,6 @@ export function AdminSupportThreadsPanel() {
                 </p>
                 <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{selected.requester_user_id}</p>
               </div>
-              <Note tone="warn">{t("admin.threads.noMoneyNote")}</Note>
               <div className="max-h-[420px] space-y-2 overflow-y-auto">
                 <p className="rounded-[10px] bg-muted px-3 py-1.5 text-center text-xs text-muted-foreground">
                   {t("admin.threads.systemLine", { booking: selected.booking_id })}
@@ -215,9 +214,8 @@ export function AdminSupportThreadsPanel() {
                     <p className="text-[11px] font-semibold text-muted-foreground">
                       {AUTHOR_KEY[message.author] ? t(AUTHOR_KEY[message.author]) : message.author} · {formatDateTime(message.created_at)}
                       {message.has_files ? ` · ${t("admin.threads.hasFile")}` : ""}
-                      {message.staff_only ? ` · ${t("admin.threads.staffOnly")}` : ""}
                     </p>
-                    <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                    <p className="whitespace-pre-wrap break-words">{message.staff_only ? t("admin.v3.threads.internalPrefix", { text: message.text }) : message.text}</p>
                     {(selected.files ?? []).filter((file) => file.message_id === message.id).map((file) => (
                       <div key={file.ref} className="mt-1.5 flex items-center justify-between gap-2 rounded-[8px] bg-muted/60 px-2 py-1 text-xs">
                         <span className="min-w-0 truncate">{file.name}</span>

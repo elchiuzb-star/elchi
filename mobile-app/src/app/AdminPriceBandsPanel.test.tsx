@@ -44,9 +44,9 @@ describe("AdminPriceBandsPanel", () => {
     expect(await screen.findByText("80 000 – 180 000 so'm · jami")).toBeInTheDocument();
     expect(await screen.findByText(/faqat admin va undan yuqori/)).toBeInTheDocument();
     expect(screen.getByText("Maslahat")).toBeInTheDocument();
-    expect(screen.getByText("Yuk v2 80 000 – 180 000 so'm")).toBeInTheDocument();
+    expect(screen.getByText("Yuk · 80 000 – 180 000 so'm")).toBeInTheDocument();
     expect(screen.queryByText("Quyi chegara (so'm)")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Yangilash \(v/ })).toBeNull();
+    expect(screen.queryAllByRole("button", { name: "Yangilash" }).filter((node) => node.getAttribute("type") === "submit")).toHaveLength(0);
   });
 
   it("lets admin+ save the next version with a reason", async () => {
@@ -54,7 +54,7 @@ describe("AdminPriceBandsPanel", () => {
     m(ops.setPriceBand).mockResolvedValue({ data: { ...band, version: 3 }, warnings: [], meta: null });
     render(<AdminPriceBandsPanel />);
     fireEvent.change(await screen.findByDisplayValue("Yo'lovchi (bir o'rin narxi)"), { target: { value: "parcel" } });
-    const save = await screen.findByRole("button", { name: "Yangilash (v3)" });
+    const save = (await screen.findAllByRole("button", { name: "Yangilash" })).find((node) => node.getAttribute("type") === "submit") as HTMLElement;
     expect(save).toBeDisabled();
     fireEvent.change(screen.getByLabelText(/Sabab \(auditda ko'rinadi\)/), { target: { value: "Mavsumiy narxlar yangilandi" } });
     expect(save).toBeEnabled();
